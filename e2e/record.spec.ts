@@ -15,6 +15,20 @@ test("arm, auto-takeoff, reload kill drill, stop, logbook", async ({
   await expect(page.locator("[data-aircraft-layer='true']")).toBeVisible();
   await expect(page.getByTestId("instrument-duration")).not.toHaveText("0:00");
 
+  // CSS cascade guards: import sorting once put theme.css before Ionic's
+  // css and MapView.css before maplibre's, resurfacing the attribution
+  // background and a 1px document scrollbar.
+  const cascade = await page.evaluate(() => ({
+    overflowX: document.documentElement.scrollWidth - window.innerWidth,
+    overflowY: document.documentElement.scrollHeight - window.innerHeight,
+    attribBackground: getComputedStyle(
+      document.querySelector(".maplibregl-ctrl-attrib")!,
+    ).backgroundColor,
+  }));
+  expect(cascade.overflowX).toBe(0);
+  expect(cascade.overflowY).toBe(0);
+  expect(cascade.attribBackground).toBe("rgba(0, 0, 0, 0)");
+
   await page.getByRole("button", { name: "Track up" }).click();
   await expect(page.getByRole("button", { name: "Track up" })).toHaveAttribute(
     "data-active",
@@ -49,21 +63,6 @@ test("arm, auto-takeoff, reload kill drill, stop, logbook", async ({
   await page.getByText("Logbook", { exact: true }).click();
   await expect(page.getByRole("heading", { name: /^Flight / })).toBeVisible();
   await expect(page.getByText(/1 flights/)).toBeVisible();
-
-  // CSS cascade guards: import sorting once put theme.css before Ionic's
-  // css and MapView.css before maplibre's, resurfacing the attribution
-  // background and a 1px document scrollbar.
-  const cascade = await page.evaluate(() => ({
-    overflowX: document.documentElement.scrollWidth - window.innerWidth,
-    overflowY: document.documentElement.scrollHeight - window.innerHeight,
-    attribBackground: getComputedStyle(
-      document.querySelector(".maplibregl-ctrl-attrib")!,
-    ).backgroundColor,
-  }));
-  expect(cascade.overflowX).toBe(0);
-  expect(cascade.overflowY).toBe(0);
-  expect(cascade.attribBackground).toBe("rgba(0, 0, 0, 0)");
-
   expect(pageErrors).toEqual([]);
 });
 
