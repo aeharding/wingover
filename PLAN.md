@@ -39,7 +39,7 @@ Ring 1 (browser) is fully working and verified:
 - [x] **Landing auto-detection** (done 2026-07-09): `src/flight/landing.ts` — ≤1.0 m/s sustained 15 fixes (track exists only post-takeoff, so no taxi false-positive; stationary wind-hover is why it prompts instead of auto-stopping). FlyPage shows a gloves-sized prompt "Looks like you landed" [Still flying / Stop & save] with a 30 s countdown that auto-stops (`?land-timeout-ms` seam). Dismiss re-arms only after movement resumes. Also: **real GPS engine landed** (`src/engine/real.ts` + IndexedDB WAL in `wal.ts`, kill-drill e2e via stubbed watchPosition in `e2e/real-engine.spec.ts` — CDP setGeolocation can't supply altitude/speed). Engine choice: mock for `?mock-speed` + dev default, real for `?engine=real` + prod.
 - [ ] Reload-while-armed/acquiring e2e kill drill (only recording-phase reload is covered)
 - [ ] Surface geolocation permission-denied in the arming screen (engine currently only console.warns; needs an error channel on the seam)
-- [ ] Ring 2: `cargo check` / `tauri dev` on Linux desktop (needs webkit2gtk system deps — untested)
+- [x] **Ring 2 gate cleared** (2026-07-09): `cargo check` green on Linux (webkit2gtk-4.1/jscore/soup3 all present on this machine). `@tauri-apps/cli` added; placeholder icon set generated from `app-icon.png` (dark field + cyan aircraft arrow — replace with real branding later). `tauri dev` window launch still untried: its beforeDevCommand fights the running Vite server on strict port 5173 — run when the dev server is down.
 - [ ] eslint flat config matching Voyager's, CI workflow (lint + test + build)
 - [ ] Native seam switch in `src/engine/index.ts` (Tauri platform detection) once the iOS plugin exists
 
