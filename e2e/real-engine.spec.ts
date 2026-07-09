@@ -79,6 +79,16 @@ async function waitForWatch(page: Page) {
   );
 }
 
+async function armAndFly(page: Page, emit: ReturnType<typeof makeEmitter>) {
+  await page.getByRole("button", { name: "Start Flight" }).click();
+  await expect(page.getByTestId("armed")).toBeVisible();
+  await waitForWatch(page);
+  await emit([{}, {}, {}]);
+  await expect(page.getByText("Waiting for takeoff")).toBeVisible();
+  await emit(Array.from({ length: 6 }, () => ({ speed: 6 })));
+  await expect(page.getByTestId("recording")).toBeVisible();
+}
+
 test("real engine: gate, backdated takeoff, reload kill drill, stop", async ({
   page,
 }) => {
@@ -139,4 +149,48 @@ test("real engine: gate, backdated takeoff, reload kill drill, stop", async ({
   await page.getByText("Logbook", { exact: true }).click();
   await expect(page.getByText(/1 flights/)).toBeVisible();
   expect(pageErrors).toEqual([]);
+});
+
+test("landing prompt: dismiss re-arms, stop saves", async ({ page }) => {
+  await page.addInitScript(GEO_STUB);
+  const emit = makeEmitter(page);
+  await page.goto(URL);
+  await armAndFly(page, emit);
+
+  await emit(Array.from({ length: 15 }, () => ({ speed: 0.3 })));
+  await expect(page.getByTestId("landing-prompt")).toBeVisible();
+
+  await page.getByRole("button", { name: "Still flying" }).click();
+  await expect(page.getByTestId("landing-prompt")).toBeHidden();
+
+  // More stationary fixes must not re-prompt until movement resumes
+  await emit(Array.from({ length: 5 }, () => ({ speed: 0.3 })));
+  await expect(page.getByTestId("landing-prompt")).toBeHidden();
+
+  await emit(Array.from({ length: 5 }, () => ({ speed: 7 })));
+  await emit(Array.from({ length: 15 }, () => ({ speed: 0.3 })));
+  await expect(page.getByTestId("landing-prompt")).toBeVisible();
+
+  await page.getByRole("button", { name: /Stop & save/ }).click();
+  await expect(
+    page.getByRole("button", { name: "Start Flight" }),
+  ).toBeVisible();
+  await page.getByText("Logbook", { exact: true }).click();
+  await expect(page.getByText(/1 flights/)).toBeVisible();
+});
+
+test("landing prompt times out into auto-stop", async ({ page }) => {
+  await page.addInitScript(GEO_STUB);
+  const emit = makeEmitter(page);
+  await page.goto(`${URL}&land-timeout-ms=1200`);
+  await armAndFly(page, emit);
+
+  await emit(Array.from({ length: 15 }, () => ({ speed: 0.3 })));
+  await expect(page.getByTestId("landing-prompt")).toBeVisible();
+
+  await expect(page.getByRole("button", { name: "Start Flight" })).toBeVisible({
+    timeout: 5000,
+  });
+  await page.getByText("Logbook", { exact: true }).click();
+  await expect(page.getByText(/1 flights/)).toBeVisible();
 });

@@ -162,3 +162,48 @@
   background: #d83a3a;
   border-color: #ff8a8a;
 }
+
+.landing-prompt {
+  position: absolute;
+  left: 50%;
+  bottom: max(24px, env(safe-area-inset-bottom));
+  transform: translateX(-50%);
+  z-index: 20;
+  width: min(92vw, 440px);
+  padding: 16px;
+  border-radius: 16px;
+  background: rgba(18, 22, 26, 0.92);
+  border: 1px solid rgba(255, 255, 255, 0.14);
+}
+
+.landing-message {
+  font-size: 20px;
+  font-weight: 700;
+  text-align: center;
+  margin-bottom: 14px;
+}
+
+.landing-actions {
+  display: flex;
+  gap: 12px;
+}
+
+.landing-actions button {
+  flex: 1;
+  min-height: 64px;
+  border-radius: 12px;
+  font-size: 18px;
+  font-weight: 700;
+  border: 1px solid rgba(255, 255, 255, 0.2);
+}
+
+.landing-continue {
+  background: rgba(52, 62, 72, 0.95);
+  color: #e8ecf1;
+}
+
+.landing-stop {
+  background: rgba(150, 30, 30, 0.95);
+  border-color: rgba(224, 90, 90, 0.6);
+  color: #ffe3e3;
+}

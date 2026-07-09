@@ -22,6 +22,7 @@ import {
   formatRelativeDegrees,
   formatSpeed,
 } from "../flight/format";
+import { isLanded } from "../flight/landing";
 import { bearingBetween, relativeBearing } from "../flight/nav";
 import { computeStats, haversineMeters } from "../flight/stats";
 import { useSettings } from "../settings/SettingsContext";
@@ -30,13 +31,14 @@ import "./FlyPage.css";
 
 const initialSearch = location.search;
 
-function holdDurationMs(): number {
-  const raw = new URLSearchParams(initialSearch).get("hold-ms");
+function durationParamMs(name: string, fallback: number): number {
+  const raw = new URLSearchParams(initialSearch).get(name);
   const parsed = raw ? Number(raw) : NaN;
-  return Number.isFinite(parsed) && parsed > 0 ? parsed : 1500;
+  return Number.isFinite(parsed) && parsed > 0 ? parsed : fallback;
 }
 
-const HOLD_MS = holdDurationMs();
+const HOLD_MS = durationParamMs("hold-ms", 1500);
+const LANDING_TIMEOUT_MS = durationParamMs("land-timeout-ms", 30_000);
 
 export default function FlyPage() {
   const { units } = useSettings();
@@ -59,6 +61,9 @@ export default function FlyPage() {
   const holdTimerRef = useRef<ReturnType<typeof setTimeout> | undefined>(
     undefined,
   );
+  const [landingPromptAt, setLandingPromptAt] = useState<number | null>(null);
+  const [, setLandingTick] = useState(0);
+  const landingDismissedRef = useRef(false);
 
   function applyStatus(value: EngineStatus | "loading") {
     statusRef.current = value;
@@ -104,6 +109,15 @@ export default function FlyPage() {
       if (previous) distanceRef.current += haversineMeters(previous, fix);
       trackRef.current.push(fix);
       setFixCount(trackRef.current.length);
+
+      if (isLanded(trackRef.current)) {
+        if (!landingDismissedRef.current) {
+          setLandingPromptAt((current) => current ?? Date.now());
+        }
+      } else {
+        landingDismissedRef.current = false;
+        setLandingPromptAt(null);
+      }
     });
 
     const unsubscribeStatus = engine.onStatus(() => {
@@ -132,6 +146,8 @@ export default function FlyPage() {
     distanceRef.current = 0;
     setLatest(null);
     setFixCount(0);
+    setLandingPromptAt(null);
+    landingDismissedRef.current = false;
     changeFollow(true);
     changeTrackUp(false);
     await engine.start();
@@ -148,6 +164,7 @@ export default function FlyPage() {
     holdTimerRef.current = undefined;
     const track = await engine.stop();
     setHolding(false);
+    setLandingPromptAt(null);
     applyStatus("idle");
     setLatest(null);
     if (track.length > 1) {
@@ -166,6 +183,30 @@ export default function FlyPage() {
       setSavedToastOpen(true);
     }
   }
+
+  useEffect(() => {
+    if (landingPromptAt === null) return;
+    const deadline = landingPromptAt + LANDING_TIMEOUT_MS;
+    const interval = setInterval(() => {
+      if (Date.now() >= deadline) finishFlight();
+      else setLandingTick((tick) => tick + 1);
+    }, 250);
+    return () => clearInterval(interval);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [landingPromptAt]);
+
+  function dismissLandingPrompt() {
+    landingDismissedRef.current = true;
+    setLandingPromptAt(null);
+  }
+
+  const landingSecondsLeft =
+    landingPromptAt === null
+      ? 0
+      : Math.max(
+          0,
+          Math.ceil((landingPromptAt + LANDING_TIMEOUT_MS - Date.now()) / 1000),
+        );
 
   function beginHold() {
     setHolding(true);
@@ -348,6 +389,22 @@ export default function FlyPage() {
                 <IonIcon icon={stopIcon} />
               </button>
             </div>
+            {landingPromptAt !== null && (
+              <div className="landing-prompt" data-testid="landing-prompt">
+                <div className="landing-message">Looks like you landed</div>
+                <div className="landing-actions">
+                  <button
+                    className="landing-continue"
+                    onClick={dismissLandingPrompt}
+                  >
+                    Still flying
+                  </button>
+                  <button className="landing-stop" onClick={finishFlight}>
+                    Stop &amp; save ({landingSecondsLeft})
+                  </button>
+                </div>
+              </div>
+            )}
           </div>
         )}
         <IonToast

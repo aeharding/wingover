@@ -36,8 +36,9 @@ Ring 1 (browser) is fully working and verified:
 
 - [x] **GPX import** (done 2026-07-09): Logbook (...) menu → "Import GPX files" (multi-select). `src/flight/gpxImport.ts` parses GPX (built against Alex's real PPG Flyer exports: trk>name launch-site names, 1 Hz, `<rte>` ignored), dedupes burst duplicates (<500 ms apart — real files contain 44 ms doubles that would fake 2000 m/s), derives speed/course/climb. **Provenance for future undo**: flights get `source: "gpx-import"`, `sourceFilename`, `importBatchId` (one uuid per import operation), `importedAt`. Validated by importing all 309 real exports through the UI in Chromium: 16.9 s, zero errors. Unit tests use happy-dom (per-file pragma; note: happy-dom leaks on hundreds of parses — bulk validation belongs in a real browser). E2e drives the filechooser with a fixture file.
 
-- [ ] Landing auto-detection (sustained near-zero speed on ground → prompt or auto-stop) — mirrors takeoff detection, same pure-module approach
+- [x] **Landing auto-detection** (done 2026-07-09): `src/flight/landing.ts` — ≤1.0 m/s sustained 15 fixes (track exists only post-takeoff, so no taxi false-positive; stationary wind-hover is why it prompts instead of auto-stopping). FlyPage shows a gloves-sized prompt "Looks like you landed" [Still flying / Stop & save] with a 30 s countdown that auto-stops (`?land-timeout-ms` seam). Dismiss re-arms only after movement resumes. Also: **real GPS engine landed** (`src/engine/real.ts` + IndexedDB WAL in `wal.ts`, kill-drill e2e via stubbed watchPosition in `e2e/real-engine.spec.ts` — CDP setGeolocation can't supply altitude/speed). Engine choice: mock for `?mock-speed` + dev default, real for `?engine=real` + prod.
 - [ ] Reload-while-armed/acquiring e2e kill drill (only recording-phase reload is covered)
+- [ ] Surface geolocation permission-denied in the arming screen (engine currently only console.warns; needs an error channel on the seam)
 - [ ] Ring 2: `cargo check` / `tauri dev` on Linux desktop (needs webkit2gtk system deps — untested)
 - [ ] eslint flat config matching Voyager's, CI workflow (lint + test + build)
 - [ ] Native seam switch in `src/engine/index.ts` (Tauri platform detection) once the iOS plugin exists
@@ -79,7 +80,7 @@ Ring 1 (browser) is fully working and verified:
 2. **Takeoff thresholds** (pilot sanity check): arm→record at ≥5 m/s (~11 mph) sustained 5 s, backdate through ≥1.5 m/s movement. Reasonable for foot launch? Trikes? Should strong-wind kiting (can exceed 11 mph briefly) be a concern, or does the 5 s sustain handle it?
 3. **GPS accuracy gate**: ≤10 m horizontal / ≤15 m vertical sustained 3 fixes before "waiting for takeoff". Too strict/loose?
 4. **Climb rate units**: ft/s like PPG Flyer, or fpm? (Currently ft/s.)
-5. **Landing auto-detection**: auto-stop the flight, or prompt "Looks like you landed — stop recording?" (Steering doc leans guarded actions; prompt seems safer with a timeout.)
+5. **Landing auto-detection**: ~~auto-stop vs prompt~~ **Default shipped 2026-07-09**: prompt with 30 s countdown → auto-stop (steering-doc guarded-action posture). Sanity-check the thresholds: ≤1.0 m/s sustained 15 s. OK? Also: should the countdown be longer on-device?
 6. **Map tiles**: OpenFreeMap as default provider OK?
 7. **Min iOS version** target?
 8. **Flight naming**: currently `Flight {locale datetime}`. Good enough for v1?
