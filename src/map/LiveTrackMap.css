@@ -1,0 +1,15 @@
+.live-map {
+  position: relative;
+  flex: 1;
+  min-height: 0;
+  overflow: hidden;
+}
+
+.live-map .map-container {
+  inset: -256px;
+}
+
+.live-map .maplibregl-ctrl-bottom-left {
+  left: 256px;
+  bottom: 256px;
+}

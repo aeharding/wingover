@@ -1,0 +1,126 @@
+.flight-detail-map {
+  position: absolute;
+  inset: 0;
+}
+
+.detail-overlay {
+  position: absolute;
+  top: 0.75rem;
+  left: 0.75rem;
+  right: 0.75rem;
+  z-index: 5;
+  padding: 0.6rem 0.75rem;
+  background: rgba(24, 26, 29, 0.9);
+  border: 1px solid #333;
+  border-radius: 12px;
+}
+
+@media (min-width: 768px) {
+  .detail-overlay {
+    left: auto;
+    width: 400px;
+  }
+}
+
+.detail-overlay-header {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+}
+
+.detail-title,
+.detail-title-static {
+  flex: 1;
+  min-width: 0;
+  font-size: 1.05rem;
+  font-weight: 600;
+  color: #fff;
+  background: none;
+  border: none;
+  padding: 0.2rem 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.detail-title:focus {
+  outline: none;
+  border-bottom: 1px solid var(--wingover-accent);
+}
+
+.collapse-button {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 2.2rem;
+  height: 2.2rem;
+  flex-shrink: 0;
+  font-size: 1.2rem;
+  color: #cfd3d8;
+  background: none;
+  border: none;
+}
+
+.detail-notes {
+  width: 100%;
+  margin-top: 0.35rem;
+  padding: 0.35rem 0;
+  font-size: 0.85rem;
+  color: #dfe3e8;
+  background: none;
+  border: none;
+  resize: none;
+}
+
+.detail-notes:focus {
+  outline: none;
+}
+
+.detail-notes::placeholder {
+  color: #7c828a;
+}
+
+.detail-stats {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 0.4rem 0.75rem;
+  margin-top: 0.4rem;
+}
+
+.detail-stat {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 0.5rem;
+  min-width: 0;
+}
+
+.detail-stat-label {
+  font-size: 0.72rem;
+  color: #a7acb3;
+  white-space: nowrap;
+}
+
+.detail-stat-value {
+  font-size: 0.95rem;
+  font-weight: 600;
+  color: #fff;
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+}
+
+.endpoint-marker {
+  width: 16px;
+  height: 16px;
+  border-radius: 50%;
+  border: 2.5px solid #fff;
+  box-shadow: 0 1px 4px rgba(0, 0, 0, 0.5);
+}
+
+.endpoint-marker.launch {
+  background: var(--wingover-green);
+}
+
+.endpoint-marker.landing {
+  background: #e0483a;
+}

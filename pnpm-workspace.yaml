@@ -1,0 +1,4 @@
+updateConfig:
+  ignoreDependencies:
+    - react-router
+    - react-router-dom

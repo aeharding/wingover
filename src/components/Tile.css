@@ -1,0 +1,74 @@
+.instruments {
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  z-index: 5;
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 1px;
+  padding-top: env(safe-area-inset-top);
+  pointer-events: none;
+}
+
+@media (min-width: 768px) {
+  .instruments {
+    top: 0.75rem;
+    left: auto;
+    right: 0.75rem;
+    width: 400px;
+    border-radius: 12px;
+    overflow: hidden;
+  }
+}
+
+.tile {
+  position: relative;
+  background: rgba(13, 15, 17, 0.68);
+  padding: 0.35rem 0.75rem;
+  min-width: 0;
+}
+
+.tile .label {
+  font-size: 0.7rem;
+  color: #a7acb3;
+}
+
+.tile .value {
+  font-size: clamp(1.3rem, 5.4vw, 1.7rem);
+  font-weight: 700;
+  color: #fff;
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+  min-width: 0;
+  overflow: hidden;
+}
+
+.tile.cyan .value {
+  color: var(--wingover-accent);
+}
+
+.tile.green .value {
+  color: var(--wingover-green);
+}
+
+.tile.yellow .value {
+  color: #ffd43b;
+}
+
+.tile.wide {
+  grid-column: 1 / -1;
+}
+
+.tile.has-icon {
+  padding-right: clamp(3rem, 12vw, 4rem);
+}
+
+.tile-icon {
+  position: absolute;
+  top: 50%;
+  right: 0.9rem;
+  translate: 0 -50%;
+  display: flex;
+  align-items: center;
+}

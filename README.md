@@ -1,0 +1,24 @@
+# Wingover
+
+Flight recorder and planner for paramotor pilots. Open source, privacy-first, zero backend — your flights never leave your device.
+
+- [STEERING.md](./STEERING.md) — project direction and values
+- [PLAN.md](./PLAN.md) — current status and next steps
+
+## Development
+
+Most development happens in a plain browser against a mock recording engine (append `?mock-speed=120` to time-compress simulated flights).
+
+Maps: street view (OpenFreeMap) works with zero configuration. The satellite layer uses MapTiler — the built-in key is restricted to official builds (origin `wingover.app` / app user agent), so for your own satellite builds get a free key at maptiler.com and set `VITE_MAPTILER_KEY` (or paste it under Settings → MapTiler key).
+
+```sh
+pnpm install
+pnpm dev        # browser ring with mock engine
+pnpm test       # unit tests
+pnpm e2e        # Playwright e2e, including reload kill drills
+pnpm build      # typecheck + production build
+```
+
+## License
+
+[AGPL-3.0](./LICENSE)

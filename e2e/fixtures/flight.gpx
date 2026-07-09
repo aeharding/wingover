@@ -1,0 +1,23 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<gpx version="1.1" creator="ppg-flyer-export" xmlns="http://www.topografix.com/GPX/1/1">
+<metadata>
+<name>Tomahawk Test Flight</name>
+<time>2024-06-01T12:00:00.000Z</time>
+</metadata>
+<trk><name>Tomahawk Test Flight</name>
+<trkseg>
+<trkpt lat="43.075000" lon="-89.550000"><ele>300.0</ele><time>2024-06-01T12:00:00.000Z</time></trkpt>
+<trkpt lat="43.075090" lon="-89.550000"><ele>301.5</ele><time>2024-06-01T12:00:01.000Z</time></trkpt>
+<trkpt lat="43.075180" lon="-89.549990"><ele>303.0</ele><time>2024-06-01T12:00:02.000Z</time></trkpt>
+<trkpt lat="43.075270" lon="-89.549970"><ele>304.5</ele><time>2024-06-01T12:00:03.000Z</time></trkpt>
+<trkpt lat="43.075360" lon="-89.549940"><ele>306.0</ele><time>2024-06-01T12:00:04.000Z</time></trkpt>
+<trkpt lat="43.075450" lon="-89.549900"><ele>307.5</ele><time>2024-06-01T12:00:05.000Z</time></trkpt>
+<trkpt lat="43.075540" lon="-89.549850"><ele>309.0</ele><time>2024-06-01T12:00:06.000Z</time></trkpt>
+<trkpt lat="43.075630" lon="-89.549790"><ele>310.5</ele><time>2024-06-01T12:00:07.000Z</time></trkpt>
+<trkpt lat="43.075720" lon="-89.549720"><ele>312.0</ele><time>2024-06-01T12:00:08.000Z</time></trkpt>
+<trkpt lat="43.075810" lon="-89.549640"><ele>313.5</ele><time>2024-06-01T12:00:09.000Z</time></trkpt>
+<trkpt lat="43.075900" lon="-89.549550"><ele>315.0</ele><time>2024-06-01T12:00:10.000Z</time></trkpt>
+<trkpt lat="43.075990" lon="-89.549450"><ele>316.5</ele><time>2024-06-01T12:00:11.000Z</time></trkpt>
+</trkseg>
+</trk>
+</gpx>

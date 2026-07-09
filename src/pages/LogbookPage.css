@@ -1,0 +1,13 @@
+.logbook-empty {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  height: 100%;
+  color: #9a9fa6;
+  font-size: 1.1rem;
+}
+
+.logbook-totals {
+  padding: 1rem 1.25rem calc(1rem + env(safe-area-inset-bottom));
+  text-align: center;
+}

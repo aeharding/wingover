@@ -1,0 +1,65 @@
+.map-container {
+  position: absolute;
+  inset: 0;
+  background: #191b1e;
+}
+
+.map-container .maplibregl-canvas {
+  opacity: 1;
+  transition: opacity 0.25s ease;
+}
+
+.map-container.map-loading .maplibregl-canvas {
+  opacity: 0;
+}
+
+.map-overlay {
+  position: absolute;
+  right: 0.9rem;
+  bottom: calc(0.9rem + env(safe-area-inset-bottom));
+  display: flex;
+  flex-direction: column;
+  gap: 0.6rem;
+  z-index: 10;
+}
+
+.map-button {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 3.25rem;
+  height: 3.25rem;
+  font-size: 1.5rem;
+  color: #fff;
+  background: rgba(24, 26, 29, 0.9);
+  border: 1px solid #333;
+  border-radius: 12px;
+}
+
+.map-button:active {
+  background: rgba(60, 64, 70, 0.9);
+}
+
+.map-button[data-active="true"] {
+  color: var(--wingover-accent);
+  border-color: var(--wingover-accent);
+}
+
+.map-container .maplibregl-ctrl-attrib {
+  box-sizing: border-box;
+  max-width: calc(100vw - 6rem);
+  white-space: normal;
+  line-height: 1.4;
+  font-size: 0.68rem;
+  color: rgba(235, 238, 242, 0.8);
+  background: none;
+  text-shadow: 0 0 3px rgba(0, 0, 0, 0.9);
+}
+
+.map-container .maplibregl-ctrl-attrib a {
+  color: rgba(235, 238, 242, 0.92);
+}
+
+.map-container .maplibregl-ctrl-attrib summary {
+  filter: invert(1) opacity(0.85);
+}

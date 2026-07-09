@@ -1,0 +1,164 @@
+.fly-content {
+  --background: #000;
+}
+
+.fly-idle {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 3rem;
+  height: 100%;
+}
+
+.fly-idle h1 {
+  color: #fff;
+  font-size: 2.5rem;
+  font-weight: 700;
+}
+
+.start-button {
+  width: min(85%, 420px);
+  padding: 1.5rem;
+  font-size: 1.75rem;
+  font-weight: 600;
+  color: #fff;
+  background: #1a7f37;
+  border: none;
+  border-radius: 16px;
+}
+
+.start-button:active {
+  background: #166b2f;
+}
+
+.fly-armed {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 2.5rem;
+  height: 100%;
+  text-align: center;
+}
+
+.armed-message h2 {
+  font-size: 1.6rem;
+  font-weight: 700;
+}
+
+.armed-message p {
+  color: #9a9fa6;
+}
+
+.pulse {
+  width: 14px;
+  height: 14px;
+  margin: 0 auto 1rem;
+  border-radius: 50%;
+  background: var(--wingover-green);
+  animation: pulse 1.2s ease-in-out infinite;
+}
+
+@keyframes pulse {
+  50% {
+    opacity: 0.2;
+  }
+}
+
+.armed-speed {
+  font-size: 3rem;
+  font-weight: 700;
+  font-variant-numeric: tabular-nums;
+  color: var(--wingover-green);
+}
+
+.armed-accuracy {
+  font-size: 1.4rem;
+  font-weight: 600;
+  font-variant-numeric: tabular-nums;
+  color: #ffd43b;
+}
+
+.pulse.acquiring {
+  background: #ffd43b;
+}
+
+.cancel-button {
+  width: min(60%, 280px);
+  padding: 1rem;
+  font-size: 1.2rem;
+  color: #fff;
+  background: #333;
+  border: none;
+  border-radius: 14px;
+}
+
+.fly-recording {
+  position: relative;
+  height: 100%;
+}
+
+.fly-recording .live-map {
+  position: absolute;
+  inset: 0;
+}
+
+.flight-controls {
+  position: absolute;
+  right: 0.9rem;
+  bottom: calc(0.9rem + env(safe-area-inset-bottom));
+  display: flex;
+  flex-direction: column;
+  gap: 0.6rem;
+  z-index: 6;
+}
+
+.launch-arrow {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: clamp(1.9rem, 8vw, 2.5rem);
+  height: clamp(1.9rem, 8vw, 2.5rem);
+  font-size: clamp(1.4rem, 6vw, 1.8rem);
+  line-height: 1;
+  transition: rotate 0.3s ease;
+}
+
+.compass {
+  width: clamp(38px, 10.5vw, 48px);
+  height: clamp(38px, 10.5vw, 48px);
+}
+
+.compass circle {
+  fill: none;
+  stroke: #444;
+  stroke-width: 1.5;
+}
+
+.compass text {
+  fill: #9a9fa6;
+  font-size: 9px;
+  font-weight: 600;
+  text-anchor: middle;
+  dominant-baseline: central;
+}
+
+.compass .needle-north {
+  fill: #e0483a;
+}
+
+.compass .needle-south {
+  fill: #d0d4da;
+}
+
+.stop-button {
+  background: rgba(150, 30, 30, 0.9);
+  border-color: rgba(224, 90, 90, 0.6);
+  touch-action: none;
+}
+
+.stop-button.holding {
+  background: #d83a3a;
+  border-color: #ff8a8a;
+}

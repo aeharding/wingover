@@ -1,0 +1,24 @@
+.all-flights-map {
+  position: absolute;
+  inset: 0;
+}
+
+.composite-legend {
+  position: absolute;
+  left: 0.9rem;
+  bottom: calc(3.2rem + env(safe-area-inset-bottom));
+  z-index: 5;
+  padding: 0.4rem 0.6rem;
+  font-size: 0.7rem;
+  color: #cfd3d8;
+  background: rgba(20, 22, 25, 0.75);
+  border-radius: 8px;
+}
+
+.legend-bar {
+  height: 6px;
+  width: 120px;
+  margin-top: 4px;
+  border-radius: 3px;
+  background: linear-gradient(90deg, hsl(290, 85%, 48%), hsl(175, 85%, 62%));
+}

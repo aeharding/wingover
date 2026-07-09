@@ -1,0 +1,17 @@
+:root {
+  --wingover-accent: #4cc2ff;
+  --wingover-green: #35e06a;
+  --wingover-tile: #111214;
+}
+
+ion-tab-bar {
+  height: 64px;
+}
+
+ion-tab-button {
+  font-size: 0.85rem;
+}
+
+.tab-bar-hidden {
+  display: none;
+}
