@@ -40,7 +40,6 @@ Ring 1 (browser) is fully working and verified:
 - [ ] Reload-while-armed/acquiring e2e kill drill (only recording-phase reload is covered)
 - [ ] Ring 2: `cargo check` / `tauri dev` on Linux desktop (needs webkit2gtk system deps — untested)
 - [ ] eslint flat config matching Voyager's, CI workflow (lint + test + build)
-- [ ] Code-split the bundle (1.2 MB main chunk; Ionic pulls everything through `App.tsx`)
 - [ ] Native seam switch in `src/engine/index.ts` (Tauri platform detection) once the iOS plugin exists
 
 ## Learnings (2026-07-09 afternoon batch)
@@ -88,6 +87,9 @@ Ring 1 (browser) is fully working and verified:
 10. ~~"Flights on a computer"~~ **Resolved 2026-07-09**: PWA only — no native desktop app. Native mobile wrappers exist solely for recording reliability. Desktop = installable web app syncing via CouchDB (E2EE decryption client-side works in-browser). Static hosting for the PWA (e.g. wingover.app) keeps the zero-dynamic-backend posture.
 
 ## Later / parked
+
+- ~~Code splitting~~ — rejected by Alex 2026-07-09: mobile app, bundle ships locally, not a concern
+- M3 replay (scrubber + graphs) — belayed by Alex 2026-07-09 in favor of the real-engine critical path
 
 - Native iOS recording plugin (M0 kill drills on hardware) — the `takeoff.ts` + `types.ts` contracts are the porting reference
 - Sync spike: replicate against a real CouchDB (per-user DBs, `db.replicate`/`db.sync` is now one call away); E2EE question for the hosted tier
