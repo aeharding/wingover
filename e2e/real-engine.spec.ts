@@ -1,4 +1,4 @@
-import { expect, test, type Page } from "@playwright/test";
+import { expect, type Page, test } from "@playwright/test";
 
 // CDP setGeolocation cannot supply altitude/speed, which the accuracy gate
 // and takeoff detection require — stub watchPosition itself so the test
@@ -149,6 +149,30 @@ test("real engine: gate, backdated takeoff, reload kill drill, stop", async ({
   await page.getByText("Logbook", { exact: true }).click();
   await expect(page.getByText(/1 flights/)).toBeVisible();
   expect(pageErrors).toEqual([]);
+});
+
+test("reload while armed keeps the session and still auto-takes-off", async ({
+  page,
+}) => {
+  await page.addInitScript(GEO_STUB);
+  const emit = makeEmitter(page);
+  await page.goto(URL);
+
+  await page.getByRole("button", { name: "Start Flight" }).click();
+  await expect(page.getByTestId("armed")).toBeVisible();
+  await waitForWatch(page);
+  await emit([{}, {}, {}]);
+  await expect(page.getByText("Waiting for takeoff")).toBeVisible();
+
+  // Kill the webview while armed: the session must survive
+  await page.goto(URL);
+  await expect(page.getByTestId("armed")).toBeVisible();
+  await expect(page.getByText("Waiting for takeoff")).toBeVisible();
+
+  // …and takeoff detection must still work on the rehydrated buffer
+  await waitForWatch(page);
+  await emit(Array.from({ length: 6 }, () => ({ speed: 6 })));
+  await expect(page.getByTestId("recording")).toBeVisible();
 });
 
 test("landing prompt: dismiss re-arms, stop saves", async ({ page }) => {

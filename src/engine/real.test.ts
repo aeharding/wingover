@@ -1,8 +1,8 @@
 import { beforeEach, describe, expect, it } from "vitest";
 
 import { GeolocationRecordingEngine } from "./real";
-import { clearWal } from "./wal";
 import type { EngineStatus } from "./types";
+import { clearWal } from "./wal";
 
 class FakeGeolocation {
   private watchers = new Map<number, PositionCallback>();

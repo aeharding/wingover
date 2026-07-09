@@ -1,6 +1,6 @@
 import { useIonAlert } from "@ionic/react";
 
-import { deleteFlight, getTrack, type Flight } from "../storage/db";
+import { deleteFlight, type Flight, getTrack } from "../storage/db";
 import { downloadTextFile } from "./download";
 import { flightToGpx } from "./gpx";
 

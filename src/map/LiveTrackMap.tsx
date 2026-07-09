@@ -8,9 +8,10 @@ import { useEffect, useRef } from "react";
 
 import type { Fix } from "../engine/types";
 import { relativeBearing } from "../flight/nav";
-import MapView, { type MapLibreModule } from "./MapView";
-import { readLiveViewState, writeLiveViewState } from "./liveViewState";
 import type { MapViewKind } from "./config";
+import { readLiveViewState, writeLiveViewState } from "./liveViewState";
+import MapView, { type MapLibreModule } from "./MapView";
+
 import "./LiveTrackMap.css";
 
 const CHASE_MS = 800;

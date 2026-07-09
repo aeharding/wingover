@@ -5,6 +5,7 @@ import { computeStats } from "../flight/stats";
 import {
   deleteFlight,
   deletePin,
+  type Flight,
   getFlight,
   getSetting,
   getTrack,
@@ -15,7 +16,6 @@ import {
   setSetting,
   updateFlight,
   updatePin,
-  type Flight,
 } from "./db";
 
 function makeFlight(fixes: ReturnType<FlightSimulator["fixesUpTo"]>): Flight {

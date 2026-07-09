@@ -20,16 +20,16 @@ import {
   useIonRouter,
   useIonViewWillEnter,
 } from "@ionic/react";
+import { ellipsisHorizontal, shareOutline, trashOutline } from "ionicons/icons";
 import { useEffect, useRef, useState } from "react";
 import { Virtualizer } from "virtua";
-
-import { ellipsisHorizontal, shareOutline, trashOutline } from "ionicons/icons";
 
 import { formatDistance, formatDuration } from "../flight/format";
 import { importGpxFiles } from "../flight/importGpx";
 import { useFlightActions } from "../flight/useFlightActions";
 import { useSettings } from "../settings/SettingsContext";
-import { listFlights, type Flight } from "../storage/db";
+import { type Flight, listFlights } from "../storage/db";
+
 import "./LogbookPage.css";
 
 export default function LogbookPage() {

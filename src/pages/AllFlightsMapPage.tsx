@@ -12,10 +12,11 @@ import type { Feature } from "geojson";
 import type { GeoJSONSource, Map as MapLibreMap } from "maplibre-gl";
 import { useEffect, useRef, useState } from "react";
 
+import type { MapViewKind } from "../map/config";
 import MapView, { type MapLibreModule } from "../map/MapView";
 import ViewToggle from "../map/ViewToggle";
-import type { MapViewKind } from "../map/config";
 import { getSetting, getTrack, listFlights, setSetting } from "../storage/db";
+
 import "./AllFlightsMapPage.css";
 
 const OLDEST_HUE = 290;

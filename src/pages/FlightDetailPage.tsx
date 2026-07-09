@@ -30,18 +30,19 @@ import {
   formatSpeed,
 } from "../flight/format";
 import { useFlightActions } from "../flight/useFlightActions";
+import type { MapViewKind } from "../map/config";
 import MapView, { type MapLibreModule } from "../map/MapView";
 import ViewToggle from "../map/ViewToggle";
-import type { MapViewKind } from "../map/config";
 import { useSettings } from "../settings/SettingsContext";
 import {
+  type Flight,
   getFlight,
   getSetting,
   getTrack,
   setSetting,
   updateFlight,
-  type Flight,
 } from "../storage/db";
+
 import "./FlightDetailPage.css";
 
 function toLineData(track: Fix[]): Feature {
@@ -172,7 +173,6 @@ export default function FlightDetailPage() {
     return () => {
       for (const marker of markers) marker.remove();
     };
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [track, mapReady, flight?.id]);
 
   const stats = flight?.stats;

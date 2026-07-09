@@ -8,17 +8,18 @@ import { locateOutline } from "ionicons/icons";
 import type { Map as MapLibreMap, Marker } from "maplibre-gl";
 import { useEffect, useRef, useState } from "react";
 
+import type { MapViewKind } from "../map/config";
 import MapView, { type MapLibreModule } from "../map/MapView";
 import ViewToggle from "../map/ViewToggle";
-import type { MapViewKind } from "../map/config";
 import {
   deletePin,
   getSetting,
   listPins,
+  type Pin,
   savePin,
   setSetting,
-  type Pin,
 } from "../storage/db";
+
 import "./PlanPage.css";
 
 const PIN_SVG = `<svg viewBox="0 0 24 32" width="28" height="37" xmlns="http://www.w3.org/2000/svg"><path d="M12 0C5.4 0 0 5.4 0 12c0 9 12 20 12 20s12-11 12-20C24 5.4 18.6 0 12 0z" fill="#e0483a"/><circle cx="12" cy="12" r="5" fill="#fff"/></svg>`;

@@ -9,10 +9,6 @@ import { useEffect, useLayoutEffect, useRef, useState } from "react";
 import Tile from "../components/Tile";
 import { engine } from "../engine";
 import type { EngineStatus, Fix } from "../engine/types";
-import LiveTrackMap from "../map/LiveTrackMap";
-import ViewToggle from "../map/ViewToggle";
-import type { MapViewKind } from "../map/config";
-import { readLiveViewState, writeLiveViewState } from "../map/liveViewState";
 import {
   formatAltitude,
   formatClimb,
@@ -25,8 +21,13 @@ import {
 import { isLanded } from "../flight/landing";
 import { bearingBetween, relativeBearing } from "../flight/nav";
 import { computeStats, haversineMeters } from "../flight/stats";
+import type { MapViewKind } from "../map/config";
+import LiveTrackMap from "../map/LiveTrackMap";
+import { readLiveViewState, writeLiveViewState } from "../map/liveViewState";
+import ViewToggle from "../map/ViewToggle";
 import { useSettings } from "../settings/SettingsContext";
 import { getSetting, saveFlight, setSetting } from "../storage/db";
+
 import "./FlyPage.css";
 
 const initialSearch = location.search;

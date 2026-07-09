@@ -11,8 +11,8 @@ import {
   appendWalFix,
   clearWal,
   readWal,
-  writeWalSession,
   type WalSession,
+  writeWalSession,
 } from "./wal";
 
 // Thresholds in takeoff.ts are tuned for ~1 Hz fixes; platforms can burst

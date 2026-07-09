@@ -1,10 +1,10 @@
-import "maplibre-gl/dist/maplibre-gl.css";
-
 import type { Map as MapLibreMap } from "maplibre-gl";
 import { useEffect, useRef, useState } from "react";
 
-import { resolveMapStyle, type MapViewKind } from "./config";
+import { type MapViewKind, resolveMapStyle } from "./config";
+
 import "./MapView.css";
+import "maplibre-gl/dist/maplibre-gl.css";
 
 export type MapLibreModule = typeof import("maplibre-gl");
 
