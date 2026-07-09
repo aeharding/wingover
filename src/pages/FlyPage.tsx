@@ -233,7 +233,7 @@ export default function FlyPage() {
 
   return (
     <IonPage>
-      <IonContent fullscreen className="fly-content">
+      <IonContent fullscreen scrollY={false} className="fly-content">
         {status === "idle" && (
           <div className="fly-idle">
             <h1>Wingover</h1>

@@ -117,7 +117,7 @@ export default function PlanPage() {
 
   return (
     <IonPage>
-      <IonContent>
+      <IonContent scrollY={false}>
         <MapView view={view} onReady={handleReady} onLongPress={addPin} />
         <div className="map-overlay">
           <button

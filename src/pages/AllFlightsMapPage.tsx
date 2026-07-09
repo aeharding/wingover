@@ -132,7 +132,7 @@ export default function AllFlightsMapPage() {
           <IonTitle>All Flights</IonTitle>
         </IonToolbar>
       </IonHeader>
-      <IonContent>
+      <IonContent scrollY={false}>
         <div className="all-flights-map">
           <MapView view={view} onReady={handleReady} />
           <div className="composite-legend">

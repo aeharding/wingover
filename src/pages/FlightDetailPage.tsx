@@ -196,7 +196,7 @@ export default function FlightDetailPage() {
           </IonButtons>
         </IonToolbar>
       </IonHeader>
-      <IonContent>
+      <IonContent scrollY={false}>
         <div className="flight-detail-map">
           <MapView view={view} onReady={handleReady} />
           {flight && stats && (

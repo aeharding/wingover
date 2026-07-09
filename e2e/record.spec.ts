@@ -15,19 +15,22 @@ test("arm, auto-takeoff, reload kill drill, stop, logbook", async ({
   await expect(page.locator("[data-aircraft-layer='true']")).toBeVisible();
   await expect(page.getByTestId("instrument-duration")).not.toHaveText("0:00");
 
-  // CSS cascade guards: import sorting once put theme.css before Ionic's
-  // css and MapView.css before maplibre's, resurfacing the attribution
-  // background and a 1px document scrollbar.
-  const cascade = await page.evaluate(() => ({
-    overflowX: document.documentElement.scrollWidth - window.innerWidth,
-    overflowY: document.documentElement.scrollHeight - window.innerHeight,
+  // Style regression guards. The attribution must stay transparent
+  // (MapView.css loading after maplibre's css), and the fly page must not
+  // scroll — the scrollbar lives in ion-content's shadow DOM inner-scroll,
+  // which document-level overflow checks cannot see.
+  const styleGuards = await page.evaluate(() => ({
     attribBackground: getComputedStyle(
       document.querySelector(".maplibregl-ctrl-attrib")!,
     ).backgroundColor,
+    innerScrollOverflowY: getComputedStyle(
+      document
+        .querySelector("ion-content.fly-content")!
+        .shadowRoot!.querySelector(".inner-scroll")!,
+    ).overflowY,
   }));
-  expect(cascade.overflowX).toBe(0);
-  expect(cascade.overflowY).toBe(0);
-  expect(cascade.attribBackground).toBe("rgba(0, 0, 0, 0)");
+  expect(styleGuards.attribBackground).toBe("rgba(0, 0, 0, 0)");
+  expect(styleGuards.innerScrollOverflowY).toBe("hidden");
 
   await page.getByRole("button", { name: "Track up" }).click();
   await expect(page.getByRole("button", { name: "Track up" })).toHaveAttribute(
