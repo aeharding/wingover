@@ -9,7 +9,6 @@ import { useEffect, useRef } from "react";
 import type { Fix } from "../engine/types";
 import { relativeBearing } from "../flight/nav";
 import MapView, { type MapLibreModule } from "./MapView";
-import { labelInsertionPoint } from "./layers";
 import { readLiveViewState, writeLiveViewState } from "./liveViewState";
 import type { MapViewKind } from "./config";
 import "./LiveTrackMap.css";
@@ -520,17 +519,13 @@ export default function LiveTrackMap({
   function ensureTrackLayers(map: MapLibreMap) {
     if (map.getSource("track")) return;
     map.addSource("track", { type: "geojson", data: toLineData([]) });
-    const firstSymbol = labelInsertionPoint(map);
-    map.addLayer(
-      {
-        id: "track",
-        type: "line",
-        source: "track",
-        layout: { "line-cap": "round", "line-join": "round" },
-        paint: { "line-color": "#4cc2ff", "line-width": LINE_WIDTH_PX },
-      },
-      firstSymbol,
-    );
+    map.addLayer({
+      id: "track",
+      type: "line",
+      source: "track",
+      layout: { "line-cap": "round", "line-join": "round" },
+      paint: { "line-color": "#4cc2ff", "line-width": LINE_WIDTH_PX },
+    });
     lineCoordsRef.current = [];
     committedCountRef.current = 0;
     pendingCountRef.current = null;
@@ -539,10 +534,7 @@ export default function LiveTrackMap({
 
     const lib = libRef.current;
     if (lib && !map.getLayer("aircraft")) {
-      map.addLayer(
-        createAircraftLayer(lib, () => getAircraftFrame(map)),
-        firstSymbol,
-      );
+      map.addLayer(createAircraftLayer(lib, () => getAircraftFrame(map)));
       map.getContainer().setAttribute("data-aircraft-layer", "true");
     }
     if (displayRef.current) renderFrame(displayRef.current);

@@ -31,7 +31,6 @@ import {
 } from "../flight/format";
 import { useFlightActions } from "../flight/useFlightActions";
 import MapView, { type MapLibreModule } from "../map/MapView";
-import { labelInsertionPoint } from "../map/layers";
 import ViewToggle from "../map/ViewToggle";
 import type { MapViewKind } from "../map/config";
 import { useSettings } from "../settings/SettingsContext";
@@ -109,17 +108,13 @@ export default function FlightDetailPage() {
       type: "geojson",
       data: toLineData(trackRef.current),
     });
-    const firstSymbol = labelInsertionPoint(map);
-    map.addLayer(
-      {
-        id: "track",
-        type: "line",
-        source: "track",
-        layout: { "line-cap": "round", "line-join": "round" },
-        paint: { "line-color": "#4cc2ff", "line-width": 4 },
-      },
-      firstSymbol,
-    );
+    map.addLayer({
+      id: "track",
+      type: "line",
+      source: "track",
+      layout: { "line-cap": "round", "line-join": "round" },
+      paint: { "line-color": "#4cc2ff", "line-width": 4 },
+    });
     map.getContainer().setAttribute("data-track-layer", "true");
   }
 

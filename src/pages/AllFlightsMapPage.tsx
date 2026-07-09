@@ -13,7 +13,6 @@ import type { GeoJSONSource, Map as MapLibreMap } from "maplibre-gl";
 import { useEffect, useRef, useState } from "react";
 
 import MapView, { type MapLibreModule } from "../map/MapView";
-import { labelInsertionPoint } from "../map/layers";
 import ViewToggle from "../map/ViewToggle";
 import type { MapViewKind } from "../map/config";
 import { getSetting, getTrack, listFlights, setSetting } from "../storage/db";
@@ -75,21 +74,17 @@ export default function AllFlightsMapPage() {
       type: "geojson",
       data: { type: "FeatureCollection", features: featuresRef.current },
     });
-    const firstSymbol = labelInsertionPoint(map);
-    map.addLayer(
-      {
-        id: "flights",
-        type: "line",
-        source: "flights",
-        layout: { "line-cap": "round", "line-join": "round" },
-        paint: {
-          "line-color": ["get", "color"],
-          "line-width": 3.5,
-          "line-opacity": 0.9,
-        },
+    map.addLayer({
+      id: "flights",
+      type: "line",
+      source: "flights",
+      layout: { "line-cap": "round", "line-join": "round" },
+      paint: {
+        "line-color": ["get", "color"],
+        "line-width": 3.5,
+        "line-opacity": 0.9,
       },
-      firstSymbol,
-    );
+    });
     map.getContainer().setAttribute("data-flights-layer", "true");
   }
 
