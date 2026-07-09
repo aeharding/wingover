@@ -16,6 +16,7 @@ import "./LiveTrackMap.css";
 
 const CHASE_MS = 800;
 const COURSE_SMOOTH_MS = 400;
+const BEARING_SMOOTH_MS = 800;
 const OVERSCAN_PX = 256;
 const ARROW_PX = 30;
 const LINE_WIDTH_PX = 4;
@@ -37,6 +38,10 @@ interface DisplayPosition {
   lng: number;
   lat: number;
   course: number;
+}
+
+function normalizeDeg(degrees: number) {
+  return ((degrees % 360) + 360) % 360;
 }
 
 function toLineData(coordinates: [number, number][]): Feature {
@@ -271,6 +276,7 @@ export default function LiveTrackMap({
   const lastCommitAtRef = useRef(0);
   const playheadRef = useRef<{ ts: number; index: number } | null>(null);
   const smoothedCourseRef = useRef<number | null>(null);
+  const cameraBearingRef = useRef<number | null>(null);
   const loopFrameRef = useRef<number | undefined>(undefined);
   const lastStepAtRef = useRef(0);
 
@@ -281,6 +287,15 @@ export default function LiveTrackMap({
       left: OVERSCAN_PX,
       right: OVERSCAN_PX,
     };
+  }
+
+  // While following, zoom gestures anchor at the (padded) center where the
+  // aircraft sits, so pinch/scroll never tugs it toward the cursor. Unpinned
+  // zoom anchors at the cursor as usual.
+  function applyZoomAnchor(map: MapLibreMap, following: boolean) {
+    const options = following ? { around: "center" as const } : undefined;
+    map.scrollZoom.enable(options);
+    map.touchZoomRotate.enable(options);
   }
 
   // The line only ever contains fixes the playhead has passed, so it can
@@ -356,12 +371,14 @@ export default function LiveTrackMap({
           committed: number;
           total: number;
           tailCoords: [number, number][];
+          playheadTs: number | null;
         };
       }
     ).__tail = {
       committed: committedCountRef.current,
       total: coords.length,
       tailCoords: tail,
+      playheadTs: playheadRef.current?.ts ?? null,
     };
     return { display, tail };
   }
@@ -375,15 +392,12 @@ export default function LiveTrackMap({
       map.getContainer() as HTMLElement & { __display?: DisplayPosition }
     ).__display = position;
 
-    if (
-      followRef.current &&
-      !interactingRef.current &&
-      !map.isZooming() &&
-      !map.isRotating()
-    ) {
+    if (followRef.current && !interactingRef.current) {
       map.jumpTo({
         center: [position.lng, position.lat],
-        bearing: trackUpRef.current ? position.course : 0,
+        bearing:
+          cameraBearingRef.current ??
+          (trackUpRef.current ? position.course : 0),
         padding: cameraPadding(),
       });
     } else {
@@ -402,6 +416,7 @@ export default function LiveTrackMap({
     if (fixes.length === 0) {
       playheadRef.current = null;
       smoothedCourseRef.current = null;
+      cameraBearingRef.current = null;
       return;
     }
 
@@ -414,6 +429,7 @@ export default function LiveTrackMap({
       playhead = { ts: last.timestamp, index: fixes.length - 1 };
     }
 
+    const previousTs = playhead.ts;
     const remaining = last.timestamp - playhead.ts;
     if (remaining > 0) {
       playhead.ts += remaining * Math.min(1, dt / CHASE_MS);
@@ -445,16 +461,37 @@ export default function LiveTrackMap({
     }
 
     // Low-pass the heading: segment-wise lerp alone kinks at every fix
-    // boundary, which reads as snapping (worst in track-up).
+    // boundary, which reads as snapping (worst in track-up). Smoothing runs
+    // on the playhead's clock, not wall time, so it keeps pace with the turn
+    // at any playback compression.
+    const smoothFactor = Math.min(
+      1,
+      (playhead.ts - previousTs) / COURSE_SMOOTH_MS,
+    );
     const prevCourse = smoothedCourseRef.current;
     const smoothedCourse =
       prevCourse === null
         ? display.course
         : prevCourse +
-          relativeBearing(prevCourse, display.course) *
-            Math.min(1, dt / COURSE_SMOOTH_MS);
-    smoothedCourseRef.current = ((smoothedCourse % 360) + 360) % 360;
+          relativeBearing(prevCourse, display.course) * smoothFactor;
+    smoothedCourseRef.current = normalizeDeg(smoothedCourse);
     display.course = smoothedCourseRef.current;
+
+    // The camera bearing chases its target through the same loop instead of
+    // an easeTo: an ease would pause recentering for its whole duration
+    // (isRotating) while the aircraft keeps moving. Unlike the aircraft
+    // heading, it smooths in REAL time — it rotates the entire viewport, so
+    // its rate must stay comfortable at any playback compression.
+    const bearingTarget = trackUpRef.current ? display.course : 0;
+    const prevBearing = cameraBearingRef.current;
+    cameraBearingRef.current =
+      prevBearing === null
+        ? bearingTarget
+        : normalizeDeg(
+            prevBearing +
+              relativeBearing(prevBearing, bearingTarget) *
+                Math.min(1, dt / BEARING_SMOOTH_MS),
+          );
 
     syncLine(map);
     renderFrame(display);
@@ -470,9 +507,12 @@ export default function LiveTrackMap({
     loopFrameRef.current = requestAnimationFrame(stepPlayhead);
   }
 
+  // Fast refresh preserves refs but re-runs effects: clear the frame id so
+  // ensureLoop can restart the loop after HMR instead of seeing a stale id.
   useEffect(
     () => () => {
       if (loopFrameRef.current) cancelAnimationFrame(loopFrameRef.current);
+      loopFrameRef.current = undefined;
     },
     [],
   );
@@ -511,6 +551,7 @@ export default function LiveTrackMap({
   function handleReady(map: MapLibreMap, lib: MapLibreModule) {
     mapRef.current = map;
     libRef.current = lib;
+    applyZoomAnchor(map, followRef.current);
     map.on("style.load", () => ensureTrackLayers(map));
     map.on("mousedown", () => {
       interactingRef.current = true;
@@ -576,20 +617,23 @@ export default function LiveTrackMap({
 
   useEffect(() => {
     const map = mapRef.current;
+    if (!map) return;
+    applyZoomAnchor(map, follow);
     const position = displayRef.current;
-    if (!follow || !map || !position) return;
-    map.easeTo({
+    if (!follow || !position) return;
+    const bearing = trackUpRef.current ? position.course : 0;
+    cameraBearingRef.current = bearing;
+    map.jumpTo({
       center: [position.lng, position.lat],
       zoom: Math.max(map.getZoom(), 11),
-      bearing: trackUpRef.current ? position.course : 0,
+      bearing,
       padding: cameraPadding(),
-      duration: 200,
     });
   }, [follow]);
 
   useEffect(() => {
     const map = mapRef.current;
-    if (!map) return;
+    if (!map || followRef.current) return;
     map.easeTo({
       bearing: trackUp ? (displayRef.current?.course ?? 0) : 0,
       duration: 400,
