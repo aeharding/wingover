@@ -42,7 +42,10 @@ export default defineConfig(
           type: "natural",
           ignoreCase: false,
           tsconfig: { rootDir: "." },
-          sortSideEffects: true,
+          // Never sort side-effect imports: CSS cascade order is
+          // load-bearing (theme.css must follow Ionic css, MapView.css
+          // must follow maplibre-gl.css).
+          sortSideEffects: false,
           groups: [
             "builtin",
             "external",

@@ -3,8 +3,8 @@ import { useEffect, useRef, useState } from "react";
 
 import { type MapViewKind, resolveMapStyle } from "./config";
 
-import "./MapView.css";
 import "maplibre-gl/dist/maplibre-gl.css";
+import "./MapView.css";
 
 export type MapLibreModule = typeof import("maplibre-gl");
 
