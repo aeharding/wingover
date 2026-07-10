@@ -15,7 +15,20 @@ import MapView, { type MapLibreModule } from "./MapView";
 
 import "./LiveTrackMap.css";
 
-const CHASE_MS = 800;
+// Playback runs a fixed lag behind the newest fix as piecewise-linear legs
+// at constant velocity — proportional chasing surges after every fix and
+// crawls before the next, which reads as 1 Hz speed pulsing.
+const SNAP_LAG_REAL_MS = 2500;
+const FIX_INTERVAL_MIN_MS = 30;
+const FIX_INTERVAL_MAX_MS = 3000;
+const FIX_INTERVAL_EMA_ALPHA = 0.2;
+// When frames stall and a backlog builds, clear it at a bounded overspeed
+// instead of compressing it into one leg (reads as a teleport).
+const MAX_CATCHUP_RATE = 1.5;
+// Legs run slightly longer than the expected interval so ordinary arrival
+// jitter starts the next leg before this one starves (a paused playhead
+// reads as motion stutter); the cost is a fraction of a fix of extra lag.
+const LEG_DURATION_PAD = 1.15;
 const COURSE_SMOOTH_MS = 400;
 const BEARING_SMOOTH_MS = 800;
 const ZOOM_SMOOTH_MS = 200;
@@ -275,6 +288,16 @@ export default function LiveTrackMap({
   const playheadRef = useRef<{ ts: number; index: number } | null>(null);
   const smoothedCourseRef = useRef<number | null>(null);
   const cameraBearingRef = useRef<number | null>(null);
+  // Playback leg: advance the playhead toward toTs at a fixed track-time
+  // rate per real ms. Rate-based (not wall-clock) so starved frames advance
+  // proportionally instead of stalling and teleporting.
+  const legRef = useRef<{ toTs: number; rate: number } | null>(null);
+  const fixIntervalEmaRef = useRef(1000);
+  // Track-time production rate (timestamp ms per real ms): 1 at live speed,
+  // the compression factor under the mock.
+  const trackRateEmaRef = useRef(1);
+  const lastFixArrivalRef = useRef<number | null>(null);
+  const lastFixTsRef = useRef<number | null>(null);
   const zoomTargetRef = useRef<number | null>(null);
   const loopFrameRef = useRef<number | undefined>(undefined);
   const lastStepAtRef = useRef(0);
@@ -405,9 +428,9 @@ export default function LiveTrackMap({
     }
   }
 
-  // The playhead travels along the recorded track polyline, chasing the
-  // newest fix with an exponential rubber-band (steady-state lag ≈ CHASE_MS).
-  // Both the aircraft and the line derive from it, so they cannot diverge.
+  // The playhead travels along the recorded track polyline at constant
+  // velocity per leg, one learned fix-interval behind live. Both the
+  // aircraft and the line derive from it, so they cannot diverge.
   // An Effect Event so the rAF callback always sees the latest props.
   const stepPlayhead = useEffectEvent((now: number) => {
     loopFrameRef.current = undefined;
@@ -418,6 +441,9 @@ export default function LiveTrackMap({
       playheadRef.current = null;
       smoothedCourseRef.current = null;
       cameraBearingRef.current = null;
+      legRef.current = null;
+      lastFixArrivalRef.current = null;
+      lastFixTsRef.current = null;
       return;
     }
 
@@ -428,12 +454,14 @@ export default function LiveTrackMap({
     let playhead = playheadRef.current;
     if (!playhead || playhead.index >= fixes.length) {
       playhead = { ts: last.timestamp, index: fixes.length - 1 };
+      legRef.current = null;
     }
 
     const previousTs = playhead.ts;
-    const remaining = last.timestamp - playhead.ts;
-    if (remaining > 0) {
-      playhead.ts += remaining * Math.min(1, dt / CHASE_MS);
+    const leg = legRef.current;
+    if (leg) {
+      playhead.ts = Math.min(leg.toTs, playhead.ts + leg.rate * dt);
+      if (playhead.ts >= leg.toTs) legRef.current = null;
     }
     while (
       playhead.index < fixes.length - 1 &&
@@ -514,7 +542,7 @@ export default function LiveTrackMap({
     syncLine(map);
     renderFrame(map, display, zoom);
 
-    if (playhead.ts < last.timestamp - 1 || zoomTargetRef.current !== null) {
+    if (legRef.current !== null || zoomTargetRef.current !== null) {
       loopFrameRef.current = requestAnimationFrame((next) =>
         stepPlayhead(next),
       );
@@ -657,6 +685,48 @@ export default function LiveTrackMap({
         bearing: trackUp ? fix.course : 0,
         padding: cameraPadding(),
       });
+    }
+
+    const now = performance.now();
+    const lastArrival = lastFixArrivalRef.current;
+    const lastFixTs = lastFixTsRef.current;
+    if (lastArrival !== null && lastFixTs !== null) {
+      const arrivalDelta = Math.min(
+        FIX_INTERVAL_MAX_MS,
+        Math.max(FIX_INTERVAL_MIN_MS, now - lastArrival),
+      );
+      fixIntervalEmaRef.current =
+        fixIntervalEmaRef.current * (1 - FIX_INTERVAL_EMA_ALPHA) +
+        arrivalDelta * FIX_INTERVAL_EMA_ALPHA;
+      const trackDelta = fix.timestamp - lastFixTs;
+      if (trackDelta > 0) {
+        const rate = Math.min(500, Math.max(0.1, trackDelta / arrivalDelta));
+        trackRateEmaRef.current =
+          trackRateEmaRef.current * (1 - FIX_INTERVAL_EMA_ALPHA) +
+          rate * FIX_INTERVAL_EMA_ALPHA;
+      }
+    }
+    lastFixArrivalRef.current = now;
+    lastFixTsRef.current = fix.timestamp;
+
+    const playhead = playheadRef.current;
+    if (playhead) {
+      const backlogTrackMs = fix.timestamp - playhead.ts;
+      const backlogRealMs = backlogTrackMs / trackRateEmaRef.current;
+      if (backlogRealMs > SNAP_LAG_REAL_MS) {
+        // Hopelessly behind (backgrounded tab): jump instead of animating.
+        playhead.ts = fix.timestamp;
+        legRef.current = null;
+      } else if (backlogTrackMs > 0) {
+        const duration = Math.max(
+          fixIntervalEmaRef.current * LEG_DURATION_PAD,
+          backlogRealMs / MAX_CATCHUP_RATE,
+        );
+        legRef.current = {
+          toTs: fix.timestamp,
+          rate: backlogTrackMs / duration,
+        };
+      }
     }
     ensureLoop();
   });

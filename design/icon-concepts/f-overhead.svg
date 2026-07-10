@@ -13,31 +13,43 @@
   <g clip-path="url(#sq3)">
     <rect width="1024" height="1024" fill="url(#sky3)"/>
     <circle cx="150" cy="240" r="14" fill="#FFE8C2" opacity="0.7"/>
-    <rect x="620" y="640" width="180" height="26" rx="13" fill="#FFDFAC" opacity="0.4"/>
-    <rect x="700" y="692" width="110" height="22" rx="11" fill="#FFDFAC" opacity="0.3"/>
-    <circle cx="352" cy="822" r="140" fill="#FFC66B"/>
-    <g stroke="#2A1E52" stroke-width="8">
-      <line x1="315" y1="701" x2="620" y2="1120"/>
-      <line x1="457" y1="587" x2="620" y2="1120"/>
-      <line x1="594" y1="468" x2="620" y2="1120"/>
-      <line x1="726" y1="344" x2="620" y2="1120"/>
-      <line x1="855" y1="215" x2="620" y2="1120"/>
-    </g>
-    <path d="M 170 810
-             A 760 760 0 0 1 855 215
-             A 5152 5152 0 0 1 170 810
-             Z"
-          fill="#FFEFD3" stroke="#FFEFD3" stroke-width="22"
-          stroke-linejoin="round"/>
-    <g stroke="#EBCFA2" stroke-width="7" stroke-linecap="round">
-      <line x1="223" y1="663" x2="280" y2="729"/>
-      <line x1="268" y1="576" x2="351" y2="673"/>
-      <line x1="320" y1="499" x2="422" y2="616"/>
-      <line x1="381" y1="430" x2="491" y2="557"/>
-      <line x1="449" y1="371" x2="560" y2="498"/>
-      <line x1="526" y1="320" x2="627" y2="437"/>
-      <line x1="610" y1="279" x2="694" y2="375"/>
-      <line x1="702" y1="247" x2="759" y2="312"/>
+    <rect x="640" y="700" width="180" height="26" rx="13" fill="#FFDFAC" opacity="0.4"/>
+    <rect x="730" y="752" width="110" height="22" rx="11" fill="#FFDFAC" opacity="0.3"/>
+    <circle cx="348" cy="812" r="135" fill="#FFC66B"/>
+    <g transform="translate(25 -20)">
+      <g stroke="#3A2A5E" stroke-width="4" opacity="0.55" fill="none">
+        <path d="M 103 927 Q 143 1014 213 1080"/>
+        <path d="M 185 856 Q 241 978 328 1080"/>
+        <path d="M 267 784 Q 335 941 435 1080"/>
+        <path d="M 348 713 Q 424 905 533 1080"/>
+        <path d="M 429 641 Q 510 868 624 1080"/>
+        <path d="M 510 569 Q 593 831 709 1080"/>
+        <path d="M 591 496 Q 823 734 1080 946"/>
+        <path d="M 671 424 Q 863 649 1080 849"/>
+        <path d="M 751 352 Q 902 557 1080 738"/>
+        <path d="M 832 279 Q 942 455 1080 609"/>
+        <path d="M 911 206 Q 981 343 1080 461"/>
+      </g>
+      <path d="M 60 935
+               A 1415 1415 0 0 1 1005 90
+               A 40198 40198 0 0 1 60 935
+               Z"
+            fill="#FFEFD3" stroke="#FFEFD3" stroke-width="60"
+            stroke-linecap="round" stroke-linejoin="round"/>
+      <g stroke="#F0D8AC" stroke-width="5" stroke-linecap="round" opacity="0.8">
+        <line x1="62" y1="880" x2="103" y2="927"/>
+        <line x1="113" y1="776" x2="185" y2="856"/>
+        <line x1="171" y1="677" x2="267" y2="784"/>
+        <line x1="234" y1="586" x2="348" y2="713"/>
+        <line x1="304" y1="500" x2="429" y2="641"/>
+        <line x1="378" y1="422" x2="510" y2="569"/>
+        <line x1="459" y1="349" x2="591" y2="496"/>
+        <line x1="546" y1="284" x2="671" y2="424"/>
+        <line x1="637" y1="225" x2="751" y2="352"/>
+        <line x1="736" y1="172" x2="832" y2="279"/>
+        <line x1="840" y1="126" x2="911" y2="206"/>
+        <line x1="951" y1="86" x2="992" y2="132"/>
+      </g>
     </g>
   </g>
 </svg>
