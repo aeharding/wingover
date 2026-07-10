@@ -15,21 +15,21 @@ test("arm, auto-takeoff, reload kill drill, stop, logbook", async ({
   await expect(page.locator("[data-aircraft-layer='true']")).toBeVisible();
   await expect(page.getByTestId("instrument-duration")).not.toHaveText("0:00");
 
-  // Style regression guards. Street view carries no on-map attribution
-  // (it lives on the Settings page; satellite keeps a compact control for
-  // MapTiler's terms), and the fly page must not scroll — the scrollbar
-  // lives in ion-content's shadow DOM inner-scroll, which document-level
-  // overflow checks cannot see.
+  // Style regression guards. The attribution must stay transparent
+  // (MapView.css loading after maplibre's css), and the fly page must not
+  // scroll — the scrollbar lives in ion-content's shadow DOM inner-scroll,
+  // which document-level overflow checks cannot see.
   const styleGuards = await page.evaluate(() => ({
-    attributionCount: document.querySelectorAll(".maplibregl-ctrl-attrib")
-      .length,
+    attribBackground: getComputedStyle(
+      document.querySelector(".maplibregl-ctrl-attrib")!,
+    ).backgroundColor,
     innerScrollOverflowY: getComputedStyle(
       document
         .querySelector("ion-content.fly-content")!
         .shadowRoot!.querySelector(".inner-scroll")!,
     ).overflowY,
   }));
-  expect(styleGuards.attributionCount).toBe(0);
+  expect(styleGuards.attribBackground).toBe("rgba(0, 0, 0, 0)");
   expect(styleGuards.innerScrollOverflowY).toBe("hidden");
 
   await page.getByRole("button", { name: "Track up" }).click();

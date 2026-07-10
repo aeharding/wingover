@@ -5,7 +5,6 @@ import {
   IonItem,
   IonLabel,
   IonList,
-  IonListHeader,
   IonNote,
   IonPage,
   IonSegment,
@@ -61,45 +60,6 @@ export default function SettingsPage() {
               <IonSegmentButton value="imperial">Imperial</IonSegmentButton>
               <IonSegmentButton value="metric">Metric</IonSegmentButton>
             </IonSegment>
-          </IonItem>
-        </IonList>
-        <IonList>
-          <IonListHeader>
-            <IonLabel>Map data</IonLabel>
-          </IonListHeader>
-          <IonItem
-            href="https://www.openstreetmap.org/copyright"
-            target="_blank"
-            rel="noopener"
-            detail
-            data-testid="osm-attribution"
-          >
-            <IonLabel>
-              <h3>© OpenStreetMap contributors</h3>
-              <p>Map data available under the Open Database License</p>
-            </IonLabel>
-          </IonItem>
-          <IonItem
-            href="https://openfreemap.org"
-            target="_blank"
-            rel="noopener"
-            detail
-          >
-            <IonLabel>
-              <h3>OpenFreeMap</h3>
-              <p>Street map tiles</p>
-            </IonLabel>
-          </IonItem>
-          <IonItem
-            href="https://www.maptiler.com/copyright/"
-            target="_blank"
-            rel="noopener"
-            detail
-          >
-            <IonLabel>
-              <h3>© MapTiler</h3>
-              <p>Satellite imagery</p>
-            </IonLabel>
           </IonItem>
         </IonList>
         <div style={{ textAlign: "center", paddingTop: "2rem" }}>

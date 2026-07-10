@@ -87,8 +87,6 @@ Ring 1 (browser) is fully working and verified:
 9. **To-launch tile**: shows rotated arrow + distance home (steer by arrow, fuel-plan by number). PPG Flyer showed relative degrees instead — want the degrees added/back?
 10. ~~"Flights on a computer"~~ **Resolved 2026-07-09**: PWA only — no native desktop app. Native mobile wrappers exist solely for recording reliability. Desktop = installable web app syncing via CouchDB (E2EE decryption client-side works in-browser). Static hosting for the PWA (e.g. wingover.app) keeps the zero-dynamic-backend posture.
 
-11. **MapTiler attribution plan check**: OSM attribution moved to Settings (per OSM app guidelines); satellite view keeps a compact on-map control because MapTiler's FREE tier requires on-map credit. If your MapTiler plan permits custom attribution placement, the satellite control can go too — one-line change in MapView.tsx `syncAttribution`.
-
 ## Later / parked
 
 - ~~Code splitting~~ — rejected by Alex 2026-07-09: mobile app, bundle ships locally, not a concern
