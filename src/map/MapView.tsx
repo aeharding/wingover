@@ -1,4 +1,4 @@
-import type { Map as MapLibreMap } from "maplibre-gl";
+import type { AttributionControl, Map as MapLibreMap } from "maplibre-gl";
 import { useEffect, useRef, useState } from "react";
 
 import { type MapViewKind, resolveMapStyle } from "./config";
@@ -16,11 +16,7 @@ interface MapViewProps {
 
 const LONG_PRESS_MS = 500;
 const MOVE_TOLERANCE_PX = 10;
-const ATTRIBUTION_LINGER_MS = 6000;
 const REVEAL_FALLBACK_MS = 4000;
-
-let attributionShownThisLaunch = false;
-let attributionLingerElapsed = false;
 
 export default function MapView({ view, onReady, onLongPress }: MapViewProps) {
   const containerRef = useRef<HTMLDivElement>(null);
@@ -32,10 +28,30 @@ export default function MapView({ view, onReady, onLongPress }: MapViewProps) {
   const initialViewRef = useRef(view);
   const [revealed, setRevealed] = useState(false);
 
+  // OSM attribution lives on the Settings page. The on-map control exists
+  // only for satellite view, where MapTiler's terms require on-map credit.
+  const attributionRef = useRef<AttributionControl | null>(null);
+  const libRef = useRef<MapLibreModule | null>(null);
+
+  function syncAttribution(map: MapLibreMap, current: MapViewKind) {
+    const lib = libRef.current;
+    if (!lib) return;
+    if (current === "satellite" && !attributionRef.current) {
+      attributionRef.current = new lib.AttributionControl({ compact: true });
+      map.addControl(attributionRef.current, "bottom-left");
+      const attribution = map
+        .getContainer()
+        .querySelector(".maplibregl-ctrl-attrib") as HTMLDetailsElement | null;
+      if (attribution) attribution.open = false;
+    } else if (current !== "satellite" && attributionRef.current) {
+      map.removeControl(attributionRef.current);
+      attributionRef.current = null;
+    }
+  }
+
   useEffect(() => {
     let cancelled = false;
     let map: MapLibreMap | undefined;
-    let attributionObserver: MutationObserver | undefined;
     const reveal = () => {
       if (!cancelled) setRevealed(true);
     };
@@ -45,6 +61,7 @@ export default function MapView({ view, onReady, onLongPress }: MapViewProps) {
       const lib = await import("maplibre-gl");
       const style = await resolveMapStyle(initialViewRef.current);
       if (cancelled || !containerRef.current) return;
+      libRef.current = lib;
       map = new lib.Map({
         container: containerRef.current,
         style,
@@ -53,40 +70,7 @@ export default function MapView({ view, onReady, onLongPress }: MapViewProps) {
         fadeDuration: 0,
         attributionControl: false,
       });
-      map.addControl(
-        new lib.AttributionControl({ compact: true }),
-        "bottom-left",
-      );
-      const attribution = containerRef.current.querySelector(
-        ".maplibregl-ctrl-attrib",
-      ) as HTMLDetailsElement | null;
-      if (attribution) {
-        const collapse = () => {
-          attribution.open = false;
-        };
-        if (attributionShownThisLaunch) {
-          collapse();
-        } else {
-          attributionShownThisLaunch = true;
-          setTimeout(() => {
-            attributionLingerElapsed = true;
-            collapse();
-          }, ATTRIBUTION_LINGER_MS);
-        }
-
-        let userToggleAt = 0;
-        attribution.querySelector("summary")?.addEventListener("click", () => {
-          userToggleAt = Date.now();
-        });
-        attributionObserver = new MutationObserver(() => {
-          if (!attributionLingerElapsed) return;
-          if (attribution.open && Date.now() - userToggleAt > 400) collapse();
-        });
-        attributionObserver.observe(attribution, {
-          attributes: true,
-          attributeFilter: ["open"],
-        });
-      }
+      syncAttribution(map, initialViewRef.current);
       mapRef.current = map;
       (containerRef.current as HTMLDivElement & { __map?: MapLibreMap }).__map =
         map;
@@ -147,7 +131,7 @@ export default function MapView({ view, onReady, onLongPress }: MapViewProps) {
     return () => {
       cancelled = true;
       clearTimeout(revealFallback);
-      attributionObserver?.disconnect();
+      attributionRef.current = null;
       map?.remove();
       mapRef.current = null;
     };
@@ -156,8 +140,12 @@ export default function MapView({ view, onReady, onLongPress }: MapViewProps) {
   useEffect(() => {
     (async () => {
       const style = await resolveMapStyle(view);
-      mapRef.current?.setStyle(style);
+      const map = mapRef.current;
+      if (!map) return;
+      map.setStyle(style);
+      syncAttribution(map, view);
     })();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [view]);
 
   const classes = [
