@@ -76,7 +76,7 @@ Ring 1 (browser) is fully working and verified:
 
 ## Questions for Alex (answer when back online)
 
-1. ~~Initial commit~~ **Committed 2026-07-09** (`d9175b9` + follow-up polish). Still open: create `aeharding/wingover` on GitHub and push?
+1. ~~Initial commit + GitHub repo~~ **Resolved 2026-07-09**: `aeharding/wingover` created by Alex, main pushed, CI live. Reminder: `DEFAULT_MAPTILER_KEY` in `src/map/config.ts` is public by design (origin/UA-restricted).
 2. **Takeoff thresholds** (pilot sanity check): arm→record at ≥5 m/s (~11 mph) sustained 5 s, backdate through ≥1.5 m/s movement. Reasonable for foot launch? Trikes? Should strong-wind kiting (can exceed 11 mph briefly) be a concern, or does the 5 s sustain handle it?
 3. **GPS accuracy gate**: ≤10 m horizontal / ≤15 m vertical sustained 3 fixes before "waiting for takeoff". Too strict/loose?
 4. **Climb rate units**: ft/s like PPG Flyer, or fpm? (Currently ft/s.)
