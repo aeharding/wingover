@@ -8,6 +8,11 @@
     "geolocation:allow-check-permissions",
     "geolocation:allow-request-permissions",
     "geolocation:allow-watch-position",
-    "geolocation:allow-clear-watch"
+    "geolocation:allow-clear-watch",
+    "wingover-location:allow-start-watch",
+    "wingover-location:allow-fixes-since",
+    "wingover-location:allow-stop-watch",
+    "wingover-location:allow-check-permissions",
+    "wingover-location:allow-request-permissions"
   ]
 }

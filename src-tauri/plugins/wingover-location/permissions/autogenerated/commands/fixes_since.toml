@@ -1,0 +1,13 @@
+# Automatically generated - DO NOT EDIT!
+
+"$schema" = "../../schemas/schema.json"
+
+[[permission]]
+identifier = "allow-fixes-since"
+description = "Enables the fixes_since command without any pre-configured scope."
+commands.allow = ["fixes_since"]
+
+[[permission]]
+identifier = "deny-fixes-since"
+description = "Denies the fixes_since command without any pre-configured scope."
+commands.deny = ["fixes_since"]

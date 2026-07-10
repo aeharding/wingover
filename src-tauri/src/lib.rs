@@ -3,6 +3,18 @@ pub fn run() {
     let builder = tauri::Builder::default();
     #[cfg(mobile)]
     let builder = builder.plugin(tauri_plugin_geolocation::init());
+    let builder = builder.plugin(wingover_location::init());
+    // WKWebView does NOT reload itself when iOS/macOS kills its content
+    // process (memory pressure while backgrounded does this routinely) —
+    // without this hook the app stays a dead white view until relaunch.
+    // Reloading brings the UI back up to rehydrate from the WAL + native
+    // fix queue, per the reliability doctrine.
+    #[cfg(any(target_os = "macos", target_os = "ios"))]
+    let builder = builder.on_web_content_process_terminate(|webview| {
+        if let Err(error) = webview.reload() {
+            log::error!("failed to reload webview after content process death: {error}");
+        }
+    });
     builder
         .setup(|_app| {
             // tao's iOS Window::inner_size() reports the safe-area size, so the
