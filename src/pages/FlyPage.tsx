@@ -139,10 +139,14 @@ export default function FlyPage() {
 
   useLayoutEffect(() => {
     if (status !== "recording") return;
-    const measure = () =>
-      setMapTopInset(
-        instrumentsRef.current?.getBoundingClientRect().height ?? 0,
-      );
+    // Rounded to an even device-pixel count: the camera's screen anchor
+    // shifts by inset/2, and a fractional anchor would defeat the map's
+    // pixel-snapped rendering.
+    const measure = () => {
+      const height = instrumentsRef.current?.getBoundingClientRect().height;
+      const dpr = window.devicePixelRatio || 1;
+      setMapTopInset(height ? Math.round((height * dpr) / 2) * (2 / dpr) : 0);
+    };
     measure();
     window.addEventListener("resize", measure);
     return () => window.removeEventListener("resize", measure);
