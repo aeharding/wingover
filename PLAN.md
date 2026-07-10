@@ -126,8 +126,8 @@ the same contract.
 ## Questions for Alex (answer when back online)
 
 1. ~~Initial commit + GitHub repo~~ **Resolved 2026-07-09**: `aeharding/wingover` created by Alex, main pushed, CI live. Reminder: `DEFAULT_MAPTILER_KEY` in `src/map/config.ts` is public by design (origin/UA-restricted).
-2. ~~Takeoff thresholds~~ **Resolved 2026-07-10** (device testing): lowered to ≥4.5 m/s (≈10 mph — ">10 mph should trigger" per Alex) sustained 5 fixes; backdate threshold unchanged at ≥1.5 m/s.
-3. **GPS accuracy gate**: ≤10 m horizontal / ≤15 m vertical sustained 3 fixes before "waiting for takeoff". Too strict/loose?
+2. ~~Takeoff thresholds~~ **Resolved 2026-07-10** (device testing): lowered to ≥4.5 m/s (≈10 mph — ">10 mph should trigger" per Alex) sustained 5 fixes; backdate threshold unchanged at ≥1.5 m/s. **Real root cause of the ground-test no-trigger**: takeoff detection demanded the strict two-axis accuracy check per fix, and accuracy degrades in motion — one bad fix per five resets the sustain forever while the armed screen shows only speed. detectTakeoff/backdate now use hAcc ≤ 35 m only (credible doppler speed; still rejects wifi junk); the strict gate remains for arming.
+3. **GPS accuracy gate**: ≤10 m horizontal / ≤15 m vertical sustained 3 fixes before "waiting for takeoff". Too strict/loose? _Device evidence 2026-07-10: gate passed outdoors on hardware, so plausibly right for arming; takeoff detection no longer uses it (see #2)._
 4. **Climb rate units**: ft/s like PPG Flyer, or fpm? (Currently ft/s.)
 5. **Landing auto-detection**: ~~auto-stop vs prompt~~ **Default shipped 2026-07-09**: prompt with 30 s countdown → auto-stop (steering-doc guarded-action posture). Sanity-check the thresholds: ≤1.0 m/s sustained 15 s. OK? Also: should the countdown be longer on-device?
 6. **Map tiles**: OpenFreeMap as default provider OK?

@@ -110,4 +110,20 @@ describe("detectTakeoff", () => {
       detectTakeoff(fixesFrom([0.2, 0.1, TAKEOFF_SPEED_MPS + 1, 6, 7, 8, 9])),
     ).toBe(2);
   });
+
+  // On-device regression (2026-07-10): armed ground test at 15+ mph never
+  // recorded — GPS accuracy degrades in motion and the old strict
+  // two-axis check kept resetting the sustain run. Takeoff only needs a
+  // credible speed: moderate horizontal accuracy, vertical irrelevant.
+  it("triggers with degraded accuracy in motion", () => {
+    const track = fixesFrom([
+      0.2,
+      { speed: 6.7, horizontalAccuracy: 18, verticalAccuracy: 40 },
+      { speed: 7.0, horizontalAccuracy: 25, verticalAccuracy: 60 },
+      { speed: 7.2, horizontalAccuracy: 12, verticalAccuracy: 25 },
+      { speed: 6.9, horizontalAccuracy: 30, verticalAccuracy: 48 },
+      { speed: 7.1, horizontalAccuracy: 22, verticalAccuracy: 35 },
+    ]);
+    expect(detectTakeoff(track)).toBe(1);
+  });
 });
