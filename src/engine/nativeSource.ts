@@ -1,8 +1,9 @@
 import { invoke } from "@tauri-apps/api/core";
 
-import type { PositionSource, SourcePosition } from "./real";
+import type { CoreClient, PositionSource, SourcePosition } from "./real";
+import type { Waypoint } from "./types";
 
-// Pull-based source over the wingover-location plugin. The native side
+// Pull-based source over the wingover plugin. The native side
 // captures with CoreLocation (background delivery on) and buffers every
 // fix for the session; we poll fixes_since(cursor) once a second. The
 // same call serves live delivery AND post-reload catch-up — after a
@@ -60,7 +61,7 @@ export const nativePositionSource: PositionSource = {
       inFlight = true;
       try {
         const response = await invoke<FixesResponse>(
-          "plugin:wingover-location|fixes_since",
+          "plugin:wingover|fixes_since",
           { ts: cursor },
         );
         if (stopped) return;
@@ -76,7 +77,8 @@ export const nativePositionSource: PositionSource = {
           });
         }
       } catch (error) {
-        if (!stopped) onError({ permissionDenied: false, message: String(error) });
+        if (!stopped)
+          onError({ permissionDenied: false, message: String(error) });
       } finally {
         inFlight = false;
       }
@@ -85,11 +87,11 @@ export const nativePositionSource: PositionSource = {
     (async () => {
       try {
         let status = await invoke<PermissionStatus>(
-          "plugin:wingover-location|check_permissions",
+          "plugin:wingover|check_permissions",
         );
         if (status.location === "prompt") {
           status = await invoke<PermissionStatus>(
-            "plugin:wingover-location|request_permissions",
+            "plugin:wingover|request_permissions",
           );
         }
         if (status.location !== "granted") {
@@ -100,7 +102,7 @@ export const nativePositionSource: PositionSource = {
           return;
         }
         if (stopped) return;
-        await invoke("plugin:wingover-location|start_watch");
+        await invoke("plugin:wingover|start_watch");
         if (stopped) return;
         void poll();
         timer = setInterval(() => void poll(), POLL_MS);
@@ -115,7 +117,19 @@ export const nativePositionSource: PositionSource = {
       // Finalize: stop CoreLocation and clear the native session file.
       // Tauri IPC is FIFO per webview, so a stop immediately followed by
       // a new watch's start_watch cannot be reordered.
-      void invoke("plugin:wingover-location|stop_watch");
+      void invoke("plugin:wingover|stop_watch");
     };
+  },
+};
+
+// The plugin surface bundled for the engine — the exact counterpart of
+// webCore: the watch carries the core lifecycle
+// (start_watch/stop_watch), setWaypoints is the set_waypoints command.
+export const nativeCore: CoreClient = {
+  source: nativePositionSource,
+  setWaypoints(waypoints: Waypoint[]) {
+    void invoke("plugin:wingover|set_waypoints", { waypoints }).catch((error) =>
+      console.warn("set_waypoints failed:", error),
+    );
   },
 };

@@ -49,6 +49,10 @@ Three layers with a hard rule about who owns what:
 2. **Tauri core — Rust.** Plumbing, commands, filesystem access, shared logic that doesn't need to survive backgrounding.
 3. **Native recording engine — a custom Tauri mobile plugin (Swift first; Kotlin when Android lands).** Owns the GPS/baro pipeline and the active flight, end to end. iOS: CoreLocation with background location updates (When-In-Use permission is sufficient — never ask for Always) + CMAltimeter for baro. Android (later): foreground location service, designed provider-agnostic so a Google-free build (F-Droid) needs no rework.
 
+_Runtime elaboration — which layer owns which class of behavior, the
+realtime core, and the annunciator seams — lives in
+[ARCHITECTURE.md](ARCHITECTURE.md)._
+
 ### Source of truth
 
 | Data                        | Lives in                                           | Why                                              |
@@ -83,6 +87,48 @@ The invariants, in priority order:
 | Storage write failure             | Surface loudly; never fail silently                                                                                                               |
 
 These invariants double as the primary test suite: the "kill drills" (background 30+ min, force webview termination, force app termination, relaunch mid-recording) are automated in CI against simulators and re-run on physical hardware before each release. See Testing Strategy.
+
+### Background parity: the engine replays, the UI derives
+
+Nearly as load-bearing as webview disposability, and its logical completion:
+**the app behaves identically foregrounded and backgrounded.** Backgrounding
+is not a special mode — from the engine's perspective it is merely fixes
+arriving in a burst instead of one per second.
+
+- The native layer is the recorder of truth. It buffers every fix durably,
+  regardless of what the JS layer is doing.
+- On foreground (or reload, or relaunch), the JS engine pulls everything it
+  missed and processes it through the _same_ code path as live delivery.
+  There is no separate recovery path to rot.
+- **Every flight-semantic decision — arming, takeoff, landing, flight
+  finalization — is a pure function of fix timestamps, never of wall-clock
+  time.** A takeoff that happened while the phone was asleep is detected and
+  backdated on replay exactly as it would have been live. A landing that
+  happened forty minutes ago finalizes the flight retroactively at the
+  touchdown fix, discarding the stationary tail, the moment the backlog is
+  replayed.
+- The UI holds no truth. React state derives from engine snapshots and
+  events, and must tolerate an hour of history arriving in one second
+  (the live map jumps rather than animating through a large backlog).
+- Business wiring lives in headless JS modules, never in components. React
+  renders derived state and forwards user intent; anything that must happen
+  regardless of which page is mounted — the plan being copied into a
+  starting flight, the annunciator following the session lifecycle — is
+  wired engine-side (`src/engine/session.ts`; the web core
+  `src/engine/core.ts` is a TS twin of the plugin's core.rs, driven by
+  the same watch lifecycle). The boundary is a directory boundary — React
+  exists only under `src/ui/` — and it is mechanical: eslint bans
+  React/Ionic imports from `src/engine`, `src/flight`, and `src/storage`.
+- **A flight owns its waypoints.** The Plan tab is a reusable template for
+  the NEXT flight; starting a flight copies the plan's pins into the
+  session. Mid-flight additions join that flight only. An active flight
+  never re-reads the plan.
+
+Test consequence: burst-replay IS the backgrounding drill. Emitting a full
+flight — takeoff, cruise, landing, stationary tail — as one rapid stream of
+correctly-timestamped fixes must produce byte-identical results to flying it
+in real time. This is automated in e2e; hardware drills only verify that the
+OS actually delivers fixes while asleep.
 
 ## Testing Strategy
 

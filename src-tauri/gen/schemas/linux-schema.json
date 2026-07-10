@@ -2195,74 +2195,74 @@
         {
           "description": "Enables the check_permissions command without any pre-configured scope.",
           "type": "string",
-          "const": "geolocation:allow-check-permissions",
+          "const": "wingover:allow-check-permissions",
           "markdownDescription": "Enables the check_permissions command without any pre-configured scope."
         },
         {
-          "description": "Enables the clear_permissions command without any pre-configured scope.",
+          "description": "Enables the fixes_since command without any pre-configured scope.",
           "type": "string",
-          "const": "geolocation:allow-clear-permissions",
-          "markdownDescription": "Enables the clear_permissions command without any pre-configured scope."
-        },
-        {
-          "description": "Enables the clear_watch command without any pre-configured scope.",
-          "type": "string",
-          "const": "geolocation:allow-clear-watch",
-          "markdownDescription": "Enables the clear_watch command without any pre-configured scope."
-        },
-        {
-          "description": "Enables the get_current_position command without any pre-configured scope.",
-          "type": "string",
-          "const": "geolocation:allow-get-current-position",
-          "markdownDescription": "Enables the get_current_position command without any pre-configured scope."
+          "const": "wingover:allow-fixes-since",
+          "markdownDescription": "Enables the fixes_since command without any pre-configured scope."
         },
         {
           "description": "Enables the request_permissions command without any pre-configured scope.",
           "type": "string",
-          "const": "geolocation:allow-request-permissions",
+          "const": "wingover:allow-request-permissions",
           "markdownDescription": "Enables the request_permissions command without any pre-configured scope."
         },
         {
-          "description": "Enables the watch_position command without any pre-configured scope.",
+          "description": "Enables the set_waypoints command without any pre-configured scope.",
           "type": "string",
-          "const": "geolocation:allow-watch-position",
-          "markdownDescription": "Enables the watch_position command without any pre-configured scope."
+          "const": "wingover:allow-set-waypoints",
+          "markdownDescription": "Enables the set_waypoints command without any pre-configured scope."
+        },
+        {
+          "description": "Enables the start_watch command without any pre-configured scope.",
+          "type": "string",
+          "const": "wingover:allow-start-watch",
+          "markdownDescription": "Enables the start_watch command without any pre-configured scope."
+        },
+        {
+          "description": "Enables the stop_watch command without any pre-configured scope.",
+          "type": "string",
+          "const": "wingover:allow-stop-watch",
+          "markdownDescription": "Enables the stop_watch command without any pre-configured scope."
         },
         {
           "description": "Denies the check_permissions command without any pre-configured scope.",
           "type": "string",
-          "const": "geolocation:deny-check-permissions",
+          "const": "wingover:deny-check-permissions",
           "markdownDescription": "Denies the check_permissions command without any pre-configured scope."
         },
         {
-          "description": "Denies the clear_permissions command without any pre-configured scope.",
+          "description": "Denies the fixes_since command without any pre-configured scope.",
           "type": "string",
-          "const": "geolocation:deny-clear-permissions",
-          "markdownDescription": "Denies the clear_permissions command without any pre-configured scope."
-        },
-        {
-          "description": "Denies the clear_watch command without any pre-configured scope.",
-          "type": "string",
-          "const": "geolocation:deny-clear-watch",
-          "markdownDescription": "Denies the clear_watch command without any pre-configured scope."
-        },
-        {
-          "description": "Denies the get_current_position command without any pre-configured scope.",
-          "type": "string",
-          "const": "geolocation:deny-get-current-position",
-          "markdownDescription": "Denies the get_current_position command without any pre-configured scope."
+          "const": "wingover:deny-fixes-since",
+          "markdownDescription": "Denies the fixes_since command without any pre-configured scope."
         },
         {
           "description": "Denies the request_permissions command without any pre-configured scope.",
           "type": "string",
-          "const": "geolocation:deny-request-permissions",
+          "const": "wingover:deny-request-permissions",
           "markdownDescription": "Denies the request_permissions command without any pre-configured scope."
         },
         {
-          "description": "Denies the watch_position command without any pre-configured scope.",
+          "description": "Denies the set_waypoints command without any pre-configured scope.",
           "type": "string",
-          "const": "geolocation:deny-watch-position",
-          "markdownDescription": "Denies the watch_position command without any pre-configured scope."
+          "const": "wingover:deny-set-waypoints",
+          "markdownDescription": "Denies the set_waypoints command without any pre-configured scope."
+        },
+        {
+          "description": "Denies the start_watch command without any pre-configured scope.",
+          "type": "string",
+          "const": "wingover:deny-start-watch",
+          "markdownDescription": "Denies the start_watch command without any pre-configured scope."
+        },
+        {
+          "description": "Denies the stop_watch command without any pre-configured scope.",
+          "type": "string",
+          "const": "wingover:deny-stop-watch",
+          "markdownDescription": "Denies the stop_watch command without any pre-configured scope."
         }
       ]
     },

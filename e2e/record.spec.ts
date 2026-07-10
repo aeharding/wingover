@@ -180,3 +180,21 @@ test("interrupting the hold does not stop the recording", async ({ page }) => {
 
   await expect(page.getByTestId("recording")).toBeVisible();
 });
+
+test("a two-hour flight lands itself and reaches the logbook hands-free", async ({
+  page,
+}) => {
+  await page.goto("/?mock-speed=6000&map-style=blank");
+  await page.getByRole("button", { name: "Start Flight" }).click();
+  await expect(page.getByTestId("recording")).toBeVisible({ timeout: 10_000 });
+  // The simulated pilot stops in place after two hours of flight; landing
+  // detection, the fix-time grace, finalization, and collection all run
+  // with zero interaction.
+  await expect(page.getByText("Flight saved to logbook")).toBeVisible({
+    timeout: 20_000,
+  });
+  await expect(
+    page.getByRole("button", { name: "Start Flight" }),
+  ).toBeVisible();
+  await expect(page.locator("ion-tab-bar")).toBeVisible();
+});

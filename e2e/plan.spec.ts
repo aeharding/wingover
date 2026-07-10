@@ -31,6 +31,13 @@ test("tap to drop pins, persist across reload, tap to delete", async ({
 
   await expect(page.getByTestId("pin-marker")).toHaveCount(2);
 
+  // Two pins connect into an ordered route line; the newest is the tail.
+  await expect(page.locator(".pin-marker.pin-tail")).toHaveCount(1);
+  const mapContainer = page.locator(".map-container");
+  await expect(mapContainer).not.toHaveAttribute("data-route-coords", "");
+  const routeBefore = await mapContainer.getAttribute("data-route-coords");
+  expect(routeBefore!.split(";")).toHaveLength(2);
+
   await canvas.click({ position: { x: 60, y: 200 } });
   await expect(page.getByTestId("pin-marker")).toHaveCount(2);
 
@@ -38,8 +45,14 @@ test("tap to drop pins, persist across reload, tap to delete", async ({
   await page.getByText("Plan", { exact: true }).click();
   await expect(page.getByTestId("pin-marker")).toHaveCount(2);
 
+  // The route survives reload in the same order (creation order).
+  await expect(mapContainer).toHaveAttribute("data-route-coords", routeBefore!);
+
   await page.getByTestId("pin-marker").first().click();
   await expect(page.getByTestId("pin-marker")).toHaveCount(1);
+
+  // One pin is no route.
+  await expect(mapContainer).toHaveAttribute("data-route-coords", "");
 
   await page.getByTestId("pin-marker").click();
   await expect(page.getByTestId("pin-marker")).toHaveCount(0);

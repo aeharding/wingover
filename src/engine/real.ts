@@ -1,12 +1,22 @@
+import { createNanoEvents } from "nanoevents";
+
+import {
+  isLanded,
+  LANDING_GRACE_MS,
+  LANDING_SUSTAIN_FIXES,
+} from "../flight/landing";
 import { bearingBetween } from "../flight/nav";
 import { haversineMeters } from "../flight/stats";
 import { detectTakeoff, gpsReadyIndex } from "../flight/takeoff";
 import type {
   EngineError,
+  EngineEvents,
   EngineSnapshot,
   EngineStatus,
   Fix,
   RecordingEngine,
+  StartOptions,
+  Waypoint,
 } from "./types";
 import {
   appendWalFix,
@@ -47,7 +57,7 @@ export interface WatchOptions {
 }
 
 // Seam between the recording engine and wherever fixes come from:
-// navigator.geolocation in the browser, the wingover-location plugin
+// navigator.geolocation in the browser, the wingover plugin
 // (CoreLocation + native queue) in the native apps.
 export interface PositionSource {
   watch(
@@ -55,6 +65,15 @@ export interface PositionSource {
     onError: (error: SourceError) => void,
     options?: WatchOptions,
   ): () => void;
+}
+
+// The plugin surface as the engine sees it, identical on every platform:
+// the watch carries the core lifecycle (start_watch/stop_watch native,
+// webCore's wrapper on the web); setWaypoints mirrors the
+// set_waypoints command — config pushes only.
+export interface CoreClient {
+  source: PositionSource;
+  setWaypoints(waypoints: Waypoint[]): void;
 }
 
 export const navigatorPositionSource: PositionSource = {
@@ -77,9 +96,7 @@ export const navigatorPositionSource: PositionSource = {
 };
 
 export class GeolocationRecordingEngine implements RecordingEngine {
-  private fixListeners = new Set<(fix: Fix) => void>();
-  private statusListeners = new Set<(status: EngineStatus) => void>();
-  private errorListeners = new Set<(error: EngineError) => void>();
+  private events = createNanoEvents<EngineEvents>();
   private buffer: Fix[] = [];
   private session: WalSession | null = null;
   private stopWatch: (() => void) | null = null;
@@ -87,7 +104,10 @@ export class GeolocationRecordingEngine implements RecordingEngine {
   private walQueue: Promise<unknown> = Promise.resolve();
 
   constructor(
-    private readonly source: PositionSource = navigatorPositionSource,
+    private readonly core: CoreClient = {
+      source: navigatorPositionSource,
+      setWaypoints: () => {},
+    },
   ) {}
 
   async getSnapshot(): Promise<EngineSnapshot> {
@@ -95,29 +115,81 @@ export class GeolocationRecordingEngine implements RecordingEngine {
     const { session, fixes } = await readWal();
     this.session = session;
     this.buffer = fixes;
-    if (!session) return { status: "idle", startedAt: null, track: [] };
-    this.ensureWatch();
+    if (!session) {
+      return {
+        status: "idle",
+        startedAt: null,
+        track: [],
+        landingAt: null,
+        waypoints: [],
+      };
+    }
     const status = this.deriveStatus();
     this.lastStatus = status;
-    if (status !== "recording") return { status, startedAt: null, track: [] };
+    if (status === "ended") {
+      // Final flight waiting to be collected; the watch stays off.
+      const track = this.finalizedTrack();
+      return {
+        status,
+        startedAt: track[0]?.timestamp ?? null,
+        track,
+        landingAt: this.landingAt(),
+        waypoints: session.waypoints ?? [],
+      };
+    }
+    this.ensureWatch();
+    if (status !== "recording" && status !== "landed") {
+      return {
+        status,
+        startedAt: null,
+        track: [],
+        landingAt: null,
+        waypoints: session.waypoints ?? [],
+      };
+    }
     const track = this.buffer.slice(session.takeoffIndex!);
-    return { status, startedAt: track[0]?.timestamp ?? null, track };
+    return {
+      status,
+      startedAt: track[0]?.timestamp ?? null,
+      track,
+      landingAt: this.landingAt(),
+      waypoints: session.waypoints ?? [],
+    };
   }
 
-  async start(): Promise<void> {
+  private landingAt(): number | null {
+    const index = this.session?.landingIndex;
+    return index != null ? (this.buffer[index]?.timestamp ?? null) : null;
+  }
+
+  async start(options?: StartOptions): Promise<void> {
     await clearWal();
-    this.session = { armedAt: Date.now(), takeoffIndex: null };
+    this.session = {
+      armedAt: Date.now(),
+      takeoffIndex: null,
+      waypoints: options?.waypoints ?? [],
+    };
     this.buffer = [];
     await writeWalSession(this.session);
     this.setStatus("acquiring");
     this.ensureWatch();
   }
 
+  // Mid-flight additions join this flight only; the plan is untouched.
+  async addWaypoints(waypoints: Waypoint[]): Promise<void> {
+    if (!this.session || waypoints.length === 0) return;
+    this.session = {
+      ...this.session,
+      waypoints: [...(this.session.waypoints ?? []), ...waypoints],
+    };
+    const session = this.session;
+    this.enqueueWal(() => writeWalSession(session));
+    this.core.setWaypoints(session.waypoints ?? []);
+    await this.walQueue;
+  }
+
   async stop(): Promise<Fix[]> {
-    const track =
-      this.session && this.session.takeoffIndex !== null
-        ? this.buffer.slice(this.session.takeoffIndex)
-        : [];
+    const track = this.finalizedTrack();
     this.clearWatch();
     this.session = null;
     this.buffer = [];
@@ -127,47 +199,76 @@ export class GeolocationRecordingEngine implements RecordingEngine {
     return track;
   }
 
-  onFix(listener: (fix: Fix) => void): () => void {
-    this.fixListeners.add(listener);
-    return () => {
-      this.fixListeners.delete(listener);
-    };
+  on<E extends keyof EngineEvents>(
+    event: E,
+    listener: EngineEvents[E],
+  ): () => void {
+    return this.events.on(event, listener);
   }
 
-  onStatus(listener: (status: EngineStatus) => void): () => void {
-    this.statusListeners.add(listener);
-    return () => {
-      this.statusListeners.delete(listener);
+  dismissLanding(): void {
+    if (!this.session || this.session.landingIndex == null) return;
+    this.session = {
+      ...this.session,
+      landingIndex: null,
+      landingDismissed: true,
     };
+    const session = this.session;
+    this.enqueueWal(() => writeWalSession(session));
+    this.setStatus(this.deriveStatus());
   }
 
-  onError(listener: (error: EngineError) => void): () => void {
-    this.errorListeners.add(listener);
-    return () => {
-      this.errorListeners.delete(listener);
-    };
+  // The flight of record ends at touchdown: everything after the detected
+  // landing fix is stationary tail and is discarded.
+  private finalizedTrack(): Fix[] {
+    const session = this.session;
+    if (!session || session.takeoffIndex === null) return [];
+    const end =
+      session.landingIndex != null
+        ? session.landingIndex + 1
+        : this.buffer.length;
+    return this.buffer.slice(session.takeoffIndex, end);
   }
 
+  // Pure derivation from WAL data — no transient flags. A rehydration or
+  // burst replay lands in exactly the same state as live delivery would.
   private deriveStatus(): EngineStatus {
     if (!this.session) return "idle";
-    if (this.session.takeoffIndex !== null) return "recording";
-    return gpsReadyIndex(this.buffer) !== null ? "armed" : "acquiring";
+    if (this.session.takeoffIndex === null) {
+      return gpsReadyIndex(this.buffer) !== null ? "armed" : "acquiring";
+    }
+    const landingIndex = this.session.landingIndex;
+    if (landingIndex == null) return "recording";
+    const touchdown = this.buffer[landingIndex];
+    const latest = this.buffer[this.buffer.length - 1];
+    if (
+      touchdown &&
+      latest &&
+      latest.timestamp - touchdown.timestamp >= LANDING_GRACE_MS
+    ) {
+      return "ended";
+    }
+    return "landed";
   }
 
   private setStatus(status: EngineStatus) {
     if (status === this.lastStatus) return;
     this.lastStatus = status;
-    for (const listener of this.statusListeners) listener(status);
+    this.events.emit("status", status);
   }
 
   private ensureWatch() {
     if (this.stopWatch !== null) return;
     const latest = this.buffer[this.buffer.length - 1];
-    this.stopWatch = this.source.watch(
+    this.stopWatch = this.core.source.watch(
       (position) => this.handlePosition(position),
       (error) => this.handleWatchError(error),
       { since: latest?.timestamp },
     );
+    // Config follows the watch: initial start and post-reload rehydration
+    // both re-push the session's set here (native: harmless overwrite of
+    // what waypoints.json already hydrated).
+    this.core.setWaypoints(this.session?.waypoints ?? []);
   }
 
   private handleWatchError(error: SourceError) {
@@ -187,7 +288,7 @@ export class GeolocationRecordingEngine implements RecordingEngine {
   }
 
   private emitError(error: EngineError) {
-    for (const listener of this.errorListeners) listener(error);
+    this.events.emit("error", error);
   }
 
   private clearWatch() {
@@ -210,7 +311,7 @@ export class GeolocationRecordingEngine implements RecordingEngine {
     this.buffer.push(fix);
     this.enqueueWal(() => appendWalFix(fix));
 
-    for (const listener of this.fixListeners) listener(fix);
+    this.events.emit("fix", fix);
 
     if (this.session.takeoffIndex === null) {
       const takeoffIndex = detectTakeoff(this.buffer);
@@ -219,8 +320,49 @@ export class GeolocationRecordingEngine implements RecordingEngine {
         const session = this.session;
         this.enqueueWal(() => writeWalSession(session));
       }
+    } else {
+      this.detectLanding();
     }
-    this.setStatus(this.deriveStatus());
+    const status = this.deriveStatus();
+    // The flight of record is final: stop consuming. The WAL is retained
+    // until the consumer collects via stop().
+    if (status === "ended") this.clearWatch();
+    this.setStatus(status);
+  }
+
+  // All in fix time, never wall clock: a landing sitting in a replayed
+  // backlog detects and finalizes exactly as it would have live. The
+  // resulting state is fully derived (deriveStatus), so this only maintains
+  // the landing marker in the session.
+  private detectLanding() {
+    const session = this.session;
+    if (!session || session.takeoffIndex === null) return;
+
+    const windowStart = Math.max(
+      session.takeoffIndex,
+      this.buffer.length - LANDING_SUSTAIN_FIXES,
+    );
+    const landedNow = isLanded(this.buffer.slice(windowStart));
+
+    if (!landedNow) {
+      if (session.landingIndex != null || session.landingDismissed) {
+        this.session = {
+          ...session,
+          landingIndex: null,
+          landingDismissed: false,
+        };
+        const updated = this.session;
+        this.enqueueWal(() => writeWalSession(updated));
+      }
+      return;
+    }
+
+    if (session.landingDismissed || session.landingIndex != null) return;
+
+    const landingIndex = this.buffer.length - LANDING_SUSTAIN_FIXES;
+    this.session = { ...session, landingIndex };
+    const updated = this.session;
+    this.enqueueWal(() => writeWalSession(updated));
   }
 
   private enqueueWal(operation: () => Promise<void>) {

@@ -2,6 +2,10 @@ import type { Fix } from "../engine/types";
 
 export const LANDING_SPEED_MPS = 1.0;
 export const LANDING_SUSTAIN_FIXES = 15;
+// Fix-time (not wall-clock) grace between touchdown detection and
+// auto-finalization, so a backlogged landing finalizes retroactively on
+// replay exactly as it would have live.
+export const LANDING_GRACE_MS = 30_000;
 
 // The recorded track only exists after sustained takeoff speed, so a
 // trailing run of near-zero ground speed can only mean the wing is down

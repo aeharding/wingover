@@ -1,25 +1,25 @@
-import { MockRecordingEngine } from "./mock";
-import { nativePositionSource } from "./nativeSource";
+import { webCore, withWebCore } from "./core";
+import { nativeCore } from "./nativeSource";
+import { isTauri } from "./platform";
 import { GeolocationRecordingEngine } from "./real";
+import { createSimulatorSource } from "./simulatorSource";
 import type { RecordingEngine } from "./types";
 
 const initialSearch = typeof location === "undefined" ? "" : location.search;
 
-function isTauri(): boolean {
-  return typeof window !== "undefined" && "__TAURI_INTERNALS__" in window;
-}
-
-// Mock when explicitly requested (?mock-speed) or by default in browser dev,
-// where a desk has no GPS worth recording. Native apps use CoreLocation via
-// the wingover-location plugin's native queue. ?engine=real forces the
-// browser real engine (e2e); production PWA builds record real GPS too.
+// Real GPS everywhere by default: CoreLocation via the wingover plugin's
+// native queue under Tauri, navigator.geolocation in any browser (dev and
+// PWA alike). The simulator is strictly opt-in via ?mock-speed=N.
 function chooseEngine(): RecordingEngine {
   const params = new URLSearchParams(initialSearch);
-  if (params.has("mock-speed")) return new MockRecordingEngine();
-  if (isTauri()) return new GeolocationRecordingEngine(nativePositionSource);
-  if (params.get("engine") === "real") return new GeolocationRecordingEngine();
-  if (import.meta.env.DEV) return new MockRecordingEngine();
-  return new GeolocationRecordingEngine();
+  if (params.has("mock-speed")) {
+    const parsed = Number(params.get("mock-speed"));
+    const compression = Number.isFinite(parsed) && parsed > 0 ? parsed : 60;
+    return new GeolocationRecordingEngine(
+      withWebCore(createSimulatorSource(compression)),
+    );
+  }
+  return new GeolocationRecordingEngine(isTauri() ? nativeCore : webCore);
 }
 
 export const engine: RecordingEngine = chooseEngine();

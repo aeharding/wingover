@@ -67,6 +67,25 @@ export default defineConfig(
     },
   },
   {
+    // The doctrine boundary as a directory boundary (STEERING.md): the
+    // headless world must never import React or Ionic.
+    files: ["src/engine/**", "src/flight/**", "src/storage/**"],
+    rules: {
+      "no-restricted-imports": [
+        "error",
+        {
+          patterns: [
+            {
+              group: ["react", "react-dom", "react-dom/*", "@ionic/*"],
+              message:
+                "Headless world: React/Ionic live in src/ui/ only (STEERING.md).",
+            },
+          ],
+        },
+      ],
+    },
+  },
+  {
     ignores: [
       "dist/",
       "node_modules/",

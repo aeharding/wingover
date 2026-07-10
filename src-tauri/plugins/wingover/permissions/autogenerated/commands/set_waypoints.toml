@@ -1,0 +1,13 @@
+# Automatically generated - DO NOT EDIT!
+
+"$schema" = "../../schemas/schema.json"
+
+[[permission]]
+identifier = "allow-set-waypoints"
+description = "Enables the set_waypoints command without any pre-configured scope."
+commands.allow = ["set_waypoints"]
+
+[[permission]]
+identifier = "deny-set-waypoints"
+description = "Denies the set_waypoints command without any pre-configured scope."
+commands.deny = ["set_waypoints"]

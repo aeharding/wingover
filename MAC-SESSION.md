@@ -6,8 +6,8 @@ drills.
 
 ## Already done (Linux side)
 
-- `tauri-plugin-geolocation` registered on mobile builds (`src-tauri/src/lib.rs`),
-  capabilities granted (`src-tauri/capabilities/default.json`).
+- ~~`tauri-plugin-geolocation`~~ REMOVED 2026-07-10 (superseded by the
+  in-repo wingover plugin; `tauriSource.ts` deleted with it).
 - Engine seam: `GeolocationRecordingEngine` takes a `PositionSource`;
   `tauriSource.ts` adapts the plugin (permissions flow + mapping, unit-tested).
   Engine selection auto-detects Tauri (`__TAURI_INTERNALS__`) — no flags needed.
@@ -59,3 +59,24 @@ IndexedDB WAL is the M0 baseline; measure how it behaves first.
 What compiled first try, what needed patching, whether background delivery
 works with the stock plugin, and Freeway Drive + kill drill results — those
 answers drive the next PLAN iteration.
+
+## Round 2 (2026-07-10): realtime core verification
+
+The Swift plugin was dieted to four primitives and all storage/decisions
+moved to Rust (see ARCHITECTURE.md). On the Mac:
+
+1. `git fetch && git reset --hard origin/main` (or pull the reviewed branch),
+   `pnpm install`, then build — the Swift rewrite is UNVERIFIED off-Mac.
+2. Re-run the sim drills from round 1: WebContent kill mid-recording and
+   full terminate + relaunch. The hydration source is now
+   `Application Support/<app>/session.jsonl` written by RUST — verify the
+   file exists during a session and is gone after stop (same for
+   `waypoints.json`: present while flying with pins, deleted by stop).
+3. Waypoint audio drills (new): create a pin, fly through it with Freeway
+   Drive — expect "Waypoint reached" spoken. Then repeat with the
+   screen off (background speech is the empirical Apple question — if
+   silent, try adding `audio` to UIBackgroundModes in project.yml), and
+   with Music playing (expect ducking, not interruption).
+4. `run_mobile_plugin` from the Rust ingest thread is the least-trodden
+   path — if drains fail, the error surfaces in the Xcode console with
+   the `wingover plugin drain failed` prefix.

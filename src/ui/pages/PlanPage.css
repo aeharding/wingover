@@ -1,0 +1,12 @@
+.pin-marker {
+  padding: 0;
+  background: none;
+  border: none;
+  line-height: 0;
+}
+
+.pin-marker.pin-tail svg {
+  transform: scale(1.3);
+  transform-origin: bottom center;
+  filter: drop-shadow(0 0 5px rgba(255, 255, 255, 0.85));
+}

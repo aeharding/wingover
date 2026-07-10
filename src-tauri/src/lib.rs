@@ -2,8 +2,7 @@
 pub fn run() {
     let builder = tauri::Builder::default();
     #[cfg(mobile)]
-    let builder = builder.plugin(tauri_plugin_geolocation::init());
-    let builder = builder.plugin(wingover_location::init());
+    let builder = builder.plugin(tauri_plugin_wingover::init());
     // WKWebView does NOT reload itself when iOS/macOS kills its content
     // process (memory pressure while backgrounded does this routinely) —
     // without this hook the app stays a dead white view until relaunch.

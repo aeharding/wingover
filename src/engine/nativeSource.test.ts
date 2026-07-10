@@ -39,9 +39,9 @@ function fix(timestamp: number, extra: Partial<NativeFix> = {}): NativeFix {
 function stubPlugin(buffer: NativeFix[], error?: string) {
   core.invoke.mockImplementation((cmd: string, args?: { ts: number }) => {
     switch (cmd) {
-      case "plugin:wingover-location|check_permissions":
+      case "plugin:wingover|check_permissions":
         return Promise.resolve({ location: "granted" });
-      case "plugin:wingover-location|fixes_since":
+      case "plugin:wingover|fixes_since":
         return Promise.resolve({
           fixes: buffer.filter((f) => f.timestamp > args!.ts),
           ...(error !== undefined && { error }),
@@ -77,7 +77,7 @@ describe("nativePositionSource", () => {
     );
     await vi.advanceTimersByTimeAsync(0);
 
-    expect(commands()).toContain("plugin:wingover-location|start_watch");
+    expect(commands()).toContain("plugin:wingover|start_watch");
     expect(positions.map((p) => p.timestamp)).toEqual([1000, 2000]);
 
     // Next poll only sees newer fixes — cursor advanced past 2000.
@@ -131,11 +131,11 @@ describe("nativePositionSource", () => {
   it("requests permission when status is prompt", async () => {
     core.invoke.mockImplementation((cmd: string) => {
       switch (cmd) {
-        case "plugin:wingover-location|check_permissions":
+        case "plugin:wingover|check_permissions":
           return Promise.resolve({ location: "prompt" });
-        case "plugin:wingover-location|request_permissions":
+        case "plugin:wingover|request_permissions":
           return Promise.resolve({ location: "granted" });
-        case "plugin:wingover-location|fixes_since":
+        case "plugin:wingover|fixes_since":
           return Promise.resolve({ fixes: [] });
         default:
           return Promise.resolve(null);
@@ -148,14 +148,14 @@ describe("nativePositionSource", () => {
     );
     await vi.advanceTimersByTimeAsync(0);
 
-    expect(commands()).toContain("plugin:wingover-location|request_permissions");
-    expect(commands()).toContain("plugin:wingover-location|start_watch");
+    expect(commands()).toContain("plugin:wingover|request_permissions");
+    expect(commands()).toContain("plugin:wingover|start_watch");
   });
 
   it("surfaces permission denial without starting the watch", async () => {
     core.invoke.mockImplementation((cmd: string) => {
       switch (cmd) {
-        case "plugin:wingover-location|check_permissions":
+        case "plugin:wingover|check_permissions":
           return Promise.resolve({ location: "denied" });
         default:
           return Promise.resolve(null);
@@ -172,7 +172,7 @@ describe("nativePositionSource", () => {
     expect(errors).toEqual([
       { permissionDenied: true, message: "location permission denied" },
     ]);
-    expect(commands()).not.toContain("plugin:wingover-location|start_watch");
+    expect(commands()).not.toContain("plugin:wingover|start_watch");
   });
 
   it("surfaces a native error when no fixes flow, and classifies denial", async () => {
@@ -217,7 +217,7 @@ describe("nativePositionSource", () => {
     expect(positions).toHaveLength(1);
 
     stop();
-    expect(commands()).toContain("plugin:wingover-location|stop_watch");
+    expect(commands()).toContain("plugin:wingover|stop_watch");
 
     stubPlugin([fix(1000), fix(2000)]);
     await vi.advanceTimersByTimeAsync(3000);
@@ -227,7 +227,7 @@ describe("nativePositionSource", () => {
   it("does not start the native watch if stopped during the permission flow", async () => {
     let resolvePermissions: ((status: unknown) => void) | undefined;
     core.invoke.mockImplementation((cmd: string) => {
-      if (cmd === "plugin:wingover-location|check_permissions") {
+      if (cmd === "plugin:wingover|check_permissions") {
         return new Promise((resolve) => {
           resolvePermissions = resolve;
         });
@@ -244,6 +244,6 @@ describe("nativePositionSource", () => {
     resolvePermissions!({ location: "granted" });
     await vi.advanceTimersByTimeAsync(0);
 
-    expect(commands()).not.toContain("plugin:wingover-location|start_watch");
+    expect(commands()).not.toContain("plugin:wingover|start_watch");
   });
 });

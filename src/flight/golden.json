@@ -1,0 +1,171 @@
+{
+  "description": "Cross-language conformance vectors for waypoint announcement logic. Executed by BOTH the vitest suite (src/flight/waypoints.test.ts) and the cargo suite (tauri-plugin-wingover announcer.rs). Semantics pinned here: waypoints are anonymous (no names); announce on outside->inside transition; dwelling inside never repeats; exiting re-arms silently; a session's first fix inside a waypoint arms WITHOUT announcing (launching from inside your own waypoint must not speak). Keep fixes several meters clear of radius boundaries so float divergence cannot flip a case.",
+  "announcementTemplate": "Waypoint reached",
+  "cases": [
+    {
+      "name": "simple arrival announces once, dwell stays silent",
+      "waypoints": [
+        {
+          "id": "a",
+          "latitude": 43.0,
+          "longitude": -89.4,
+          "radiusM": 200
+        }
+      ],
+      "fixes": [
+        {
+          "timestamp": 1000,
+          "latitude": 42.995,
+          "longitude": -89.4
+        },
+        {
+          "timestamp": 2000,
+          "latitude": 42.9995,
+          "longitude": -89.4
+        },
+        {
+          "timestamp": 3000,
+          "latitude": 43.0,
+          "longitude": -89.4
+        }
+      ],
+      "announcements": [
+        {
+          "atTimestamp": 2000,
+          "text": "Waypoint reached"
+        }
+      ]
+    },
+    {
+      "name": "exit re-arms; re-entry announces again",
+      "waypoints": [
+        {
+          "id": "a",
+          "latitude": 43.0,
+          "longitude": -89.4,
+          "radiusM": 200
+        }
+      ],
+      "fixes": [
+        {
+          "timestamp": 1000,
+          "latitude": 42.995,
+          "longitude": -89.4
+        },
+        {
+          "timestamp": 2000,
+          "latitude": 43.0,
+          "longitude": -89.4
+        },
+        {
+          "timestamp": 3000,
+          "latitude": 42.995,
+          "longitude": -89.4
+        },
+        {
+          "timestamp": 4000,
+          "latitude": 43.0,
+          "longitude": -89.4
+        }
+      ],
+      "announcements": [
+        {
+          "atTimestamp": 2000,
+          "text": "Waypoint reached"
+        },
+        {
+          "atTimestamp": 4000,
+          "text": "Waypoint reached"
+        }
+      ]
+    },
+    {
+      "name": "starting inside arms silently; only a genuine re-arrival speaks",
+      "waypoints": [
+        {
+          "id": "home",
+          "latitude": 43.0,
+          "longitude": -89.4,
+          "radiusM": 200
+        }
+      ],
+      "fixes": [
+        {
+          "timestamp": 1000,
+          "latitude": 43.0,
+          "longitude": -89.4
+        },
+        {
+          "timestamp": 2000,
+          "latitude": 43.0001,
+          "longitude": -89.4
+        },
+        {
+          "timestamp": 3000,
+          "latitude": 42.99,
+          "longitude": -89.4
+        },
+        {
+          "timestamp": 4000,
+          "latitude": 43.0,
+          "longitude": -89.4
+        }
+      ],
+      "announcements": [
+        {
+          "atTimestamp": 4000,
+          "text": "Waypoint reached"
+        }
+      ]
+    },
+    {
+      "name": "two waypoints announce independently in path order",
+      "waypoints": [
+        {
+          "id": "a",
+          "latitude": 43.0,
+          "longitude": -89.4,
+          "radiusM": 200
+        },
+        {
+          "id": "b",
+          "latitude": 43.01,
+          "longitude": -89.4,
+          "radiusM": 200
+        }
+      ],
+      "fixes": [
+        {
+          "timestamp": 1000,
+          "latitude": 42.995,
+          "longitude": -89.4
+        },
+        {
+          "timestamp": 2000,
+          "latitude": 43.0,
+          "longitude": -89.4
+        },
+        {
+          "timestamp": 3000,
+          "latitude": 43.005,
+          "longitude": -89.4
+        },
+        {
+          "timestamp": 4000,
+          "latitude": 43.01,
+          "longitude": -89.4
+        }
+      ],
+      "announcements": [
+        {
+          "atTimestamp": 2000,
+          "text": "Waypoint reached"
+        },
+        {
+          "atTimestamp": 4000,
+          "text": "Waypoint reached"
+        }
+      ]
+    }
+  ]
+}

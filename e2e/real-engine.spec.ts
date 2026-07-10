@@ -42,14 +42,22 @@ const GEO_STUB = `(() => {
     value: geolocation,
     configurable: true,
   });
+  window.__spoken = [];
+  if (typeof speechSynthesis !== "undefined") {
+    speechSynthesis.speak = (utterance) => {
+      window.__spoken.push(utterance.text);
+    };
+  }
 })();`;
 
-const URL = "/?engine=real&map-style=blank&hold-ms=300";
+const URL = "/?map-style=blank&hold-ms=300";
 
 interface FixSpec {
   speed?: number;
   accuracy?: number;
   altitudeAccuracy?: number;
+  latitude?: number;
+  longitude?: number;
 }
 
 function makeEmitter(page: Page) {
@@ -58,12 +66,12 @@ function makeEmitter(page: Page) {
   return async (fixes: FixSpec[]) => {
     const payload = fixes.map((spec) => {
       timestamp += 1000;
-      latitude += ((spec.speed ?? 0) * 1000) / 111_320 / 1000;
+      latitude = spec.latitude ?? latitude + (spec.speed ?? 0) / 111_320;
       return {
         timestamp,
         coords: {
           latitude,
-          longitude: -89.4,
+          longitude: spec.longitude ?? -89.4,
           altitude: 300,
           accuracy: spec.accuracy ?? 5,
           altitudeAccuracy: spec.altitudeAccuracy ?? 8,
@@ -216,18 +224,23 @@ test("landing prompt: dismiss re-arms, stop saves", async ({ page }) => {
   await expect(page.getByText(/1 flights/)).toBeVisible();
 });
 
-test("landing prompt times out into auto-stop", async ({ page }) => {
+test("backgrounded landing: a burst-replayed flight finalizes retroactively", async ({
+  page,
+}) => {
   await page.addInitScript(GEO_STUB);
   const emit = makeEmitter(page);
-  await page.goto(`${URL}&land-timeout-ms=1200`);
+  await page.goto(URL);
   await armAndFly(page, emit);
 
-  await emit(Array.from({ length: 15 }, () => ({ speed: 0.3 })));
-  await expect(page.getByTestId("landing-prompt")).toBeVisible();
+  // The phone slept through landing + a long stationary wait; on foreground
+  // the whole backlog replays at once. Grace is fix-time, so the engine
+  // finalizes retroactively at touchdown with no interaction and no
+  // wall-clock wait.
+  await emit(Array.from({ length: 50 }, () => ({ speed: 0.3 })));
 
-  await expect(page.getByRole("button", { name: "Start Flight" })).toBeVisible({
-    timeout: 5000,
-  });
+  await expect(
+    page.getByRole("button", { name: "Start Flight" }),
+  ).toBeVisible();
   await page.getByText("Logbook", { exact: true }).click();
   await expect(page.getByText(/1 flights/)).toBeVisible();
 });
@@ -255,4 +268,46 @@ test("permission denied surfaces on the arming screen and clears on fix", async 
   // A fix arriving clears the banner
   await emit([{}]);
   await expect(page.getByTestId("gps-error")).toBeHidden();
+});
+
+test("a pin becomes a spoken waypoint announcement mid-flight", async ({
+  page,
+}) => {
+  await page.addInitScript(GEO_STUB);
+  const emit = makeEmitter(page);
+
+  // Drop a pin on the plan page and read back where it landed
+  await page.goto("/?map-style=blank");
+  await page.getByText("Plan", { exact: true }).click();
+  const canvas = page.locator(".maplibregl-canvas");
+  await expect(canvas).toBeVisible();
+  await page.waitForTimeout(500);
+  const box = (await canvas.boundingBox())!;
+  await page.mouse.move(box.x + 200, box.y + 300);
+  await page.mouse.down();
+  await page.waitForTimeout(700);
+  await page.mouse.up();
+  const marker = page.getByTestId("pin-marker");
+  await expect(marker).toBeVisible();
+  const pinLat = Number(await marker.getAttribute("data-lat"));
+  const pinLng = Number(await marker.getAttribute("data-lng"));
+
+  // Fly far from the pin, then pass through it
+  await page.goto(URL);
+  await armAndFly(page, emit);
+  await emit([
+    { speed: 7, latitude: pinLat - 0.005, longitude: pinLng },
+    { speed: 7, latitude: pinLat, longitude: pinLng },
+    { speed: 7, latitude: pinLat, longitude: pinLng },
+  ]);
+
+  await page.waitForFunction(
+    () => (window as unknown as { __spoken: string[] }).__spoken.length > 0,
+  );
+  const spoken = await page.evaluate(
+    () => (window as unknown as { __spoken: string[] }).__spoken,
+  );
+  expect(spoken).toContain("Waypoint reached");
+  // Dwelling inside must not repeat
+  expect(spoken.filter((text) => text === "Waypoint reached")).toHaveLength(1);
 });

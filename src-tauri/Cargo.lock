@@ -3058,12 +3058,9 @@ dependencies = [
 ]
 
 [[package]]
-name = "tauri-plugin-geolocation"
-version = "2.3.2"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "0366e51823ad001ff1a47f116cd34ddfea3d94ebeb2309caf42e290dec27e0a6"
+name = "tauri-plugin-wingover"
+version = "0.1.0"
 dependencies = [
- "log",
  "serde",
  "serde_json",
  "tauri",
@@ -4211,7 +4208,7 @@ checksum = "589f6da84c646204747d1270a2a5661ea66ed1cced2631d546fdfb155959f9ec"
 
 [[package]]
 name = "wingover"
-version = "0.0.0"
+version = "0.1.0"
 dependencies = [
  "log",
  "objc2",
@@ -4220,19 +4217,7 @@ dependencies = [
  "serde_json",
  "tauri",
  "tauri-build",
- "tauri-plugin-geolocation",
- "wingover-location",
-]
-
-[[package]]
-name = "wingover-location"
-version = "0.1.0"
-dependencies = [
- "serde",
- "serde_json",
- "tauri",
- "tauri-plugin",
- "thiserror 2.0.18",
+ "tauri-plugin-wingover",
 ]
 
 [[package]]

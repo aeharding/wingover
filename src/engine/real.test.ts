@@ -1,8 +1,9 @@
-import { beforeEach, describe, expect, it } from "vitest";
+import { IDBFactory } from "fake-indexeddb";
+import { afterEach, beforeEach, describe, expect, it } from "vitest";
 
-import { GeolocationRecordingEngine } from "./real";
+import { LANDING_SUSTAIN_FIXES } from "../flight/landing";
+import { GeolocationRecordingEngine, navigatorPositionSource } from "./real";
 import type { EngineStatus } from "./types";
-import { clearWal } from "./wal";
 
 class FakeGeolocation {
   private watchers = new Map<
@@ -50,6 +51,13 @@ class FakeGeolocation {
 
 let geolocation: FakeGeolocation;
 let timestamp: number;
+const engines: GeolocationRecordingEngine[] = [];
+
+function createEngine(): GeolocationRecordingEngine {
+  const engine = new GeolocationRecordingEngine();
+  engines.push(engine);
+  return engine;
+}
 
 interface CoordOverrides {
   latitude?: number;
@@ -89,7 +97,17 @@ beforeEach(async () => {
     writable: true,
   });
   timestamp = 1_700_000_000_000;
-  await clearWal();
+  // Fresh IndexedDB per test: engines from earlier tests have
+  // fire-and-forget WAL writes that would otherwise land after clearWal
+  // and pollute this test's rehydration reads.
+  globalThis.indexedDB = new IDBFactory();
+});
+
+// Drain: stop() awaits each engine's WAL queue, so no test leaves
+// fire-and-forget writes to land in the next test's database.
+afterEach(async () => {
+  for (const engine of engines) await engine.stop();
+  engines.length = 0;
 });
 
 async function armAndTakeOff(engine: GeolocationRecordingEngine) {
@@ -102,9 +120,9 @@ async function armAndTakeOff(engine: GeolocationRecordingEngine) {
 
 describe("GeolocationRecordingEngine", () => {
   it("walks acquiring → armed → recording with backdated takeoff", async () => {
-    const engine = new GeolocationRecordingEngine();
+    const engine = createEngine();
     const statuses: EngineStatus[] = [];
-    engine.onStatus((status) => statuses.push(status));
+    engine.on("status", (status) => statuses.push(status));
 
     await engine.start();
     expect(statuses).toEqual(["acquiring"]);
@@ -129,12 +147,12 @@ describe("GeolocationRecordingEngine", () => {
   });
 
   it("rehydrates a recording from the WAL in a fresh instance", async () => {
-    const first = new GeolocationRecordingEngine();
+    const first = createEngine();
     await armAndTakeOff(first);
     const before = await first.getSnapshot();
     expect(before.status).toBe("recording");
 
-    const reborn = new GeolocationRecordingEngine();
+    const reborn = createEngine();
     const snapshot = await reborn.getSnapshot();
     expect(snapshot.status).toBe("recording");
     expect(snapshot.startedAt).toBe(before.startedAt);
@@ -143,22 +161,22 @@ describe("GeolocationRecordingEngine", () => {
   });
 
   it("stop returns the flight and clears the WAL", async () => {
-    const engine = new GeolocationRecordingEngine();
+    const engine = createEngine();
     await armAndTakeOff(engine);
     const track = await engine.stop();
     expect(track.length).toBe(7);
     expect(track[0].speed).toBe(2);
 
-    const fresh = new GeolocationRecordingEngine();
+    const fresh = createEngine();
     const snapshot = await fresh.getSnapshot();
     expect(snapshot.status).toBe("idle");
     expect(snapshot.track).toEqual([]);
   });
 
   it("derives speed and course when the platform omits them", async () => {
-    const engine = new GeolocationRecordingEngine();
+    const engine = createEngine();
     const fixes: number[][] = [];
-    engine.onFix((fix) => fixes.push([fix.speed, fix.course]));
+    engine.on("fix", (fix) => fixes.push([fix.speed, fix.course]));
     await engine.start();
 
     geolocation.emit(position({ speed: null, heading: null }));
@@ -173,9 +191,9 @@ describe("GeolocationRecordingEngine", () => {
   });
 
   it("never arms without vertical accuracy", async () => {
-    const engine = new GeolocationRecordingEngine();
+    const engine = createEngine();
     const statuses: EngineStatus[] = [];
-    engine.onStatus((status) => statuses.push(status));
+    engine.on("status", (status) => statuses.push(status));
     await engine.start();
     for (let i = 0; i < 6; i++) {
       geolocation.emit(position({ altitudeAccuracy: null }));
@@ -184,23 +202,146 @@ describe("GeolocationRecordingEngine", () => {
   });
 
   it("classifies watch errors", async () => {
-    const engine = new GeolocationRecordingEngine();
+    const engine = createEngine();
     const errors: string[] = [];
-    engine.onError((error) => errors.push(error.code));
+    engine.on("error", (error) => errors.push(error.code));
     await engine.start();
     geolocation.emitError(1);
     geolocation.emitError(2);
     expect(errors).toEqual(["permission-denied", "unavailable"]);
   });
 
+  it("walks recording → landed → ended on fix time, trimming the tail", async () => {
+    const engine = createEngine();
+    const statuses: EngineStatus[] = [];
+    engine.on("status", (status) => statuses.push(status));
+    await armAndTakeOff(engine);
+
+    for (let i = 0; i < LANDING_SUSTAIN_FIXES; i++) {
+      geolocation.emit(position({ speed: 0.3 }));
+    }
+    expect(statuses.at(-1)).toBe("landed");
+    const landedSnapshot = await engine.getSnapshot();
+    expect(landedSnapshot.landingAt).not.toBeNull();
+
+    // Grace is fix time: more one-second fixes expire it, even emitted in
+    // a burst (this IS the backgrounded-landing replay case)
+    for (let i = 0; i < 35; i++) {
+      geolocation.emit(position({ speed: 0.3 }));
+    }
+    expect(statuses.at(-1)).toBe("ended");
+    expect(geolocation.watcherCount).toBe(0);
+
+    const snapshot = await engine.getSnapshot();
+    expect(snapshot.status).toBe("ended");
+    // Trimmed at touchdown: taxi + flight + the single touchdown fix
+    expect(snapshot.track.map((fix) => fix.speed)).toEqual([
+      2, 3, 6, 6, 6, 6, 6, 0.3,
+    ]);
+
+    const flown = await engine.stop();
+    expect(flown.map((fix) => fix.speed)).toEqual([2, 3, 6, 6, 6, 6, 6, 0.3]);
+    const fresh = createEngine();
+    expect((await fresh.getSnapshot()).status).toBe("idle");
+  });
+
+  it("ended survives death before collection — nothing is lost", async () => {
+    const first = createEngine();
+    await armAndTakeOff(first);
+    for (let i = 0; i < LANDING_SUSTAIN_FIXES + 35; i++) {
+      geolocation.emit(position({ speed: 0.3 }));
+    }
+    expect((await first.getSnapshot()).status).toBe("ended");
+
+    // The webview dies between finalization and persistence: a fresh
+    // engine still finds the completed flight in the WAL.
+    const reborn = createEngine();
+    const snapshot = await reborn.getSnapshot();
+    expect(snapshot.status).toBe("ended");
+    expect(snapshot.track.map((fix) => fix.speed)).toEqual([
+      2, 3, 6, 6, 6, 6, 6, 0.3,
+    ]);
+  });
+
+  it("dismiss returns landed to recording until movement resumes", async () => {
+    const engine = createEngine();
+    const statuses: EngineStatus[] = [];
+    engine.on("status", (status) => statuses.push(status));
+    await armAndTakeOff(engine);
+
+    for (let i = 0; i < LANDING_SUSTAIN_FIXES; i++) {
+      geolocation.emit(position({ speed: 0.3 }));
+    }
+    expect(statuses.at(-1)).toBe("landed");
+    engine.dismissLanding();
+    expect(statuses.at(-1)).toBe("recording");
+
+    for (let i = 0; i < 40; i++) {
+      geolocation.emit(position({ speed: 0.3 }));
+    }
+    expect(statuses.at(-1)).toBe("recording");
+
+    // Movement clears the dismissal; a fresh landing detects again
+    for (let i = 0; i < 5; i++) geolocation.emit(position({ speed: 7 }));
+    for (let i = 0; i < LANDING_SUSTAIN_FIXES; i++) {
+      geolocation.emit(position({ speed: 0.3 }));
+    }
+    expect(statuses.at(-1)).toBe("landed");
+  });
+
+  it("manual stop after landing detection trims the tail", async () => {
+    const engine = createEngine();
+    await armAndTakeOff(engine);
+    for (let i = 0; i < LANDING_SUSTAIN_FIXES + 5; i++) {
+      geolocation.emit(position({ speed: 0.3 }));
+    }
+    const track = await engine.stop();
+    expect(track.map((fix) => fix.speed)).toEqual([2, 3, 6, 6, 6, 6, 6, 0.3]);
+  });
+
   it("drops burst duplicates faster than 500 ms", async () => {
-    const engine = new GeolocationRecordingEngine();
+    const engine = createEngine();
     let count = 0;
-    engine.onFix(() => count++);
+    engine.on("fix", () => count++);
     await engine.start();
     geolocation.emit(position());
     geolocation.emit(position({}, 44));
     geolocation.emit(position({}, 1000));
     expect(count).toBe(2);
+  });
+});
+
+describe("session waypoints", () => {
+  it("seeds from start options, appends, survives rehydration, clears on stop", async () => {
+    const waypoint = { id: "a", latitude: 43, longitude: -89.4, radiusM: 200 };
+    const first = createEngine();
+    await first.start({ waypoints: [waypoint] });
+    expect((await first.getSnapshot()).waypoints).toEqual([waypoint]);
+    await first.addWaypoints([{ ...waypoint, id: "b" }]);
+
+    const reborn = createEngine();
+    const snapshot = await reborn.getSnapshot();
+    expect(snapshot.waypoints.map((w) => w.id)).toEqual(["a", "b"]);
+
+    await reborn.stop();
+    expect((await reborn.getSnapshot()).waypoints).toEqual([]);
+  });
+});
+
+describe("waypoint config pushes", () => {
+  it("pushes the session's set when the watch is established and on additions", async () => {
+    const pushes: number[] = [];
+    const engine = new GeolocationRecordingEngine({
+      source: navigatorPositionSource,
+      setWaypoints: (waypoints) => pushes.push(waypoints.length),
+    });
+    engines.push(engine);
+    const waypoint = { id: "a", latitude: 43, longitude: -89.4, radiusM: 200 };
+    await engine.start({ waypoints: [waypoint] });
+    await engine.addWaypoints([{ ...waypoint, id: "b" }]);
+    await engine.stop();
+    // No push at stop: the watch teardown carries core.stop on both
+    // platforms.
+    expect(pushes).toEqual([1, 2]);
   });
 });

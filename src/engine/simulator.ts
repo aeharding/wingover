@@ -10,6 +10,11 @@ const HOME = {
 
 const CRUISE_ALTITUDE = HOME.groundAltitude + 300;
 const GPS_ACQUIRE_SECONDS = 18;
+const LAUNCH_RUN_END_S = 52;
+// The simulated pilot lands after two hours: stop in place with zero
+// speed and let the ENGINE detect and finalize — the simulator only
+// supplies data.
+export const SIM_FLIGHT_END_S = LAUNCH_RUN_END_S + 2 * 60 * 60;
 
 function mulberry32(seed: number) {
   let a = seed >>> 0;
@@ -55,8 +60,11 @@ export class FlightSimulator {
     if (t < 45) {
       speed = this.rand() * 0.6;
       climb = 0;
-    } else if (t < 52) {
+    } else if (t < LAUNCH_RUN_END_S) {
       speed = 2 + (t - 45) * 0.8;
+      climb = 0;
+    } else if (t >= SIM_FLIGHT_END_S) {
+      speed = 0;
       climb = 0;
     } else if (this.altitude < CRUISE_ALTITUDE) {
       speed = 10;
@@ -66,7 +74,9 @@ export class FlightSimulator {
       climb = (this.rand() - 0.5) * 1.2;
     }
 
-    this.heading = (this.heading + (this.rand() - 0.5) * 6 + 360) % 360;
+    if (speed > 0) {
+      this.heading = (this.heading + (this.rand() - 0.5) * 6 + 360) % 360;
+    }
     const headingRadians = (this.heading * Math.PI) / 180;
     const north = speed * Math.cos(headingRadians);
     const east = speed * Math.sin(headingRadians);

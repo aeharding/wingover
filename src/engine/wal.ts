@@ -1,8 +1,11 @@
-import type { Fix } from "./types";
+import type { Fix, Waypoint } from "./types";
 
 export interface WalSession {
   armedAt: number;
   takeoffIndex: number | null;
+  landingIndex?: number | null;
+  landingDismissed?: boolean;
+  waypoints?: Waypoint[];
 }
 
 const DB_NAME = "wingover-wal";
