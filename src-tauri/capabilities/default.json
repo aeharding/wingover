@@ -1,5 +1,13 @@
 {
   "identifier": "default",
-  "windows": ["main"],
-  "permissions": ["core:default"]
+  "windows": [
+    "main"
+  ],
+  "permissions": [
+    "core:default",
+    "geolocation:allow-check-permissions",
+    "geolocation:allow-request-permissions",
+    "geolocation:allow-watch-position",
+    "geolocation:allow-clear-watch"
+  ]
 }

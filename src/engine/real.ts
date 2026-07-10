@@ -21,15 +21,66 @@ import {
 const MIN_FIX_INTERVAL_MS = 500;
 const DERIVE_COURSE_MIN_SPEED_MPS = 0.5;
 
+export interface SourcePosition {
+  timestamp: number;
+  coords: {
+    latitude: number;
+    longitude: number;
+    accuracy: number;
+    altitude: number | null;
+    altitudeAccuracy: number | null;
+    speed: number | null;
+    heading: number | null;
+  };
+}
+
+export interface SourceError {
+  permissionDenied: boolean;
+  message: string;
+}
+
+// Seam between the recording engine and wherever fixes come from:
+// navigator.geolocation in the browser, the Tauri geolocation plugin
+// (CoreLocation) in the native apps.
+export interface PositionSource {
+  watch(
+    onPosition: (position: SourcePosition) => void,
+    onError: (error: SourceError) => void,
+  ): () => void;
+}
+
+export const navigatorPositionSource: PositionSource = {
+  watch(onPosition, onError) {
+    if (!("geolocation" in navigator)) {
+      onError({ permissionDenied: false, message: "no geolocation support" });
+      return () => {};
+    }
+    const id = navigator.geolocation.watchPosition(
+      (position) => onPosition(position),
+      (error) =>
+        onError({
+          permissionDenied: error.code === error.PERMISSION_DENIED,
+          message: error.message,
+        }),
+      { enableHighAccuracy: true, maximumAge: 0 },
+    );
+    return () => navigator.geolocation.clearWatch(id);
+  },
+};
+
 export class GeolocationRecordingEngine implements RecordingEngine {
   private fixListeners = new Set<(fix: Fix) => void>();
   private statusListeners = new Set<(status: EngineStatus) => void>();
   private errorListeners = new Set<(error: EngineError) => void>();
   private buffer: Fix[] = [];
   private session: WalSession | null = null;
-  private watchId: number | null = null;
+  private stopWatch: (() => void) | null = null;
   private lastStatus: EngineStatus = "idle";
   private walQueue: Promise<unknown> = Promise.resolve();
+
+  constructor(
+    private readonly source: PositionSource = navigatorPositionSource,
+  ) {}
 
   async getSnapshot(): Promise<EngineSnapshot> {
     await this.walQueue;
@@ -102,24 +153,16 @@ export class GeolocationRecordingEngine implements RecordingEngine {
   }
 
   private ensureWatch() {
-    if (this.watchId !== null) return;
-    if (!("geolocation" in navigator)) {
-      this.emitError({
-        code: "unavailable",
-        message: "This device has no location support.",
-      });
-      return;
-    }
-    this.watchId = navigator.geolocation.watchPosition(
+    if (this.stopWatch !== null) return;
+    this.stopWatch = this.source.watch(
       (position) => this.handlePosition(position),
       (error) => this.handleWatchError(error),
-      { enableHighAccuracy: true, maximumAge: 0 },
     );
   }
 
-  private handleWatchError(error: GeolocationPositionError) {
+  private handleWatchError(error: SourceError) {
     console.warn("geolocation error:", error.message);
-    if (error.code === error.PERMISSION_DENIED) {
+    if (error.permissionDenied) {
       this.emitError({
         code: "permission-denied",
         message:
@@ -138,13 +181,13 @@ export class GeolocationRecordingEngine implements RecordingEngine {
   }
 
   private clearWatch() {
-    if (this.watchId !== null) {
-      navigator.geolocation.clearWatch(this.watchId);
-      this.watchId = null;
+    if (this.stopWatch !== null) {
+      this.stopWatch();
+      this.stopWatch = null;
     }
   }
 
-  private handlePosition(position: GeolocationPosition) {
+  private handlePosition(position: SourcePosition) {
     if (!this.session) return;
     const previous = this.buffer[this.buffer.length - 1];
     if (
@@ -176,7 +219,7 @@ export class GeolocationRecordingEngine implements RecordingEngine {
     });
   }
 
-  private toFix(position: GeolocationPosition, previous: Fix | undefined): Fix {
+  private toFix(position: SourcePosition, previous: Fix | undefined): Fix {
     const coords = position.coords;
     const timestamp = position.timestamp;
     const seconds = previous ? (timestamp - previous.timestamp) / 1000 : 0;

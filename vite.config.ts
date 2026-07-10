@@ -18,6 +18,7 @@ export default defineConfig({
       "virtua",
       "pouchdb-browser",
       "events",
+      "@tauri-apps/plugin-geolocation",
     ],
     holdUntilCrawlEnd: true,
   },

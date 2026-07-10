@@ -1,0 +1,14 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+  <key>NSLocationWhenInUseUsageDescription</key>
+  <string>Wingover records your flight track while you fly.</string>
+  <key>NSLocationAlwaysAndWhenInUseUsageDescription</key>
+  <string>Wingover keeps recording your flight when the screen is off or the app is in the background.</string>
+  <key>UIBackgroundModes</key>
+  <array>
+    <string>location</string>
+  </array>
+</dict>
+</plist>

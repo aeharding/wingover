@@ -1,0 +1,43 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1024 1024">
+  <defs>
+    <linearGradient id="sky3" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0" stop-color="#453070"/>
+      <stop offset="0.42" stop-color="#8E4E82"/>
+      <stop offset="0.74" stop-color="#DE6F60"/>
+      <stop offset="1" stop-color="#FFAD5F"/>
+    </linearGradient>
+    <clipPath id="sq3">
+      <rect width="1024" height="1024" rx="230"/>
+    </clipPath>
+  </defs>
+  <g clip-path="url(#sq3)">
+    <rect width="1024" height="1024" fill="url(#sky3)"/>
+    <circle cx="150" cy="240" r="14" fill="#FFE8C2" opacity="0.7"/>
+    <rect x="620" y="640" width="180" height="26" rx="13" fill="#FFDFAC" opacity="0.4"/>
+    <rect x="700" y="692" width="110" height="22" rx="11" fill="#FFDFAC" opacity="0.3"/>
+    <circle cx="352" cy="822" r="140" fill="#FFC66B"/>
+    <g stroke="#2A1E52" stroke-width="8">
+      <line x1="315" y1="701" x2="620" y2="1120"/>
+      <line x1="457" y1="587" x2="620" y2="1120"/>
+      <line x1="594" y1="468" x2="620" y2="1120"/>
+      <line x1="726" y1="344" x2="620" y2="1120"/>
+      <line x1="855" y1="215" x2="620" y2="1120"/>
+    </g>
+    <path d="M 170 810
+             A 760 760 0 0 1 855 215
+             A 5152 5152 0 0 1 170 810
+             Z"
+          fill="#FFEFD3" stroke="#FFEFD3" stroke-width="22"
+          stroke-linejoin="round"/>
+    <g stroke="#EBCFA2" stroke-width="7" stroke-linecap="round">
+      <line x1="223" y1="663" x2="280" y2="729"/>
+      <line x1="268" y1="576" x2="351" y2="673"/>
+      <line x1="320" y1="499" x2="422" y2="616"/>
+      <line x1="381" y1="430" x2="491" y2="557"/>
+      <line x1="449" y1="371" x2="560" y2="498"/>
+      <line x1="526" y1="320" x2="627" y2="437"/>
+      <line x1="610" y1="279" x2="694" y2="375"/>
+      <line x1="702" y1="247" x2="759" y2="312"/>
+    </g>
+  </g>
+</svg>

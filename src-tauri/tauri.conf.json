@@ -23,6 +23,9 @@
     }
   },
   "bundle": {
-    "active": false
+    "active": false,
+    "iOS": {
+      "minimumSystemVersion": "16.0"
+    }
   }
 }

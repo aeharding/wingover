@@ -1,9 +1,1 @@
-{
-  "default": {
-    "identifier": "default",
-    "description": "",
-    "local": true,
-    "windows": ["main"],
-    "permissions": ["core:default"]
-  }
-}
+{"default":{"identifier":"default","description":"","local":true,"windows":["main"],"permissions":["core:default","geolocation:allow-check-permissions","geolocation:allow-request-permissions","geolocation:allow-watch-position","geolocation:allow-clear-watch"]}}
