@@ -39,13 +39,21 @@ export interface SourceError {
   message: string;
 }
 
+export interface WatchOptions {
+  // Timestamp of the newest fix already held (WAL-rehydrated); sources
+  // that buffer natively replay everything after it. Browser sources
+  // have no backlog and ignore it.
+  since?: number;
+}
+
 // Seam between the recording engine and wherever fixes come from:
-// navigator.geolocation in the browser, the Tauri geolocation plugin
-// (CoreLocation) in the native apps.
+// navigator.geolocation in the browser, the wingover-location plugin
+// (CoreLocation + native queue) in the native apps.
 export interface PositionSource {
   watch(
     onPosition: (position: SourcePosition) => void,
     onError: (error: SourceError) => void,
+    options?: WatchOptions,
   ): () => void;
 }
 
@@ -154,9 +162,11 @@ export class GeolocationRecordingEngine implements RecordingEngine {
 
   private ensureWatch() {
     if (this.stopWatch !== null) return;
+    const latest = this.buffer[this.buffer.length - 1];
     this.stopWatch = this.source.watch(
       (position) => this.handlePosition(position),
       (error) => this.handleWatchError(error),
+      { since: latest?.timestamp },
     );
   }
 
