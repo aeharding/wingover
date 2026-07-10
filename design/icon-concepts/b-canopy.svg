@@ -11,11 +11,11 @@
   </defs>
   <rect width="1024" height="1024" rx="230" fill="url(#bg)"/>
   <g transform="rotate(-10 512 512)">
-    <line x1="512" y1="700" x2="270" y2="560" stroke="url(#mark)" stroke-width="22"/>
-    <line x1="512" y1="700" x2="754" y2="560" stroke="url(#mark)" stroke-width="22"/>
-    <path d="M 270 560 A 242 242 0 0 1 754 560"
+    <line x1="512" y1="700" x2="258" y2="572" stroke="url(#mark)" stroke-width="30"/>
+    <line x1="512" y1="700" x2="766" y2="572" stroke="url(#mark)" stroke-width="30"/>
+    <path d="M 258 572 A 254 254 0 0 1 766 572"
           fill="none" stroke="url(#mark)" stroke-width="88"
           stroke-linecap="round"/>
-    <circle cx="512" cy="700" r="58" fill="url(#mark)"/>
+    <circle cx="512" cy="700" r="66" fill="url(#mark)"/>
   </g>
 </svg>

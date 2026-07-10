@@ -3,6 +3,7 @@ import type {
   CustomLayerInterface,
   GeoJSONSource,
   Map as MapLibreMap,
+  MapWheelEvent,
 } from "maplibre-gl";
 import { useEffect, useEffectEvent, useRef, useState } from "react";
 
@@ -17,6 +18,9 @@ import "./LiveTrackMap.css";
 const CHASE_MS = 800;
 const COURSE_SMOOTH_MS = 400;
 const BEARING_SMOOTH_MS = 800;
+const ZOOM_SMOOTH_MS = 200;
+const WHEEL_ZOOM_RATE = 1 / 450;
+const PINCH_ZOOM_RATE = 1 / 100;
 const OVERSCAN_PX = 256;
 const ARROW_PX = 30;
 const LINE_WIDTH_PX = 4;
@@ -271,6 +275,7 @@ export default function LiveTrackMap({
   const playheadRef = useRef<{ ts: number; index: number } | null>(null);
   const smoothedCourseRef = useRef<number | null>(null);
   const cameraBearingRef = useRef<number | null>(null);
+  const zoomTargetRef = useRef<number | null>(null);
   const loopFrameRef = useRef<number | undefined>(undefined);
   const lastStepAtRef = useRef(0);
 
@@ -377,7 +382,11 @@ export default function LiveTrackMap({
     return { display, tail };
   }
 
-  function renderFrame(map: MapLibreMap, position: DisplayPosition) {
+  function renderFrame(
+    map: MapLibreMap,
+    position: DisplayPosition,
+    zoom?: number,
+  ) {
     displayRef.current = position;
 
     (
@@ -389,6 +398,7 @@ export default function LiveTrackMap({
         center: [position.lng, position.lat],
         bearing: cameraBearingRef.current ?? (trackUp ? position.course : 0),
         padding: cameraPadding(),
+        ...(zoom !== undefined && { zoom }),
       });
     } else {
       map.triggerRepaint();
@@ -484,10 +494,27 @@ export default function LiveTrackMap({
                 Math.min(1, dt / BEARING_SMOOTH_MS),
           );
 
-    syncLine(map);
-    renderFrame(map, display);
+    // While following, the loop owns wheel zoom too: gliding it here in the
+    // same jumpTo as center/bearing means nothing fights the camera.
+    let zoom: number | undefined;
+    const zoomTarget = zoomTargetRef.current;
+    if (zoomTarget !== null) {
+      const currentZoom = map.getZoom();
+      const nextZoom =
+        currentZoom +
+        (zoomTarget - currentZoom) * Math.min(1, dt / ZOOM_SMOOTH_MS);
+      if (Math.abs(zoomTarget - nextZoom) < 0.002) {
+        zoomTargetRef.current = null;
+        zoom = zoomTarget;
+      } else {
+        zoom = nextZoom;
+      }
+    }
 
-    if (playhead.ts < last.timestamp - 1) {
+    syncLine(map);
+    renderFrame(map, display, zoom);
+
+    if (playhead.ts < last.timestamp - 1 || zoomTargetRef.current !== null) {
       loopFrameRef.current = requestAnimationFrame((next) =>
         stepPlayhead(next),
       );
@@ -514,6 +541,7 @@ export default function LiveTrackMap({
   // dispatch here always runs the latest render's body (fresh track prop).
   const ensureTrackLayers = useEffectEvent(
     (map: MapLibreMap, lib: MapLibreModule) => {
+      if (!map.isStyleLoaded()) return;
       if (map.getSource("track")) return;
       map.addSource("track", { type: "geojson", data: toLineData([]) });
       map.addLayer({
@@ -541,11 +569,35 @@ export default function LiveTrackMap({
     onFollowChange(false);
   });
 
+  // While following, scrollZoom's smooth ease and the per-frame jumpTo would
+  // fight (killed eases read as slow, choppy zoom). Intercept the wheel and
+  // let the follow loop glide zoom itself; unpinned keeps native behavior.
+  const handleWheel = useEffectEvent((event: MapWheelEvent) => {
+    const map = mapContext?.map;
+    if (!map) return;
+    if (!follow || interactingRef.current) return;
+    event.preventDefault();
+    const original = event.originalEvent;
+    const rate = original.ctrlKey ? PINCH_ZOOM_RATE : WHEEL_ZOOM_RATE;
+    const from = zoomTargetRef.current ?? map.getZoom();
+    zoomTargetRef.current = Math.min(
+      map.getMaxZoom(),
+      Math.max(map.getMinZoom(), from - original.deltaY * rate),
+    );
+    ensureLoop();
+  });
+
   const setupMap = useEffectEvent(({ map, lib }: MapContext) => {
     applyZoomAnchor(map, follow);
+    // style.load alone is not enough: it can fire before this listener is
+    // registered, and isStyleLoaded() stays false until sprites/glyphs and
+    // sources finish after it. styledata + idle + a direct attempt make
+    // layer creation eventually consistent; ensureTrackLayers is idempotent
+    // and declines until the style can accept layers.
     map.on("style.load", () => ensureTrackLayers(map, lib));
-    // The style may have finished loading before this effect ran.
-    if (map.isStyleLoaded()) ensureTrackLayers(map, lib);
+    map.on("styledata", () => ensureTrackLayers(map, lib));
+    map.on("idle", () => ensureTrackLayers(map, lib));
+    ensureTrackLayers(map, lib);
     map.on("mousedown", () => {
       interactingRef.current = true;
     });
@@ -567,6 +619,7 @@ export default function LiveTrackMap({
       writeLiveViewState({ center: [center.lng, center.lat] });
     });
     map.on("dragstart", () => handleDragStart());
+    map.on("wheel", (event) => handleWheel(event));
     map.on("zoomend", () => {
       writeLiveViewState({ zoom: map.getZoom() });
     });

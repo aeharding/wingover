@@ -10,10 +10,11 @@
     </linearGradient>
   </defs>
   <rect width="1024" height="1024" rx="230" fill="url(#bg)"/>
-  <path d="M 300 800
-           C 330 600, 360 380, 470 290
-           C 540 235, 650 230, 700 310
-           C 730 365, 725 445, 685 505"
+  <path d="M 285 810
+           C 320 570, 355 340, 490 270
+           C 575 222, 690 235, 725 330
+           C 750 400, 738 495, 680 570"
         fill="none" stroke="url(#mark)" stroke-width="84"
         stroke-linecap="round"/>
+  <circle cx="612" cy="672" r="44" fill="url(#mark)"/>
 </svg>

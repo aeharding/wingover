@@ -1,0 +1,42 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1024 1024">
+  <defs>
+    <linearGradient id="sky" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0" stop-color="#453070"/>
+      <stop offset="0.42" stop-color="#8E4E82"/>
+      <stop offset="0.74" stop-color="#DE6F60"/>
+      <stop offset="1" stop-color="#FFAD5F"/>
+    </linearGradient>
+    <clipPath id="sq2">
+      <rect width="1024" height="1024" rx="230"/>
+    </clipPath>
+  </defs>
+  <g clip-path="url(#sq2)">
+    <rect width="1024" height="1024" fill="url(#sky)"/>
+    <rect x="655" y="230" width="185" height="26" rx="13" fill="#FFDFAC" opacity="0.4"/>
+    <rect x="160" y="330" width="115" height="22" rx="11" fill="#FFDFAC" opacity="0.35"/>
+    <circle cx="512" cy="660" r="190" fill="#FFC66B"/>
+    <g transform="rotate(-12 512 512) translate(0 -40)">
+      <g stroke="#2A1E52" stroke-width="11">
+        <line x1="512" y1="740" x2="242" y2="575"/>
+        <line x1="512" y1="740" x2="782" y2="575"/>
+        <line x1="512" y1="740" x2="381" y2="467"/>
+        <line x1="512" y1="740" x2="643" y2="467"/>
+      </g>
+      <circle cx="566" cy="745" r="50" fill="none" stroke="#2A1E52" stroke-width="12"/>
+      <ellipse cx="512" cy="745" rx="46" ry="30" fill="#2A1E52"/>
+      <circle cx="455" cy="735" r="24" fill="#2A1E52"/>
+      <path d="M 170 520
+               A 430 430 0 0 1 854 520
+               L 782 575
+               A 50 50 0 0 1 720 512
+               A 50 50 0 0 1 643 467
+               A 50 50 0 0 1 557 444
+               A 50 50 0 0 1 467 444
+               A 50 50 0 0 1 381 467
+               A 50 50 0 0 1 304 512
+               A 50 50 0 0 1 242 575
+               Z"
+            fill="#FFEFD3"/>
+    </g>
+  </g>
+</svg>
