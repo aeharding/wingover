@@ -87,6 +87,8 @@ Ring 1 (browser) is fully working and verified:
 9. **To-launch tile**: shows rotated arrow + distance home (steer by arrow, fuel-plan by number). PPG Flyer showed relative degrees instead — want the degrees added/back?
 10. ~~"Flights on a computer"~~ **Resolved 2026-07-09**: PWA only — no native desktop app. Native mobile wrappers exist solely for recording reliability. Desktop = installable web app syncing via CouchDB (E2EE decryption client-side works in-browser). Static hosting for the PWA (e.g. wingover.app) keeps the zero-dynamic-backend posture.
 
+- Attribution stays as the compact on-map control — moving it to Settings was tried and rejected by Alex 2026-07-09 (commit c1ba625, reverted). Don't propose again without new reasoning.
+
 ## Later / parked
 
 - ~~Code splitting~~ — rejected by Alex 2026-07-09: mobile app, bundle ships locally, not a concern
