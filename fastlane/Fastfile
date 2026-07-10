@@ -3,15 +3,12 @@ opt_out_usage
 default_platform(:ios)
 
 APP_IDENTIFIER = "app.wingover.wingover"
-IOS_PROJECT = "src-tauri/gen/apple/wingover.xcodeproj"
-IOS_SCHEME = "wingover_iOS"
 
 platform :ios do
-  desc "Build from the Tauri-generated project and push to TestFlight"
+  desc "Build via tauri ios build and push to TestFlight"
   lane :deploy do
     setup_ci if ENV["CI"]
-    # api_key lets CI create the provisioning profile (and bundle ID) on
-    # the portal itself — no one-time local match run needed.
+    # Installs the shared distribution cert (+ profile) into the CI keychain.
     match(
       type: "appstore",
       app_identifier: APP_IDENTIFIER,
@@ -19,31 +16,16 @@ platform :ios do
     )
 
     build_number = ENV.fetch("BUILD_NUMBER", "1")
-    output_name = "Wingover-iOS-#{build_number}.ipa"
 
-    # The generated project's "Build Rust Code" phase drives the frontend
-    # and Rust builds via the tauri CLI, so xcodebuild needs pnpm install
-    # and the iOS Rust targets present (the workflow provides both).
-    build_app(
-      project: IOS_PROJECT,
-      scheme: IOS_SCHEME,
-      output_name: output_name,
-      export_method: "app-store",
-      xcargs: "CURRENT_PROJECT_VERSION=#{build_number} " \
-              "CODE_SIGN_STYLE=Manual " \
-              "CODE_SIGN_IDENTITY='Apple Distribution' " \
-              "PROVISIONING_PROFILE_SPECIFIER='match AppStore #{APP_IDENTIFIER}'",
-      export_options: {
-        provisioningProfiles: {
-          APP_IDENTIFIER => "match AppStore #{APP_IDENTIFIER}",
-        },
-      },
-    )
+    # tauri ios build owns the archive: it runs beforeBuildCommand (frontend
+    # build) and invokes xcodebuild with the context its Rust build phase
+    # expects — driving the Xcode project directly with gym aborts inside
+    # xcode-script. Signing auth comes from APPLE_API_* env (workflow).
+    sh("cd .. && pnpm tauri ios build " \
+       "--export-method app-store-connect --build-number #{build_number}")
 
-    # Internal testers only until an external beta group exists in
-    # App Store Connect; flip distribute_external + groups then.
     upload_to_testflight(
-      ipa: output_name,
+      ipa: "src-tauri/gen/apple/build/arm64/Wingover.ipa",
       app_identifier: APP_IDENTIFIER,
       api_key_path: "authkey.json",
       changelog: "GitHub Actions build #{build_number}, sha #{ENV['GITHUB_SHA']}",

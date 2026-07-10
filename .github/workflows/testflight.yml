@@ -42,13 +42,23 @@ jobs:
         if: steps.creds.outputs.have == 'true'
         run: pnpm install --frozen-lockfile
 
-      - name: Build and deploy to TestFlight
+      - name: Prepare Apple API key
         if: steps.creds.outputs.have == 'true'
         run: |
           echo "$APP_STORE_CONNECT_KEY" > authkey.json
-          bundle exec fastlane ios deploy
+          jq -r .key authkey.json > apple-api.p8
+          {
+            echo "APPLE_API_ISSUER=$(jq -r .issuer_id authkey.json)"
+            echo "APPLE_API_KEY=$(jq -r .key_id authkey.json)"
+            echo "APPLE_API_KEY_PATH=$PWD/apple-api.p8"
+          } >> "$GITHUB_ENV"
         env:
           APP_STORE_CONNECT_KEY: ${{ secrets.APP_STORE_CONNECT_KEY }}
+
+      - name: Build and deploy to TestFlight
+        if: steps.creds.outputs.have == 'true'
+        run: bundle exec fastlane ios deploy
+        env:
           MATCH_PASSWORD: ${{ secrets.MATCH_PASSWORD }}
           MATCH_GIT_BASIC_AUTHORIZATION: ${{ secrets.MATCH_GIT_BASIC_AUTHORIZATION }}
           BUILD_NUMBER: ${{ github.run_number }}
@@ -58,4 +68,4 @@ jobs:
         uses: actions/upload-artifact@v7
         with:
           name: Wingover-iOS-${{ github.run_number }}.ipa
-          path: Wingover-iOS-${{ github.run_number }}.ipa
+          path: src-tauri/gen/apple/build/arm64/Wingover.ipa
