@@ -126,7 +126,7 @@ the same contract.
 ## Questions for Alex (answer when back online)
 
 1. ~~Initial commit + GitHub repo~~ **Resolved 2026-07-09**: `aeharding/wingover` created by Alex, main pushed, CI live. Reminder: `DEFAULT_MAPTILER_KEY` in `src/map/config.ts` is public by design (origin/UA-restricted).
-2. **Takeoff thresholds** (pilot sanity check): arm→record at ≥5 m/s (~11 mph) sustained 5 s, backdate through ≥1.5 m/s movement. Reasonable for foot launch? Trikes? Should strong-wind kiting (can exceed 11 mph briefly) be a concern, or does the 5 s sustain handle it?
+2. ~~Takeoff thresholds~~ **Resolved 2026-07-10** (device testing): lowered to ≥4.5 m/s (≈10 mph — ">10 mph should trigger" per Alex) sustained 5 fixes; backdate threshold unchanged at ≥1.5 m/s.
 3. **GPS accuracy gate**: ≤10 m horizontal / ≤15 m vertical sustained 3 fixes before "waiting for takeoff". Too strict/loose?
 4. **Climb rate units**: ft/s like PPG Flyer, or fpm? (Currently ft/s.)
 5. **Landing auto-detection**: ~~auto-stop vs prompt~~ **Default shipped 2026-07-09**: prompt with 30 s countdown → auto-stop (steering-doc guarded-action posture). Sanity-check the thresholds: ≤1.0 m/s sustained 15 s. OK? Also: should the countdown be longer on-device?

@@ -1,6 +1,7 @@
 import type { Fix } from "../engine/types";
 
-export const TAKEOFF_SPEED_MPS = 5;
+// >10 mph triggers (Alex, 2026-07-10 device testing — PLAN question #2).
+export const TAKEOFF_SPEED_MPS = 4.5;
 export const TAKEOFF_SUSTAIN_FIXES = 5;
 export const MOVEMENT_SPEED_MPS = 1.5;
 
