@@ -405,26 +405,6 @@ export default function LiveTrackMap({
     return { display, tail };
   }
 
-  // Zoomed out, the camera creeps at fractions of a pixel per frame and the
-  // continuously shifting subpixel resample reads as tile/label shimmer.
-  // Snap the camera to the device-pixel grid (north-up only — a rotated
-  // viewport has no aligned grid); the aircraft layer renders in floats, so
-  // it carries the smooth subpixel motion instead.
-  function snapCenterToPixelGrid(
-    lib: MapLibreModule,
-    center: [number, number],
-    zoom: number,
-  ): [number, number] {
-    const scale = 512 * Math.pow(2, zoom) * (window.devicePixelRatio || 1);
-    const mercator = lib.MercatorCoordinate.fromLngLat(center);
-    const snapped = new lib.MercatorCoordinate(
-      Math.round(mercator.x * scale) / scale,
-      Math.round(mercator.y * scale) / scale,
-      0,
-    ).toLngLat();
-    return [snapped.lng, snapped.lat];
-  }
-
   function renderFrame(
     map: MapLibreMap,
     position: DisplayPosition,
@@ -437,16 +417,9 @@ export default function LiveTrackMap({
     ).__display = position;
 
     if (follow && !interactingRef.current) {
-      const bearing =
-        cameraBearingRef.current ?? (trackUp ? position.course : 0);
-      let center: [number, number] = [position.lng, position.lat];
-      const lib = mapContext?.lib;
-      if (lib && Math.abs(relativeBearing(0, bearing)) < 0.05) {
-        center = snapCenterToPixelGrid(lib, center, zoom ?? map.getZoom());
-      }
       map.jumpTo({
-        center,
-        bearing,
+        center: [position.lng, position.lat],
+        bearing: cameraBearingRef.current ?? (trackUp ? position.course : 0),
         padding: cameraPadding(),
         ...(zoom !== undefined && { zoom }),
       });
