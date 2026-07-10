@@ -14,14 +14,27 @@ const GEO_STUB = `(() => {
     },
     watcherCount: () => watchers.size,
   };
+  const errorWatchers = new Map();
+  window.__geo.fail = (code) => {
+    const error = {
+      code,
+      message: "stubbed",
+      PERMISSION_DENIED: 1,
+      POSITION_UNAVAILABLE: 2,
+      TIMEOUT: 3,
+    };
+    for (const callback of [...errorWatchers.values()]) callback(error);
+  };
   const geolocation = {
-    watchPosition(success) {
+    watchPosition(success, error) {
       const id = nextId++;
       watchers.set(id, success);
+      if (error) errorWatchers.set(id, error);
       return id;
     },
     clearWatch(id) {
       watchers.delete(id);
+      errorWatchers.delete(id);
     },
     getCurrentPosition() {},
   };
@@ -217,4 +230,29 @@ test("landing prompt times out into auto-stop", async ({ page }) => {
   });
   await page.getByText("Logbook", { exact: true }).click();
   await expect(page.getByText(/1 flights/)).toBeVisible();
+});
+
+test("permission denied surfaces on the arming screen and clears on fix", async ({
+  page,
+}) => {
+  await page.addInitScript(GEO_STUB);
+  const emit = makeEmitter(page);
+  await page.goto(URL);
+
+  await page.getByRole("button", { name: "Start Flight" }).click();
+  await expect(page.getByTestId("armed")).toBeVisible();
+  await waitForWatch(page);
+
+  await page.evaluate(() => {
+    (window as unknown as { __geo: { fail: (c: number) => void } }).__geo.fail(
+      1,
+    );
+  });
+  await expect(page.getByTestId("gps-error")).toContainText(
+    "Location permission denied",
+  );
+
+  // A fix arriving clears the banner
+  await emit([{}]);
+  await expect(page.getByTestId("gps-error")).toBeHidden();
 });

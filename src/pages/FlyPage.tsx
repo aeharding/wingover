@@ -8,7 +8,7 @@ import { useEffect, useLayoutEffect, useRef, useState } from "react";
 
 import Tile from "../components/Tile";
 import { engine } from "../engine";
-import type { EngineStatus, Fix } from "../engine/types";
+import type { EngineError, EngineStatus, Fix } from "../engine/types";
 import {
   formatAltitude,
   formatClimb,
@@ -65,6 +65,7 @@ export default function FlyPage() {
   const [landingPromptAt, setLandingPromptAt] = useState<number | null>(null);
   const [, setLandingTick] = useState(0);
   const landingDismissedRef = useRef(false);
+  const [gpsError, setGpsError] = useState<EngineError | null>(null);
 
   function applyStatus(value: EngineStatus | "loading") {
     statusRef.current = value;
@@ -102,7 +103,10 @@ export default function FlyPage() {
     });
     syncFromEngine();
 
+    const unsubscribeError = engine.onError((error) => setGpsError(error));
+
     const unsubscribeFix = engine.onFix((fix) => {
+      setGpsError(null);
       setLatest(fix);
       if (statusRef.current !== "recording") return;
       const previous = trackRef.current[trackRef.current.length - 1];
@@ -126,6 +130,7 @@ export default function FlyPage() {
     });
 
     return () => {
+      unsubscribeError();
       unsubscribeFix();
       unsubscribeStatus();
     };
@@ -149,6 +154,7 @@ export default function FlyPage() {
     setFixCount(0);
     setLandingPromptAt(null);
     landingDismissedRef.current = false;
+    setGpsError(null);
     changeFollow(true);
     changeTrackUp(false);
     await engine.start();
@@ -260,6 +266,11 @@ export default function FlyPage() {
                   : "Recording starts automatically when you launch."}
               </p>
             </div>
+            {gpsError && (
+              <div className="gps-error" data-testid="gps-error">
+                {gpsError.message}
+              </div>
+            )}
             {status === "acquiring" ? (
               <div className="armed-accuracy" data-testid="armed-accuracy">
                 {latest

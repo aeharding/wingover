@@ -108,6 +108,10 @@ export class MockRecordingEngine implements RecordingEngine {
     };
   }
 
+  onError(): () => void {
+    return () => {};
+  }
+
   private bufferAt(wal: MockWal, now: number): Fix[] {
     if (!this.simulator || this.simulatorSeed !== wal.seed) {
       this.simulator = new FlightSimulator(wal.seed, wal.armedAt);

@@ -5,12 +5,18 @@ import type { EngineStatus } from "./types";
 import { clearWal } from "./wal";
 
 class FakeGeolocation {
-  private watchers = new Map<number, PositionCallback>();
+  private watchers = new Map<
+    number,
+    { success: PositionCallback; error?: PositionErrorCallback }
+  >();
   private nextId = 1;
 
-  watchPosition(success: PositionCallback): number {
+  watchPosition(
+    success: PositionCallback,
+    error?: PositionErrorCallback,
+  ): number {
     const id = this.nextId++;
-    this.watchers.set(id, success);
+    this.watchers.set(id, { success, error });
     return id;
   }
 
@@ -19,7 +25,22 @@ class FakeGeolocation {
   }
 
   emit(position: GeolocationPosition) {
-    for (const callback of [...this.watchers.values()]) callback(position);
+    for (const watcher of [...this.watchers.values()]) {
+      watcher.success(position);
+    }
+  }
+
+  emitError(code: number) {
+    const error = {
+      code,
+      message: "fake",
+      PERMISSION_DENIED: 1,
+      POSITION_UNAVAILABLE: 2,
+      TIMEOUT: 3,
+    } as GeolocationPositionError;
+    for (const watcher of [...this.watchers.values()]) {
+      watcher.error?.(error);
+    }
   }
 
   get watcherCount() {
@@ -160,6 +181,16 @@ describe("GeolocationRecordingEngine", () => {
       geolocation.emit(position({ altitudeAccuracy: null }));
     }
     expect(statuses).toEqual(["acquiring"]);
+  });
+
+  it("classifies watch errors", async () => {
+    const engine = new GeolocationRecordingEngine();
+    const errors: string[] = [];
+    engine.onError((error) => errors.push(error.code));
+    await engine.start();
+    geolocation.emitError(1);
+    geolocation.emitError(2);
+    expect(errors).toEqual(["permission-denied", "unavailable"]);
   });
 
   it("drops burst duplicates faster than 500 ms", async () => {

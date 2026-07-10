@@ -2,6 +2,7 @@ import { bearingBetween } from "../flight/nav";
 import { haversineMeters } from "../flight/stats";
 import { detectTakeoff, gpsReadyIndex } from "../flight/takeoff";
 import type {
+  EngineError,
   EngineSnapshot,
   EngineStatus,
   Fix,
@@ -23,6 +24,7 @@ const DERIVE_COURSE_MIN_SPEED_MPS = 0.5;
 export class GeolocationRecordingEngine implements RecordingEngine {
   private fixListeners = new Set<(fix: Fix) => void>();
   private statusListeners = new Set<(status: EngineStatus) => void>();
+  private errorListeners = new Set<(error: EngineError) => void>();
   private buffer: Fix[] = [];
   private session: WalSession | null = null;
   private watchId: number | null = null;
@@ -80,6 +82,13 @@ export class GeolocationRecordingEngine implements RecordingEngine {
     };
   }
 
+  onError(listener: (error: EngineError) => void): () => void {
+    this.errorListeners.add(listener);
+    return () => {
+      this.errorListeners.delete(listener);
+    };
+  }
+
   private deriveStatus(): EngineStatus {
     if (!this.session) return "idle";
     if (this.session.takeoffIndex !== null) return "recording";
@@ -95,14 +104,37 @@ export class GeolocationRecordingEngine implements RecordingEngine {
   private ensureWatch() {
     if (this.watchId !== null) return;
     if (!("geolocation" in navigator)) {
-      console.warn("geolocation unavailable");
+      this.emitError({
+        code: "unavailable",
+        message: "This device has no location support.",
+      });
       return;
     }
     this.watchId = navigator.geolocation.watchPosition(
       (position) => this.handlePosition(position),
-      (error) => console.warn("geolocation error:", error.message),
+      (error) => this.handleWatchError(error),
       { enableHighAccuracy: true, maximumAge: 0 },
     );
+  }
+
+  private handleWatchError(error: GeolocationPositionError) {
+    console.warn("geolocation error:", error.message);
+    if (error.code === error.PERMISSION_DENIED) {
+      this.emitError({
+        code: "permission-denied",
+        message:
+          "Location permission denied. Allow location access for Wingover, then try again.",
+      });
+    } else {
+      this.emitError({
+        code: "unavailable",
+        message: "GPS unavailable — check that location services are on.",
+      });
+    }
+  }
+
+  private emitError(error: EngineError) {
+    for (const listener of this.errorListeners) listener(error);
   }
 
   private clearWatch() {
