@@ -25,7 +25,8 @@
   "bundle": {
     "active": false,
     "iOS": {
-      "minimumSystemVersion": "16.0"
+      "minimumSystemVersion": "16.0",
+      "developmentTeam": "SYTN44U2UN"
     }
   }
 }

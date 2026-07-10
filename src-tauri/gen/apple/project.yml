@@ -12,6 +12,7 @@ settingGroups:
     base:
       PRODUCT_NAME: Wingover
       PRODUCT_BUNDLE_IDENTIFIER: app.wingover.wingover
+      DEVELOPMENT_TEAM: SYTN44U2UN
 targetTemplates:
   app:
     type: application
@@ -40,6 +41,9 @@ targets:
       path: wingover_iOS/Info.plist
       properties:
         LSRequiresIPhoneOS: true
+        NSLocationWhenInUseUsageDescription: Wingover records your flight track while you fly.
+        NSLocationAlwaysAndWhenInUseUsageDescription: Wingover keeps recording your flight when the screen is off or the app is in the background.
+        UIBackgroundModes: [location]
         UILaunchStoryboardName: LaunchScreen
         UIRequiredDeviceCapabilities: [arm64, metal]
         UISupportedInterfaceOrientations:
