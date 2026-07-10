@@ -90,6 +90,8 @@ Ring 1 (browser) is fully working and verified:
 
 - Attribution stays as the compact on-map control — moving it to Settings was tried and rejected by Alex 2026-07-09 (commit c1ba625, reverted). Don't propose again without new reasoning.
 
+- Camera pixel-snap (commit cbbb071, reverted): tried for zoomed-out shimmer; Alex still saw shimmer in the dev env afterward, so reverted pending a real-iPhone check. If shimmer reproduces on device, the snap technique + probes are in that commit's history (probe showed motion itself is uniform — any fix is rendering-side).
+
 ## Later / parked
 
 - ~~Code splitting~~ — rejected by Alex 2026-07-09: mobile app, bundle ships locally, not a concern
