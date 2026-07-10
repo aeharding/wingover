@@ -1,0 +1,8 @@
+# Reuses the same certificates repo as Voyager (team-wide distribution
+# cert); match adds the wingover provisioning profile alongside. Point at a
+# dedicated repo instead if preferred.
+git_url("https://github.com/aeharding/voyager-match")
+
+storage_mode("git")
+
+type("appstore")

@@ -80,7 +80,7 @@ Ring 1 (browser) is fully working and verified:
 **The native layer is a dumb capture+buffer; JS keeps all flight semantics.**
 Replaces the vendor-and-patch plan entirely. STEERING §Architecture layer 3
 ("owns the GPS/baro pipeline and the active flight, end to end") is amended in
-spirit: native owns *capture and durable buffering*; the JS engine owns the
+spirit: native owns _capture and durable buffering_; the JS engine owns the
 flight. Rationale: the e2e-proven JS engine stays the only engine; the Swift
 surface is ~200 lines; the Kotlin port later is a foreground service feeding
 the same contract.
@@ -90,8 +90,8 @@ the same contract.
   `pausesLocationUpdatesAutomatically=false`, `.airborne`, best accuracy —
   the flags the community plugin never set. Fixes normalized at the source
   (CoreLocation -1 sentinels → absent keys → JS null) and buffered in memory
-  + an append-only JSONL session file (Application Support) that survives
-  app crash/jetsam; torn tail = couple of points, accepted budget.
+  - an append-only JSONL session file (Application Support) that survives
+    app crash/jetsam; torn tail = couple of points, accepted budget.
 - **Delivery is pull, not push**: JS polls `fixes_since(cursor)` at 1 Hz.
   One code path serves live delivery AND post-reload catch-up, so the
   recovery path runs every second of every flight; no channels to orphan on
@@ -140,6 +140,8 @@ the same contract.
 - Attribution stays as the compact on-map control — moving it to Settings was tried and rejected by Alex 2026-07-09 (commit c1ba625, reverted). Don't propose again without new reasoning.
 
 - Camera pixel-snap (commit cbbb071, reverted): tried for zoomed-out shimmer; Alex still saw shimmer in the dev env afterward, so reverted pending a real-iPhone check. If shimmer reproduces on device, the snap technique + probes are in that commit's history (probe showed motion itself is uniform — any fix is rendering-side).
+
+- **TestFlight pipeline** (added 2026-07-10, Voyager pattern): `.github/workflows/testflight.yml` on every main push (macos runner, `environment: deploy`, gracefully skips until secrets exist) → fastlane `ios deploy`: match (certs from the shared voyager-match repo), build_app on the Tauri-generated project (its Build Rust Code phase drives pnpm+cargo), CURRENT_PROJECT_VERSION = run number, upload_to_testflight internal-only (flip `distribute_external` + groups once an external beta group exists). One-time setup on Alex: (1) register app.wingover.wingover in App Store Connect, (2) `bundle exec fastlane match appstore` once from the Mac to mint the profile into voyager-match, (3) repo secrets `APP_STORE_CONNECT_KEY` (authkey.json contents), `MATCH_PASSWORD`, `MATCH_GIT_BASIC_AUTHORIZATION` (same values as Voyager's), (4) create the `deploy` environment. Version bumped to 0.1.0 (ASC rejects 0.0.0); Settings version string is hardcoded — wire to a build define someday.
 
 ## Later / parked
 

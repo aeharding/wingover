@@ -1,0 +1,5 @@
+app_identifier(["app.wingover.wingover"])
+apple_id("alex@harding.dev")
+
+itc_team_id("126507712") # App Store Connect Team ID
+team_id("SYTN44U2UN") # Developer Portal Team ID

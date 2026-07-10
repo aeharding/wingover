@@ -1,0 +1,61 @@
+name: TestFlight
+
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+jobs:
+  testflight:
+    concurrency:
+      group: ios-release
+    environment: deploy
+    runs-on: macos-26
+    steps:
+      - uses: actions/checkout@v7
+
+      # Skips gracefully until the deploy secrets exist, so main stays green
+      # while App Store Connect setup is pending.
+      - name: Check deploy credentials
+        id: creds
+        env:
+          HAS_KEY: ${{ secrets.APP_STORE_CONNECT_KEY != '' }}
+        run: echo "have=$HAS_KEY" >> "$GITHUB_OUTPUT"
+
+      - uses: pnpm/action-setup@v6
+        if: steps.creds.outputs.have == 'true'
+      - uses: actions/setup-node@v6
+        if: steps.creds.outputs.have == 'true'
+        with:
+          node-version-file: .tool-versions
+          cache: pnpm
+      - uses: ruby/setup-ruby@v1
+        if: steps.creds.outputs.have == 'true'
+        with:
+          bundler-cache: true
+
+      - name: Install iOS Rust targets
+        if: steps.creds.outputs.have == 'true'
+        run: rustup target add aarch64-apple-ios
+
+      - name: Install dependencies
+        if: steps.creds.outputs.have == 'true'
+        run: pnpm install --frozen-lockfile
+
+      - name: Build and deploy to TestFlight
+        if: steps.creds.outputs.have == 'true'
+        run: |
+          echo "$APP_STORE_CONNECT_KEY" > authkey.json
+          bundle exec fastlane ios deploy
+        env:
+          APP_STORE_CONNECT_KEY: ${{ secrets.APP_STORE_CONNECT_KEY }}
+          MATCH_PASSWORD: ${{ secrets.MATCH_PASSWORD }}
+          MATCH_GIT_BASIC_AUTHORIZATION: ${{ secrets.MATCH_GIT_BASIC_AUTHORIZATION }}
+          BUILD_NUMBER: ${{ github.run_number }}
+
+      - name: Upload IPA artifact
+        if: steps.creds.outputs.have == 'true'
+        uses: actions/upload-artifact@v7
+        with:
+          name: Wingover-iOS-${{ github.run_number }}.ipa
+          path: Wingover-iOS-${{ github.run_number }}.ipa

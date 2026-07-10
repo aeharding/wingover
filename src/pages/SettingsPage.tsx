@@ -63,7 +63,7 @@ export default function SettingsPage() {
           </IonItem>
         </IonList>
         <div style={{ textAlign: "center", paddingTop: "2rem" }}>
-          <IonNote>Wingover 0.0.0 · AGPL-3.0</IonNote>
+          <IonNote>Wingover 0.1.0 · AGPL-3.0</IonNote>
         </div>
       </IonContent>
     </IonPage>
