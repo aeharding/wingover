@@ -606,6 +606,8 @@ export default function LiveTrackMap({
       });
     }
     ensureLoop();
+    // ensureLoop reads everything through refs; only new fixes kick it.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [latest]);
 
   useEffect(() => {

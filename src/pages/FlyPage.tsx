@@ -134,6 +134,8 @@ export default function FlyPage() {
       unsubscribeFix();
       unsubscribeStatus();
     };
+    // Mount-only engine subscription; handlers read state through refs.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   useLayoutEffect(() => {
