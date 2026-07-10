@@ -1,6 +1,7 @@
-# Seeded from the existing team distribution cert via `match import`
-# (no new certificate minted) — encrypted with its own passphrase.
-git_url("https://github.com/aeharding/wingover-match")
+# Shared per-team match repo (fastlane's recommended layout): the team
+# distribution cert lives here once; wingover only adds its own
+# provisioning profile alongside Voyager's.
+git_url("https://github.com/aeharding/voyager-match")
 
 storage_mode("git")
 
