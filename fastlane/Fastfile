@@ -5,10 +5,10 @@ default_platform(:ios)
 APP_IDENTIFIER = "app.wingover.wingover"
 
 platform :ios do
-  desc "Build via tauri ios build and push to TestFlight"
+  desc "Build via tauri ios build, export manually, push to TestFlight"
   lane :deploy do
     setup_ci if ENV["CI"]
-    # Installs the shared distribution cert (+ profile) into the CI keychain.
+    # Installs the shared distribution cert + profile into the CI keychain.
     match(
       type: "appstore",
       app_identifier: APP_IDENTIFIER,
@@ -16,16 +16,30 @@ platform :ios do
     )
 
     build_number = ENV.fetch("BUILD_NUMBER", "1")
+    root = File.expand_path("..", __dir__)
 
-    # tauri ios build owns the archive: it runs beforeBuildCommand (frontend
-    # build) and invokes xcodebuild with the context its Rust build phase
-    # expects — driving the Xcode project directly with gym aborts inside
-    # xcode-script. Signing auth comes from APPLE_API_* env (workflow).
-    sh("cd .. && pnpm tauri ios build " \
-       "--export-method app-store-connect --build-number #{build_number}")
+    # tauri ios build owns the archive (frontend build + xcodebuild with the
+    # context its Rust phase expects), but its export step insists on cloud
+    # signing, which our API key cannot do — tolerate that failure and
+    # export the archive ourselves with the match profile.
+    sh("cd '#{root}' && pnpm tauri ios build " \
+       "--export-method app-store-connect --build-number #{build_number} " \
+       "|| true")
+
+    archive = File.join(root, "src-tauri/gen/apple/build/wingover_iOS.xcarchive")
+    UI.user_error!("Archive missing: tauri build failed before export — check its log above") unless File.directory?(archive)
+
+    export_dir = File.join(root, "build-export")
+    sh("xcodebuild -exportArchive " \
+       "-archivePath '#{archive}' " \
+       "-exportOptionsPlist '#{File.join(root, "fastlane/export-options.plist")}' " \
+       "-exportPath '#{export_dir}'")
+
+    ipa = Dir[File.join(export_dir, "*.ipa")].first
+    UI.user_error!("No IPA produced by exportArchive") unless ipa
 
     upload_to_testflight(
-      ipa: "src-tauri/gen/apple/build/arm64/Wingover.ipa",
+      ipa: ipa,
       app_identifier: APP_IDENTIFIER,
       api_key_path: "authkey.json",
       changelog: "GitHub Actions build #{build_number}, sha #{ENV['GITHUB_SHA']}",
