@@ -19,7 +19,7 @@ import type {
   Waypoint,
 } from "./types";
 import {
-  appendWalFix,
+  appendWalFixes,
   clearWal,
   readWal,
   type WalSession,
@@ -102,6 +102,7 @@ export class GeolocationRecordingEngine implements RecordingEngine {
   private stopWatch: (() => void) | null = null;
   private lastStatus: EngineStatus = "idle";
   private walQueue: Promise<unknown> = Promise.resolve();
+  private pendingWalFixes: Fix[] = [];
 
   constructor(
     private readonly core: CoreClient = {
@@ -309,7 +310,16 @@ export class GeolocationRecordingEngine implements RecordingEngine {
     }
     const fix = this.toFix(position, previous);
     this.buffer.push(fix);
-    this.enqueueWal(() => appendWalFix(fix));
+    // Fixes accumulate until the queued flush runs, so a burst becomes a
+    // few large transactions instead of thousands of small ones.
+    this.pendingWalFixes.push(fix);
+    if (this.pendingWalFixes.length === 1) {
+      this.enqueueWal(() => {
+        const batch = this.pendingWalFixes;
+        this.pendingWalFixes = [];
+        return appendWalFixes(batch);
+      });
+    }
 
     this.events.emit("fix", fix);
 

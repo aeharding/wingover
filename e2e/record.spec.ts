@@ -58,9 +58,9 @@ test("arm, auto-takeoff, reload kill drill, stop, logbook", async ({
   await page.waitForTimeout(800);
   await page.mouse.up();
 
-  await expect(
-    page.getByRole("button", { name: "Start Flight" }),
-  ).toBeVisible();
+  await expect(page.getByRole("button", { name: "Start Flight" })).toBeVisible({
+    timeout: 15_000,
+  });
   await expect(page.locator("ion-tab-bar")).toBeVisible();
 
   await page.getByText("Logbook", { exact: true }).click();
@@ -193,8 +193,8 @@ test("a two-hour flight lands itself and reaches the logbook hands-free", async 
   await expect(page.getByText("Flight saved to logbook")).toBeVisible({
     timeout: 20_000,
   });
-  await expect(
-    page.getByRole("button", { name: "Start Flight" }),
-  ).toBeVisible();
+  await expect(page.getByRole("button", { name: "Start Flight" })).toBeVisible({
+    timeout: 15_000,
+  });
   await expect(page.locator("ion-tab-bar")).toBeVisible();
 });

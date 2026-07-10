@@ -81,9 +81,13 @@ export function writeWalSession(session: WalSession): Promise<void> {
   });
 }
 
-export function appendWalFix(fix: Fix): Promise<void> {
+// One transaction per batch: burst replay (foregrounding after hours
+// backgrounded, the simulator at high compression) delivers thousands of
+// fixes in moments, and a transaction per fix makes the queue drain take
+// longer than the flight.
+export function appendWalFixes(batch: Fix[]): Promise<void> {
   return withStores("readwrite", (fixes) => {
-    fixes.add(fix);
+    for (const fix of batch) fixes.add(fix);
   });
 }
 
