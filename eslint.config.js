@@ -1,5 +1,6 @@
 // @ts-check
 
+import commentsPlugin from "@eslint-community/eslint-plugin-eslint-comments";
 import eslint from "@eslint/js";
 import eslintConfigPrettier from "eslint-config-prettier";
 import perfectionistPlugin from "eslint-plugin-perfectionist";
@@ -14,15 +15,12 @@ export default defineConfig(
   eslintConfigPrettier,
   reactHooks.configs.flat["recommended-latest"],
   {
-    // React Compiler strictness rules are off: the codebase deliberately
-    // syncs props into refs during render for the imperative MapLibre
-    // callbacks. Revisit if/when adopting the compiler.
+    // Disabling lint rules inline is banned — fix the code instead.
+    plugins: {
+      "@eslint-community/eslint-comments": commentsPlugin,
+    },
     rules: {
-      "react-hooks/refs": "off",
-      "react-hooks/purity": "off",
-      "react-hooks/immutability": "off",
-      "react-hooks/set-state-in-effect": "off",
-      "react-hooks/exhaustive-deps": "warn",
+      "@eslint-community/eslint-comments/no-use": "error",
     },
   },
   {

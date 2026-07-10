@@ -1,5 +1,5 @@
 import type { Map as MapLibreMap } from "maplibre-gl";
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useEffectEvent, useRef, useState } from "react";
 
 import { type MapViewKind, resolveMapStyle } from "./config";
 
@@ -25,10 +25,12 @@ let attributionLingerElapsed = false;
 export default function MapView({ view, onReady, onLongPress }: MapViewProps) {
   const containerRef = useRef<HTMLDivElement>(null);
   const mapRef = useRef<MapLibreMap | null>(null);
-  const onReadyRef = useRef(onReady);
-  onReadyRef.current = onReady;
-  const onLongPressRef = useRef(onLongPress);
-  onLongPressRef.current = onLongPress;
+  const notifyReady = useEffectEvent((map: MapLibreMap, lib: MapLibreModule) =>
+    onReady?.(map, lib),
+  );
+  const notifyLongPress = useEffectEvent(
+    (point: { longitude: number; latitude: number }) => onLongPress?.(point),
+  );
   const initialViewRef = useRef(view);
   const [revealed, setRevealed] = useState(false);
 
@@ -108,7 +110,7 @@ export default function MapView({ view, onReady, onLongPress }: MapViewProps) {
         pressPoint = point;
         pressTimer = setTimeout(() => {
           cancelPress();
-          onLongPressRef.current?.({
+          notifyLongPress({
             longitude: lngLat.lng,
             latitude: lngLat.lat,
           });
@@ -141,7 +143,7 @@ export default function MapView({ view, onReady, onLongPress }: MapViewProps) {
 
       map.once("load", reveal);
 
-      onReadyRef.current?.(map, lib);
+      notifyReady(map, lib);
     })();
 
     return () => {

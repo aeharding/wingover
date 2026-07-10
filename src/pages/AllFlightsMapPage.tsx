@@ -10,7 +10,7 @@ import {
 } from "@ionic/react";
 import type { Feature } from "geojson";
 import type { GeoJSONSource, Map as MapLibreMap } from "maplibre-gl";
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useEffectEvent, useRef, useState } from "react";
 
 import type { MapViewKind } from "../map/config";
 import MapView, { type MapLibreModule } from "../map/MapView";
@@ -31,11 +31,12 @@ function rampColor(t: number): string {
 export default function AllFlightsMapPage() {
   const [view, setView] = useState<MapViewKind>("street");
   const [features, setFeatures] = useState<Feature[]>([]);
-  const [mapReady, setMapReady] = useState(false);
+  const [mapContext, setMapContext] = useState<{
+    map: MapLibreMap;
+    lib: MapLibreModule;
+  } | null>(null);
   const mapRef = useRef<MapLibreMap | null>(null);
   const libRef = useRef<MapLibreModule | null>(null);
-  const featuresRef = useRef<Feature[]>([]);
-  featuresRef.current = features;
 
   useIonViewWillEnter(() => {
     getSetting("mapView").then((value) => {
@@ -68,12 +69,14 @@ export default function AllFlightsMapPage() {
     setSetting("mapView", value);
   }
 
-  function ensureFlightsLayer(map: MapLibreMap) {
+  // Effect Event: the styledata/idle listeners are registered once but
+  // must see the latest features state.
+  const ensureFlightsLayer = useEffectEvent((map: MapLibreMap) => {
     if (!map.isStyleLoaded()) return;
-    if (map.getSource("flights") || featuresRef.current.length === 0) return;
+    if (map.getSource("flights") || features.length === 0) return;
     map.addSource("flights", {
       type: "geojson",
-      data: { type: "FeatureCollection", features: featuresRef.current },
+      data: { type: "FeatureCollection", features: features },
     });
     map.addLayer({
       id: "flights",
@@ -87,20 +90,23 @@ export default function AllFlightsMapPage() {
       },
     });
     map.getContainer().setAttribute("data-flights-layer", "true");
-  }
+  });
 
-  function handleReady(map: MapLibreMap, lib: MapLibreModule) {
+  const setupMap = useEffectEvent((map: MapLibreMap, lib: MapLibreModule) => {
     mapRef.current = map;
     libRef.current = lib;
     map.on("styledata", () => ensureFlightsLayer(map));
     map.on("idle", () => ensureFlightsLayer(map));
-    setMapReady(true);
-  }
+  });
+
+  useEffect(() => {
+    if (mapContext) setupMap(mapContext.map, mapContext.lib);
+  }, [mapContext]);
 
   useEffect(() => {
     const map = mapRef.current;
     const lib = libRef.current;
-    if (!map || !lib || !mapReady || features.length === 0) return;
+    if (!map || !lib || !mapContext || features.length === 0) return;
 
     const source = map.getSource("flights") as GeoJSONSource | undefined;
     if (source) {
@@ -120,7 +126,7 @@ export default function AllFlightsMapPage() {
       padding: { top: 80, bottom: 60, left: 50, right: 50 },
       animate: false,
     });
-  }, [features, mapReady]);
+  }, [features, mapContext]);
 
   return (
     <IonPage>
@@ -134,7 +140,10 @@ export default function AllFlightsMapPage() {
       </IonHeader>
       <IonContent scrollY={false}>
         <div className="all-flights-map">
-          <MapView view={view} onReady={handleReady} />
+          <MapView
+            view={view}
+            onReady={(map, lib) => setMapContext({ map, lib })}
+          />
           <div className="composite-legend">
             Oldest → newest
             <div className="legend-bar" />

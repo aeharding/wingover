@@ -4,7 +4,7 @@ import type {
   GeoJSONSource,
   Map as MapLibreMap,
 } from "maplibre-gl";
-import { useEffect, useRef } from "react";
+import { useEffect, useEffectEvent, useRef, useState } from "react";
 
 import type { Fix } from "../engine/types";
 import { relativeBearing } from "../flight/nav";
@@ -245,6 +245,11 @@ function createAircraftLayer(
   };
 }
 
+interface MapContext {
+  map: MapLibreMap;
+  lib: MapLibreModule;
+}
+
 export default function LiveTrackMap({
   track,
   latest,
@@ -254,20 +259,9 @@ export default function LiveTrackMap({
   topInset = 0,
   onFollowChange,
 }: LiveTrackMapProps) {
-  const mapRef = useRef<MapLibreMap | null>(null);
-  const libRef = useRef<MapLibreModule | null>(null);
+  const [mapContext, setMapContext] = useState<MapContext | null>(null);
   const positionInitializedRef = useRef(false);
-  const trackRef = useRef(track);
-  trackRef.current = track;
-  const followRef = useRef(follow);
-  followRef.current = follow;
-  const trackUpRef = useRef(trackUp);
-  trackUpRef.current = trackUp;
   const interactingRef = useRef(false);
-  const onFollowChangeRef = useRef(onFollowChange);
-  onFollowChangeRef.current = onFollowChange;
-  const topInsetRef = useRef(topInset);
-  topInsetRef.current = topInset;
   const displayRef = useRef<DisplayPosition | null>(null);
   const lineCoordsRef = useRef<[number, number][]>([]);
   const committedCountRef = useRef(0);
@@ -282,7 +276,7 @@ export default function LiveTrackMap({
 
   function cameraPadding() {
     return {
-      top: OVERSCAN_PX + topInsetRef.current,
+      top: OVERSCAN_PX + topInset,
       bottom: OVERSCAN_PX,
       left: OVERSCAN_PX,
       right: OVERSCAN_PX,
@@ -301,7 +295,7 @@ export default function LiveTrackMap({
   // The line only ever contains fixes the playhead has passed, so it can
   // never extend ahead of the aircraft.
   function syncLine(map: MapLibreMap) {
-    const fixes = trackRef.current;
+    const fixes = track;
     const playhead = playheadRef.current;
     const upTo = playhead ? Math.min(playhead.index + 1, fixes.length) : 0;
     if (lineCoordsRef.current.length > upTo) {
@@ -383,21 +377,17 @@ export default function LiveTrackMap({
     return { display, tail };
   }
 
-  function renderFrame(position: DisplayPosition) {
+  function renderFrame(map: MapLibreMap, position: DisplayPosition) {
     displayRef.current = position;
-    const map = mapRef.current;
-    if (!map) return;
 
     (
       map.getContainer() as HTMLElement & { __display?: DisplayPosition }
     ).__display = position;
 
-    if (followRef.current && !interactingRef.current) {
+    if (follow && !interactingRef.current) {
       map.jumpTo({
         center: [position.lng, position.lat],
-        bearing:
-          cameraBearingRef.current ??
-          (trackUpRef.current ? position.course : 0),
+        bearing: cameraBearingRef.current ?? (trackUp ? position.course : 0),
         padding: cameraPadding(),
       });
     } else {
@@ -408,10 +398,11 @@ export default function LiveTrackMap({
   // The playhead travels along the recorded track polyline, chasing the
   // newest fix with an exponential rubber-band (steady-state lag ≈ CHASE_MS).
   // Both the aircraft and the line derive from it, so they cannot diverge.
-  function stepPlayhead(now: number) {
+  // An Effect Event so the rAF callback always sees the latest props.
+  const stepPlayhead = useEffectEvent((now: number) => {
     loopFrameRef.current = undefined;
-    const map = mapRef.current;
-    const fixes = trackRef.current;
+    const map = mapContext?.map;
+    const fixes = track;
     if (!map) return;
     if (fixes.length === 0) {
       playheadRef.current = null;
@@ -482,7 +473,7 @@ export default function LiveTrackMap({
     // (isRotating) while the aircraft keeps moving. Unlike the aircraft
     // heading, it smooths in REAL time — it rotates the entire viewport, so
     // its rate must stay comfortable at any playback compression.
-    const bearingTarget = trackUpRef.current ? display.course : 0;
+    const bearingTarget = trackUp ? display.course : 0;
     const prevBearing = cameraBearingRef.current;
     cameraBearingRef.current =
       prevBearing === null
@@ -494,18 +485,20 @@ export default function LiveTrackMap({
           );
 
     syncLine(map);
-    renderFrame(display);
+    renderFrame(map, display);
 
     if (playhead.ts < last.timestamp - 1) {
-      loopFrameRef.current = requestAnimationFrame(stepPlayhead);
+      loopFrameRef.current = requestAnimationFrame((next) =>
+        stepPlayhead(next),
+      );
     }
-  }
+  });
 
-  function ensureLoop() {
+  const ensureLoop = useEffectEvent(() => {
     if (loopFrameRef.current !== undefined) return;
     lastStepAtRef.current = performance.now();
-    loopFrameRef.current = requestAnimationFrame(stepPlayhead);
-  }
+    loopFrameRef.current = requestAnimationFrame((next) => stepPlayhead(next));
+  });
 
   // Fast refresh preserves refs but re-runs effects: clear the frame id so
   // ensureLoop can restart the loop after HMR instead of seeing a stale id.
@@ -517,35 +510,42 @@ export default function LiveTrackMap({
     [],
   );
 
-  function ensureTrackLayers(map: MapLibreMap) {
-    if (map.getSource("track")) return;
-    map.addSource("track", { type: "geojson", data: toLineData([]) });
-    map.addLayer({
-      id: "track",
-      type: "line",
-      source: "track",
-      layout: { "line-cap": "round", "line-join": "round" },
-      paint: { "line-color": "#4cc2ff", "line-width": LINE_WIDTH_PX },
-    });
-    lineCoordsRef.current = [];
-    committedCountRef.current = 0;
-    pendingCountRef.current = null;
-    confirmArmedRef.current = false;
-    syncLine(map);
+  // An Effect Event: the style.load listener is registered once, but the
+  // dispatch here always runs the latest render's body (fresh track prop).
+  const ensureTrackLayers = useEffectEvent(
+    (map: MapLibreMap, lib: MapLibreModule) => {
+      if (map.getSource("track")) return;
+      map.addSource("track", { type: "geojson", data: toLineData([]) });
+      map.addLayer({
+        id: "track",
+        type: "line",
+        source: "track",
+        layout: { "line-cap": "round", "line-join": "round" },
+        paint: { "line-color": "#4cc2ff", "line-width": LINE_WIDTH_PX },
+      });
+      lineCoordsRef.current = [];
+      committedCountRef.current = 0;
+      pendingCountRef.current = null;
+      confirmArmedRef.current = false;
+      syncLine(map);
 
-    const lib = libRef.current;
-    if (lib && !map.getLayer("aircraft")) {
-      map.addLayer(createAircraftLayer(lib, () => getAircraftFrame(map)));
-      map.getContainer().setAttribute("data-aircraft-layer", "true");
-    }
-    if (displayRef.current) renderFrame(displayRef.current);
-  }
+      if (!map.getLayer("aircraft")) {
+        map.addLayer(createAircraftLayer(lib, () => getAircraftFrame(map)));
+        map.getContainer().setAttribute("data-aircraft-layer", "true");
+      }
+      if (displayRef.current) renderFrame(map, displayRef.current);
+    },
+  );
 
-  function handleReady(map: MapLibreMap, lib: MapLibreModule) {
-    mapRef.current = map;
-    libRef.current = lib;
-    applyZoomAnchor(map, followRef.current);
-    map.on("style.load", () => ensureTrackLayers(map));
+  const handleDragStart = useEffectEvent(() => {
+    onFollowChange(false);
+  });
+
+  const setupMap = useEffectEvent(({ map, lib }: MapContext) => {
+    applyZoomAnchor(map, follow);
+    map.on("style.load", () => ensureTrackLayers(map, lib));
+    // The style may have finished loading before this effect ran.
+    if (map.isStyleLoaded()) ensureTrackLayers(map, lib);
     map.on("mousedown", () => {
       interactingRef.current = true;
     });
@@ -566,57 +566,59 @@ export default function LiveTrackMap({
       const center = map.getCenter();
       writeLiveViewState({ center: [center.lng, center.lat] });
     });
-    map.on("dragstart", () => {
-      followRef.current = false;
-      onFollowChangeRef.current(false);
-    });
+    map.on("dragstart", () => handleDragStart());
     map.on("zoomend", () => {
       writeLiveViewState({ zoom: map.getZoom() });
     });
 
-    const last = trackRef.current[trackRef.current.length - 1];
+    const last = track[track.length - 1];
     if (last) {
       positionInitializedRef.current = true;
       const saved = readLiveViewState();
       const center: [number, number] =
-        !followRef.current && saved.center
+        !follow && saved.center
           ? saved.center
           : [last.longitude, last.latitude];
       map.jumpTo({
         center,
         zoom: saved.zoom ?? 13,
-        bearing: trackUpRef.current ? last.course : 0,
+        bearing: trackUp ? last.course : 0,
         padding: cameraPadding(),
       });
       ensureLoop();
     }
-  }
+  });
 
   useEffect(() => {
-    const map = mapRef.current;
-    if (!map || !latest) return;
+    if (mapContext) setupMap(mapContext);
+  }, [mapContext]);
 
+  const handleNewFix = useEffectEvent((fix: Fix) => {
+    const map = mapContext?.map;
+    if (!map) return;
     if (!positionInitializedRef.current) {
       positionInitializedRef.current = true;
       map.jumpTo({
-        center: [latest.longitude, latest.latitude],
+        center: [fix.longitude, fix.latitude],
         zoom: readLiveViewState().zoom ?? 13,
-        bearing: trackUpRef.current ? latest.course : 0,
+        bearing: trackUp ? fix.course : 0,
         padding: cameraPadding(),
       });
     }
     ensureLoop();
-    // ensureLoop reads everything through refs; only new fixes kick it.
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [latest]);
+  });
 
   useEffect(() => {
-    const map = mapRef.current;
+    if (latest) handleNewFix(latest);
+  }, [latest]);
+
+  const applyFollowChange = useEffectEvent((following: boolean) => {
+    const map = mapContext?.map;
     if (!map) return;
-    applyZoomAnchor(map, follow);
+    applyZoomAnchor(map, following);
     const position = displayRef.current;
-    if (!follow || !position) return;
-    const bearing = trackUpRef.current ? position.course : 0;
+    if (!following || !position) return;
+    const bearing = trackUp ? position.course : 0;
     cameraBearingRef.current = bearing;
     map.jumpTo({
       center: [position.lng, position.lat],
@@ -624,20 +626,31 @@ export default function LiveTrackMap({
       bearing,
       padding: cameraPadding(),
     });
-  }, [follow]);
+  });
 
   useEffect(() => {
-    const map = mapRef.current;
-    if (!map || followRef.current) return;
+    applyFollowChange(follow);
+  }, [follow]);
+
+  const applyTrackUpChange = useEffectEvent((trackingUp: boolean) => {
+    const map = mapContext?.map;
+    if (!map || follow) return;
     map.easeTo({
-      bearing: trackUp ? (displayRef.current?.course ?? 0) : 0,
+      bearing: trackingUp ? (displayRef.current?.course ?? 0) : 0,
       duration: 400,
     });
+  });
+
+  useEffect(() => {
+    applyTrackUpChange(trackUp);
   }, [trackUp]);
 
   return (
     <div className="live-map">
-      <MapView view={view} onReady={handleReady} />
+      <MapView
+        view={view}
+        onReady={(map, lib) => setMapContext({ map, lib })}
+      />
     </div>
   );
 }

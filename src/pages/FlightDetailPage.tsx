@@ -19,7 +19,7 @@ import {
   ellipsisHorizontal,
 } from "ionicons/icons";
 import type { Map as MapLibreMap } from "maplibre-gl";
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useEffectEvent, useRef, useState } from "react";
 import { useParams } from "react-router";
 
 import type { Fix } from "../engine/types";
@@ -65,15 +65,16 @@ export default function FlightDetailPage() {
   const [track, setTrack] = useState<Fix[]>([]);
   const [optionsOpen, setOptionsOpen] = useState(false);
   const [view, setView] = useState<MapViewKind>("street");
-  const [mapReady, setMapReady] = useState(false);
+  const [mapContext, setMapContext] = useState<{
+    map: MapLibreMap;
+    lib: MapLibreModule;
+  } | null>(null);
   const [expanded, setExpanded] = useState(true);
   const [draftName, setDraftName] = useState("");
   const [draftNotes, setDraftNotes] = useState("");
   const mapRef = useRef<MapLibreMap | null>(null);
   const libRef = useRef<MapLibreModule | null>(null);
   const overlayRef = useRef<HTMLDivElement>(null);
-  const trackRef = useRef<Fix[]>([]);
-  trackRef.current = track;
 
   useIonViewWillEnter(() => {
     getFlight(id).then((found) => {
@@ -102,12 +103,14 @@ export default function FlightDetailPage() {
     setFlight({ ...flight, name, notes });
   }
 
-  function ensureTrackLayer(map: MapLibreMap) {
+  // Effect Event: the styledata/idle listeners are registered once but
+  // must see the latest track state.
+  const ensureTrackLayer = useEffectEvent((map: MapLibreMap) => {
     if (!map.isStyleLoaded()) return;
-    if (map.getSource("track") || trackRef.current.length === 0) return;
+    if (map.getSource("track") || track.length === 0) return;
     map.addSource("track", {
       type: "geojson",
-      data: toLineData(trackRef.current),
+      data: toLineData(track),
     });
     map.addLayer({
       id: "track",
@@ -117,20 +120,23 @@ export default function FlightDetailPage() {
       paint: { "line-color": "#4cc2ff", "line-width": 4 },
     });
     map.getContainer().setAttribute("data-track-layer", "true");
-  }
+  });
 
-  function handleReady(map: MapLibreMap, lib: MapLibreModule) {
+  const setupMap = useEffectEvent((map: MapLibreMap, lib: MapLibreModule) => {
     mapRef.current = map;
     libRef.current = lib;
     map.on("styledata", () => ensureTrackLayer(map));
     map.on("idle", () => ensureTrackLayer(map));
-    setMapReady(true);
-  }
+  });
+
+  useEffect(() => {
+    if (mapContext) setupMap(mapContext.map, mapContext.lib);
+  }, [mapContext]);
 
   useEffect(() => {
     const map = mapRef.current;
     const lib = libRef.current;
-    if (!map || !lib || !mapReady || track.length === 0) return;
+    if (!map || !lib || !mapContext || track.length === 0) return;
 
     ensureTrackLayer(map);
 
@@ -173,7 +179,7 @@ export default function FlightDetailPage() {
     return () => {
       for (const marker of markers) marker.remove();
     };
-  }, [track, mapReady, flight?.id]);
+  }, [track, mapContext, flight?.id]);
 
   const stats = flight?.stats;
 
@@ -198,7 +204,10 @@ export default function FlightDetailPage() {
       </IonHeader>
       <IonContent scrollY={false}>
         <div className="flight-detail-map">
-          <MapView view={view} onReady={handleReady} />
+          <MapView
+            view={view}
+            onReady={(map, lib) => setMapContext({ map, lib })}
+          />
           {flight && stats && (
             <div className="detail-overlay" ref={overlayRef}>
               <div className="detail-overlay-header">

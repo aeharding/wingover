@@ -4,7 +4,13 @@ import {
   locateOutline,
   stop as stopIcon,
 } from "ionicons/icons";
-import { useEffect, useLayoutEffect, useRef, useState } from "react";
+import {
+  useEffect,
+  useEffectEvent,
+  useLayoutEffect,
+  useRef,
+  useState,
+} from "react";
 
 import Tile from "../components/Tile";
 import { engine } from "../engine";
@@ -40,15 +46,15 @@ function durationParamMs(name: string, fallback: number): number {
 
 const HOLD_MS = durationParamMs("hold-ms", 1500);
 const LANDING_TIMEOUT_MS = durationParamMs("land-timeout-ms", 30_000);
+const savedLiveView = readLiveViewState();
 
 export default function FlyPage() {
   const { units } = useSettings();
   const [status, setStatus] = useState<EngineStatus | "loading">("loading");
   const [latest, setLatest] = useState<Fix | null>(null);
-  const [, setFixCount] = useState(0);
+  const [track, setTrack] = useState<Fix[]>([]);
   const [savedToastOpen, setSavedToastOpen] = useState(false);
   const [holding, setHolding] = useState(false);
-  const savedLiveView = useRef(readLiveViewState()).current;
   const [mapView, setMapView] = useState<MapViewKind>(
     savedLiveView.mapView ?? "street",
   );
@@ -56,30 +62,24 @@ export default function FlyPage() {
   const [trackUp, setTrackUp] = useState(savedLiveView.trackUp ?? false);
   const [mapTopInset, setMapTopInset] = useState(0);
   const instrumentsRef = useRef<HTMLDivElement>(null);
-  const statusRef = useRef<EngineStatus | "loading">("loading");
-  const trackRef = useRef<Fix[]>([]);
-  const distanceRef = useRef(0);
+  // Burst-safe accumulator: several fixes can arrive in one task, before
+  // React re-renders. Never read during render — `track` state mirrors it.
+  const trackAccumRef = useRef<Fix[]>([]);
   const holdTimerRef = useRef<ReturnType<typeof setTimeout> | undefined>(
     undefined,
   );
   const [landingPromptAt, setLandingPromptAt] = useState<number | null>(null);
-  const [, setLandingTick] = useState(0);
+  const [landingSecondsLeft, setLandingSecondsLeft] = useState(0);
   const landingDismissedRef = useRef(false);
   const [gpsError, setGpsError] = useState<EngineError | null>(null);
 
-  function applyStatus(value: EngineStatus | "loading") {
-    statusRef.current = value;
-    setStatus(value);
-  }
-
-  async function syncFromEngine() {
+  const syncFromEngine = useEffectEvent(async () => {
     const snapshot = await engine.getSnapshot();
-    trackRef.current = snapshot.track;
-    distanceRef.current = computeStats(snapshot.track).distanceMeters;
+    trackAccumRef.current = [...snapshot.track];
+    setTrack(snapshot.track);
     setLatest(snapshot.track[snapshot.track.length - 1] ?? null);
-    setFixCount(snapshot.track.length);
-    applyStatus(snapshot.status);
-  }
+    setStatus(snapshot.status);
+  });
 
   function changeMapView(value: MapViewKind) {
     setMapView(value);
@@ -97,45 +97,44 @@ export default function FlyPage() {
     writeLiveViewState({ trackUp: value });
   }
 
+  const handleEngineFix = useEffectEvent((fix: Fix) => {
+    setGpsError(null);
+    setLatest(fix);
+    if (status !== "recording") return;
+    const accumulated = trackAccumRef.current;
+    const previous = accumulated[accumulated.length - 1];
+    if (previous && fix.timestamp <= previous.timestamp) return;
+    accumulated.push(fix);
+    setTrack([...accumulated]);
+
+    if (isLanded(accumulated)) {
+      if (!landingDismissedRef.current && landingPromptAt === null) {
+        setLandingSecondsLeft(Math.ceil(LANDING_TIMEOUT_MS / 1000));
+        setLandingPromptAt(Date.now());
+      }
+    } else {
+      landingDismissedRef.current = false;
+      setLandingPromptAt(null);
+    }
+  });
+
   useEffect(() => {
     getSetting("mapView").then((value) => {
       if (value === "street" || value === "satellite") setMapView(value);
     });
-    syncFromEngine();
+    // Deferred so the initial engine sync sets state asynchronously, like
+    // every later sync triggered by engine callbacks.
+    Promise.resolve().then(() => syncFromEngine());
 
     const unsubscribeError = engine.onError((error) => setGpsError(error));
-
-    const unsubscribeFix = engine.onFix((fix) => {
-      setGpsError(null);
-      setLatest(fix);
-      if (statusRef.current !== "recording") return;
-      const previous = trackRef.current[trackRef.current.length - 1];
-      if (previous && fix.timestamp <= previous.timestamp) return;
-      if (previous) distanceRef.current += haversineMeters(previous, fix);
-      trackRef.current.push(fix);
-      setFixCount(trackRef.current.length);
-
-      if (isLanded(trackRef.current)) {
-        if (!landingDismissedRef.current) {
-          setLandingPromptAt((current) => current ?? Date.now());
-        }
-      } else {
-        landingDismissedRef.current = false;
-        setLandingPromptAt(null);
-      }
-    });
-
-    const unsubscribeStatus = engine.onStatus(() => {
-      syncFromEngine();
-    });
+    const unsubscribeFix = engine.onFix((fix) => handleEngineFix(fix));
+    const unsubscribeStatus = engine.onStatus(() => syncFromEngine());
 
     return () => {
       unsubscribeError();
       unsubscribeFix();
       unsubscribeStatus();
     };
-    // Mount-only engine subscription; handlers read state through refs.
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   useLayoutEffect(() => {
@@ -150,72 +149,65 @@ export default function FlyPage() {
   }, [status]);
 
   async function armFlight() {
-    trackRef.current = [];
-    distanceRef.current = 0;
     setLatest(null);
-    setFixCount(0);
+    trackAccumRef.current = [];
+    setTrack([]);
     setLandingPromptAt(null);
     landingDismissedRef.current = false;
     setGpsError(null);
     changeFollow(true);
     changeTrackUp(false);
     await engine.start();
-    applyStatus("acquiring");
+    setStatus("acquiring");
   }
 
   async function cancelArmed() {
     await engine.stop();
-    applyStatus("idle");
+    setStatus("idle");
     setLatest(null);
   }
 
   async function finishFlight() {
     holdTimerRef.current = undefined;
-    const track = await engine.stop();
+    const flown = await engine.stop();
     setHolding(false);
     setLandingPromptAt(null);
-    applyStatus("idle");
+    setStatus("idle");
     setLatest(null);
-    if (track.length > 1) {
-      const startedAt = track[0].timestamp;
+    if (flown.length > 1) {
+      const startedAt = flown[0].timestamp;
       await saveFlight(
         {
           id: crypto.randomUUID(),
           name: `Flight ${new Date(startedAt).toLocaleString()}`,
           notes: "",
           startedAt,
-          stats: computeStats(track),
+          stats: computeStats(flown),
           updatedAt: Date.now(),
         },
-        track,
+        flown,
       );
       setSavedToastOpen(true);
     }
   }
 
+  const landingTick = useEffectEvent(() => {
+    if (landingPromptAt === null) return;
+    const remainingMs = landingPromptAt + LANDING_TIMEOUT_MS - Date.now();
+    if (remainingMs <= 0) finishFlight();
+    else setLandingSecondsLeft(Math.max(0, Math.ceil(remainingMs / 1000)));
+  });
+
   useEffect(() => {
     if (landingPromptAt === null) return;
-    const deadline = landingPromptAt + LANDING_TIMEOUT_MS;
-    const interval = setInterval(() => {
-      if (Date.now() >= deadline) finishFlight();
-      else setLandingTick((tick) => tick + 1);
-    }, 250);
+    const interval = setInterval(() => landingTick(), 250);
     return () => clearInterval(interval);
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [landingPromptAt]);
 
   function dismissLandingPrompt() {
     landingDismissedRef.current = true;
     setLandingPromptAt(null);
   }
-
-  const landingSecondsLeft =
-    landingPromptAt === null
-      ? 0
-      : Math.max(
-          0,
-          Math.ceil((landingPromptAt + LANDING_TIMEOUT_MS - Date.now()) / 1000),
-        );
 
   function beginHold() {
     setHolding(true);
@@ -228,7 +220,7 @@ export default function FlyPage() {
     holdTimerRef.current = undefined;
   }
 
-  const first = trackRef.current[0];
+  const first = track[0];
   const durationSeconds =
     latest && first && status === "recording"
       ? (latest.timestamp - first.timestamp) / 1000
@@ -363,7 +355,7 @@ export default function FlyPage() {
               />
             </div>
             <LiveTrackMap
-              track={trackRef.current}
+              track={track}
               latest={latest}
               view={mapView}
               follow={follow}

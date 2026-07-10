@@ -6,7 +6,7 @@ import {
 } from "@ionic/react";
 import { locateOutline } from "ionicons/icons";
 import type { Map as MapLibreMap, Marker } from "maplibre-gl";
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useEffectEvent, useRef, useState } from "react";
 
 import type { MapViewKind } from "../map/config";
 import MapView, { type MapLibreModule } from "../map/MapView";
@@ -27,12 +27,13 @@ const PIN_SVG = `<svg viewBox="0 0 24 32" width="28" height="37" xmlns="http://w
 export default function PlanPage() {
   const [view, setView] = useState<MapViewKind>("street");
   const [pins, setPins] = useState<Pin[]>([]);
-  const [mapReady, setMapReady] = useState(false);
+  const [mapContext, setMapContext] = useState<{
+    map: MapLibreMap;
+    lib: MapLibreModule;
+  } | null>(null);
   const mapRef = useRef<MapLibreMap | null>(null);
   const libRef = useRef<MapLibreModule | null>(null);
   const markersRef = useRef(new Map<string, Marker>());
-  const pinsRef = useRef<Pin[]>([]);
-  pinsRef.current = pins;
 
   useIonViewWillEnter(() => {
     listPins().then(setPins);
@@ -46,11 +47,10 @@ export default function PlanPage() {
     setSetting("mapView", value);
   }
 
-  function handleReady(map: MapLibreMap, lib: MapLibreModule) {
+  const setupMap = useEffectEvent((map: MapLibreMap, lib: MapLibreModule) => {
     mapRef.current = map;
     libRef.current = lib;
-    setMapReady(true);
-    const existing = pinsRef.current;
+    const existing = pins;
     if (existing.length === 1) {
       map.jumpTo({
         center: [existing[0].longitude, existing[0].latitude],
@@ -61,30 +61,11 @@ export default function PlanPage() {
       for (const pin of existing) bounds.extend([pin.longitude, pin.latitude]);
       map.fitBounds(bounds, { padding: 60, animate: false });
     }
-  }
+  });
 
   useEffect(() => {
-    const map = mapRef.current;
-    const lib = libRef.current;
-    if (!map || !lib || !mapReady) return;
-    for (const marker of markersRef.current.values()) marker.remove();
-    markersRef.current.clear();
-    for (const pin of pins) {
-      const element = document.createElement("button");
-      element.className = "pin-marker";
-      element.setAttribute("aria-label", "Pin");
-      element.setAttribute("data-testid", "pin-marker");
-      element.innerHTML = PIN_SVG;
-      element.addEventListener("click", (event) => {
-        event.stopPropagation();
-        removePin(pin.id);
-      });
-      const marker = new lib.Marker({ element, anchor: "bottom" })
-        .setLngLat([pin.longitude, pin.latitude])
-        .addTo(map);
-      markersRef.current.set(pin.id, marker);
-    }
-  }, [pins, mapReady]);
+    if (mapContext) setupMap(mapContext.map, mapContext.lib);
+  }, [mapContext]);
 
   async function addPin(point: { longitude: number; latitude: number }) {
     const now = Date.now();
@@ -106,6 +87,29 @@ export default function PlanPage() {
     setPins((current) => current.filter((pin) => pin.id !== pinId));
   }
 
+  useEffect(() => {
+    const map = mapRef.current;
+    const lib = libRef.current;
+    if (!map || !lib || !mapContext) return;
+    for (const marker of markersRef.current.values()) marker.remove();
+    markersRef.current.clear();
+    for (const pin of pins) {
+      const element = document.createElement("button");
+      element.className = "pin-marker";
+      element.setAttribute("aria-label", "Pin");
+      element.setAttribute("data-testid", "pin-marker");
+      element.innerHTML = PIN_SVG;
+      element.addEventListener("click", (event) => {
+        event.stopPropagation();
+        removePin(pin.id);
+      });
+      const marker = new lib.Marker({ element, anchor: "bottom" })
+        .setLngLat([pin.longitude, pin.latitude])
+        .addTo(map);
+      markersRef.current.set(pin.id, marker);
+    }
+  }, [pins, mapContext]);
+
   function locate() {
     navigator.geolocation.getCurrentPosition((position) => {
       mapRef.current?.flyTo({
@@ -118,7 +122,11 @@ export default function PlanPage() {
   return (
     <IonPage>
       <IonContent scrollY={false}>
-        <MapView view={view} onReady={handleReady} onLongPress={addPin} />
+        <MapView
+          view={view}
+          onReady={(map, lib) => setMapContext({ map, lib })}
+          onLongPress={addPin}
+        />
         <div className="map-overlay">
           <button
             className="map-button"
