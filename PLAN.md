@@ -75,6 +75,54 @@ Ring 1 (browser) is fully working and verified:
 - PouchDB + Vite needs the `events` npm package installed (Vite stubs node builtins to empty objects → "Class extends value [object Object]" at runtime, dev and prod alike). PouchDB in vitest/node needs `self` and `FileReader` shims plus fake-indexeddb (`src/test-setup.ts`). Restart the dev server after installing deps — Playwright's `reuseExistingServer` happily reuses a stale one.
 - **Walkthrough-driven bug find**: the `/` → `/fly` redirect drops the query string, so `?mock-speed` was silently ignored (everything ran at the default 60×, including e2e where the speed params were placebos). Fixed by caching `location.search` at module load in `mock.ts`. Lesson: actually driving the app catches what green tests miss — worth screenshotting flows after UI changes.
 
+## Native queue decision (2026-07-10, decided with Alex on the Mac)
+
+**The native layer is a dumb capture+buffer; JS keeps all flight semantics.**
+Replaces the vendor-and-patch plan entirely. STEERING §Architecture layer 3
+("owns the GPS/baro pipeline and the active flight, end to end") is amended in
+spirit: native owns *capture and durable buffering*; the JS engine owns the
+flight. Rationale: the e2e-proven JS engine stays the only engine; the Swift
+surface is ~200 lines; the Kotlin port later is a foreground service feeding
+the same contract.
+
+- **Plugin**: `src-tauri/plugins/wingover-location` (in-repo path dep).
+  CLLocationManager with `allowsBackgroundLocationUpdates`,
+  `pausesLocationUpdatesAutomatically=false`, `.airborne`, best accuracy —
+  the flags the community plugin never set. Fixes normalized at the source
+  (CoreLocation -1 sentinels → absent keys → JS null) and buffered in memory
+  + an append-only JSONL session file (Application Support) that survives
+  app crash/jetsam; torn tail = couple of points, accepted budget.
+- **Delivery is pull, not push**: JS polls `fixes_since(cursor)` at 1 Hz.
+  One code path serves live delivery AND post-reload catch-up, so the
+  recovery path runs every second of every flight; no channels to orphan on
+  reload (the old plugin spammed "Couldn't find callback id" after every HMR
+  reload). `stop_watch` (only from engine.stop → flight finalization)
+  stops capture and deletes the file. Page reloads never touch native state.
+- **Engine seam**: `PositionSource.watch` gained `{ since }` — engine passes
+  its newest WAL fix timestamp; buffering sources replay exactly the backlog.
+- **Load-bearing discovery**: WKWebView does NOT reload after iOS kills its
+  content process and tauri does nothing by default —
+  `on_web_content_process_terminate → reload()` is registered in lib.rs.
+  Without it, "webview killed → rehydrate" can never happen: the app stays
+  a dead white view.
+- **Sim drills passed (iPhone 17 / iOS 26 sim, Freeway Drive)**:
+  (1) WebContent process kill mid-recording → auto-reload → WAL rehydrate →
+  native-queue catch-up: duration continuous, track line continuous through
+  the dead window. (2) Full app terminate + relaunch → same, via session-file
+  hydration. Screen-off/jetsam remain device drills.
+- **Also fixed on the Mac session**: iOS webview was sized to the safe area
+  (96pt dead strip at the bottom) — tao `inner_size()` reports safe-area
+  size; setup hook resizes the WKWebView to superview bounds +
+  `contentInsetAdjustmentBehavior=.never`. And `Info.plist` location keys
+  now live in gen/apple/project.yml `info.properties` (xcodegen regenerates
+  Info.plist, wiping direct edits).
+- **Open (question #11 below)**: simulator scenario fixes have NO
+  altitude/verticalAccuracy (verified from the session file — keys absent).
+  The old plugin's `-1` passed the `<=15` vertical gate (loophole, now
+  closed), which is the only reason sim flights ever armed. Fresh arming in
+  the sim now sticks at "acquiring". Real devices provide valid vAcc and are
+  unaffected.
+
 ## Questions for Alex (answer when back online)
 
 1. ~~Initial commit + GitHub repo~~ **Resolved 2026-07-09**: `aeharding/wingover` created by Alex, main pushed, CI live. Reminder: `DEFAULT_MAPTILER_KEY` in `src/map/config.ts` is public by design (origin/UA-restricted).
@@ -87,6 +135,7 @@ Ring 1 (browser) is fully working and verified:
 8. **Flight naming**: currently `Flight {locale datetime}`. Good enough for v1?
 9. **To-launch tile**: shows rotated arrow + distance home (steer by arrow, fuel-plan by number). PPG Flyer showed relative degrees instead — want the degrees added/back?
 10. ~~"Flights on a computer"~~ **Resolved 2026-07-09**: PWA only — no native desktop app. Native mobile wrappers exist solely for recording reliability. Desktop = installable web app syncing via CouchDB (E2EE decryption client-side works in-browser). Static hosting for the PWA (e.g. wingover.app) keeps the zero-dynamic-backend posture.
+11. **Sim can't arm the accuracy gate** (2026-07-10): simulator fixes have no vertical accuracy, so fresh arming sticks at "acquiring" on the desk (real devices unaffected). Options: a dev-only gate-relax seam (`?vacc-gate=off`, consistent with existing seams) so sim-ring drills can run the full arm→takeoff flow; or accept browser-ring-only coverage for arming. Recommend the seam.
 
 - Attribution stays as the compact on-map control — moving it to Settings was tried and rejected by Alex 2026-07-09 (commit c1ba625, reverted). Don't propose again without new reasoning.
 
