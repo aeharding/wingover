@@ -50,6 +50,10 @@ class WingoverPlugin: Plugin, CLLocationManagerDelegate {
       self.locationManager.allowsBackgroundLocationUpdates = true
       self.locationManager.showsBackgroundLocationIndicator = true
       self.locationManager.startUpdatingLocation()
+      // The screen stays awake while capture runs (the pilot may still
+      // lock manually; background location keeps recording). Process-level,
+      // so a webview death cannot let the screen sleep mid-flight.
+      UIApplication.shared.isIdleTimerDisabled = true
       invoke.resolve()
     }
   }
@@ -57,6 +61,7 @@ class WingoverPlugin: Plugin, CLLocationManagerDelegate {
   @objc public func stopCapture(_ invoke: Invoke) throws {
     DispatchQueue.main.async {
       self.locationManager.stopUpdatingLocation()
+      UIApplication.shared.isIdleTimerDisabled = false
       self.buffer = []
       self.lastTimestamp = 0
       self.lastError = nil

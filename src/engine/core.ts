@@ -55,6 +55,48 @@ function speak(text: string) {
   speechSynthesis.speak(new SpeechSynthesisUtterance(text));
 }
 
+// The PWA twin of the Swift shim's isIdleTimerDisabled: the screen stays
+// awake while the watch runs. Doubly load-bearing here — the PWA is
+// foreground-only, so a screen that sleeps mid-flight ENDS the recording.
+// Browsers release the sentinel whenever the page hides; re-acquire on
+// return. Absent API (old browsers, tests): silently does nothing.
+function createScreenWakeLock() {
+  let sentinel: WakeLockSentinel | null = null;
+  let active = false;
+
+  async function acquire() {
+    if (!active) return;
+    if (typeof navigator === "undefined" || !("wakeLock" in navigator)) return;
+    try {
+      sentinel = await navigator.wakeLock.request("screen");
+    } catch {
+      // Denied (battery saver, hidden page): recording is unaffected.
+    }
+  }
+
+  function onVisibilityChange() {
+    if (document.visibilityState === "visible") void acquire();
+  }
+
+  return {
+    start() {
+      active = true;
+      void acquire();
+      if (typeof document !== "undefined") {
+        document.addEventListener("visibilitychange", onVisibilityChange);
+      }
+    },
+    stop() {
+      active = false;
+      if (typeof document !== "undefined") {
+        document.removeEventListener("visibilitychange", onVisibilityChange);
+      }
+      void sentinel?.release().catch(() => {});
+      sentinel = null;
+    },
+  };
+}
+
 // Wrap any capture source with the web core — the exact counterpart of
 // nativeCore: the same watch that carries start_watch/stop_watch natively
 // carries core.start/core.stop here, and the batch callback plays the
@@ -66,6 +108,10 @@ export function withWebCore(inner: PositionSource): CoreClient {
     source: {
       watch(onPositions, onError, options) {
         core.start();
+        // The watch carries every capability, wake lock included — the
+        // exact counterpart of startCapture's isIdleTimerDisabled.
+        const wakeLock = createScreenWakeLock();
+        wakeLock.start();
         const unwatch = inner.watch(
           (positions) => {
             const coords = positions.map((position) => position.coords);
@@ -77,6 +123,7 @@ export function withWebCore(inner: PositionSource): CoreClient {
         );
         return () => {
           unwatch();
+          wakeLock.stop();
           core.stop();
         };
       },
