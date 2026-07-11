@@ -1,4 +1,10 @@
-import { IonContent, IonIcon, IonPage, IonToast } from "@ionic/react";
+import {
+  IonContent,
+  IonIcon,
+  IonPage,
+  IonToast,
+  useIonAlert,
+} from "@ionic/react";
 import {
   compassOutline,
   locateOutline,
@@ -39,15 +45,6 @@ import { useSettings } from "../settings/SettingsContext";
 
 import "./FlyPage.css";
 
-const initialSearch = location.search;
-
-function durationParamMs(name: string, fallback: number): number {
-  const raw = new URLSearchParams(initialSearch).get(name);
-  const parsed = raw ? Number(raw) : NaN;
-  return Number.isFinite(parsed) && parsed > 0 ? parsed : fallback;
-}
-
-const HOLD_MS = durationParamMs("hold-ms", 1500);
 const savedLiveView = readLiveViewState();
 
 // Locking the phone is only safe where the native layer records through
@@ -71,7 +68,7 @@ export default function FlyPage() {
   // must not flash the Start button during a live-flight reload.
   const [ready, setReady] = useState(false);
   const [savedToastOpen, setSavedToastOpen] = useState(false);
-  const [holding, setHolding] = useState(false);
+  const [presentAlert] = useIonAlert();
   const [mapView, setMapView] = useState<MapViewKind>(
     savedLiveView.mapView ?? "street",
   );
@@ -79,9 +76,6 @@ export default function FlyPage() {
   const [trackUp, setTrackUp] = useState(savedLiveView.trackUp ?? false);
   const [mapTopInset, setMapTopInset] = useState(0);
   const instrumentsRef = useRef<HTMLDivElement>(null);
-  const holdTimerRef = useRef<ReturnType<typeof setTimeout> | undefined>(
-    undefined,
-  );
 
   const { track, latest, landingAt, error: gpsError } = snapshot;
   const status: EngineStatus | "loading" = ready ? snapshot.status : "loading";
@@ -178,24 +172,25 @@ export default function FlyPage() {
   // Journal the stop; the flight derives to "ended" and the collection
   // effect persists it — the same crash-safe path as a detected landing.
   function endFlight() {
-    holdTimerRef.current = undefined;
-    setHolding(false);
     engine.end();
+  }
+
+  // An explicit confirm beats the old long-press: nothing about a hold
+  // gesture is discoverable mid-flight, and a stray tap must not end a
+  // recording. The landing prompt's own button stays direct — it IS the
+  // confirmation there.
+  function confirmEndFlight() {
+    presentAlert({
+      header: "End flight?",
+      buttons: [
+        { text: "Cancel", role: "cancel" },
+        { text: "Stop & save", role: "destructive", handler: endFlight },
+      ],
+    });
   }
 
   function dismissLandingPrompt() {
     engine.dismissLanding();
-  }
-
-  function beginHold() {
-    setHolding(true);
-    holdTimerRef.current = setTimeout(endFlight, HOLD_MS);
-  }
-
-  function cancelHold() {
-    setHolding(false);
-    clearTimeout(holdTimerRef.current);
-    holdTimerRef.current = undefined;
   }
 
   const landingSecondsLeft =
@@ -378,15 +373,9 @@ export default function FlyPage() {
               </button>
               <ViewToggle view={mapView} onChange={changeMapView} />
               <button
-                className={
-                  holding
-                    ? "map-button stop-button holding"
-                    : "map-button stop-button"
-                }
-                aria-label="Hold to stop"
-                onPointerDown={beginHold}
-                onPointerUp={cancelHold}
-                onPointerLeave={cancelHold}
+                className="map-button stop-button"
+                aria-label="Stop flight"
+                onClick={confirmEndFlight}
               >
                 <IonIcon icon={stopIcon} />
               </button>

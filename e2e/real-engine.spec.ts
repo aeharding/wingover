@@ -50,7 +50,7 @@ const GEO_STUB = `(() => {
   }
 })();`;
 
-const URL = "/?map-style=blank&hold-ms=300";
+const URL = "/?map-style=blank";
 
 interface FixSpec {
   speed?: number;
@@ -159,16 +159,11 @@ test("real engine: gate, backdated takeoff, reload kill drill, stop", async ({
   await emit([{ speed: 7 }, { speed: 7 }]);
   await expect(page.locator("[data-aircraft-layer='true']")).toBeVisible();
 
-  const stopButton = page.getByRole("button", { name: /hold to stop/i });
-  await stopButton.hover();
-  await page.mouse.down();
-  // Hold until the stop takes effect, not for a guessed duration: the
-  // hold timer fires on main-thread time, and a pointerup that beats it
-  // (one long task on a slow CI runner) cancels the stop BY DESIGN.
+  await page.getByRole("button", { name: "Stop flight" }).click();
+  await page.getByRole("button", { name: "Stop & save" }).click();
   await expect(
     page.getByRole("button", { name: "Start Flight" }),
   ).toBeVisible({ timeout: 15_000 });
-  await page.mouse.up();
   await page.getByText("Logbook", { exact: true }).click();
   await expect(page.getByText(/1 flights/)).toBeVisible();
   expect(pageErrors).toEqual([]);

@@ -48,15 +48,12 @@ test("composite map draws all flights even with a slow style", async ({
   });
   await page.route("**/api.maptiler.com/**", (route) => route.abort());
 
-  await page.goto("/?mock-speed=40&hold-ms=300");
+  await page.goto("/?mock-speed=40");
   await page.getByRole("button", { name: "Start Flight" }).click();
   await expect(page.getByTestId("recording")).toBeVisible({ timeout: 10_000 });
   await page.waitForTimeout(500);
-  const stopButton = page.getByRole("button", { name: /hold to stop/i });
-  await stopButton.hover();
-  await page.mouse.down();
-  await page.waitForTimeout(800);
-  await page.mouse.up();
+  await page.getByRole("button", { name: "Stop flight" }).click();
+  await page.getByRole("button", { name: "Stop & save" }).click();
   await expect(
     page.getByRole("button", { name: "Start Flight" }),
   ).toBeVisible();
