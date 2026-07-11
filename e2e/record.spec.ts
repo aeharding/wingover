@@ -196,7 +196,7 @@ test("a two-hour flight lands itself and reaches the logbook hands-free", async 
 test("zoom slider zooms the map one-fingered without unpinning follow", async ({
   page,
 }) => {
-  await page.goto("/?mock-speed=40&map-style=blank&hold-ms=300");
+  await page.goto("/?mock-speed=40&map-style=blank");
   await page.getByRole("button", { name: "Start Flight" }).click();
   await expect(page.getByTestId("recording")).toBeVisible({ timeout: 10_000 });
 
