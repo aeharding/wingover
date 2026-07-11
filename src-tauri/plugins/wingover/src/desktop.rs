@@ -33,6 +33,10 @@ impl<R: Runtime> Wingover<R> {
         Err(crate::Error::UnsupportedPlatform)
     }
 
+    pub fn share_file(&self, _name: &str, _content: &str) -> crate::Result<()> {
+        Err(crate::Error::UnsupportedPlatform)
+    }
+
     pub fn check_permissions(&self) -> crate::Result<serde_json::Value> {
         Err(crate::Error::UnsupportedPlatform)
     }
