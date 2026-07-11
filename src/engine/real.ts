@@ -1,5 +1,3 @@
-import { createNanoEvents } from "nanoevents";
-
 import {
   isLanded,
   LANDING_GRACE_MS,
@@ -10,7 +8,6 @@ import { haversineMeters } from "../flight/stats";
 import { detectTakeoff, gpsReadyIndex } from "../flight/takeoff";
 import type {
   EngineError,
-  EngineEvents,
   EngineSnapshot,
   EngineStatus,
   Fix,
@@ -96,15 +93,17 @@ export const navigatorPositionSource: PositionSource = {
 };
 
 export class GeolocationRecordingEngine implements RecordingEngine {
-  private events = createNanoEvents<EngineEvents>();
   private buffer: Fix[] = [];
   private session: WalSession | null = null;
   private stopWatch: (() => void) | null = null;
-  private lastStatus: EngineStatus = "idle";
   private walQueue: Promise<unknown> = Promise.resolve();
   private pendingWalFixes: Fix[] = [];
   private hydrated = false;
   private hydration: Promise<void> | null = null;
+  private error: EngineError | null = null;
+  private listeners = new Set<() => void>();
+  private snapshotCache: EngineSnapshot | null = null;
+  private notifyQueued = false;
 
   constructor(
     private readonly core: CoreClient = {
@@ -128,6 +127,10 @@ export class GeolocationRecordingEngine implements RecordingEngine {
         this.hydrated = true;
         this.session = session;
         this.buffer = fixes;
+        // Rehydrating a live session restarts capture; a finalized flight
+        // ("ended") stays parked until collected via stop().
+        if (session && this.deriveStatus() !== "ended") this.ensureWatch();
+        this.invalidate();
       }
     })();
     return this.hydration;
@@ -142,42 +145,77 @@ export class GeolocationRecordingEngine implements RecordingEngine {
     return this.snapshotSync();
   }
 
-  // Pure synchronous view of in-memory state. Engine event listeners must
-  // use this instead of awaiting getSnapshot(): a replay burst delivers
-  // many fixes in one task, so anything applied across an await is already
-  // stale by the time the continuation runs.
-  snapshotSync(): EngineSnapshot {
+  // Every state change funnels through here: drop the cached snapshot and
+  // schedule ONE notification per task. A replay burst delivers thousands
+  // of fixes synchronously; subscribers wake once, after it, and read a
+  // complete, consistent view — there is no per-fix delta stream to fall
+  // behind on.
+  private invalidate() {
+    this.snapshotCache = null;
+    if (this.notifyQueued) return;
+    this.notifyQueued = true;
+    queueMicrotask(() => {
+      this.notifyQueued = false;
+      for (const listener of [...this.listeners]) listener();
+    });
+  }
+
+  // Stable identities (class fields, not methods): useSyncExternalStore
+  // resubscribes when the subscribe function changes and compares
+  // snapshots by identity, so both must survive being passed around bare.
+  subscribe = (listener: () => void): (() => void) => {
+    this.listeners.add(listener);
+    return () => {
+      this.listeners.delete(listener);
+    };
+  };
+
+  // Pure cached view of in-memory state: the same object until something
+  // changes, a fresh derivation after. Reads have no side effects — safe
+  // to call during React render.
+  snapshotSync = (): EngineSnapshot => {
+    this.snapshotCache ??= this.deriveSnapshot();
+    return this.snapshotCache;
+  };
+
+  private deriveSnapshot(): EngineSnapshot {
     const session = this.session;
+    const error = this.error;
     if (!session) {
       return {
         status: "idle",
         startedAt: null,
         track: [],
+        latest: null,
         landingAt: null,
         waypoints: [],
+        error,
       };
     }
     const status = this.deriveStatus();
-    this.lastStatus = status;
+    const latest = this.buffer[this.buffer.length - 1] ?? null;
+    const waypoints = session.waypoints ?? [];
     if (status === "ended") {
-      // Final flight waiting to be collected; the watch stays off.
       const track = this.finalizedTrack();
       return {
         status,
         startedAt: track[0]?.timestamp ?? null,
         track,
+        latest,
         landingAt: this.landingAt(),
-        waypoints: session.waypoints ?? [],
+        waypoints,
+        error,
       };
     }
-    this.ensureWatch();
     if (status !== "recording" && status !== "landed") {
       return {
         status,
         startedAt: null,
         track: [],
+        latest,
         landingAt: null,
-        waypoints: session.waypoints ?? [],
+        waypoints,
+        error,
       };
     }
     const track = this.buffer.slice(session.takeoffIndex!);
@@ -185,13 +223,11 @@ export class GeolocationRecordingEngine implements RecordingEngine {
       status,
       startedAt: track[0]?.timestamp ?? null,
       track,
+      latest,
       landingAt: this.landingAt(),
-      waypoints: session.waypoints ?? [],
+      waypoints,
+      error,
     };
-  }
-
-  get status(): EngineStatus {
-    return this.lastStatus;
   }
 
   private landingAt(): number | null {
@@ -210,9 +246,10 @@ export class GeolocationRecordingEngine implements RecordingEngine {
       waypoints: options?.waypoints ?? [],
     };
     this.buffer = [];
+    this.error = null;
     await writeWalSession(this.session);
-    this.setStatus("acquiring");
     this.ensureWatch();
+    this.invalidate();
   }
 
   // Mid-flight additions join this flight only; the plan is untouched.
@@ -225,6 +262,7 @@ export class GeolocationRecordingEngine implements RecordingEngine {
     const session = this.session;
     this.enqueueWal(() => writeWalSession(session));
     this.core.setWaypoints(session.waypoints ?? []);
+    this.invalidate();
     await this.walQueue;
   }
 
@@ -234,17 +272,11 @@ export class GeolocationRecordingEngine implements RecordingEngine {
     this.hydrated = true;
     this.session = null;
     this.buffer = [];
+    this.error = null;
+    this.invalidate();
     await this.walQueue;
     await clearWal();
-    this.setStatus("idle");
     return track;
-  }
-
-  on<E extends keyof EngineEvents>(
-    event: E,
-    listener: EngineEvents[E],
-  ): () => void {
-    return this.events.on(event, listener);
   }
 
   dismissLanding(): void {
@@ -256,7 +288,10 @@ export class GeolocationRecordingEngine implements RecordingEngine {
     };
     const session = this.session;
     this.enqueueWal(() => writeWalSession(session));
-    this.setStatus(this.deriveStatus());
+    // Grace may already have expired ("ended" cleared the watch a beat
+    // before the tap landed): recording resumes, so the watch must too.
+    this.ensureWatch();
+    this.invalidate();
   }
 
   // The flight of record ends at touchdown: everything after the detected
@@ -292,12 +327,6 @@ export class GeolocationRecordingEngine implements RecordingEngine {
     return "landed";
   }
 
-  private setStatus(status: EngineStatus) {
-    if (status === this.lastStatus) return;
-    this.lastStatus = status;
-    this.events.emit("status", status);
-  }
-
   private ensureWatch() {
     if (this.stopWatch !== null) return;
     const latest = this.buffer[this.buffer.length - 1];
@@ -314,22 +343,17 @@ export class GeolocationRecordingEngine implements RecordingEngine {
 
   private handleWatchError(error: SourceError) {
     console.warn("geolocation error:", error.message);
-    if (error.permissionDenied) {
-      this.emitError({
-        code: "permission-denied",
-        message:
-          "Location permission denied. Allow location access for Wingover, then try again.",
-      });
-    } else {
-      this.emitError({
-        code: "unavailable",
-        message: "GPS unavailable — check that location services are on.",
-      });
-    }
-  }
-
-  private emitError(error: EngineError) {
-    this.events.emit("error", error);
+    this.error = error.permissionDenied
+      ? {
+          code: "permission-denied",
+          message:
+            "Location permission denied. Allow location access for Wingover, then try again.",
+        }
+      : {
+          code: "unavailable",
+          message: "GPS unavailable — check that location services are on.",
+        };
+    this.invalidate();
   }
 
   private clearWatch() {
@@ -350,6 +374,8 @@ export class GeolocationRecordingEngine implements RecordingEngine {
     }
     const fix = this.toFix(position, previous);
     this.buffer.push(fix);
+    // Fixes flowing again means whatever failed has recovered.
+    this.error = null;
     // Fixes accumulate until the queued flush runs, so a burst becomes a
     // few large transactions instead of thousands of small ones.
     this.pendingWalFixes.push(fix);
@@ -361,8 +387,6 @@ export class GeolocationRecordingEngine implements RecordingEngine {
       });
     }
 
-    this.events.emit("fix", fix);
-
     if (this.session.takeoffIndex === null) {
       const takeoffIndex = detectTakeoff(this.buffer);
       if (takeoffIndex !== null) {
@@ -373,11 +397,10 @@ export class GeolocationRecordingEngine implements RecordingEngine {
     } else {
       this.detectLanding();
     }
-    const status = this.deriveStatus();
     // The flight of record is final: stop consuming. The WAL is retained
     // until the consumer collects via stop().
-    if (status === "ended") this.clearWatch();
-    this.setStatus(status);
+    if (this.deriveStatus() === "ended") this.clearWatch();
+    this.invalidate();
   }
 
   // All in fix time, never wall clock: a landing sitting in a replayed

@@ -94,8 +94,18 @@ The WAL hydrates the engine exactly once per page load; after that,
 in-memory state is authoritative and WAL reads are never re-applied. A
 replay burst delivers many fixes in one task, so any WAL read racing it is
 stale by construction — re-applying one tears fixes out of the live buffer
-(the sleep-through-takeoff straight-line bug). Consumers inside engine
-event listeners take `snapshotSync()`, never an awaited snapshot.
+(the sleep-through-takeoff straight-line bug).
+
+Consumers follow **signal-then-read**: the engine pushes no payloads and
+has no per-fix event stream. It fires one coalesced "changed" signal per
+task (a thousand-fix replay burst is a single wake-up) and consumers read
+`snapshotSync()` — a pure, cached view whose identity is stable between
+changes, so React binds to it directly via `useSyncExternalStore` and no
+consumer maintains its own mirror of the track. Every read is a complete,
+consistent view; there is no delta protocol to fall behind on. Within a
+session `snapshot.track` is append-only and prefix-stable (the live map's
+incremental GPU upload builds on this contract; it rebuilds if ever
+violated); session boundaries reset it.
 
 ## The core seam (the web reimplements the plugin surface)
 

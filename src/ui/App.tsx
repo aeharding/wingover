@@ -15,7 +15,7 @@ import {
   navigateOutline,
   settingsOutline,
 } from "ionicons/icons";
-import { useEffect, useState } from "react";
+import { useEffect, useSyncExternalStore } from "react";
 import { Redirect, Route } from "react-router-dom";
 
 import { engine } from "../engine";
@@ -30,13 +30,16 @@ import { SettingsProvider } from "./settings/SettingsContext";
 setupIonicReact({ mode: "ios" });
 
 export default function App() {
-  const [inFlight, setInFlight] = useState(false);
+  // Pre-hydration the engine reports "idle", so the tab bar shows during
+  // load and hides once a live session hydrates — same as before.
+  const inFlight = useSyncExternalStore(
+    engine.subscribe,
+    () => engine.snapshotSync().status !== "idle",
+  );
 
   useEffect(() => {
-    engine
-      .getSnapshot()
-      .then((snapshot) => setInFlight(snapshot.status !== "idle"));
-    return engine.on("status", (status) => setInFlight(status !== "idle"));
+    // Kick the one-time WAL hydration (idempotent; FlyPage kicks it too).
+    void engine.getSnapshot();
   }, []);
 
   return (
