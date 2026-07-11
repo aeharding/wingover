@@ -785,25 +785,17 @@ export default function LiveTrackMap({
   const [sliderZoom, setSliderZoom] = useState<{ zoom: number } | null>(null);
   const appliedSliderZoomRef = useRef<{ zoom: number } | null>(null);
 
-  // Applies like wheel zoom: the follow loop's glide while pinned
-  // (nothing fights the camera), a direct jump when free.
+  // No smoothing on slider zoom: the finger movement IS the animation, a
+  // glide behind it just reads as lag. Any in-flight wheel glide dies so
+  // the follow loop cannot tug the zoom back.
   useEffect(() => {
     if (!sliderZoom || !mapContext) return;
-    // Re-runs from follow/map changes must not re-apply an old input.
+    // Re-runs from map changes must not re-apply an old input.
     if (appliedSliderZoomRef.current === sliderZoom) return;
     appliedSliderZoomRef.current = sliderZoom;
-    const map = mapContext.map;
-    const clamped = Math.min(
-      map.getMaxZoom(),
-      Math.max(map.getMinZoom(), sliderZoom.zoom),
-    );
-    if (follow && !interactingRef.current) {
-      zoomTargetRef.current = clamped;
-      ensureLoop();
-    } else {
-      map.jumpTo({ zoom: clamped });
-    }
-  }, [sliderZoom, mapContext, follow]);
+    zoomTargetRef.current = null;
+    mapContext.map.jumpTo({ zoom: sliderZoom.zoom });
+  }, [sliderZoom, mapContext]);
 
   const applyTrackUpChange = useEffectEvent((trackingUp: boolean) => {
     const map = mapContext?.map;

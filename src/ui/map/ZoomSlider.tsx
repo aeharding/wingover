@@ -3,40 +3,43 @@ import { useEffect, useRef } from "react";
 
 import "./ZoomSlider.css";
 
-// Workshop switch: ?slider=native renders a plain vertical
-// <input type="range"> for side-by-side comparison with the custom
-// slider (Ionic's IonRange is horizontal-only, so this is the real
-// alternative). Default remains the custom slider.
-const SLIDER_VARIANT =
-  typeof location === "undefined"
-    ? null
-    : new URLSearchParams(location.search).get("slider");
+// One-thumb zoom (pinch needs two hands; a pilot has one), bounded by
+// what is USEFUL in flight rather than what the tile stack allows: all
+// the way out shows ~20 mi across the screen (the whole flight area),
+// all the way in ~0.2 mi (a landing field and its approaches — crossed
+// in ~25 s at PPG speeds; closer is clutter). Native <input type=range>:
+// platform drag behavior, chunky accent styling, zero custom gesture code.
+const WIDEST_SPAN_M = 32_187; // ~20 mi across the viewport
+const TIGHTEST_SPAN_M = 322; // ~0.2 mi
+const STEP = 0.05;
 
-// Pinch needs two hands (one is on the throttle/brakes): a chunky vertical
-// slider gives one-thumb zoom. Usability over looks — big hit area, no
-// chrome. The thumb tracks the map's real zoom, so pinch/wheel and the
-// slider never disagree.
-const MIN_ZOOM_FLOOR = 3;
-const KEY_STEP = 0.5;
+// Web mercator: meters per pixel at zoom z is C * cos(latitude) / 2^z.
+const MERCATOR_M_PER_PX_Z0 = 156_543.033_92;
+
+function zoomForSpan(map: MapLibreMap, spanM: number): number {
+  const widthPx = map.getContainer().clientWidth || 390;
+  const latitude = (map.getCenter().lat * Math.PI) / 180;
+  return Math.log2(
+    (MERCATOR_M_PER_PX_Z0 * Math.cos(latitude) * widthPx) / spanM,
+  );
+}
 
 interface ZoomSliderProps {
   map: MapLibreMap;
   onInput: (zoom: number) => void;
 }
 
-export default function ZoomSlider(props: ZoomSliderProps) {
-  if (SLIDER_VARIANT === "native") return <NativeZoomSlider {...props} />;
-  return <CustomZoomSlider {...props} />;
-}
-
-function NativeZoomSlider({ map, onInput }: ZoomSliderProps) {
+export default function ZoomSlider({ map, onInput }: ZoomSliderProps) {
   const inputRef = useRef<HTMLInputElement>(null);
-  const min = Math.max(map.getMinZoom(), MIN_ZOOM_FLOOR);
 
+  // The thumb tracks the map's real zoom (pinch and slider never
+  // disagree), and the span bounds re-derive as latitude/viewport change.
   useEffect(() => {
     const input = inputRef.current;
     if (!input) return;
     const sync = () => {
+      input.min = zoomForSpan(map, WIDEST_SPAN_M).toFixed(2);
+      input.max = zoomForSpan(map, TIGHTEST_SPAN_M).toFixed(2);
       input.value = map.getZoom().toFixed(2);
     };
     sync();
@@ -49,96 +52,14 @@ function NativeZoomSlider({ map, onInput }: ZoomSliderProps) {
   return (
     <input
       ref={inputRef}
-      className="zoom-slider zoom-slider-native"
+      className="zoom-slider"
       type="range"
       aria-label="Zoom"
-      min={min}
-      max={map.getMaxZoom()}
-      step={0.1}
-      defaultValue={map.getZoom()}
+      min={zoomForSpan(map, WIDEST_SPAN_M).toFixed(2)}
+      max={zoomForSpan(map, TIGHTEST_SPAN_M).toFixed(2)}
+      step={STEP}
+      defaultValue={map.getZoom().toFixed(2)}
       onInput={(event) => onInput(Number(event.currentTarget.value))}
     />
-  );
-}
-
-function CustomZoomSlider({ map, onInput }: ZoomSliderProps) {
-  const trackRef = useRef<HTMLDivElement>(null);
-  const thumbRef = useRef<HTMLDivElement>(null);
-  const draggingRef = useRef(false);
-
-  function minZoom() {
-    return Math.max(map.getMinZoom(), MIN_ZOOM_FLOOR);
-  }
-
-  useEffect(() => {
-    const track = trackRef.current;
-    const thumb = thumbRef.current;
-    if (!track || !thumb) return;
-    const sync = () => {
-      const min = Math.max(map.getMinZoom(), MIN_ZOOM_FLOOR);
-      const max = map.getMaxZoom();
-      const fraction = Math.min(
-        1,
-        Math.max(0, (map.getZoom() - min) / (max - min)),
-      );
-      thumb.style.top = `${(1 - fraction) * 100}%`;
-      track.setAttribute("aria-valuenow", map.getZoom().toFixed(1));
-    };
-    sync();
-    map.on("zoom", sync);
-    return () => {
-      map.off("zoom", sync);
-    };
-  }, [map]);
-
-  function zoomAt(clientY: number) {
-    const track = trackRef.current;
-    if (!track) return map.getZoom();
-    const rect = track.getBoundingClientRect();
-    const fraction = Math.min(
-      1,
-      Math.max(0, 1 - (clientY - rect.top) / rect.height),
-    );
-    return minZoom() + fraction * (map.getMaxZoom() - minZoom());
-  }
-
-  return (
-    <div
-      ref={trackRef}
-      className="zoom-slider"
-      role="slider"
-      tabIndex={0}
-      aria-label="Zoom"
-      aria-orientation="vertical"
-      aria-valuemin={minZoom()}
-      aria-valuemax={map.getMaxZoom()}
-      aria-valuenow={Number(map.getZoom().toFixed(1))}
-      onPointerDown={(event) => {
-        draggingRef.current = true;
-        event.currentTarget.setPointerCapture(event.pointerId);
-        onInput(zoomAt(event.clientY));
-      }}
-      onPointerMove={(event) => {
-        if (draggingRef.current) onInput(zoomAt(event.clientY));
-      }}
-      onPointerUp={() => {
-        draggingRef.current = false;
-      }}
-      onPointerCancel={() => {
-        draggingRef.current = false;
-      }}
-      onKeyDown={(event) => {
-        if (event.key === "ArrowUp") onInput(map.getZoom() + KEY_STEP);
-        if (event.key === "ArrowDown") onInput(map.getZoom() - KEY_STEP);
-      }}
-    >
-      <span className="zoom-slider-cap" aria-hidden="true">
-        +
-      </span>
-      <div ref={thumbRef} className="zoom-slider-thumb" />
-      <span className="zoom-slider-cap zoom-slider-cap-bottom" aria-hidden="true">
-        −
-      </span>
-    </div>
   );
 }

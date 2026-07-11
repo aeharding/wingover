@@ -209,7 +209,13 @@ test("zoom slider zooms the map one-fingered without unpinning follow", async ({
 
   const slider = page.getByRole("slider", { name: "Zoom" });
   await expect(slider).toBeVisible();
-  const before = Number(await slider.getAttribute("aria-valuenow"));
+  // Bounds are ground spans, not tile-stack limits: ~20 mi across at the
+  // bottom, ~0.2 mi at the top (both latitude/viewport dependent).
+  expect(Number(await slider.getAttribute("min"))).toBeGreaterThan(9);
+  expect(Number(await slider.getAttribute("min"))).toBeLessThan(12);
+  expect(Number(await slider.getAttribute("max"))).toBeGreaterThan(16);
+  expect(Number(await slider.getAttribute("max"))).toBeLessThan(19);
+  const before = Number(await slider.inputValue());
 
   const box = (await slider.boundingBox())!;
   await page.mouse.move(box.x + box.width / 2, box.y + box.height * 0.9);
@@ -221,7 +227,7 @@ test("zoom slider zooms the map one-fingered without unpinning follow", async ({
 
   // Follow-mode zoom glides through the camera loop; poll until it lands.
   await expect
-    .poll(async () => Number(await slider.getAttribute("aria-valuenow")))
+    .poll(async () => Number(await slider.inputValue()))
     .toBeGreaterThan(before);
   // Sliding is not a map drag: the follow camera must stay pinned.
   await expect(
