@@ -163,6 +163,39 @@ mod tests {
     }
 
     #[test]
+    fn ingest_announces_across_a_batch() {
+        let core = core("batch");
+        core.start().unwrap();
+        core.set_waypoints(vec![Waypoint {
+            id: "a".into(),
+            latitude: 43.0,
+            longitude: -89.4,
+            radius_m: 200.0,
+        }])
+        .unwrap();
+
+        // One replayed batch: arm outside, enter, exit (re-arm), enter
+        // again. Evaluation is per fix WITHIN the batch — two
+        // announcements, in order — and the whole batch persists first.
+        let announced = core
+            .ingest(&[
+                fix(1000, 42.995),
+                fix(2000, 43.0),
+                fix(3000, 42.995),
+                fix(4000, 43.0),
+            ])
+            .unwrap();
+        assert_eq!(
+            announced,
+            vec![
+                "Waypoint reached".to_string(),
+                "Waypoint reached".to_string()
+            ]
+        );
+        assert_eq!(core.fixes_since(0).unwrap().len(), 4);
+    }
+
+    #[test]
     fn waypoints_survive_a_new_core() {
         let dir;
         {

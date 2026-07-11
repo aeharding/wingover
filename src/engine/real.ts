@@ -55,10 +55,13 @@ export interface WatchOptions {
 
 // Seam between the recording engine and wherever fixes come from:
 // navigator.geolocation in the browser, the wingover plugin
-// (CoreLocation + native queue) in the native apps.
+// (CoreLocation + native queue) in the native apps. Fixes arrive in
+// BATCHES, mirroring the Rust core's ingest(&[Fix]): a backlog replay is
+// one call, making the burst boundary structural instead of an accident
+// of delivery timing; live browser cadence is simply a batch of one.
 export interface PositionSource {
   watch(
-    onPosition: (position: SourcePosition) => void,
+    onPositions: (positions: SourcePosition[]) => void,
     onError: (error: SourceError) => void,
     options?: WatchOptions,
   ): () => void;
@@ -74,13 +77,13 @@ export interface CoreClient {
 }
 
 export const navigatorPositionSource: PositionSource = {
-  watch(onPosition, onError) {
+  watch(onPositions, onError) {
     if (!("geolocation" in navigator)) {
       onError({ permissionDenied: false, message: "no geolocation support" });
       return () => {};
     }
     const id = navigator.geolocation.watchPosition(
-      (position) => onPosition(position),
+      (position) => onPositions([position]),
       (error) =>
         onError({
           permissionDenied: error.code === error.PERMISSION_DENIED,
@@ -331,7 +334,7 @@ export class GeolocationRecordingEngine implements RecordingEngine {
     if (this.stopWatch !== null) return;
     const latest = this.buffer[this.buffer.length - 1];
     this.stopWatch = this.core.source.watch(
-      (position) => this.handlePosition(position),
+      (positions) => this.handlePositions(positions),
       (error) => this.handleWatchError(error),
       { since: latest?.timestamp },
     );
@@ -363,40 +366,49 @@ export class GeolocationRecordingEngine implements RecordingEngine {
     }
   }
 
-  private handlePosition(position: SourcePosition) {
+  // Batch ingest, the TS twin of core.rs's ingest(&[Fix]). Detection runs
+  // per fix — landing/takeoff indices must land exactly where live
+  // delivery would have put them (fix-time doctrine) — but the batch is
+  // one state change: one WAL flush joins the queue, one invalidation.
+  private handlePositions(positions: SourcePosition[]) {
     if (!this.session) return;
-    const previous = this.buffer[this.buffer.length - 1];
-    if (
-      previous &&
-      position.timestamp - previous.timestamp < MIN_FIX_INTERVAL_MS
-    ) {
-      return;
+    let ingested = false;
+    for (const position of positions) {
+      const previous = this.buffer[this.buffer.length - 1];
+      if (
+        previous &&
+        position.timestamp - previous.timestamp < MIN_FIX_INTERVAL_MS
+      ) {
+        continue;
+      }
+      const fix = this.toFix(position, previous);
+      this.buffer.push(fix);
+      // Fixes accumulate until the queued flush runs, so a burst becomes a
+      // few large transactions instead of thousands of small ones.
+      this.pendingWalFixes.push(fix);
+      if (this.pendingWalFixes.length === 1) {
+        this.enqueueWal(() => {
+          const batch = this.pendingWalFixes;
+          this.pendingWalFixes = [];
+          return appendWalFixes(batch);
+        });
+      }
+
+      if (this.session.takeoffIndex === null) {
+        const takeoffIndex = detectTakeoff(this.buffer);
+        if (takeoffIndex !== null) {
+          this.session = { ...this.session, takeoffIndex };
+          const session = this.session;
+          this.enqueueWal(() => writeWalSession(session));
+        }
+      } else {
+        this.detectLanding();
+      }
+      ingested = true;
     }
-    const fix = this.toFix(position, previous);
-    this.buffer.push(fix);
+    if (!ingested) return;
     // Fixes flowing again means whatever failed has recovered.
     this.error = null;
-    // Fixes accumulate until the queued flush runs, so a burst becomes a
-    // few large transactions instead of thousands of small ones.
-    this.pendingWalFixes.push(fix);
-    if (this.pendingWalFixes.length === 1) {
-      this.enqueueWal(() => {
-        const batch = this.pendingWalFixes;
-        this.pendingWalFixes = [];
-        return appendWalFixes(batch);
-      });
-    }
-
-    if (this.session.takeoffIndex === null) {
-      const takeoffIndex = detectTakeoff(this.buffer);
-      if (takeoffIndex !== null) {
-        this.session = { ...this.session, takeoffIndex };
-        const session = this.session;
-        this.enqueueWal(() => writeWalSession(session));
-      }
-    } else {
-      this.detectLanding();
-    }
     // The flight of record is final: stop consuming. The WAL is retained
     // until the consumer collects via stop().
     if (this.deriveStatus() === "ended") this.clearWatch();

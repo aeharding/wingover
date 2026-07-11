@@ -35,7 +35,7 @@ function toSourcePosition(fix: Fix): SourcePosition {
 // one and redelivers everything after the cursor.
 export function createSimulatorSource(compression: number): PositionSource {
   return {
-    watch(onPosition, onError, options) {
+    watch(onPositions, onError, options) {
       void onError;
       const since = options?.since;
       let session: SimSession | null = null;
@@ -60,11 +60,15 @@ export function createSimulatorSource(compression: number): PositionSource {
             ((Date.now() - active.startedAt) / 1000) * active.compression,
           );
           const buffer = simulator.fixesUpTo(Math.max(elapsed, 1));
+          // Everything a tick produced is one batch, exactly like a native
+          // poll response — compressed delivery IS a continuous replay.
+          const batch: SourcePosition[] = [];
           while (emitted < buffer.length) {
             const fix = buffer[emitted++];
             if (since != null && fix.timestamp <= since) continue;
-            onPosition(toSourcePosition(fix));
+            batch.push(toSourcePosition(fix));
           }
+          if (batch.length > 0) onPositions(batch);
         },
         Math.max(50, 1000 / active.compression),
       );

@@ -120,11 +120,15 @@ watch, exactly as it does natively:
   session + waypoint config; `set_waypoints` is config-only; the Rust
   ingest thread announces and speaks.
 - **Web**: `engine/core.ts` is core.rs's TS twin — the same surface,
-  function for function (`start` / `stop` / `setWaypoints` / `ingest`),
-  carried by the same watch (`webCore` wraps the browser
-  source: watch start → `core.start`, teardown → `core.stop`, each
-  position → `ingest` → speak). A change to the web lifecycle that has no
-  named Rust counterpart is a smell by construction.
+  function for function (`start` / `stop` / `setWaypoints` /
+  `ingest(batch)`), carried by the same watch (`webCore` wraps the browser
+  source: watch start → `core.start`, teardown → `core.stop`, each batch →
+  `ingest` → speak). Fixes move through the whole JS seam in batches,
+  mirroring Rust's `ingest(&[Fix])`: a native poll response, a simulator
+  tick, or a single live browser fix is one `onPositions(batch)` call, so
+  a backlog replay is structurally one delivery — one WAL flush, one
+  change notification. A change to the web lifecycle that has no named
+  Rust counterpart is a smell by construction.
 - The engine pushes config in exactly two places on every platform:
   establishing the watch (session start AND post-reload rehydration) and
   `addWaypoints`. It never runs announce lifecycle logic itself.

@@ -2,7 +2,12 @@ import { IDBFactory } from "fake-indexeddb";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
 
 import { LANDING_SUSTAIN_FIXES } from "../flight/landing";
-import { GeolocationRecordingEngine, navigatorPositionSource } from "./real";
+import {
+  GeolocationRecordingEngine,
+  navigatorPositionSource,
+  type PositionSource,
+  type SourcePosition,
+} from "./real";
 
 class FakeGeolocation {
   private watchers = new Map<
@@ -368,6 +373,68 @@ describe("GeolocationRecordingEngine", () => {
     await settle();
     expect(notifications).toBe(2);
     expect(trackAtNotify).toBe(23);
+  });
+
+  // Fix-time doctrine, batch edition: a whole flight replayed as ONE
+  // onPositions batch (waking after it all happened) must land in exactly
+  // the state live per-fix delivery produces — same backdated takeoff,
+  // same landing index, same grace expiry, same trimmed track.
+  it("a whole-flight batch lands in the state live delivery produces", async () => {
+    function manualSource() {
+      let deliver: ((batch: SourcePosition[]) => void) | null = null;
+      const source: PositionSource = {
+        watch(onPositions) {
+          deliver = onPositions;
+          return () => {
+            deliver = null;
+          };
+        },
+      };
+      return { source, push: (batch: SourcePosition[]) => deliver?.(batch) };
+    }
+
+    const fixture: SourcePosition[] = [];
+    for (let i = 0; i < 3; i++) fixture.push(position({ speed: 0 }));
+    fixture.push(position({ speed: 2 }));
+    fixture.push(position({ speed: 3 }));
+    for (let i = 0; i < 5; i++) fixture.push(position({ speed: 6 }));
+    for (let i = 0; i < LANDING_SUSTAIN_FIXES + 35; i++) {
+      fixture.push(position({ speed: 0.3 }));
+    }
+
+    // Live cadence: one batch per fix.
+    const liveSource = manualSource();
+    const live = new GeolocationRecordingEngine({
+      source: liveSource.source,
+      setWaypoints: () => {},
+    });
+    engines.push(live);
+    await live.start();
+    for (const p of fixture) liveSource.push([p]);
+    const liveSnapshot = live.snapshotSync();
+    expect(liveSnapshot.status).toBe("ended");
+    await live.stop();
+
+    // Replay: everything in one batch, with one coalesced notification.
+    const burstSource = manualSource();
+    const burst = new GeolocationRecordingEngine({
+      source: burstSource.source,
+      setWaypoints: () => {},
+    });
+    engines.push(burst);
+    await burst.start();
+    await settle();
+    let notifications = 0;
+    burst.subscribe(() => notifications++);
+    burstSource.push(fixture);
+    await settle();
+    expect(notifications).toBe(1);
+
+    const burstSnapshot = burst.snapshotSync();
+    expect(burstSnapshot.status).toBe("ended");
+    expect(burstSnapshot.startedAt).toBe(liveSnapshot.startedAt);
+    expect(burstSnapshot.landingAt).toBe(liveSnapshot.landingAt);
+    expect(burstSnapshot.track).toEqual(liveSnapshot.track);
   });
 
   it("drops burst duplicates faster than 500 ms", async () => {
