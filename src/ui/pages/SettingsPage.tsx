@@ -15,7 +15,12 @@ import {
 } from "@ionic/react";
 import { useEffect, useState } from "react";
 
-import { getSetting, setSetting } from "../../storage/db";
+import {
+  getBooleanSetting,
+  getSetting,
+  setBooleanSetting,
+  setSetting,
+} from "../../storage/db";
 import { useSettings } from "../settings/SettingsContext";
 
 export default function SettingsPage() {
@@ -25,12 +30,12 @@ export default function SettingsPage() {
 
   useEffect(() => {
     getSetting("maptilerKey").then((value) => setMaptilerKey(value ?? ""));
-    getSetting("autoEndFlight").then((value) => setAutoEnd(value !== "false"));
+    getBooleanSetting("autoEndFlight", true).then(setAutoEnd);
   }, []);
 
   function saveAutoEnd(value: boolean) {
     setAutoEnd(value);
-    setSetting("autoEndFlight", String(value));
+    void setBooleanSetting("autoEndFlight", value);
   }
 
   function saveMaptilerKey(value: string) {

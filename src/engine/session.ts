@@ -1,5 +1,5 @@
 import { DEFAULT_WAYPOINT_RADIUS_M } from "../flight/waypoints";
-import { getSetting, listPins, type Pin } from "../storage/db";
+import { getBooleanSetting, listPins, type Pin } from "../storage/db";
 import { engine } from "./index";
 import type { Waypoint } from "./types";
 
@@ -22,12 +22,12 @@ function toWaypoint(pin: Pin): Waypoint {
 export async function startFlight(): Promise<void> {
   const [pins, autoEnd] = await Promise.all([
     listPins(),
-    getSetting("autoEndFlight"),
+    getBooleanSetting("autoEndFlight", true),
   ]);
   await engine.start({
     waypoints: pins.map(toWaypoint),
     // The session copies the setting at start, like the waypoint plan:
     // an active flight keeps the behavior it took off with.
-    autoEnd: autoEnd !== "false",
+    autoEnd,
   });
 }

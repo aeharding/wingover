@@ -225,3 +225,17 @@ export async function setSetting(key: string, value: string) {
     await db.put({ _id, value });
   }
 }
+
+// The settings store is string-valued; booleans cross that edge HERE and
+// nowhere else — callers never see (or mis-parse) "false".
+export async function getBooleanSetting(
+  key: string,
+  fallback: boolean,
+): Promise<boolean> {
+  const value = await getSetting(key);
+  return value === null ? fallback : value === "true";
+}
+
+export async function setBooleanSetting(key: string, value: boolean) {
+  await setSetting(key, value ? "true" : "false");
+}
