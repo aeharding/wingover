@@ -281,6 +281,9 @@ export default function LiveTrackMap({
   const interactingRef = useRef(false);
   const displayRef = useRef<DisplayPosition | null>(null);
   const lineCoordsRef = useRef<[number, number][]>([]);
+  // Timestamp of the last fix consumed into lineCoords — detects a track
+  // prop whose history changed out from under the incremental append.
+  const lineEndTsRef = useRef<number | null>(null);
   const committedCountRef = useRef(0);
   const pendingCountRef = useRef<number | null>(null);
   const confirmArmedRef = useRef(false);
@@ -326,8 +329,18 @@ export default function LiveTrackMap({
     const fixes = track;
     const playhead = playheadRef.current;
     const upTo = playhead ? Math.min(playhead.index + 1, fixes.length) : 0;
-    if (lineCoordsRef.current.length > upTo) {
+    // Incremental append assumes the track only ever grows in place. If the
+    // consumed prefix no longer lines up — history was replaced or
+    // reindexed (a rehydration heal) — appending would mix coordinates from
+    // two different indexings into one permanently wrong line: rebuild.
+    const consumed = lineCoordsRef.current.length;
+    const intact =
+      consumed <= upTo &&
+      (consumed === 0 ||
+        fixes[consumed - 1].timestamp === lineEndTsRef.current);
+    if (!intact) {
       lineCoordsRef.current = [];
+      lineEndTsRef.current = null;
       committedCountRef.current = 0;
       pendingCountRef.current = null;
       confirmArmedRef.current = false;
@@ -337,6 +350,7 @@ export default function LiveTrackMap({
     while (lineCoordsRef.current.length < upTo) {
       const fix = fixes[lineCoordsRef.current.length];
       lineCoordsRef.current.push([fix.longitude, fix.latitude]);
+      lineEndTsRef.current = fix.timestamp;
     }
     maybeCommitLine(map);
   }
@@ -455,6 +469,12 @@ export default function LiveTrackMap({
     if (!playhead || playhead.index >= fixes.length) {
       playhead = { ts: last.timestamp, index: fixes.length - 1 };
       legRef.current = null;
+    }
+    // Timestamps survive a track heal/reindex; the cached index does not.
+    // If the fix under the index moved ahead of the playhead, restart the
+    // index — the advance loop below re-derives it in one pass.
+    if (fixes[playhead.index].timestamp > playhead.ts) {
+      playhead.index = 0;
     }
 
     const previousTs = playhead.ts;
@@ -580,6 +600,7 @@ export default function LiveTrackMap({
         paint: { "line-color": "#4cc2ff", "line-width": LINE_WIDTH_PX },
       });
       lineCoordsRef.current = [];
+      lineEndTsRef.current = null;
       committedCountRef.current = 0;
       pendingCountRef.current = null;
       confirmArmedRef.current = false;

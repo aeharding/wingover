@@ -3,7 +3,7 @@ import { afterEach, beforeEach, describe, expect, it } from "vitest";
 
 import { LANDING_SUSTAIN_FIXES } from "../flight/landing";
 import { GeolocationRecordingEngine, navigatorPositionSource } from "./real";
-import type { EngineStatus } from "./types";
+import type { EngineStatus, Fix } from "./types";
 
 class FakeGeolocation {
   private watchers = new Map<
@@ -297,6 +297,79 @@ describe("GeolocationRecordingEngine", () => {
     }
     const track = await engine.stop();
     expect(track.map((fix) => fix.speed)).toEqual([2, 3, 6, 6, 6, 6, 6, 0.3]);
+  });
+
+  // The user-reported straight-line bug: sleep during acquiring, wake after
+  // takeoff. The whole backlog replays in ONE synchronous task while a
+  // snapshot (FlyPage's collect-on-mount) is mid-read — its stale WAL read
+  // must not clobber the live buffer/session built by the burst. If it
+  // does, the fixes that follow re-run takeoff detection against the
+  // gutted buffer: status flaps back through armed (unmounting the live
+  // map) and a wrong takeoff index is written over the real one.
+  it("a snapshot racing a replay burst must not clobber live state", async () => {
+    const engine = createEngine();
+    const statuses: EngineStatus[] = [];
+    engine.on("status", (status) => statuses.push(status));
+    await engine.start();
+    // WAL read starts now, before the burst, and resolves after it.
+    const racing = engine.getSnapshot();
+
+    // Sleep-through-takeoff backlog, delivered in one synchronous task.
+    for (let i = 0; i < 3; i++) geolocation.emit(position({ speed: 0 }));
+    geolocation.emit(position({ speed: 2 }));
+    geolocation.emit(position({ speed: 3 }));
+    for (let i = 0; i < 20; i++) geolocation.emit(position({ speed: 6 }));
+    await racing;
+
+    // Live delivery continues after the stale read has landed.
+    for (let i = 0; i < 8; i++) geolocation.emit(position({ speed: 6 }));
+
+    expect(statuses).toEqual(["acquiring", "armed", "recording"]);
+    const snapshot = await engine.getSnapshot();
+    expect(snapshot.status).toBe("recording");
+    expect(snapshot.track.map((fix) => fix.speed)).toEqual([
+      2,
+      3,
+      ...Array<number>(28).fill(6),
+    ]);
+  });
+
+  // Mirrors FlyPage's wiring across a sleep-through-takeoff replay burst:
+  // rebase on the synchronous snapshot at every status event, append fix
+  // events while recording. Any gap here is a straight line on the live
+  // map (the recorded WAL stays complete, so the saved flight hides it).
+  it("status-event snapshots plus fix events reconstruct the full track", async () => {
+    const engine = createEngine();
+    await engine.start();
+
+    let accumulated: Fix[] = [];
+    engine.on("status", () => {
+      accumulated = [...engine.snapshotSync().track];
+    });
+    engine.on("fix", (fix) => {
+      if (engine.status !== "recording" && engine.status !== "landed") return;
+      const previous = accumulated[accumulated.length - 1];
+      if (previous && fix.timestamp <= previous.timestamp) return;
+      accumulated.push(fix);
+    });
+    // The collect-on-mount snapshot racing the burst, as on a real resume.
+    const racing = engine.getSnapshot();
+
+    for (let i = 0; i < 3; i++) geolocation.emit(position({ speed: 0 }));
+    geolocation.emit(position({ speed: 2 }));
+    geolocation.emit(position({ speed: 3 }));
+    for (let i = 0; i < 20; i++) geolocation.emit(position({ speed: 6 }));
+    await racing;
+    for (let i = 0; i < 8; i++) geolocation.emit(position({ speed: 6 }));
+
+    const snapshot = await engine.getSnapshot();
+    expect(snapshot.status).toBe("recording");
+    expect(accumulated).toEqual(snapshot.track);
+    expect(accumulated.map((fix) => fix.speed)).toEqual([
+      2,
+      3,
+      ...Array<number>(28).fill(6),
+    ]);
   });
 
   it("drops burst duplicates faster than 500 ms", async () => {

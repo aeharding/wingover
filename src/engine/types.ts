@@ -54,7 +54,14 @@ export interface EngineEvents {
 }
 
 export interface RecordingEngine {
+  // First call hydrates from the WAL; afterwards a pure view of live state.
   getSnapshot(): Promise<EngineSnapshot>;
+  // Synchronous view of in-memory state. Engine event listeners must use
+  // this instead of awaiting getSnapshot(): a replay burst delivers many
+  // fixes in one task, so a snapshot applied across an await is stale.
+  snapshotSync(): EngineSnapshot;
+  // Current lifecycle status, live even mid-burst (React state is not).
+  readonly status: EngineStatus;
   start(options?: StartOptions): Promise<void>;
   // Mid-flight additions join this flight only; the plan is untouched.
   addWaypoints(waypoints: Waypoint[]): Promise<void>;
