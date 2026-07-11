@@ -3,6 +3,15 @@ import { useEffect, useRef } from "react";
 
 import "./ZoomSlider.css";
 
+// Workshop switch: ?slider=native renders a plain vertical
+// <input type="range"> for side-by-side comparison with the custom
+// slider (Ionic's IonRange is horizontal-only, so this is the real
+// alternative). Default remains the custom slider.
+const SLIDER_VARIANT =
+  typeof location === "undefined"
+    ? null
+    : new URLSearchParams(location.search).get("slider");
+
 // Pinch needs two hands (one is on the throttle/brakes): a chunky vertical
 // slider gives one-thumb zoom. Usability over looks — big hit area, no
 // chrome. The thumb tracks the map's real zoom, so pinch/wheel and the
@@ -15,7 +24,44 @@ interface ZoomSliderProps {
   onInput: (zoom: number) => void;
 }
 
-export default function ZoomSlider({ map, onInput }: ZoomSliderProps) {
+export default function ZoomSlider(props: ZoomSliderProps) {
+  if (SLIDER_VARIANT === "native") return <NativeZoomSlider {...props} />;
+  return <CustomZoomSlider {...props} />;
+}
+
+function NativeZoomSlider({ map, onInput }: ZoomSliderProps) {
+  const inputRef = useRef<HTMLInputElement>(null);
+  const min = Math.max(map.getMinZoom(), MIN_ZOOM_FLOOR);
+
+  useEffect(() => {
+    const input = inputRef.current;
+    if (!input) return;
+    const sync = () => {
+      input.value = map.getZoom().toFixed(2);
+    };
+    sync();
+    map.on("zoom", sync);
+    return () => {
+      map.off("zoom", sync);
+    };
+  }, [map]);
+
+  return (
+    <input
+      ref={inputRef}
+      className="zoom-slider zoom-slider-native"
+      type="range"
+      aria-label="Zoom"
+      min={min}
+      max={map.getMaxZoom()}
+      step={0.1}
+      defaultValue={map.getZoom()}
+      onInput={(event) => onInput(Number(event.currentTarget.value))}
+    />
+  );
+}
+
+function CustomZoomSlider({ map, onInput }: ZoomSliderProps) {
   const trackRef = useRef<HTMLDivElement>(null);
   const thumbRef = useRef<HTMLDivElement>(null);
   const draggingRef = useRef(false);

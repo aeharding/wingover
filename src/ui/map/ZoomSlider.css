@@ -52,3 +52,11 @@
   top: auto;
   bottom: -1.8rem;
 }
+
+/* Workshop variant (?slider=native): plain vertical range input. */
+.zoom-slider-native {
+  writing-mode: vertical-rl;
+  direction: rtl;
+  padding: 0;
+  height: min(32vh, 280px);
+}
