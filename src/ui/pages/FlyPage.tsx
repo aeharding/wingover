@@ -126,15 +126,14 @@ export default function FlyPage() {
   }
 
   // "ended" is a durable state: the finalized flight waits in the WAL.
-  // Persist first, clear (stop) after — a crash in between just repeats
-  // this on next launch, and the deterministic flight id makes it
-  // idempotent.
+  // Persist first, discard after — a crash in between just repeats this
+  // on next launch, and the deterministic flight id makes it idempotent.
   const collectEndedFlight = useEffectEvent(async () => {
     const snapshot = await engine.getSnapshot();
     if (snapshot.status !== "ended") return;
     await persistFlight(snapshot.track);
-    // stop() clears the WAL and transitions to idle.
-    await engine.stop();
+    // Persisted — the engine's durable copy can go; idle follows.
+    await engine.discard();
   });
 
   useEffect(() => {
@@ -173,14 +172,15 @@ export default function FlyPage() {
   }
 
   async function cancelArmed() {
-    await engine.stop();
+    await engine.discard();
   }
 
-  async function finishFlight() {
+  // Journal the stop; the flight derives to "ended" and the collection
+  // effect persists it — the same crash-safe path as a detected landing.
+  function endFlight() {
     holdTimerRef.current = undefined;
-    const flown = await engine.stop();
     setHolding(false);
-    await persistFlight(flown);
+    engine.end();
   }
 
   function dismissLandingPrompt() {
@@ -189,7 +189,7 @@ export default function FlyPage() {
 
   function beginHold() {
     setHolding(true);
-    holdTimerRef.current = setTimeout(finishFlight, HOLD_MS);
+    holdTimerRef.current = setTimeout(endFlight, HOLD_MS);
   }
 
   function cancelHold() {
@@ -226,6 +226,11 @@ export default function FlyPage() {
             <button className="start-button" onClick={armFlight}>
               Start Flight
             </button>
+            {gpsError && (
+              <div className="gps-error" data-testid="gps-error">
+                {gpsError.message}
+              </div>
+            )}
           </div>
         )}
         {(status === "acquiring" || status === "armed") && (
@@ -345,6 +350,15 @@ export default function FlyPage() {
               topInset={mapTopInset}
               onFollowChange={changeFollow}
             />
+            {gpsError && (
+              <div
+                className="gps-error recording-error"
+                style={{ top: mapTopInset + 12 }}
+                data-testid="gps-error"
+              >
+                {gpsError.message}
+              </div>
+            )}
             <div className="flight-controls">
               <button
                 className="map-button"
@@ -387,7 +401,7 @@ export default function FlyPage() {
                   >
                     Still flying
                   </button>
-                  <button className="landing-stop" onClick={finishFlight}>
+                  <button className="landing-stop" onClick={endFlight}>
                     Stop &amp; save ({landingSecondsLeft})
                   </button>
                 </div>

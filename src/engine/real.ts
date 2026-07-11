@@ -28,6 +28,17 @@ import {
 const MIN_FIX_INTERVAL_MS = 500;
 const DERIVE_COURSE_MIN_SPEED_MPS = 0.5;
 
+const STORAGE_ERROR: EngineError = {
+  code: "storage",
+  message:
+    "Storage writes are failing — this flight is not being saved. Keep the app open.",
+};
+
+const BUSY_ERROR: EngineError = {
+  code: "busy",
+  message: "Recording is already running in another tab.",
+};
+
 export interface SourcePosition {
   timestamp: number;
   coords: {
@@ -101,12 +112,15 @@ export class GeolocationRecordingEngine implements RecordingEngine {
   private stopWatch: (() => void) | null = null;
   private walQueue: Promise<unknown> = Promise.resolve();
   private pendingWalFixes: Fix[] = [];
+  private walFlushQueued = false;
   private hydrated = false;
   private hydration: Promise<void> | null = null;
   private error: EngineError | null = null;
   private listeners = new Set<() => void>();
   private snapshotCache: EngineSnapshot | null = null;
   private notifyQueued = false;
+  // Doubles as the "this engine owns the recorder" flag.
+  private releaseRecorderLock: (() => void) | null = null;
 
   constructor(
     private readonly core: CoreClient = {
@@ -114,6 +128,35 @@ export class GeolocationRecordingEngine implements RecordingEngine {
       setWaypoints: () => {},
     },
   ) {}
+
+  // Two engines on one WAL (two PWA tabs) would interleave duplicate fixes
+  // into the same store — an unexplainable corrupt flight later. A Web
+  // Lock makes the recorder exclusive per origin; where the API is absent
+  // (tests, ancient webviews) recording proceeds unguarded, as before.
+  private acquireRecorderLock(): Promise<boolean> {
+    if (this.releaseRecorderLock) return Promise.resolve(true);
+    const locks = typeof navigator === "undefined" ? undefined : navigator.locks;
+    if (!locks) return Promise.resolve(true);
+    return new Promise((resolve) => {
+      locks
+        .request("wingover-recorder", { ifAvailable: true }, (lock) => {
+          if (!lock) {
+            resolve(false);
+            return;
+          }
+          resolve(true);
+          // Held until released: the lock lives as long as this promise.
+          return new Promise<void>((release) => {
+            this.releaseRecorderLock = () => {
+              this.releaseRecorderLock = null;
+              release();
+            };
+          });
+        })
+        // A locks API failure must not block recording.
+        .catch(() => resolve(true));
+    });
+  }
 
   // The WAL is a crash log, not a live source of truth: it hydrates memory
   // exactly once (page load / webview rebirth). After that, a WAL read can
@@ -131,8 +174,15 @@ export class GeolocationRecordingEngine implements RecordingEngine {
         this.session = session;
         this.buffer = fixes;
         // Rehydrating a live session restarts capture; a finalized flight
-        // ("ended") stays parked until collected via stop().
-        if (session && this.deriveStatus() !== "ended") this.ensureWatch();
+        // ("ended") stays parked until collected via stop(). If another
+        // tab owns the recorder, this one stays a passive viewer.
+        if (session && this.deriveStatus() !== "ended") {
+          if (await this.acquireRecorderLock()) {
+            this.ensureWatch();
+          } else {
+            this.error = BUSY_ERROR;
+          }
+        }
         this.invalidate();
       }
     })();
@@ -239,10 +289,18 @@ export class GeolocationRecordingEngine implements RecordingEngine {
   }
 
   async start(options?: StartOptions): Promise<void> {
+    // The lock comes first: without it this tab must not touch the WAL
+    // (clearing it would destroy the owning tab's flight).
+    if (!(await this.acquireRecorderLock())) {
+      this.error = BUSY_ERROR;
+      this.invalidate();
+      return;
+    }
     await clearWal();
     // The fresh session IS the state now; a hydration read still in
     // flight must not apply over it.
     this.hydrated = true;
+    this.pendingWalFixes = [];
     this.session = {
       armedAt: Date.now(),
       takeoffIndex: null,
@@ -269,8 +327,7 @@ export class GeolocationRecordingEngine implements RecordingEngine {
     await this.walQueue;
   }
 
-  async stop(): Promise<Fix[]> {
-    const track = this.finalizedTrack();
+  async discard(): Promise<void> {
     this.clearWatch();
     this.hydrated = true;
     this.session = null;
@@ -279,7 +336,25 @@ export class GeolocationRecordingEngine implements RecordingEngine {
     this.invalidate();
     await this.walQueue;
     await clearWal();
-    return track;
+    // Orphans from a storage outage must not leak into the next session.
+    this.pendingWalFixes = [];
+    this.releaseRecorderLock?.();
+  }
+
+  // The durable manual stop: journal the intent, derive "ended", and let
+  // the ordinary collection path (persist first, clear after) finish the
+  // job. The old shape — clear the WAL, then persist the returned track —
+  // had a crash window in which the flight existed nowhere.
+  end(): void {
+    const session = this.session;
+    if (!session || session.takeoffIndex === null || session.stoppedAt != null)
+      return;
+    this.session = { ...session, stoppedAt: Date.now() };
+    const updated = this.session;
+    this.enqueueWal(() => writeWalSession(updated));
+    // The flight of record is final: stop consuming, like a detected end.
+    this.clearWatch();
+    this.invalidate();
   }
 
   dismissLanding(): void {
@@ -316,6 +391,8 @@ export class GeolocationRecordingEngine implements RecordingEngine {
     if (this.session.takeoffIndex === null) {
       return gpsReadyIndex(this.buffer) !== null ? "armed" : "acquiring";
     }
+    // A journaled manual stop finalizes exactly like an expired grace.
+    if (this.session.stoppedAt != null) return "ended";
     const landingIndex = this.session.landingIndex;
     if (landingIndex == null) return "recording";
     const touchdown = this.buffer[landingIndex];
@@ -386,13 +463,7 @@ export class GeolocationRecordingEngine implements RecordingEngine {
       // Fixes accumulate until the queued flush runs, so a burst becomes a
       // few large transactions instead of thousands of small ones.
       this.pendingWalFixes.push(fix);
-      if (this.pendingWalFixes.length === 1) {
-        this.enqueueWal(() => {
-          const batch = this.pendingWalFixes;
-          this.pendingWalFixes = [];
-          return appendWalFixes(batch);
-        });
-      }
+      this.queueWalFlush();
 
       if (this.session.takeoffIndex === null) {
         const takeoffIndex = detectTakeoff(this.buffer);
@@ -407,10 +478,11 @@ export class GeolocationRecordingEngine implements RecordingEngine {
       ingested = true;
     }
     if (!ingested) return;
-    // Fixes flowing again means whatever failed has recovered.
-    this.error = null;
+    // Fixes flowing again means GPS has recovered; a storage error is a
+    // different channel — only a successful write clears it.
+    if (this.error?.code !== "storage") this.error = null;
     // The flight of record is final: stop consuming. The WAL is retained
-    // until the consumer collects via stop().
+    // until the consumer persists the flight and calls discard().
     if (this.deriveStatus() === "ended") this.clearWatch();
     this.invalidate();
   }
@@ -450,9 +522,42 @@ export class GeolocationRecordingEngine implements RecordingEngine {
     this.enqueueWal(() => writeWalSession(updated));
   }
 
+  // The engine's whole pitch is durability, so a failing WAL write is not
+  // a log line — it surfaces as snapshot.error (on the PWA the WAL is the
+  // ONLY durable copy). GPS errors clear on the next fix; a storage error
+  // clears only when a write actually succeeds again.
   private enqueueWal(operation: () => Promise<void>) {
-    this.walQueue = this.walQueue.then(operation).catch((error) => {
-      console.error("wal write failed:", error);
+    this.walQueue = this.walQueue.then(operation).then(
+      () => {
+        if (this.error?.code !== "storage") return;
+        this.error = null;
+        this.invalidate();
+      },
+      (error) => {
+        console.error("wal write failed:", error);
+        if (this.error?.code === "storage") return;
+        this.error = STORAGE_ERROR;
+        this.invalidate();
+      },
+    );
+  }
+
+  // At most one flush waits in the queue; it drains everything pending
+  // when it runs. On failure the batch is retained for the next attempt —
+  // a storage outage must not eat fixes that could still land later.
+  private queueWalFlush() {
+    if (this.walFlushQueued || this.pendingWalFixes.length === 0) return;
+    this.walFlushQueued = true;
+    this.enqueueWal(async () => {
+      this.walFlushQueued = false;
+      const batch = this.pendingWalFixes;
+      this.pendingWalFixes = [];
+      try {
+        await appendWalFixes(batch);
+      } catch (error) {
+        this.pendingWalFixes = [...batch, ...this.pendingWalFixes];
+        throw error;
+      }
     });
   }
 

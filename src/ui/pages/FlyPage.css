@@ -218,3 +218,15 @@
   font-size: 16px;
   text-align: center;
 }
+
+/* Mid-flight banner (storage failure, recorder owned by another tab):
+   floats below the instruments, over the map. */
+.recording-error {
+  position: absolute;
+  left: 50%;
+  transform: translateX(-50%);
+  z-index: 20;
+  width: min(92vw, 440px);
+  margin: 0;
+  background: rgba(120, 24, 24, 0.85);
+}
