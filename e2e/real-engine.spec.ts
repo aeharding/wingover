@@ -58,6 +58,7 @@ interface FixSpec {
   altitudeAccuracy?: number;
   latitude?: number;
   longitude?: number;
+  heading?: number;
 }
 
 function makeEmitter(page: Page) {
@@ -75,7 +76,7 @@ function makeEmitter(page: Page) {
           altitude: 300,
           accuracy: spec.accuracy ?? 5,
           altitudeAccuracy: spec.altitudeAccuracy ?? 8,
-          heading: 0,
+          heading: spec.heading ?? 0,
           speed: spec.speed ?? 0,
         },
       };
@@ -311,4 +312,44 @@ test("a pin becomes a spoken waypoint announcement mid-flight", async ({
   expect(spoken).toContain("Waypoint reached");
   // Dwelling inside must not repeat
   expect(spoken.filter((text) => text === "Waypoint reached")).toHaveLength(1);
+});
+
+test("track-up toggle rotates the camera immediately, not on a glide", async ({
+  page,
+}) => {
+  await page.addInitScript(GEO_STUB);
+  await page.goto(URL);
+  const emit = makeEmitter(page);
+  await armAndFly(page, emit);
+
+  // Fly a hard east course and wait for the displayed heading to settle.
+  await emit(Array.from({ length: 4 }, () => ({ speed: 6, heading: 90 })));
+  const readCourse = () =>
+    page.evaluate(
+      () =>
+        (
+          document.querySelector(".map-container") as HTMLElement & {
+          __display?: { course: number };
+        }
+        ).__display?.course ?? 0,
+    );
+  await expect.poll(readCourse, { timeout: 5000 }).toBeGreaterThan(70);
+
+  await page.getByRole("button", { name: "Track up" }).click();
+
+  // A snap, not a chase: the old 800 ms smoothing needed >1 s to cover
+  // this 90-degree alignment; the toggle must land within a frame or two.
+  await expect
+    .poll(
+      () =>
+        page.evaluate(() => {
+          const container = document.querySelector(
+            ".map-container",
+          ) as HTMLElement & { __map?: { getBearing(): number } };
+          const bearing = container.__map?.getBearing() ?? 0;
+          return bearing > 70 && bearing < 110;
+        }),
+      { timeout: 700 },
+    )
+    .toBe(true);
 });
