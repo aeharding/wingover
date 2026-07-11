@@ -5,7 +5,7 @@ test("arm, auto-takeoff, reload kill drill, stop, logbook", async ({
 }) => {
   const pageErrors: string[] = [];
   page.on("pageerror", (error) => pageErrors.push(String(error)));
-  await page.goto("/?mock-speed=40&map-style=blank&hold-ms=300");
+  await page.goto("/?mock-speed=40&map-style=blank");
   await page.getByRole("button", { name: "Start Flight" }).click();
 
   await expect(page.getByTestId("armed")).toBeVisible();
@@ -39,7 +39,7 @@ test("arm, auto-takeoff, reload kill drill, stop, logbook", async ({
   );
 
   await page.waitForTimeout(1000);
-  await page.goto("/?mock-speed=40&map-style=blank&hold-ms=300");
+  await page.goto("/?mock-speed=40&map-style=blank");
 
   await expect(page.getByTestId("recording")).toBeVisible();
   await expect(page.getByRole("button", { name: "Track up" })).toHaveAttribute(
@@ -52,16 +52,11 @@ test("arm, auto-takeoff, reload kill drill, stop, logbook", async ({
   expect(rehydrated).not.toBe("0:00");
   expect(rehydrated).not.toBeNull();
 
-  const stopButton = page.getByRole("button", { name: /hold to stop/i });
-  await stopButton.hover();
-  await page.mouse.down();
-  // Hold until the stop takes effect, not for a guessed duration: the
-  // hold timer fires on main-thread time, and a pointerup that beats it
-  // (one long task on a slow CI runner) cancels the stop BY DESIGN.
+  await page.getByRole("button", { name: "Stop flight" }).click();
+  await page.getByRole("button", { name: "Stop & save" }).click();
   await expect(
     page.getByRole("button", { name: "Start Flight" }),
   ).toBeVisible({ timeout: 15_000 });
-  await page.mouse.up();
   await expect(page.locator("ion-tab-bar")).toBeVisible();
 
   await page.getByText("Logbook", { exact: true }).click();
@@ -93,7 +88,7 @@ test("live map survives a slow-loading style", async ({ page }) => {
   });
   await page.route("**/api.maptiler.com/**", (route) => route.abort());
 
-  await page.goto("/?mock-speed=40&hold-ms=300");
+  await page.goto("/?mock-speed=40");
   await page.getByRole("button", { name: "Start Flight" }).click();
   await expect(page.getByTestId("recording")).toBeVisible({ timeout: 10_000 });
   await expect(page.locator("[data-aircraft-layer='true']")).toBeVisible({
@@ -143,7 +138,7 @@ test("live map layers appear despite a slow sprite holding the style", async ({
   });
   await page.route("**/api.maptiler.com/**", (route) => route.abort());
 
-  await page.goto("/?mock-speed=40&hold-ms=300");
+  await page.goto("/?mock-speed=40");
   await page.getByRole("button", { name: "Start Flight" }).click();
   await expect(page.getByTestId("recording")).toBeVisible({ timeout: 10_000 });
   await expect(page.locator("[data-aircraft-layer='true']")).toBeVisible({
@@ -168,18 +163,16 @@ test("canceling while acquiring GPS discards the session", async ({ page }) => {
   await expect(page.getByText("No flights yet.")).toBeVisible();
 });
 
-test("interrupting the hold does not stop the recording", async ({ page }) => {
-  await page.goto("/?mock-speed=40&map-style=blank&hold-ms=5000");
+test("canceling the stop confirmation keeps recording", async ({ page }) => {
+  await page.goto("/?mock-speed=40&map-style=blank");
   await page.getByRole("button", { name: "Start Flight" }).click();
   await expect(page.getByTestId("recording")).toBeVisible({ timeout: 10_000 });
 
-  const stopButton = page.getByRole("button", { name: /hold to stop/i });
-  await stopButton.hover();
-  await page.mouse.down();
-  await page.waitForTimeout(500);
-  await page.mouse.up();
+  await page.getByRole("button", { name: "Stop flight" }).click();
+  await page.getByRole("button", { name: "Cancel" }).click();
 
   await expect(page.getByTestId("recording")).toBeVisible();
+  await expect(page.getByTestId("instrument-duration")).not.toHaveText("0:00");
 });
 
 test("a two-hour flight lands itself and reaches the logbook hands-free", async ({

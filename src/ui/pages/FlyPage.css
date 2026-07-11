@@ -160,10 +160,6 @@
   touch-action: none;
 }
 
-.stop-button.holding {
-  background: #d83a3a;
-  border-color: #ff8a8a;
-}
 
 .landing-prompt {
   position: absolute;
