@@ -90,6 +90,13 @@ re-implement it.
 (`recording → landed → ended`), replay, storage, UI. Background parity via
 burst replay, per STEERING.md.
 
+The WAL hydrates the engine exactly once per page load; after that,
+in-memory state is authoritative and WAL reads are never re-applied. A
+replay burst delivers many fixes in one task, so any WAL read racing it is
+stale by construction — re-applying one tears fixes out of the live buffer
+(the sleep-through-takeoff straight-line bug). Consumers inside engine
+event listeners take `snapshotSync()`, never an awaited snapshot.
+
 ## The core seam (the web reimplements the plugin surface)
 
 The engine sees the same surface on every platform — a single injected

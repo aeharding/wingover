@@ -103,6 +103,8 @@ export class GeolocationRecordingEngine implements RecordingEngine {
   private lastStatus: EngineStatus = "idle";
   private walQueue: Promise<unknown> = Promise.resolve();
   private pendingWalFixes: Fix[] = [];
+  private hydrated = false;
+  private hydration: Promise<void> | null = null;
 
   constructor(
     private readonly core: CoreClient = {
@@ -111,11 +113,41 @@ export class GeolocationRecordingEngine implements RecordingEngine {
     },
   ) {}
 
+  // The WAL is a crash log, not a live source of truth: it hydrates memory
+  // exactly once (page load / webview rebirth). After that, a WAL read can
+  // only be equal or STALE — queued writes, or a read racing a replay
+  // burst — so re-applying one would tear live fixes out of the buffer and
+  // revert the session (the "straight line after waking mid-flight" bug).
+  private ensureHydrated(): Promise<void> {
+    if (this.hydrated) return Promise.resolve();
+    this.hydration ??= (async () => {
+      const { session, fixes } = await readWal();
+      // start()/stop() may have won while the read was in flight; their
+      // in-memory state is newer than anything the WAL held.
+      if (!this.hydrated) {
+        this.hydrated = true;
+        this.session = session;
+        this.buffer = fixes;
+      }
+    })();
+    return this.hydration;
+  }
+
   async getSnapshot(): Promise<EngineSnapshot> {
+    await this.ensureHydrated();
+    // Drain pending WAL writes: a snapshot taken here reports state the
+    // log has already made at least as durable. Fixes landing during the
+    // await only make the memory-derived snapshot fresher — never stale.
     await this.walQueue;
-    const { session, fixes } = await readWal();
-    this.session = session;
-    this.buffer = fixes;
+    return this.snapshotSync();
+  }
+
+  // Pure synchronous view of in-memory state. Engine event listeners must
+  // use this instead of awaiting getSnapshot(): a replay burst delivers
+  // many fixes in one task, so anything applied across an await is already
+  // stale by the time the continuation runs.
+  snapshotSync(): EngineSnapshot {
+    const session = this.session;
     if (!session) {
       return {
         status: "idle",
@@ -158,6 +190,10 @@ export class GeolocationRecordingEngine implements RecordingEngine {
     };
   }
 
+  get status(): EngineStatus {
+    return this.lastStatus;
+  }
+
   private landingAt(): number | null {
     const index = this.session?.landingIndex;
     return index != null ? (this.buffer[index]?.timestamp ?? null) : null;
@@ -165,6 +201,9 @@ export class GeolocationRecordingEngine implements RecordingEngine {
 
   async start(options?: StartOptions): Promise<void> {
     await clearWal();
+    // The fresh session IS the state now; a hydration read still in
+    // flight must not apply over it.
+    this.hydrated = true;
     this.session = {
       armedAt: Date.now(),
       takeoffIndex: null,
@@ -192,6 +231,7 @@ export class GeolocationRecordingEngine implements RecordingEngine {
   async stop(): Promise<Fix[]> {
     const track = this.finalizedTrack();
     this.clearWatch();
+    this.hydrated = true;
     this.session = null;
     this.buffer = [];
     await this.walQueue;

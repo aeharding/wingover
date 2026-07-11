@@ -15,7 +15,12 @@ import {
 import { engine } from "../../engine";
 import { isTauri } from "../../engine/platform";
 import { startFlight } from "../../engine/session";
-import type { EngineError, EngineStatus, Fix } from "../../engine/types";
+import type {
+  EngineError,
+  EngineSnapshot,
+  EngineStatus,
+  Fix,
+} from "../../engine/types";
 import {
   formatAltitude,
   formatClimb,
@@ -82,13 +87,16 @@ export default function FlyPage() {
   const [landingAt, setLandingAt] = useState<number | null>(null);
   const [gpsError, setGpsError] = useState<EngineError | null>(null);
 
-  const syncFromEngine = useEffectEvent(async () => {
-    const snapshot = await engine.getSnapshot();
+  function applySnapshot(snapshot: EngineSnapshot) {
     trackAccumRef.current = [...snapshot.track];
     setTrack(snapshot.track);
     setLatest(snapshot.track[snapshot.track.length - 1] ?? null);
     setLandingAt(snapshot.landingAt);
     setStatus(snapshot.status);
+  }
+
+  const syncFromEngine = useEffectEvent(async () => {
+    applySnapshot(await engine.getSnapshot());
   });
 
   function changeMapView(value: MapViewKind) {
@@ -110,7 +118,10 @@ export default function FlyPage() {
   const handleEngineFix = useEffectEvent((fix: Fix) => {
     setGpsError(null);
     setLatest(fix);
-    if (status !== "recording" && status !== "landed") return;
+    // Gate on the engine's own status: React state stays "acquiring" for
+    // the whole of a replay burst (one task, no re-render between fixes),
+    // which would silently drop every backlog fix after the takeoff flip.
+    if (engine.status !== "recording" && engine.status !== "landed") return;
     const accumulated = trackAccumRef.current;
     const previous = accumulated[accumulated.length - 1];
     if (previous && fix.timestamp <= previous.timestamp) return;
@@ -154,6 +165,15 @@ export default function FlyPage() {
     await engine.stop();
   });
 
+  // Status transitions rebase the accumulator on the engine's synchronous
+  // snapshot — same task, so no fix delivered after it can be lost. An
+  // awaited snapshot here would clobber back everything a still-running
+  // burst appends before the continuation runs.
+  const handleEngineStatus = useEffectEvent((engineStatus: EngineStatus) => {
+    applySnapshot(engine.snapshotSync());
+    if (engineStatus === "ended") void collectEndedFlight();
+  });
+
   // THE engine effect: every subscription is set up and torn down here.
   useEffect(() => {
     getSetting("mapView").then((value) => {
@@ -171,10 +191,9 @@ export default function FlyPage() {
 
     const unsubscribeError = engine.on("error", (error) => setGpsError(error));
     const unsubscribeFix = engine.on("fix", (fix) => handleEngineFix(fix));
-    const unsubscribeStatus = engine.on("status", (engineStatus) => {
-      syncFromEngine();
-      if (engineStatus === "ended") void collectEndedFlight();
-    });
+    const unsubscribeStatus = engine.on("status", (engineStatus) =>
+      handleEngineStatus(engineStatus),
+    );
 
     return () => {
       unsubscribeError();
