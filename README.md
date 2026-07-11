@@ -1,6 +1,12 @@
-# Wingover
+<p align="center">
+  <img width="160" height="160" src="./design/icon.svg" alt="Wingover logo">
+</p>
 
+<h1 align="center">Wingover</h1>
+
+<p align="center">
 Flight recorder and planner for paramotor pilots. Open source, privacy-first, zero backend — your flights never leave your device.
+</p>
 
 - [STEERING.md](./STEERING.md) — project direction and values
 - [PLAN.md](./PLAN.md) — current status and next steps
