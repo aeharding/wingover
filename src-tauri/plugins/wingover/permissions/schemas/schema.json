@@ -343,6 +343,18 @@
           "markdownDescription": "Denies the set_waypoints command without any pre-configured scope."
         },
         {
+          "description": "Enables the share_file command without any pre-configured scope.",
+          "type": "string",
+          "const": "allow-share-file",
+          "markdownDescription": "Enables the share_file command without any pre-configured scope."
+        },
+        {
+          "description": "Denies the share_file command without any pre-configured scope.",
+          "type": "string",
+          "const": "deny-share-file",
+          "markdownDescription": "Denies the share_file command without any pre-configured scope."
+        },
+        {
           "description": "Enables the start_watch command without any pre-configured scope.",
           "type": "string",
           "const": "allow-start-watch",

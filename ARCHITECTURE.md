@@ -50,13 +50,15 @@ the whole design:
 
 ### 1. Sensor/actuator layer — Swift, Kotlin (per-platform, dumb)
 
-Four primitives, no business logic, no storage:
+Five primitives, no business logic, no storage:
 
 - `capture` — CoreLocation / FusedLocation → in-memory buffer of raw fixes
 - `drain()` — return-and-clear the buffer (called by Rust)
 - `permissions` — check/request
 - `speak(text)` — AVSpeechSynthesizer / TextToSpeech, audio session
   configured to duck the pilot's music
+- `shareFile(name, content)` — system share sheet (WKWebView has no
+  download manager, so exports leave the app through it)
 
 Everything currently in the Swift plugin beyond these (session file, JSONL,
 cursors, torn-tail handling) migrates down into Rust so Kotlin never has to

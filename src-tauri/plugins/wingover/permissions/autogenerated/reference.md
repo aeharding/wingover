@@ -114,6 +114,32 @@ Denies the set_waypoints command without any pre-configured scope.
 <tr>
 <td>
 
+`wingover:allow-share-file`
+
+</td>
+<td>
+
+Enables the share_file command without any pre-configured scope.
+
+</td>
+</tr>
+
+<tr>
+<td>
+
+`wingover:deny-share-file`
+
+</td>
+<td>
+
+Denies the share_file command without any pre-configured scope.
+
+</td>
+</tr>
+
+<tr>
+<td>
+
 `wingover:allow-start-watch`
 
 </td>

@@ -8,11 +8,16 @@ class SpeakArgs: Decodable {
   let text: String
 }
 
-// Sensor/actuator shim (ARCHITECTURE.md): four dumb primitives — capture,
-// drain, permissions, speak. NO business logic, NO storage: the Rust
-// core owns the durable session log, cursors, and all announcement
+class ShareFileArgs: Decodable {
+  let name: String
+  let content: String
+}
+
+// Sensor/actuator shim (ARCHITECTURE.md): five dumb primitives — capture,
+// drain, permissions, speak, share. NO business logic, NO storage: the
+// Rust core owns the durable session log, cursors, and all announcement
 // decisions. This class only bridges CoreLocation in (background delivery
-// on) and speech out.
+// on), speech out, and the system share sheet.
 class WingoverPlugin: Plugin, CLLocationManagerDelegate {
   private let locationManager = CLLocationManager()
   private let speechSynthesizer = AVSpeechSynthesizer()
@@ -93,6 +98,36 @@ class WingoverPlugin: Plugin, CLLocationManagerDelegate {
       let utterance = AVSpeechUtterance(string: args.text)
       self.speechSynthesizer.speak(utterance)
       invoke.resolve()
+    }
+  }
+
+  // WKWebView has no download manager, so an anchor-download is a silent
+  // no-op — exports leave the app through the system share sheet instead.
+  @objc public func shareFile(_ invoke: Invoke) throws {
+    let args = try invoke.parseArgs(ShareFileArgs.self)
+    DispatchQueue.main.async {
+      do {
+        let name = args.name.replacingOccurrences(of: "/", with: "-")
+        let url = FileManager.default.temporaryDirectory
+          .appendingPathComponent(name)
+        try args.content.write(to: url, atomically: true, encoding: .utf8)
+        guard
+          let root = UIApplication.shared.connectedScenes
+            .compactMap({ ($0 as? UIWindowScene)?.keyWindow })
+            .first?.rootViewController
+        else {
+          invoke.reject("no view controller to present from")
+          return
+        }
+        let activity = UIActivityViewController(
+          activityItems: [url], applicationActivities: nil)
+        // iPad requires a popover anchor; centering matches the dialogs.
+        UIUtils.centerPopover(
+          rootViewController: root, popoverController: activity)
+        root.present(activity, animated: true) { invoke.resolve() }
+      } catch {
+        invoke.reject(error.localizedDescription)
+      }
     }
   }
 

@@ -2,14 +2,14 @@ import { useIonAlert } from "@ionic/react";
 
 import { flightToGpx } from "../flight/gpx";
 import { deleteFlight, type Flight, getTrack } from "../storage/db";
-import { downloadTextFile } from "./download";
+import { exportTextFile } from "./download";
 
 export function useFlightActions() {
   const [presentAlert] = useIonAlert();
 
   async function exportFlight(flight: Flight) {
     const fixes = await getTrack(flight.id);
-    downloadTextFile(`${flight.name}.gpx`, flightToGpx(flight, fixes));
+    await exportTextFile(`${flight.name}.gpx`, flightToGpx(flight, fixes));
   }
 
   function confirmDeleteFlight(flight: Flight, onDeleted?: () => void) {

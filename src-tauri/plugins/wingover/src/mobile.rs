@@ -22,7 +22,7 @@ struct DrainResponse {
     fixes: Vec<Fix>,
 }
 
-// Sensor/actuator shim: four dumb primitives, all logic lives in Rust.
+// Sensor/actuator shim: five dumb primitives, all logic lives in Rust.
 pub struct Wingover<R: Runtime>(PluginHandle<R>);
 
 impl<R: Runtime> Wingover<R> {
@@ -46,6 +46,15 @@ impl<R: Runtime> Wingover<R> {
     pub fn speak(&self, text: &str) -> crate::Result<()> {
         self.0
             .run_mobile_plugin("speak", serde_json::json!({ "text": text }))
+            .map_err(Into::into)
+    }
+
+    pub fn share_file(&self, name: &str, content: &str) -> crate::Result<()> {
+        self.0
+            .run_mobile_plugin(
+                "shareFile",
+                serde_json::json!({ "name": name, "content": content }),
+            )
             .map_err(Into::into)
     }
 

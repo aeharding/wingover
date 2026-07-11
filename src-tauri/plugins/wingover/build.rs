@@ -3,6 +3,7 @@ const COMMANDS: &[&str] = &[
     "fixes_since",
     "stop_watch",
     "set_waypoints",
+    "share_file",
     "check_permissions",
     "request_permissions",
 ];

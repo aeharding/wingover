@@ -112,6 +112,15 @@ mod commands {
     }
 
     #[command]
+    pub(crate) async fn share_file<R: Runtime>(
+        app: AppHandle<R>,
+        name: String,
+        content: String,
+    ) -> Result<()> {
+        app.wingover().share_file(&name, &content)
+    }
+
+    #[command]
     pub(crate) async fn check_permissions<R: Runtime>(
         app: AppHandle<R>,
     ) -> Result<serde_json::Value> {
@@ -143,6 +152,7 @@ pub fn init<R: Runtime>() -> TauriPlugin<R> {
             commands::fixes_since,
             commands::stop_watch,
             commands::set_waypoints,
+            commands::share_file,
             commands::check_permissions,
             commands::request_permissions,
         ])
