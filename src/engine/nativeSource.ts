@@ -50,7 +50,7 @@ function toSourcePosition(fix: NativeFix): SourcePosition {
 }
 
 export const nativePositionSource: PositionSource = {
-  watch(onPosition, onError, options) {
+  watch(onPositions, onError, options) {
     let stopped = false;
     let timer: ReturnType<typeof setInterval> | undefined;
     let cursor = options?.since ?? 0;
@@ -65,9 +65,13 @@ export const nativePositionSource: PositionSource = {
           { ts: cursor },
         );
         if (stopped) return;
-        for (const fix of response.fixes) {
-          cursor = Math.max(cursor, fix.timestamp);
-          onPosition(toSourcePosition(fix));
+        // One poll response = one batch: a backlog replay reaches the
+        // engine as a single call, not a loop of per-fix deliveries.
+        if (response.fixes.length > 0) {
+          for (const fix of response.fixes) {
+            cursor = Math.max(cursor, fix.timestamp);
+          }
+          onPositions(response.fixes.map(toSourcePosition));
         }
         // A stale error with fixes still flowing is already resolved.
         if (response.error !== undefined && response.fixes.length === 0) {

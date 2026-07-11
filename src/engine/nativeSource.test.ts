@@ -70,20 +70,27 @@ describe("nativePositionSource", () => {
     const buffer = [fix(1000), fix(2000)];
     stubPlugin(buffer);
 
-    const positions: SourcePosition[] = [];
+    const batches: SourcePosition[][] = [];
     nativePositionSource.watch(
-      (position) => positions.push(position),
+      (batch) => batches.push(batch),
       () => {},
     );
     await vi.advanceTimersByTimeAsync(0);
 
     expect(commands()).toContain("plugin:wingover|start_watch");
-    expect(positions.map((p) => p.timestamp)).toEqual([1000, 2000]);
+    // The whole backlog arrives as ONE batch: the burst boundary is
+    // structural, not an artifact of delivery timing.
+    expect(batches.map((b) => b.map((p) => p.timestamp))).toEqual([
+      [1000, 2000],
+    ]);
 
     // Next poll only sees newer fixes — cursor advanced past 2000.
     buffer.push(fix(3000));
     await vi.advanceTimersByTimeAsync(1000);
-    expect(positions.map((p) => p.timestamp)).toEqual([1000, 2000, 3000]);
+    expect(batches.map((b) => b.map((p) => p.timestamp))).toEqual([
+      [1000, 2000],
+      [3000],
+    ]);
   });
 
   it("replays only the backlog after `since` (post-reload catch-up)", async () => {
@@ -91,7 +98,7 @@ describe("nativePositionSource", () => {
 
     const positions: SourcePosition[] = [];
     nativePositionSource.watch(
-      (position) => positions.push(position),
+      (batch) => positions.push(...batch),
       () => {},
       { since: 2000 },
     );
@@ -112,7 +119,7 @@ describe("nativePositionSource", () => {
 
     const positions: SourcePosition[] = [];
     nativePositionSource.watch(
-      (position) => positions.push(position),
+      (batch) => positions.push(...batch),
       () => {},
     );
     await vi.advanceTimersByTimeAsync(0);
@@ -196,7 +203,7 @@ describe("nativePositionSource", () => {
     const positions: SourcePosition[] = [];
     const errors: SourceError[] = [];
     nativePositionSource.watch(
-      (position) => positions.push(position),
+      (batch) => positions.push(...batch),
       (error) => errors.push(error),
     );
     await vi.advanceTimersByTimeAsync(0);
@@ -210,7 +217,7 @@ describe("nativePositionSource", () => {
 
     const positions: SourcePosition[] = [];
     const stop = nativePositionSource.watch(
-      (position) => positions.push(position),
+      (batch) => positions.push(...batch),
       () => {},
     );
     await vi.advanceTimersByTimeAsync(0);

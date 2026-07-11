@@ -15,7 +15,7 @@ export interface Core {
   start(): void;
   stop(): void;
   setWaypoints(waypoints: Waypoint[]): void;
-  ingest(fix: Pick<Fix, "latitude" | "longitude">): string[];
+  ingest(batch: Array<Pick<Fix, "latitude" | "longitude">>): string[];
 }
 
 export class WebCore implements Core {
@@ -41,8 +41,12 @@ export class WebCore implements Core {
     this.tracker.setWaypoints(waypoints);
   }
 
-  ingest(fix: Pick<Fix, "latitude" | "longitude">): string[] {
-    return this.tracker.ingest(fix);
+  ingest(batch: Array<Pick<Fix, "latitude" | "longitude">>): string[] {
+    const announcements: string[] = [];
+    for (const fix of batch) {
+      announcements.push(...this.tracker.ingest(fix));
+    }
+    return announcements;
   }
 }
 
@@ -53,19 +57,20 @@ function speak(text: string) {
 
 // Wrap any capture source with the web core — the exact counterpart of
 // nativeCore: the same watch that carries start_watch/stop_watch natively
-// carries core.start/core.stop here, and the position callback plays the
-// Rust ingest thread's role (ingest → speak). Positions can come from the
+// carries core.start/core.stop here, and the batch callback plays the
+// Rust ingest thread's role (ingest → speak). Batches can come from the
 // live browser sensor or the simulator; the core neither knows nor cares.
 export function withWebCore(inner: PositionSource): CoreClient {
   const core = new WebCore();
   return {
     source: {
-      watch(onPosition, onError, options) {
+      watch(onPositions, onError, options) {
         core.start();
         const unwatch = inner.watch(
-          (position) => {
-            for (const text of core.ingest(position.coords)) speak(text);
-            onPosition(position);
+          (positions) => {
+            const coords = positions.map((position) => position.coords);
+            for (const text of core.ingest(coords)) speak(text);
+            onPositions(positions);
           },
           onError,
           options,
