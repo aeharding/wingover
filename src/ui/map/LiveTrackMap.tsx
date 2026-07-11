@@ -30,7 +30,9 @@ const MAX_CATCHUP_RATE = 1.5;
 // reads as motion stutter); the cost is a fraction of a fix of extra lag.
 const LEG_DURATION_PAD = 1.15;
 const COURSE_SMOOTH_MS = 400;
-const BEARING_SMOOTH_MS = 800;
+// Continuous track-up chase only — a track-up TOGGLE snaps instead
+// (functional, not decorative; the pilot asked for that rotation now).
+const BEARING_SMOOTH_MS = 400;
 const ZOOM_SMOOTH_MS = 200;
 const WHEEL_ZOOM_RATE = 1 / 450;
 const PINCH_ZOOM_RATE = 1 / 100;
@@ -778,11 +780,17 @@ export default function LiveTrackMap({
 
   const applyTrackUpChange = useEffectEvent((trackingUp: boolean) => {
     const map = mapContext?.map;
-    if (!map || follow) return;
-    map.easeTo({
-      bearing: trackingUp ? (displayRef.current?.course ?? 0) : 0,
-      duration: 400,
-    });
+    if (!map) return;
+    const bearing = trackingUp ? (displayRef.current?.course ?? 0) : 0;
+    if (follow) {
+      // Seed the chase at its target: the next frame's jumpTo applies the
+      // full rotation. Gliding a deliberate toggle through the smoothing
+      // chase read as multi-second animation in the way of function.
+      cameraBearingRef.current = bearing;
+      ensureLoop();
+      return;
+    }
+    map.easeTo({ bearing, duration: 150 });
   });
 
   useEffect(() => {
