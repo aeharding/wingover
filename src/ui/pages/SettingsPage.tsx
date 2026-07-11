@@ -10,20 +10,33 @@ import {
   IonSegment,
   IonSegmentButton,
   IonTitle,
+  IonToggle,
   IonToolbar,
 } from "@ionic/react";
 import { useEffect, useState } from "react";
 
-import { getSetting, setSetting } from "../../storage/db";
+import {
+  getBooleanSetting,
+  getSetting,
+  setBooleanSetting,
+  setSetting,
+} from "../../storage/db";
 import { useSettings } from "../settings/SettingsContext";
 
 export default function SettingsPage() {
   const { units, setUnits } = useSettings();
   const [maptilerKey, setMaptilerKey] = useState("");
+  const [autoEnd, setAutoEnd] = useState(true);
 
   useEffect(() => {
     getSetting("maptilerKey").then((value) => setMaptilerKey(value ?? ""));
+    getBooleanSetting("autoEndFlight", true).then(setAutoEnd);
   }, []);
+
+  function saveAutoEnd(value: boolean) {
+    setAutoEnd(value);
+    void setBooleanSetting("autoEndFlight", value);
+  }
 
   function saveMaptilerKey(value: string) {
     setMaptilerKey(value);
@@ -60,6 +73,14 @@ export default function SettingsPage() {
               <IonSegmentButton value="imperial">Imperial</IonSegmentButton>
               <IonSegmentButton value="metric">Metric</IonSegmentButton>
             </IonSegment>
+          </IonItem>
+          <IonItem>
+            <IonToggle
+              checked={autoEnd}
+              onIonChange={(event) => saveAutoEnd(event.detail.checked)}
+            >
+              Auto-end flight after landing
+            </IonToggle>
           </IonItem>
         </IonList>
         <div style={{ textAlign: "center", paddingTop: "2rem" }}>

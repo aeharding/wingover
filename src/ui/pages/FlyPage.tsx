@@ -402,7 +402,8 @@ export default function FlyPage() {
                     Still flying
                   </button>
                   <button className="landing-stop" onClick={endFlight}>
-                    Stop &amp; save ({landingSecondsLeft})
+                    Stop &amp; save
+                    {snapshot.autoEnd ? ` (${landingSecondsLeft})` : ""}
                   </button>
                 </div>
               </div>

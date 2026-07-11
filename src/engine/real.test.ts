@@ -120,8 +120,11 @@ afterEach(async () => {
   engines.length = 0;
 });
 
-async function armAndTakeOff(engine: GeolocationRecordingEngine) {
-  await engine.start();
+async function armAndTakeOff(
+  engine: GeolocationRecordingEngine,
+  options?: Parameters<GeolocationRecordingEngine["start"]>[0],
+) {
+  await engine.start(options);
   for (let i = 0; i < 3; i++) geolocation.emit(position({ speed: 0 }));
   geolocation.emit(position({ speed: 2 }));
   geolocation.emit(position({ speed: 3 }));
@@ -438,6 +441,51 @@ describe("GeolocationRecordingEngine", () => {
     expect(engine.snapshotSync().latest?.timestamp).toBe(first);
     geolocation.emit(position({}, 1000));
     expect(engine.snapshotSync().latest?.timestamp).toBe(first! + 1044);
+  });
+});
+
+describe("landing finalization", () => {
+  // The user-facing contract: the sustain wait and the grace tail belong
+  // to DETECTION, not to the flight. The flight of record is clipped at
+  // the first fix that met the landing threshold.
+  it("auto-end clips the flight at the first sub-threshold fix", async () => {
+    const engine = createEngine();
+    await armAndTakeOff(engine);
+    const touchdownTs = timestamp + 1000;
+    for (let i = 0; i < LANDING_SUSTAIN_FIXES + 35; i++) {
+      geolocation.emit(position({ speed: 0.3 }));
+    }
+    const snapshot = await engine.getSnapshot();
+    expect(snapshot.status).toBe("ended");
+    expect(snapshot.landingAt).toBe(touchdownTs);
+    expect(snapshot.track[snapshot.track.length - 1].timestamp).toBe(
+      touchdownTs,
+    );
+  });
+
+  it("autoEnd off: grace expiry never finalizes — the pilot decides", async () => {
+    const engine = createEngine();
+    await armAndTakeOff(engine, { autoEnd: false });
+    const touchdownTs = timestamp + 1000;
+    for (let i = 0; i < LANDING_SUSTAIN_FIXES + 35; i++) {
+      geolocation.emit(position({ speed: 0.3 }));
+    }
+    // Far past the grace window, still prompting.
+    expect(engine.snapshotSync().status).toBe("landed");
+    expect(engine.snapshotSync().autoEnd).toBe(false);
+    await engine.getSnapshot();
+
+    // The choice is flight-scoped and survives a webview death.
+    const reborn = createEngine();
+    expect((await reborn.getSnapshot()).status).toBe("landed");
+
+    // The pilot's own end still finalizes, clipped at touchdown.
+    reborn.end();
+    const snapshot = reborn.snapshotSync();
+    expect(snapshot.status).toBe("ended");
+    expect(snapshot.track[snapshot.track.length - 1].timestamp).toBe(
+      touchdownTs,
+    );
   });
 });
 

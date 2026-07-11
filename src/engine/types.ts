@@ -27,6 +27,9 @@ export interface Waypoint {
 
 export interface StartOptions {
   waypoints?: Waypoint[];
+  // Grace expiry auto-finalizes the landed flight (default true). Copied
+  // into the session: the active flight keeps the choice it started with.
+  autoEnd?: boolean;
 }
 
 export type EngineStatus =
@@ -46,6 +49,8 @@ export interface EngineSnapshot {
   // Touchdown timestamp once landing is detected (pending finalization).
   landingAt: number | null;
   waypoints: Waypoint[];
+  // Whether grace expiry will auto-finalize this flight (session-scoped).
+  autoEnd: boolean;
   // Sticky GPS/permission failure; cleared by the next fix or start/stop.
   error: EngineError | null;
 }
