@@ -556,11 +556,14 @@ describe("storage failure", () => {
     expect(engine.snapshotSync().error?.code).toBe("storage");
 
     // The outage's fixes were retained, not eaten: when storage recovers,
-    // the next flush lands them and only then does the error clear.
+    // the next flush lands them and only then does the error clear. The
+    // clear rides the write's completion — several IDB task hops, so poll
+    // rather than assume one macrotask reaches it (it flakes under load).
     globalThis.indexedDB = workingIndexedDB;
     geolocation.emit(position({ speed: 6 }));
-    await settle();
-    expect(engine.snapshotSync().error).toBeNull();
+    await expect
+      .poll(() => engine.snapshotSync().error, { timeout: 5000 })
+      .toBeNull();
     await engine.getSnapshot(); // drain
 
     const reborn = createEngine();
