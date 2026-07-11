@@ -12,6 +12,7 @@ import { relativeBearing } from "../../flight/nav";
 import type { MapViewKind } from "./config";
 import { readLiveViewState, writeLiveViewState } from "./liveViewState";
 import MapView, { type MapLibreModule } from "./MapView";
+import ZoomSlider from "./ZoomSlider";
 
 import "./LiveTrackMap.css";
 
@@ -778,6 +779,32 @@ export default function LiveTrackMap({
     applyFollowChange(follow);
   }, [follow]);
 
+  // Slider zoom flows through state so the effect below can reach the
+  // loop (an Effect Event, uncallable from the slider's pointer events).
+  // A fresh wrapper object per input keeps repeated values distinct.
+  const [sliderZoom, setSliderZoom] = useState<{ zoom: number } | null>(null);
+  const appliedSliderZoomRef = useRef<{ zoom: number } | null>(null);
+
+  // Applies like wheel zoom: the follow loop's glide while pinned
+  // (nothing fights the camera), a direct jump when free.
+  useEffect(() => {
+    if (!sliderZoom || !mapContext) return;
+    // Re-runs from follow/map changes must not re-apply an old input.
+    if (appliedSliderZoomRef.current === sliderZoom) return;
+    appliedSliderZoomRef.current = sliderZoom;
+    const map = mapContext.map;
+    const clamped = Math.min(
+      map.getMaxZoom(),
+      Math.max(map.getMinZoom(), sliderZoom.zoom),
+    );
+    if (follow && !interactingRef.current) {
+      zoomTargetRef.current = clamped;
+      ensureLoop();
+    } else {
+      map.jumpTo({ zoom: clamped });
+    }
+  }, [sliderZoom, mapContext, follow]);
+
   const applyTrackUpChange = useEffectEvent((trackingUp: boolean) => {
     const map = mapContext?.map;
     if (!map) return;
@@ -803,6 +830,12 @@ export default function LiveTrackMap({
         view={view}
         onReady={(map, lib) => setMapContext({ map, lib })}
       />
+      {mapContext && (
+        <ZoomSlider
+          map={mapContext.map}
+          onInput={(zoom) => setSliderZoom({ zoom })}
+        />
+      )}
     </div>
   );
 }

@@ -1,0 +1,54 @@
+.zoom-slider {
+  position: absolute;
+  /* Above the 2x2 flight-control grid (two 3.25rem rows + gap). */
+  right: 0.9rem;
+  bottom: calc(2.4rem + 114px + env(safe-area-inset-bottom));
+  width: 3.25rem;
+  height: min(32vh, 280px);
+  z-index: 6;
+  touch-action: none;
+  user-select: none;
+  -webkit-user-select: none;
+}
+
+/* Visible rail, narrower than the hit area. */
+.zoom-slider::before {
+  content: "";
+  position: absolute;
+  left: 50%;
+  top: 0;
+  bottom: 0;
+  width: 12px;
+  transform: translateX(-50%);
+  border-radius: 6px;
+  background: rgba(24, 26, 29, 0.9);
+  border: 1px solid #333;
+}
+
+.zoom-slider-thumb {
+  position: absolute;
+  left: 0;
+  right: 0;
+  height: 2.4rem;
+  transform: translateY(-50%);
+  border-radius: 10px;
+  background: rgba(60, 64, 70, 0.95);
+  border: 1px solid #777;
+}
+
+.zoom-slider-cap {
+  position: absolute;
+  left: 50%;
+  transform: translateX(-50%);
+  top: -1.7rem;
+  color: #fff;
+  font-size: 1.3rem;
+  font-weight: 700;
+  text-shadow: 0 0 4px rgba(0, 0, 0, 0.9);
+  pointer-events: none;
+}
+
+.zoom-slider-cap-bottom {
+  top: auto;
+  bottom: -1.8rem;
+}

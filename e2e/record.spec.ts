@@ -199,3 +199,32 @@ test("a two-hour flight lands itself and reaches the logbook hands-free", async 
   });
   await expect(page.locator("ion-tab-bar")).toBeVisible();
 });
+
+test("zoom slider zooms the map one-fingered without unpinning follow", async ({
+  page,
+}) => {
+  await page.goto("/?mock-speed=40&map-style=blank&hold-ms=300");
+  await page.getByRole("button", { name: "Start Flight" }).click();
+  await expect(page.getByTestId("recording")).toBeVisible({ timeout: 10_000 });
+
+  const slider = page.getByRole("slider", { name: "Zoom" });
+  await expect(slider).toBeVisible();
+  const before = Number(await slider.getAttribute("aria-valuenow"));
+
+  const box = (await slider.boundingBox())!;
+  await page.mouse.move(box.x + box.width / 2, box.y + box.height * 0.9);
+  await page.mouse.down();
+  await page.mouse.move(box.x + box.width / 2, box.y + box.height * 0.1, {
+    steps: 8,
+  });
+  await page.mouse.up();
+
+  // Follow-mode zoom glides through the camera loop; poll until it lands.
+  await expect
+    .poll(async () => Number(await slider.getAttribute("aria-valuenow")))
+    .toBeGreaterThan(before);
+  // Sliding is not a map drag: the follow camera must stay pinned.
+  await expect(
+    page.getByRole("button", { name: "Follow aircraft" }),
+  ).toHaveAttribute("data-active", "true");
+});
