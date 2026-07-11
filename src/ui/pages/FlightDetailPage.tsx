@@ -23,6 +23,7 @@ import { useEffect, useEffectEvent, useRef, useState } from "react";
 import { useParams } from "react-router";
 
 import type { Fix } from "../../engine/types";
+import { smoothFinishedTrack } from "../../flight/smooth";
 import {
   formatAltitude,
   formatDistance,
@@ -51,7 +52,9 @@ function toLineData(track: Fix[]): Feature {
     properties: {},
     geometry: {
       type: "LineString",
-      coordinates: track.map((fix) => [fix.longitude, fix.latitude]),
+      // Same smoothing family as the live map; a finished track clamps
+      // its final segment.
+      coordinates: smoothFinishedTrack(track),
     },
   };
 }

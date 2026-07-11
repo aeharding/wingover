@@ -9,6 +9,7 @@ import { useEffect, useEffectEvent, useRef, useState } from "react";
 
 import type { Fix } from "../../engine/types";
 import { relativeBearing } from "../../flight/nav";
+import { smoothSegment } from "../../flight/smooth";
 import type { MapViewKind } from "./config";
 import { readLiveViewState, writeLiveViewState } from "./liveViewState";
 import MapView, { type MapLibreModule } from "./MapView";
@@ -286,6 +287,8 @@ export default function LiveTrackMap({
   const interactingRef = useRef(false);
   const displayRef = useRef<DisplayPosition | null>(null);
   const lineCoordsRef = useRef<[number, number][]>([]);
+  // Fixes consumed into the line (coords outnumber fixes once smoothed).
+  const lineFixCountRef = useRef(0);
   // Timestamp of the last fix consumed into lineCoords — detects a track
   // prop whose history changed out from under the incremental append.
   const lineEndTsRef = useRef<number | null>(null);
@@ -334,7 +337,10 @@ export default function LiveTrackMap({
   }
 
   // The line only ever contains fixes the playhead has passed, so it can
-  // never extend ahead of the aircraft.
+  // never extend ahead of the aircraft. Smoothed append-only: segment
+  // j-1→j is drawn once its trailing control fix (j+1) exists, so drawn
+  // geometry is final — new fixes extend the line, never reshape it
+  // (smoothLiveTrack's contract, consumed incrementally).
   function syncLine(map: MapLibreMap) {
     const fixes = track;
     const playhead = playheadRef.current;
@@ -343,13 +349,14 @@ export default function LiveTrackMap({
     // contract); this enforces it. If the consumed prefix ever stops lining
     // up, appending would mix coordinates from two indexings into one
     // permanently wrong line — rebuild instead.
-    const consumed = lineCoordsRef.current.length;
+    const consumed = lineFixCountRef.current;
     const intact =
       consumed <= upTo &&
       (consumed === 0 ||
-        fixes[consumed - 1].timestamp === lineEndTsRef.current);
+        fixes[consumed - 1]?.timestamp === lineEndTsRef.current);
     if (!intact) {
       lineCoordsRef.current = [];
+      lineFixCountRef.current = 0;
       lineEndTsRef.current = null;
       committedCountRef.current = 0;
       pendingCountRef.current = null;
@@ -357,10 +364,25 @@ export default function LiveTrackMap({
       const source = map.getSource("track") as GeoJSONSource | undefined;
       source?.setData(toLineData([]));
     }
-    while (lineCoordsRef.current.length < upTo) {
-      const fix = fixes[lineCoordsRef.current.length];
-      lineCoordsRef.current.push([fix.longitude, fix.latitude]);
-      lineEndTsRef.current = fix.timestamp;
+    while (lineFixCountRef.current < upTo) {
+      const j = lineFixCountRef.current;
+      if (j === 0) {
+        lineCoordsRef.current.push([fixes[0].longitude, fixes[0].latitude]);
+      } else {
+        // The pending segment waits for its control fix; the aircraft
+        // tail bridges the last coord to the playhead meanwhile.
+        if (j + 1 >= fixes.length) break;
+        lineCoordsRef.current.push(
+          ...smoothSegment(
+            fixes[j - 2] ?? fixes[j - 1],
+            fixes[j - 1],
+            fixes[j],
+            fixes[j + 1],
+          ),
+        );
+      }
+      lineEndTsRef.current = fixes[j].timestamp;
+      lineFixCountRef.current = j + 1;
     }
     maybeCommitLine(map);
   }
@@ -623,6 +645,7 @@ export default function LiveTrackMap({
         paint: { "line-color": "#4cc2ff", "line-width": LINE_WIDTH_PX },
       });
       lineCoordsRef.current = [];
+      lineFixCountRef.current = 0;
       lineEndTsRef.current = null;
       committedCountRef.current = 0;
       pendingCountRef.current = null;
