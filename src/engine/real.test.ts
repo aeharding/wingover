@@ -463,6 +463,29 @@ describe("landing finalization", () => {
     );
   });
 
+  // The field regression (flight of 2026-07-10): packing up at walking
+  // pace never completed the old 1.0 m/s sustain window, so the whole
+  // walk-around saved into the flight of record.
+  it("a walking-pace tail detects, auto-ends, and clips at touchdown", async () => {
+    const engine = createEngine();
+    await armAndTakeOff(engine);
+    const touchdownTs = timestamp + 1000;
+    for (let i = 0; i < LANDING_SUSTAIN_FIXES; i++) {
+      geolocation.emit(position({ speed: 1.2 + (i % 3) * 0.4 }));
+    }
+    expect(engine.snapshotSync().status).toBe("landed");
+    // Walking must not UN-detect the landing; grace expires through it.
+    for (let i = 0; i < 35; i++) {
+      geolocation.emit(position({ speed: 1.4 }));
+    }
+    const snapshot = await engine.getSnapshot();
+    expect(snapshot.status).toBe("ended");
+    expect(snapshot.landingAt).toBe(touchdownTs);
+    expect(snapshot.track[snapshot.track.length - 1].timestamp).toBe(
+      touchdownTs,
+    );
+  });
+
   it("autoEnd off: grace expiry never finalizes — the pilot decides", async () => {
     const engine = createEngine();
     await armAndTakeOff(engine, { autoEnd: false });
