@@ -30,9 +30,11 @@ const MAX_CATCHUP_RATE = 1.5;
 // reads as motion stutter); the cost is a fraction of a fix of extra lag.
 const LEG_DURATION_PAD = 1.15;
 const COURSE_SMOOTH_MS = 400;
-// Continuous track-up chase only — a track-up TOGGLE snaps instead
-// (functional, not decorative; the pilot asked for that rotation now).
+// Continuous track-up chase only — a track-up TOGGLE rotates over a
+// short fixed duration instead: fast enough to be functional, long
+// enough that the eye can track where north went.
 const BEARING_SMOOTH_MS = 400;
+const ALIGN_ROTATE_MS = 200;
 const ZOOM_SMOOTH_MS = 200;
 const WHEEL_ZOOM_RATE = 1 / 450;
 const PINCH_ZOOM_RATE = 1 / 100;
@@ -293,6 +295,11 @@ export default function LiveTrackMap({
   const playheadRef = useRef<{ ts: number; index: number } | null>(null);
   const smoothedCourseRef = useRef<number | null>(null);
   const cameraBearingRef = useRef<number | null>(null);
+  // A toggle-triggered alignment: constant-progress rotation to the
+  // bearing target over ALIGN_ROTATE_MS, then back to the normal chase.
+  const bearingAlignRef = useRef<{ from: number; startedAt: number } | null>(
+    null,
+  );
   // Playback leg: advance the playhead toward toTs at a fixed track-time
   // rate per real ms. Rate-based (not wall-clock) so starved frames advance
   // proportionally instead of stalling and teleporting.
@@ -534,15 +541,24 @@ export default function LiveTrackMap({
     // heading, it smooths in REAL time — it rotates the entire viewport, so
     // its rate must stay comfortable at any playback compression.
     const bearingTarget = trackUp ? display.course : 0;
+    const align = bearingAlignRef.current;
     const prevBearing = cameraBearingRef.current;
-    cameraBearingRef.current =
-      prevBearing === null
-        ? bearingTarget
-        : normalizeDeg(
-            prevBearing +
-              relativeBearing(prevBearing, bearingTarget) *
-                Math.min(1, dt / BEARING_SMOOTH_MS),
-          );
+    if (align) {
+      const progress = Math.min(1, (now - align.startedAt) / ALIGN_ROTATE_MS);
+      cameraBearingRef.current = normalizeDeg(
+        align.from + relativeBearing(align.from, bearingTarget) * progress,
+      );
+      if (progress >= 1) bearingAlignRef.current = null;
+    } else {
+      cameraBearingRef.current =
+        prevBearing === null
+          ? bearingTarget
+          : normalizeDeg(
+              prevBearing +
+                relativeBearing(prevBearing, bearingTarget) *
+                  Math.min(1, dt / BEARING_SMOOTH_MS),
+            );
+    }
 
     // While following, the loop owns wheel zoom too: gliding it here in the
     // same jumpTo as center/bearing means nothing fights the camera.
@@ -564,7 +580,11 @@ export default function LiveTrackMap({
     syncLine(map);
     renderFrame(map, display, zoom);
 
-    if (legRef.current !== null || zoomTargetRef.current !== null) {
+    if (
+      legRef.current !== null ||
+      zoomTargetRef.current !== null ||
+      bearingAlignRef.current !== null
+    ) {
       loopFrameRef.current = requestAnimationFrame((next) =>
         stepPlayhead(next),
       );
@@ -783,14 +803,16 @@ export default function LiveTrackMap({
     if (!map) return;
     const bearing = trackingUp ? (displayRef.current?.course ?? 0) : 0;
     if (follow) {
-      // Seed the chase at its target: the next frame's jumpTo applies the
-      // full rotation. Gliding a deliberate toggle through the smoothing
-      // chase read as multi-second animation in the way of function.
-      cameraBearingRef.current = bearing;
+      // A short constant-duration rotation instead of an instant snap:
+      // seeing the world turn is what tells the pilot where north went.
+      bearingAlignRef.current = {
+        from: cameraBearingRef.current ?? map.getBearing(),
+        startedAt: performance.now(),
+      };
       ensureLoop();
       return;
     }
-    map.easeTo({ bearing, duration: 150 });
+    map.easeTo({ bearing, duration: ALIGN_ROTATE_MS });
   });
 
   useEffect(() => {
