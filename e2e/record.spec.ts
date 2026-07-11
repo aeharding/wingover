@@ -55,12 +55,13 @@ test("arm, auto-takeoff, reload kill drill, stop, logbook", async ({
   const stopButton = page.getByRole("button", { name: /hold to stop/i });
   await stopButton.hover();
   await page.mouse.down();
-  await page.waitForTimeout(800);
+  // Hold until the stop takes effect, not for a guessed duration: the
+  // hold timer fires on main-thread time, and a pointerup that beats it
+  // (one long task on a slow CI runner) cancels the stop BY DESIGN.
+  await expect(
+    page.getByRole("button", { name: "Start Flight" }),
+  ).toBeVisible({ timeout: 15_000 });
   await page.mouse.up();
-
-  await expect(page.getByRole("button", { name: "Start Flight" })).toBeVisible({
-    timeout: 15_000,
-  });
   await expect(page.locator("ion-tab-bar")).toBeVisible();
 
   await page.getByText("Logbook", { exact: true }).click();

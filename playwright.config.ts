@@ -5,6 +5,9 @@ export default defineConfig({
   timeout: 30_000,
   use: {
     baseURL: "http://localhost:5173",
+    // A failure on CI must leave a trace to inspect, not a guess: no
+    // retries (a flake is a signal in this codebase), full evidence.
+    trace: "retain-on-failure",
   },
   projects: [
     {
