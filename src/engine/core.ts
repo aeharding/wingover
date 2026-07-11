@@ -56,10 +56,12 @@ function speak(text: string) {
 }
 
 // The PWA twin of the Swift shim's isIdleTimerDisabled: the screen stays
-// awake while the watch runs. Doubly load-bearing here — the PWA is
-// foreground-only, so a screen that sleeps mid-flight ENDS the recording.
-// Browsers release the sentinel whenever the page hides; re-acquire on
-// return. Absent API (old browsers, tests): silently does nothing.
+// awake while the watch runs. Doubly load-bearing here — a hidden PWA tab
+// loses its geolocation watch and has no native buffer to replay
+// (ARCHITECTURE.md), so every fix while the screen sleeps is gone from
+// the track for good. Browsers release the sentinel whenever the page
+// hides; re-acquire on return. Absent API (old browsers, tests):
+// silently does nothing.
 function createScreenWakeLock() {
   let sentinel: WakeLockSentinel | null = null;
   let active = false;

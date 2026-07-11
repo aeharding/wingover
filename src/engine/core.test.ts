@@ -68,9 +68,10 @@ describe("web core (core.rs twin)", () => {
 });
 
 describe("withWebCore wake lock", () => {
-  // The PWA is foreground-only: a sleeping screen ends the recording, so
-  // the watch must hold a screen wake lock and re-acquire it whenever the
-  // page becomes visible again (browsers release it on hide).
+  // A hidden PWA tab loses its geolocation watch with no backlog to
+  // replay: fixes while the screen sleeps are lost for good. The watch
+  // holds a screen wake lock and re-acquires it whenever the page becomes
+  // visible again (browsers release it on hide).
   it("acquires with the watch, re-acquires on visibility, releases on teardown", async () => {
     const requests: string[] = [];
     let releases = 0;
