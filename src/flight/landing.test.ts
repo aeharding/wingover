@@ -54,3 +54,21 @@ describe("isLanded", () => {
     expect(isLanded(flying.slice(0, 5))).toBe(false);
   });
 });
+
+// The field regression (flight of 2026-07-10): a pilot packing up walks
+// at ~1.2-2.0 m/s — above the old 1.0 threshold, so landing never
+// detected and the walk saved into the flight of record.
+describe("isLanded at walking pace", () => {
+  it("detects a landing while the pilot walks around", () => {
+    const walking = Array.from(
+      { length: LANDING_SUSTAIN_FIXES },
+      (_, i) => fix(1.2 + (i % 3) * 0.4),
+    );
+    expect(isLanded([...flying, ...walking])).toBe(true);
+  });
+
+  it("does not detect during slow-but-flying speeds", () => {
+    const slow = Array.from({ length: LANDING_SUSTAIN_FIXES }, () => fix(3.5));
+    expect(isLanded([...flying, ...slow])).toBe(false);
+  });
+});
