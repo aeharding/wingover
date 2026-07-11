@@ -6,11 +6,11 @@ import "./ZoomSlider.css";
 // One-thumb zoom (pinch needs two hands; a pilot has one), bounded by
 // what is USEFUL in flight rather than what the tile stack allows: all
 // the way out shows ~20 mi across the screen (the whole flight area),
-// all the way in ~0.2 mi (a landing field and its approaches — crossed
-// in ~25 s at PPG speeds; closer is clutter). Native <input type=range>:
+// all the way in ~0.35 mi (a landing field and its approaches — crossed
+// in ~45 s at PPG speeds; closer is clutter). Native <input type=range>:
 // platform drag behavior, chunky accent styling, zero custom gesture code.
 const WIDEST_SPAN_M = 32_187; // ~20 mi across the viewport
-const TIGHTEST_SPAN_M = 322; // ~0.2 mi
+const TIGHTEST_SPAN_M = 560; // ~0.35 mi
 const STEP = 0.05;
 
 // Web mercator: meters per pixel at zoom z is C * cos(latitude) / 2^z.

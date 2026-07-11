@@ -210,11 +210,11 @@ test("zoom slider zooms the map one-fingered without unpinning follow", async ({
   const slider = page.getByRole("slider", { name: "Zoom" });
   await expect(slider).toBeVisible();
   // Bounds are ground spans, not tile-stack limits: ~20 mi across at the
-  // bottom, ~0.2 mi at the top (both latitude/viewport dependent).
+  // bottom, ~0.35 mi at the top (both latitude/viewport dependent).
   expect(Number(await slider.getAttribute("min"))).toBeGreaterThan(9);
   expect(Number(await slider.getAttribute("min"))).toBeLessThan(12);
-  expect(Number(await slider.getAttribute("max"))).toBeGreaterThan(16);
-  expect(Number(await slider.getAttribute("max"))).toBeLessThan(19);
+  expect(Number(await slider.getAttribute("max"))).toBeGreaterThan(15);
+  expect(Number(await slider.getAttribute("max"))).toBeLessThan(18);
   const before = Number(await slider.inputValue());
 
   const box = (await slider.boundingBox())!;
