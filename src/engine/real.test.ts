@@ -113,10 +113,10 @@ beforeEach(async () => {
   globalThis.indexedDB = new IDBFactory();
 });
 
-// Drain: stop() awaits each engine's WAL queue, so no test leaves
+// Drain: discard() awaits each engine's WAL queue, so no test leaves
 // fire-and-forget writes to land in the next test's database.
 afterEach(async () => {
-  for (const engine of engines) await engine.stop();
+  for (const engine of engines) await engine.discard();
   engines.length = 0;
 });
 
@@ -178,12 +178,14 @@ describe("GeolocationRecordingEngine", () => {
     expect(geolocation.watcherCount).toBeGreaterThan(0);
   });
 
-  it("stop returns the flight and clears the WAL", async () => {
+  it("end + discard finalizes the flight and clears the WAL", async () => {
     const engine = createEngine();
     await armAndTakeOff(engine);
-    const track = await engine.stop();
+    engine.end();
+    const track = engine.snapshotSync().track;
     expect(track.length).toBe(7);
     expect(track[0].speed).toBe(2);
+    await engine.discard();
 
     const fresh = createEngine();
     const snapshot = await fresh.getSnapshot();
@@ -253,8 +255,7 @@ describe("GeolocationRecordingEngine", () => {
       2, 3, 6, 6, 6, 6, 6, 0.3,
     ]);
 
-    const flown = await engine.stop();
-    expect(flown.map((fix) => fix.speed)).toEqual([2, 3, 6, 6, 6, 6, 6, 0.3]);
+    await engine.discard();
     const fresh = createEngine();
     expect((await fresh.getSnapshot()).status).toBe("idle");
   });
@@ -299,16 +300,6 @@ describe("GeolocationRecordingEngine", () => {
       geolocation.emit(position({ speed: 0.3 }));
     }
     expect(engine.snapshotSync().status).toBe("landed");
-  });
-
-  it("manual stop after landing detection trims the tail", async () => {
-    const engine = createEngine();
-    await armAndTakeOff(engine);
-    for (let i = 0; i < LANDING_SUSTAIN_FIXES + 5; i++) {
-      geolocation.emit(position({ speed: 0.3 }));
-    }
-    const track = await engine.stop();
-    expect(track.map((fix) => fix.speed)).toEqual([2, 3, 6, 6, 6, 6, 6, 0.3]);
   });
 
   // The user-reported straight-line bug: sleep during acquiring, wake after
@@ -413,7 +404,7 @@ describe("GeolocationRecordingEngine", () => {
     for (const p of fixture) liveSource.push([p]);
     const liveSnapshot = live.snapshotSync();
     expect(liveSnapshot.status).toBe("ended");
-    await live.stop();
+    await live.discard();
 
     // Replay: everything in one batch, with one coalesced notification.
     const burstSource = manualSource();
@@ -450,6 +441,134 @@ describe("GeolocationRecordingEngine", () => {
   });
 });
 
+describe("journaled stop", () => {
+  it("end() finalizes like an expired grace and survives death before collection", async () => {
+    const engine = createEngine();
+    await armAndTakeOff(engine);
+    engine.end();
+    expect(engine.snapshotSync().status).toBe("ended");
+    expect(geolocation.watcherCount).toBe(0);
+    // Drain so the journaled intent is durable, then die before collecting.
+    await engine.getSnapshot();
+
+    // The crash window the old stop() had: WAL cleared, flight not yet
+    // persisted. The journaled stop leaves the flight waiting instead.
+    const reborn = createEngine();
+    const snapshot = await reborn.getSnapshot();
+    expect(snapshot.status).toBe("ended");
+    expect(snapshot.track.map((fix) => fix.speed)).toEqual([
+      2, 3, 6, 6, 6, 6, 6,
+    ]);
+  });
+
+  it("end() after a detected landing trims the stationary tail", async () => {
+    const engine = createEngine();
+    await armAndTakeOff(engine);
+    for (let i = 0; i < LANDING_SUSTAIN_FIXES; i++) {
+      geolocation.emit(position({ speed: 0.3 }));
+    }
+    expect(engine.snapshotSync().status).toBe("landed");
+    engine.end();
+    const snapshot = await engine.getSnapshot();
+    expect(snapshot.status).toBe("ended");
+    expect(snapshot.track.map((fix) => fix.speed)).toEqual([
+      2, 3, 6, 6, 6, 6, 6, 0.3,
+    ]);
+  });
+
+  it("end() is meaningless before takeoff (cancel uses discard)", async () => {
+    const engine = createEngine();
+    await engine.start();
+    geolocation.emit(position());
+    engine.end();
+    expect(engine.snapshotSync().status).toBe("acquiring");
+  });
+});
+
+describe("storage failure", () => {
+  it("surfaces WAL write failure, retains the fixes, and recovers", async () => {
+    const engine = createEngine();
+    await armAndTakeOff(engine);
+    await engine.getSnapshot(); // drain: everything so far is durable
+
+    const workingIndexedDB = globalThis.indexedDB;
+    globalThis.indexedDB = {
+      open() {
+        throw new Error("quota exceeded");
+      },
+    } as unknown as IDBFactory;
+
+    geolocation.emit(position({ speed: 6 }));
+    await settle();
+    expect(engine.snapshotSync().error?.code).toBe("storage");
+
+    // GPS flowing must NOT clear a storage error — different channel.
+    geolocation.emit(position({ speed: 6 }));
+    await settle();
+    expect(engine.snapshotSync().error?.code).toBe("storage");
+
+    // The outage's fixes were retained, not eaten: when storage recovers,
+    // the next flush lands them and only then does the error clear.
+    globalThis.indexedDB = workingIndexedDB;
+    geolocation.emit(position({ speed: 6 }));
+    await settle();
+    expect(engine.snapshotSync().error).toBeNull();
+    await engine.getSnapshot(); // drain
+
+    const reborn = createEngine();
+    const snapshot = await reborn.getSnapshot();
+    expect(snapshot.track.map((fix) => fix.speed)).toEqual([
+      2, 3, 6, 6, 6, 6, 6, 6, 6, 6,
+    ]);
+  });
+});
+
+describe("recorder lock", () => {
+  function installFakeLocks() {
+    let held = false;
+    const locks = {
+      request: async (
+        _name: string,
+        _options: unknown,
+        callback: (lock: unknown) => unknown,
+      ) => {
+        if (held) return callback(null);
+        held = true;
+        try {
+          return await callback({});
+        } finally {
+          held = false;
+        }
+      },
+    };
+    (navigator as unknown as { locks: unknown }).locks = locks;
+  }
+
+  it("a second engine cannot take the recorder while the first holds it", async () => {
+    installFakeLocks();
+    const first = createEngine();
+    await first.start();
+    expect(first.snapshotSync().status).toBe("acquiring");
+
+    // Second tab: start refuses BEFORE touching the WAL.
+    const second = createEngine();
+    await second.start();
+    expect(second.snapshotSync().status).toBe("idle");
+    expect(second.snapshotSync().error?.code).toBe("busy");
+
+    // Only the holder consumes fixes.
+    geolocation.emit(position());
+    expect(first.snapshotSync().latest).not.toBeNull();
+    expect(second.snapshotSync().latest).toBeNull();
+
+    // Discard releases the lock; the second tab can now record.
+    await first.discard();
+    await second.start();
+    expect(second.snapshotSync().status).toBe("acquiring");
+    expect(second.snapshotSync().error).toBeNull();
+  });
+});
+
 describe("session waypoints", () => {
   it("seeds from start options, appends, survives rehydration, clears on stop", async () => {
     const waypoint = { id: "a", latitude: 43, longitude: -89.4, radiusM: 200 };
@@ -462,7 +581,7 @@ describe("session waypoints", () => {
     const snapshot = await reborn.getSnapshot();
     expect(snapshot.waypoints.map((w) => w.id)).toEqual(["a", "b"]);
 
-    await reborn.stop();
+    await reborn.discard();
     expect((await reborn.getSnapshot()).waypoints).toEqual([]);
   });
 });
@@ -478,8 +597,8 @@ describe("waypoint config pushes", () => {
     const waypoint = { id: "a", latitude: 43, longitude: -89.4, radiusM: 200 };
     await engine.start({ waypoints: [waypoint] });
     await engine.addWaypoints([{ ...waypoint, id: "b" }]);
-    await engine.stop();
-    // No push at stop: the watch teardown carries core.stop on both
+    await engine.discard();
+    // No push at discard: the watch teardown carries core.stop on both
     // platforms.
     expect(pushes).toEqual([1, 2]);
   });

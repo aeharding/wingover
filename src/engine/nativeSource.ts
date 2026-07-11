@@ -9,7 +9,7 @@ import type { Waypoint } from "./types";
 // same call serves live delivery AND post-reload catch-up — after a
 // webview death the engine passes `since` from the rehydrated WAL and
 // the backlog replays through the normal path. Only the returned
-// unsubscribe (engine.stop, i.e. flight finalization) stops native
+// unsubscribe (engine.discard, i.e. flight collection) stops native
 // capture and clears its session file; a page reload never does.
 const POLL_MS = 1000;
 

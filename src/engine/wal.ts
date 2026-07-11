@@ -5,6 +5,10 @@ export interface WalSession {
   takeoffIndex: number | null;
   landingIndex?: number | null;
   landingDismissed?: boolean;
+  // Journaled pilot intent (wall clock): a manual stop finalizes the
+  // flight exactly like an expired landing grace — derived, durable,
+  // collected by the same persist-first path.
+  stoppedAt?: number | null;
   waypoints?: Waypoint[];
 }
 
