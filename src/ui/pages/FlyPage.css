@@ -118,16 +118,16 @@
   display: flex;
   align-items: center;
   justify-content: center;
-  width: clamp(1.9rem, 8vw, 2.5rem);
-  height: clamp(1.9rem, 8vw, 2.5rem);
-  font-size: clamp(1.4rem, 6vw, 1.8rem);
+  width: clamp(2.3rem, 10vw, 3rem);
+  height: clamp(2.3rem, 10vw, 3rem);
+  font-size: clamp(1.8rem, 8vw, 2.3rem);
   line-height: 1;
   transition: rotate 0.3s ease;
 }
 
 .compass {
-  width: clamp(38px, 10.5vw, 48px);
-  height: clamp(38px, 10.5vw, 48px);
+  width: clamp(46px, 13vw, 60px);
+  height: clamp(46px, 13vw, 60px);
 }
 
 .compass circle {
