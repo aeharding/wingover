@@ -12,6 +12,7 @@ import { relativeBearing } from "../../flight/nav";
 import type { MapViewKind } from "./config";
 import { readLiveViewState, writeLiveViewState } from "./liveViewState";
 import MapView, { type MapLibreModule } from "./MapView";
+import ZoomSlider from "./ZoomSlider";
 
 import "./LiveTrackMap.css";
 
@@ -778,6 +779,24 @@ export default function LiveTrackMap({
     applyFollowChange(follow);
   }, [follow]);
 
+  // Slider zoom flows through state so the effect below can reach the
+  // loop (an Effect Event, uncallable from the slider's pointer events).
+  // A fresh wrapper object per input keeps repeated values distinct.
+  const [sliderZoom, setSliderZoom] = useState<{ zoom: number } | null>(null);
+  const appliedSliderZoomRef = useRef<{ zoom: number } | null>(null);
+
+  // No smoothing on slider zoom: the finger movement IS the animation, a
+  // glide behind it just reads as lag. Any in-flight wheel glide dies so
+  // the follow loop cannot tug the zoom back.
+  useEffect(() => {
+    if (!sliderZoom || !mapContext) return;
+    // Re-runs from map changes must not re-apply an old input.
+    if (appliedSliderZoomRef.current === sliderZoom) return;
+    appliedSliderZoomRef.current = sliderZoom;
+    zoomTargetRef.current = null;
+    mapContext.map.jumpTo({ zoom: sliderZoom.zoom });
+  }, [sliderZoom, mapContext]);
+
   const applyTrackUpChange = useEffectEvent((trackingUp: boolean) => {
     const map = mapContext?.map;
     if (!map) return;
@@ -803,6 +822,12 @@ export default function LiveTrackMap({
         view={view}
         onReady={(map, lib) => setMapContext({ map, lib })}
       />
+      {mapContext && (
+        <ZoomSlider
+          map={mapContext.map}
+          onInput={(zoom) => setSliderZoom({ zoom })}
+        />
+      )}
     </div>
   );
 }

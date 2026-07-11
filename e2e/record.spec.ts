@@ -199,3 +199,38 @@ test("a two-hour flight lands itself and reaches the logbook hands-free", async 
   });
   await expect(page.locator("ion-tab-bar")).toBeVisible();
 });
+
+test("zoom slider zooms the map one-fingered without unpinning follow", async ({
+  page,
+}) => {
+  await page.goto("/?mock-speed=40&map-style=blank&hold-ms=300");
+  await page.getByRole("button", { name: "Start Flight" }).click();
+  await expect(page.getByTestId("recording")).toBeVisible({ timeout: 10_000 });
+
+  const slider = page.getByRole("slider", { name: "Zoom" });
+  await expect(slider).toBeVisible();
+  // Bounds are ground spans, not tile-stack limits: ~20 mi across at the
+  // bottom, ~0.35 mi at the top (both latitude/viewport dependent).
+  expect(Number(await slider.getAttribute("min"))).toBeGreaterThan(9);
+  expect(Number(await slider.getAttribute("min"))).toBeLessThan(12);
+  expect(Number(await slider.getAttribute("max"))).toBeGreaterThan(15);
+  expect(Number(await slider.getAttribute("max"))).toBeLessThan(18);
+  const before = Number(await slider.inputValue());
+
+  const box = (await slider.boundingBox())!;
+  await page.mouse.move(box.x + box.width / 2, box.y + box.height * 0.9);
+  await page.mouse.down();
+  await page.mouse.move(box.x + box.width / 2, box.y + box.height * 0.1, {
+    steps: 8,
+  });
+  await page.mouse.up();
+
+  // Follow-mode zoom glides through the camera loop; poll until it lands.
+  await expect
+    .poll(async () => Number(await slider.inputValue()))
+    .toBeGreaterThan(before);
+  // Sliding is not a map drag: the follow camera must stay pinned.
+  await expect(
+    page.getByRole("button", { name: "Follow aircraft" }),
+  ).toHaveAttribute("data-active", "true");
+});
