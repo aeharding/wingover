@@ -21,7 +21,6 @@
     "events": "^3.3.0",
     "ionicons": "^8.0.13",
     "maplibre-gl": "^5.24.0",
-    "nanoevents": "^9.1.0",
     "pouchdb-browser": "^9.0.0",
     "react": "^19.2.0",
     "react-dom": "^19.2.0",

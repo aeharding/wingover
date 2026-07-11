@@ -34,10 +34,19 @@ export type EngineStatus =
 export interface EngineSnapshot {
   status: EngineStatus;
   startedAt: number | null;
+  // CONTRACT: within a session the track is append-only and prefix-stable
+  // by timestamp — a new array identity per change, but content only ever
+  // grows. Session boundaries (start/stop) reset it. Incremental consumers
+  // (the live map) build on this.
   track: Fix[];
+  // Newest fix of the session in any phase — populated while acquiring,
+  // long before the track exists.
+  latest: Fix | null;
   // Touchdown timestamp once landing is detected (pending finalization).
   landingAt: number | null;
   waypoints: Waypoint[];
+  // Sticky GPS/permission failure; cleared by the next fix or start/stop.
+  error: EngineError | null;
 }
 
 export type EngineErrorCode = "permission-denied" | "unavailable";
@@ -47,30 +56,23 @@ export interface EngineError {
   message: string;
 }
 
-export interface EngineEvents {
-  fix: (fix: Fix) => void;
-  status: (status: EngineStatus) => void;
-  error: (error: EngineError) => void;
-}
-
+// Signal-then-read: the engine never pushes payloads. subscribe() fires a
+// coalesced "changed" signal (once per task, no matter how many fixes a
+// replay burst delivers) and consumers read snapshotSync() — every read is
+// a complete, consistent view, so there is no delta stream to replay and
+// nothing to tear against a burst.
 export interface RecordingEngine {
   // First call hydrates from the WAL; afterwards a pure view of live state.
   getSnapshot(): Promise<EngineSnapshot>;
-  // Synchronous view of in-memory state. Engine event listeners must use
-  // this instead of awaiting getSnapshot(): a replay burst delivers many
-  // fixes in one task, so a snapshot applied across an await is stale.
+  // Pure, cached view of in-memory state: stable identity between changes,
+  // fresh after every change (useSyncExternalStore-compatible).
   snapshotSync(): EngineSnapshot;
-  // Current lifecycle status, live even mid-burst (React state is not).
-  readonly status: EngineStatus;
+  // Coalesced change signal; returns unsubscribe.
+  subscribe(listener: () => void): () => void;
   start(options?: StartOptions): Promise<void>;
   // Mid-flight additions join this flight only; the plan is untouched.
   addWaypoints(waypoints: Waypoint[]): Promise<void>;
   stop(): Promise<Fix[]>;
-  // Subscribe to an engine event; returns unsubscribe.
-  on<E extends keyof EngineEvents>(
-    event: E,
-    listener: EngineEvents[E],
-  ): () => void;
   // landed → recording: pilot overrides a detected touchdown.
   dismissLanding(): void;
 }

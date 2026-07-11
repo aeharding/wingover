@@ -10,17 +10,13 @@ import {
   useLayoutEffect,
   useRef,
   useState,
+  useSyncExternalStore,
 } from "react";
 
 import { engine } from "../../engine";
 import { isTauri } from "../../engine/platform";
 import { startFlight } from "../../engine/session";
-import type {
-  EngineError,
-  EngineSnapshot,
-  EngineStatus,
-  Fix,
-} from "../../engine/types";
+import type { EngineStatus, Fix } from "../../engine/types";
 import {
   formatAltitude,
   formatClimb,
@@ -66,9 +62,14 @@ const ARMED_HINT = isTauri()
 
 export default function FlyPage() {
   const { units } = useSettings();
-  const [status, setStatus] = useState<EngineStatus | "loading">("loading");
-  const [latest, setLatest] = useState<Fix | null>(null);
-  const [track, setTrack] = useState<Fix[]>([]);
+  // The engine is the single owner of flight state; this page is a view.
+  // Snapshots are cached (stable identity between changes) and the change
+  // signal is coalesced per task, so a replay burst lands as one render of
+  // a complete track — there is no per-fix mirror to fall behind.
+  const snapshot = useSyncExternalStore(engine.subscribe, engine.snapshotSync);
+  // Hydration gate: before the WAL read the engine reports "idle", which
+  // must not flash the Start button during a live-flight reload.
+  const [ready, setReady] = useState(false);
   const [savedToastOpen, setSavedToastOpen] = useState(false);
   const [holding, setHolding] = useState(false);
   const [mapView, setMapView] = useState<MapViewKind>(
@@ -78,26 +79,12 @@ export default function FlyPage() {
   const [trackUp, setTrackUp] = useState(savedLiveView.trackUp ?? false);
   const [mapTopInset, setMapTopInset] = useState(0);
   const instrumentsRef = useRef<HTMLDivElement>(null);
-  // Burst-safe accumulator: several fixes can arrive in one task, before
-  // React re-renders. Never read during render — `track` state mirrors it.
-  const trackAccumRef = useRef<Fix[]>([]);
   const holdTimerRef = useRef<ReturnType<typeof setTimeout> | undefined>(
     undefined,
   );
-  const [landingAt, setLandingAt] = useState<number | null>(null);
-  const [gpsError, setGpsError] = useState<EngineError | null>(null);
 
-  function applySnapshot(snapshot: EngineSnapshot) {
-    trackAccumRef.current = [...snapshot.track];
-    setTrack(snapshot.track);
-    setLatest(snapshot.track[snapshot.track.length - 1] ?? null);
-    setLandingAt(snapshot.landingAt);
-    setStatus(snapshot.status);
-  }
-
-  const syncFromEngine = useEffectEvent(async () => {
-    applySnapshot(await engine.getSnapshot());
-  });
+  const { track, latest, landingAt, error: gpsError } = snapshot;
+  const status: EngineStatus | "loading" = ready ? snapshot.status : "loading";
 
   function changeMapView(value: MapViewKind) {
     setMapView(value);
@@ -114,20 +101,6 @@ export default function FlyPage() {
     setTrackUp(value);
     writeLiveViewState({ trackUp: value });
   }
-
-  const handleEngineFix = useEffectEvent((fix: Fix) => {
-    setGpsError(null);
-    setLatest(fix);
-    // Gate on the engine's own status: React state stays "acquiring" for
-    // the whole of a replay burst (one task, no re-render between fixes),
-    // which would silently drop every backlog fix after the takeoff flip.
-    if (engine.status !== "recording" && engine.status !== "landed") return;
-    const accumulated = trackAccumRef.current;
-    const previous = accumulated[accumulated.length - 1];
-    if (previous && fix.timestamp <= previous.timestamp) return;
-    accumulated.push(fix);
-    setTrack([...accumulated]);
-  });
 
   async function persistFlight(flown: Fix[]) {
     if (flown.length <= 1) return;
@@ -160,47 +133,27 @@ export default function FlyPage() {
     const snapshot = await engine.getSnapshot();
     if (snapshot.status !== "ended") return;
     await persistFlight(snapshot.track);
-    // stop() clears the WAL and transitions to idle, which re-syncs all
-    // UI state (including landingAt) from the engine.
+    // stop() clears the WAL and transitions to idle.
     await engine.stop();
   });
 
-  // Status transitions rebase the accumulator on the engine's synchronous
-  // snapshot — same task, so no fix delivered after it can be lost. An
-  // awaited snapshot here would clobber back everything a still-running
-  // burst appends before the continuation runs.
-  const handleEngineStatus = useEffectEvent((engineStatus: EngineStatus) => {
-    applySnapshot(engine.snapshotSync());
-    if (engineStatus === "ended") void collectEndedFlight();
-  });
-
-  // THE engine effect: every subscription is set up and torn down here.
   useEffect(() => {
     getSetting("mapView").then((value) => {
       if (value === "street" || value === "satellite") setMapView(value);
     });
-    // Deferred so the initial engine sync sets state asynchronously, like
-    // every later sync triggered by engine callbacks. A flight that ended
-    // while the app was away (durable "ended" in the WAL) is collected
-    // right after the first sync; collectEndedFlight re-checks the
-    // snapshot, so calling it unconditionally is safe.
-    Promise.resolve().then(async () => {
-      await syncFromEngine();
-      await collectEndedFlight();
-    });
-
-    const unsubscribeError = engine.on("error", (error) => setGpsError(error));
-    const unsubscribeFix = engine.on("fix", (fix) => handleEngineFix(fix));
-    const unsubscribeStatus = engine.on("status", (engineStatus) =>
-      handleEngineStatus(engineStatus),
-    );
-
-    return () => {
-      unsubscribeError();
-      unsubscribeFix();
-      unsubscribeStatus();
-    };
+    // Kick the one-time WAL hydration; the subscription picks up the
+    // resulting state change like any other.
+    void engine.getSnapshot().then(() => setReady(true));
   }, []);
+
+  // A flight that ended — now, or while the app was away (durable "ended"
+  // hydrated from the WAL) — is collected the moment the view sees it.
+  // Deferred a tick: collection drives the engine (persist, stop), it does
+  // not synchronize render state.
+  useEffect(() => {
+    if (status !== "ended") return;
+    void Promise.resolve().then(() => collectEndedFlight());
+  }, [status]);
 
   useLayoutEffect(() => {
     if (status !== "recording" && status !== "landed") return;
@@ -214,30 +167,19 @@ export default function FlyPage() {
   }, [status]);
 
   async function armFlight() {
-    setLatest(null);
-    trackAccumRef.current = [];
-    setTrack([]);
-    setLandingAt(null);
-    setGpsError(null);
     changeFollow(true);
     changeTrackUp(false);
     await startFlight();
-    setStatus("acquiring");
   }
 
   async function cancelArmed() {
     await engine.stop();
-    setStatus("idle");
-    setLatest(null);
   }
 
   async function finishFlight() {
     holdTimerRef.current = undefined;
     const flown = await engine.stop();
     setHolding(false);
-    setLandingAt(null);
-    setStatus("idle");
-    setLatest(null);
     await persistFlight(flown);
   }
 

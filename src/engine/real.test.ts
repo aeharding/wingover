@@ -3,7 +3,6 @@ import { afterEach, beforeEach, describe, expect, it } from "vitest";
 
 import { LANDING_SUSTAIN_FIXES } from "../flight/landing";
 import { GeolocationRecordingEngine, navigatorPositionSource } from "./real";
-import type { EngineStatus, Fix } from "./types";
 
 class FakeGeolocation {
   private watchers = new Map<
@@ -57,6 +56,12 @@ function createEngine(): GeolocationRecordingEngine {
   const engine = new GeolocationRecordingEngine();
   engines.push(engine);
   return engine;
+}
+
+// Change notifications are coalesced per task: yield one macrotask so
+// pending notifies (and fake-indexeddb completions) land.
+function settle(): Promise<void> {
+  return new Promise((resolve) => setTimeout(resolve, 0));
 }
 
 interface CoordOverrides {
@@ -121,29 +126,37 @@ async function armAndTakeOff(engine: GeolocationRecordingEngine) {
 describe("GeolocationRecordingEngine", () => {
   it("walks acquiring → armed → recording with backdated takeoff", async () => {
     const engine = createEngine();
-    const statuses: EngineStatus[] = [];
-    engine.on("status", (status) => statuses.push(status));
-
     await engine.start();
-    expect(statuses).toEqual(["acquiring"]);
+    expect(engine.snapshotSync().status).toBe("acquiring");
 
     geolocation.emit(position({ accuracy: 40 }));
     geolocation.emit(position());
     geolocation.emit(position());
-    expect(statuses).toEqual(["acquiring"]);
+    expect(engine.snapshotSync().status).toBe("acquiring");
     geolocation.emit(position());
-    expect(statuses).toEqual(["acquiring", "armed"]);
+    expect(engine.snapshotSync().status).toBe("armed");
 
     const movementStart = timestamp + 1000;
     geolocation.emit(position({ speed: 2 }));
     geolocation.emit(position({ speed: 3 }));
     for (let i = 0; i < 5; i++) geolocation.emit(position({ speed: 6 }));
-    expect(statuses).toEqual(["acquiring", "armed", "recording"]);
 
     const snapshot = await engine.getSnapshot();
     expect(snapshot.status).toBe("recording");
     expect(snapshot.startedAt).toBe(movementStart);
     expect(snapshot.track[0].speed).toBe(2);
+  });
+
+  it("caches the snapshot between changes and refreshes it after", async () => {
+    const engine = createEngine();
+    await engine.start();
+    const before = engine.snapshotSync();
+    // Stable identity while nothing changes (useSyncExternalStore contract).
+    expect(engine.snapshotSync()).toBe(before);
+    geolocation.emit(position());
+    const after = engine.snapshotSync();
+    expect(after).not.toBe(before);
+    expect(after.latest).not.toBeNull();
   });
 
   it("rehydrates a recording from the WAL in a fresh instance", async () => {
@@ -175,61 +188,57 @@ describe("GeolocationRecordingEngine", () => {
 
   it("derives speed and course when the platform omits them", async () => {
     const engine = createEngine();
-    const fixes: number[][] = [];
-    engine.on("fix", (fix) => fixes.push([fix.speed, fix.course]));
     await engine.start();
 
     geolocation.emit(position({ speed: null, heading: null }));
+    expect(engine.snapshotSync().latest?.speed).toBe(0);
+
     // ~11.1 m north in 1 s ≈ 11.1 m/s heading 0
     geolocation.emit(
       position({ latitude: 43.0001, speed: null, heading: null }),
     );
-
-    expect(fixes[0][0]).toBe(0);
-    expect(fixes[1][0]).toBeCloseTo(11.1, 0);
-    expect(fixes[1][1]).toBeCloseTo(0, 0);
+    const latest = engine.snapshotSync().latest;
+    expect(latest?.speed).toBeCloseTo(11.1, 0);
+    expect(latest?.course).toBeCloseTo(0, 0);
   });
 
   it("never arms without vertical accuracy", async () => {
     const engine = createEngine();
-    const statuses: EngineStatus[] = [];
-    engine.on("status", (status) => statuses.push(status));
     await engine.start();
     for (let i = 0; i < 6; i++) {
       geolocation.emit(position({ altitudeAccuracy: null }));
     }
-    expect(statuses).toEqual(["acquiring"]);
+    expect(engine.snapshotSync().status).toBe("acquiring");
   });
 
-  it("classifies watch errors", async () => {
+  it("surfaces watch errors in the snapshot, cleared by the next fix", async () => {
     const engine = createEngine();
-    const errors: string[] = [];
-    engine.on("error", (error) => errors.push(error.code));
     await engine.start();
     geolocation.emitError(1);
+    expect(engine.snapshotSync().error?.code).toBe("permission-denied");
     geolocation.emitError(2);
-    expect(errors).toEqual(["permission-denied", "unavailable"]);
+    expect(engine.snapshotSync().error?.code).toBe("unavailable");
+    geolocation.emit(position());
+    expect(engine.snapshotSync().error).toBeNull();
   });
 
   it("walks recording → landed → ended on fix time, trimming the tail", async () => {
     const engine = createEngine();
-    const statuses: EngineStatus[] = [];
-    engine.on("status", (status) => statuses.push(status));
     await armAndTakeOff(engine);
+    expect(engine.snapshotSync().status).toBe("recording");
 
     for (let i = 0; i < LANDING_SUSTAIN_FIXES; i++) {
       geolocation.emit(position({ speed: 0.3 }));
     }
-    expect(statuses.at(-1)).toBe("landed");
-    const landedSnapshot = await engine.getSnapshot();
-    expect(landedSnapshot.landingAt).not.toBeNull();
+    expect(engine.snapshotSync().status).toBe("landed");
+    expect(engine.snapshotSync().landingAt).not.toBeNull();
 
     // Grace is fix time: more one-second fixes expire it, even emitted in
     // a burst (this IS the backgrounded-landing replay case)
     for (let i = 0; i < 35; i++) {
       geolocation.emit(position({ speed: 0.3 }));
     }
-    expect(statuses.at(-1)).toBe("ended");
+    expect(engine.snapshotSync().status).toBe("ended");
     expect(geolocation.watcherCount).toBe(0);
 
     const snapshot = await engine.getSnapshot();
@@ -265,28 +274,26 @@ describe("GeolocationRecordingEngine", () => {
 
   it("dismiss returns landed to recording until movement resumes", async () => {
     const engine = createEngine();
-    const statuses: EngineStatus[] = [];
-    engine.on("status", (status) => statuses.push(status));
     await armAndTakeOff(engine);
 
     for (let i = 0; i < LANDING_SUSTAIN_FIXES; i++) {
       geolocation.emit(position({ speed: 0.3 }));
     }
-    expect(statuses.at(-1)).toBe("landed");
+    expect(engine.snapshotSync().status).toBe("landed");
     engine.dismissLanding();
-    expect(statuses.at(-1)).toBe("recording");
+    expect(engine.snapshotSync().status).toBe("recording");
 
     for (let i = 0; i < 40; i++) {
       geolocation.emit(position({ speed: 0.3 }));
     }
-    expect(statuses.at(-1)).toBe("recording");
+    expect(engine.snapshotSync().status).toBe("recording");
 
     // Movement clears the dismissal; a fresh landing detects again
     for (let i = 0; i < 5; i++) geolocation.emit(position({ speed: 7 }));
     for (let i = 0; i < LANDING_SUSTAIN_FIXES; i++) {
       geolocation.emit(position({ speed: 0.3 }));
     }
-    expect(statuses.at(-1)).toBe("landed");
+    expect(engine.snapshotSync().status).toBe("landed");
   });
 
   it("manual stop after landing detection trims the tail", async () => {
@@ -301,15 +308,10 @@ describe("GeolocationRecordingEngine", () => {
 
   // The user-reported straight-line bug: sleep during acquiring, wake after
   // takeoff. The whole backlog replays in ONE synchronous task while a
-  // snapshot (FlyPage's collect-on-mount) is mid-read — its stale WAL read
-  // must not clobber the live buffer/session built by the burst. If it
-  // does, the fixes that follow re-run takeoff detection against the
-  // gutted buffer: status flaps back through armed (unmounting the live
-  // map) and a wrong takeoff index is written over the real one.
+  // snapshot (FlyPage's collect-on-mount) is mid-read. Hydrate-once means
+  // that read can never clobber the live buffer/session the burst built.
   it("a snapshot racing a replay burst must not clobber live state", async () => {
     const engine = createEngine();
-    const statuses: EngineStatus[] = [];
-    engine.on("status", (status) => statuses.push(status));
     await engine.start();
     // WAL read starts now, before the burst, and resolves after it.
     const racing = engine.getSnapshot();
@@ -324,7 +326,7 @@ describe("GeolocationRecordingEngine", () => {
     // Live delivery continues after the stale read has landed.
     for (let i = 0; i < 8; i++) geolocation.emit(position({ speed: 6 }));
 
-    expect(statuses).toEqual(["acquiring", "armed", "recording"]);
+    expect(engine.snapshotSync().status).toBe("recording");
     const snapshot = await engine.getSnapshot();
     expect(snapshot.status).toBe("recording");
     expect(snapshot.track.map((fix) => fix.speed)).toEqual([
@@ -334,53 +336,50 @@ describe("GeolocationRecordingEngine", () => {
     ]);
   });
 
-  // Mirrors FlyPage's wiring across a sleep-through-takeoff replay burst:
-  // rebase on the synchronous snapshot at every status event, append fix
-  // events while recording. Any gap here is a straight line on the live
-  // map (the recorded WAL stays complete, so the saved flight hides it).
-  it("status-event snapshots plus fix events reconstruct the full track", async () => {
+  // A backlog replay delivers every missed fix in one synchronous task.
+  // Subscribers get ONE coalesced signal after it and read a complete
+  // track — there is no per-fix delta stream for a consumer to fall
+  // behind on (the failure mode behind the live map's straight line).
+  it("a replay burst notifies once, with the complete state readable", async () => {
     const engine = createEngine();
     await engine.start();
+    await settle();
 
-    let accumulated: Fix[] = [];
-    engine.on("status", () => {
-      accumulated = [...engine.snapshotSync().track];
+    let notifications = 0;
+    let trackAtNotify = -1;
+    engine.subscribe(() => {
+      notifications++;
+      trackAtNotify = engine.snapshotSync().track.length;
     });
-    engine.on("fix", (fix) => {
-      if (engine.status !== "recording" && engine.status !== "landed") return;
-      const previous = accumulated[accumulated.length - 1];
-      if (previous && fix.timestamp <= previous.timestamp) return;
-      accumulated.push(fix);
-    });
-    // The collect-on-mount snapshot racing the burst, as on a real resume.
-    const racing = engine.getSnapshot();
 
     for (let i = 0; i < 3; i++) geolocation.emit(position({ speed: 0 }));
     geolocation.emit(position({ speed: 2 }));
     geolocation.emit(position({ speed: 3 }));
     for (let i = 0; i < 20; i++) geolocation.emit(position({ speed: 6 }));
-    await racing;
-    for (let i = 0; i < 8; i++) geolocation.emit(position({ speed: 6 }));
+    // Coalesced: nothing fires mid-task.
+    expect(notifications).toBe(0);
 
-    const snapshot = await engine.getSnapshot();
-    expect(snapshot.status).toBe("recording");
-    expect(accumulated).toEqual(snapshot.track);
-    expect(accumulated.map((fix) => fix.speed)).toEqual([
-      2,
-      3,
-      ...Array<number>(28).fill(6),
-    ]);
+    await settle();
+    expect(notifications).toBe(1);
+    expect(trackAtNotify).toBe(22);
+
+    // Live cadence: each subsequent fix is its own change.
+    geolocation.emit(position({ speed: 6 }));
+    await settle();
+    expect(notifications).toBe(2);
+    expect(trackAtNotify).toBe(23);
   });
 
   it("drops burst duplicates faster than 500 ms", async () => {
     const engine = createEngine();
-    let count = 0;
-    engine.on("fix", () => count++);
     await engine.start();
     geolocation.emit(position());
+    const first = engine.snapshotSync().latest?.timestamp;
+    expect(first).toBeDefined();
     geolocation.emit(position({}, 44));
+    expect(engine.snapshotSync().latest?.timestamp).toBe(first);
     geolocation.emit(position({}, 1000));
-    expect(count).toBe(2);
+    expect(engine.snapshotSync().latest?.timestamp).toBe(first! + 1044);
   });
 });
 

@@ -329,10 +329,10 @@ export default function LiveTrackMap({
     const fixes = track;
     const playhead = playheadRef.current;
     const upTo = playhead ? Math.min(playhead.index + 1, fixes.length) : 0;
-    // Incremental append assumes the track only ever grows in place. If the
-    // consumed prefix no longer lines up — history was replaced or
-    // reindexed (a rehydration heal) — appending would mix coordinates from
-    // two different indexings into one permanently wrong line: rebuild.
+    // EngineSnapshot.track is append-only within a session (its documented
+    // contract); this enforces it. If the consumed prefix ever stops lining
+    // up, appending would mix coordinates from two indexings into one
+    // permanently wrong line — rebuild instead.
     const consumed = lineCoordsRef.current.length;
     const intact =
       consumed <= upTo &&
