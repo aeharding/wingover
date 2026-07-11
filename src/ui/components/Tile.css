@@ -22,21 +22,25 @@
   }
 }
 
+/* PPG-Flyer treatment: near-opaque black rows, small plain labels, huge
+   saturated values. Sunlight readability over looks — a translucent panel
+   over bright satellite imagery washes out. */
 .tile {
   position: relative;
-  background: rgba(13, 15, 17, 0.68);
-  padding: 0.35rem 0.75rem;
+  background: rgba(8, 9, 10, 0.88);
+  padding: 0.3rem 0.75rem 0.45rem;
   min-width: 0;
 }
 
 .tile .label {
-  font-size: 0.7rem;
-  color: #a7acb3;
+  font-size: 0.8rem;
+  color: #c2c7cd;
 }
 
 .tile .value {
-  font-size: clamp(1.3rem, 5.4vw, 1.7rem);
-  font-weight: 700;
+  font-size: clamp(1.7rem, 8vw, 2.4rem);
+  font-weight: 800;
+  line-height: 1.1;
   color: #fff;
   font-variant-numeric: tabular-nums;
   white-space: nowrap;
