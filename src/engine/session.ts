@@ -1,5 +1,5 @@
 import { DEFAULT_WAYPOINT_RADIUS_M } from "../flight/waypoints";
-import { listPins, type Pin } from "../storage/db";
+import { getSetting, listPins, type Pin } from "../storage/db";
 import { engine } from "./index";
 import type { Waypoint } from "./types";
 
@@ -20,6 +20,14 @@ function toWaypoint(pin: Pin): Waypoint {
 // reusable template for the NEXT flight; an active flight owns its
 // waypoints and never re-reads the plan (STEERING.md).
 export async function startFlight(): Promise<void> {
-  const pins = await listPins();
-  await engine.start({ waypoints: pins.map(toWaypoint) });
+  const [pins, autoEnd] = await Promise.all([
+    listPins(),
+    getSetting("autoEndFlight"),
+  ]);
+  await engine.start({
+    waypoints: pins.map(toWaypoint),
+    // The session copies the setting at start, like the waypoint plan:
+    // an active flight keeps the behavior it took off with.
+    autoEnd: autoEnd !== "false",
+  });
 }

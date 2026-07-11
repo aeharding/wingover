@@ -242,12 +242,14 @@ export class GeolocationRecordingEngine implements RecordingEngine {
         latest: null,
         landingAt: null,
         waypoints: [],
+        autoEnd: true,
         error,
       };
     }
     const status = this.deriveStatus();
     const latest = this.buffer[this.buffer.length - 1] ?? null;
     const waypoints = session.waypoints ?? [];
+    const autoEnd = session.autoEnd !== false;
     if (status === "ended") {
       const track = this.finalizedTrack();
       return {
@@ -257,6 +259,7 @@ export class GeolocationRecordingEngine implements RecordingEngine {
         latest,
         landingAt: this.landingAt(),
         waypoints,
+        autoEnd,
         error,
       };
     }
@@ -268,6 +271,7 @@ export class GeolocationRecordingEngine implements RecordingEngine {
         latest,
         landingAt: null,
         waypoints,
+        autoEnd,
         error,
       };
     }
@@ -279,6 +283,7 @@ export class GeolocationRecordingEngine implements RecordingEngine {
       latest,
       landingAt: this.landingAt(),
       waypoints,
+      autoEnd,
       error,
     };
   }
@@ -305,6 +310,7 @@ export class GeolocationRecordingEngine implements RecordingEngine {
       armedAt: Date.now(),
       takeoffIndex: null,
       waypoints: options?.waypoints ?? [],
+      autoEnd: options?.autoEnd ?? true,
     };
     this.buffer = [];
     this.error = null;
@@ -400,7 +406,10 @@ export class GeolocationRecordingEngine implements RecordingEngine {
     if (
       touchdown &&
       latest &&
-      latest.timestamp - touchdown.timestamp >= LANDING_GRACE_MS
+      latest.timestamp - touchdown.timestamp >= LANDING_GRACE_MS &&
+      // The pilot opted out of auto-finalization: the flight stays
+      // "landed" (prompting) until they decide.
+      this.session.autoEnd !== false
     ) {
       return "ended";
     }

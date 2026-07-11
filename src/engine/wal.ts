@@ -9,6 +9,9 @@ export interface WalSession {
   // flight exactly like an expired landing grace — derived, durable,
   // collected by the same persist-first path.
   stoppedAt?: number | null;
+  // Flight-scoped, copied from settings at start (like waypoints): grace
+  // expiry auto-finalizes only when true. Absent means true.
+  autoEnd?: boolean;
   waypoints?: Waypoint[];
 }
 
