@@ -37,6 +37,15 @@ const COURSE_SMOOTH_MS = 400;
 const BEARING_SMOOTH_MS = 400;
 const ALIGN_ROTATE_MS = 200;
 const ZOOM_SMOOTH_MS = 200;
+// The follow loop advances the playhead every animation frame (cheap math),
+// but the expensive part — re-rendering the whole vector basemap under the
+// moving camera — is capped to ~30 fps. Measured: a repaint is the map's
+// dominant per-frame cost (the custom aircraft layer is ~0.08 ms/frame; a
+// full basemap repaint is ~40 ms and runs up to display rate). At flight
+// speed the ground creeps, so 30 fps map-scroll is indistinguishable from
+// 60 while halving that cost on any device fast enough to hit 60 — a battery
+// win that is a no-op where a device is already slower than the cap.
+const RENDER_MIN_FRAME_MS = 1000 / 30;
 const WHEEL_ZOOM_RATE = 1 / 450;
 const PINCH_ZOOM_RATE = 1 / 100;
 const OVERSCAN_PX = 256;
@@ -314,6 +323,7 @@ export default function LiveTrackMap({
   const zoomTargetRef = useRef<number | null>(null);
   const loopFrameRef = useRef<number | undefined>(undefined);
   const lastStepAtRef = useRef(0);
+  const lastRenderAtRef = useRef(0);
 
   function cameraPadding() {
     return {
@@ -578,14 +588,22 @@ export default function LiveTrackMap({
       }
     }
 
-    syncLine(map);
-    renderFrame(map, display, zoom);
-
-    if (
+    const animating =
       legRef.current !== null ||
       zoomTargetRef.current !== null ||
-      bearingAlignRef.current !== null
-    ) {
+      bearingAlignRef.current !== null;
+
+    // Advance the playhead every frame (done above), but throttle the costly
+    // basemap repaint to RENDER_MIN_FRAME_MS. Never skip the terminal frame:
+    // when the animation ends the map must land on the true final position,
+    // not a point up to one capped frame behind it.
+    if (!animating || now - lastRenderAtRef.current >= RENDER_MIN_FRAME_MS) {
+      lastRenderAtRef.current = now;
+      syncLine(map);
+      renderFrame(map, display, zoom);
+    }
+
+    if (animating) {
       loopFrameRef.current = requestAnimationFrame((next) =>
         stepPlayhead(next),
       );
