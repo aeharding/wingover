@@ -223,16 +223,36 @@ test("zoom control zooms one-fingered from anywhere without unpinning follow", a
   expect(await valuemax()).toBeLessThan(18);
   const before = await valuenow();
 
+  // The gauge (thumb + end caps) is hidden at rest and appears ONLY while
+  // dragging — nothing on the map while flying. Its thumb is positioned by
+  // the current zoom via an inline `top` percent.
+  await expect(control).not.toHaveClass(/active/);
+  const thumbTopPct = async () =>
+    parseFloat(
+      await page
+        .locator(".zoom-gauge-thumb")
+        .evaluate((el) => (el as HTMLElement).style.top),
+    );
+  const thumbBefore = await thumbTopPct();
+
   // Relative drag: press anywhere in the zone (off-center) and drag DOWN
   // to zoom in. No thumb to hit — the start point does not matter.
   const box = (await control.boundingBox())!;
+  // The zone hugs the right edge of the screen (the edge-slide gesture).
+  const viewport = page.viewportSize()!;
+  expect(box.x + box.width).toBeGreaterThanOrEqual(viewport.width - 1);
+  expect(box.width).toBeLessThan(viewport.width * 0.2);
   const downX = box.x + box.width * 0.6;
   await page.mouse.move(downX, box.y + 20);
   await page.mouse.down();
+  await expect(control).toHaveClass(/active/); // gauge appears on touch
   await page.mouse.move(downX, box.y + 150, { steps: 8 });
   await page.mouse.up();
+  await expect(control).not.toHaveClass(/active/); // hidden again on release
 
   await expect.poll(valuenow).toBeGreaterThan(before);
+  // The thumb rides down toward the fully-in cap as we zoom in.
+  expect(await thumbTopPct()).toBeGreaterThan(thumbBefore);
   // Dragging the control is not a map drag: follow must stay pinned.
   await expect(
     page.getByRole("button", { name: "Follow aircraft" }),

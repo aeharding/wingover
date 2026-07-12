@@ -3,15 +3,25 @@ import { useEffect, useRef, useState } from "react";
 
 import "./ZoomControl.css";
 
-// A forgiving one-thumb zoom control: touch ANYWHERE in the (wide) zone
-// and drag — down zooms in, up zooms out — relative to where the drag
-// began (down = closer matches the "pull the ground toward you" feel).
-// No thumb to hit, no absolute position to land on; re-grab anywhere to
-// keep going. The rail + dot indicate the current zoom. Zoom-per-pixel is
-// tied to the rail's height, so the dot tracks the finger 1:1 (a pixel of
-// drag = a pixel of dot travel) — they never drift apart, and a taller
-// rail simply makes the drag less sensitive.
+// Zoom lives on the very right EDGE of the screen: press anywhere along the
+// edge and slide — down zooms in, up zooms out — relative to where the drag
+// began (down = "pull the ground toward you"). No thumb to hit, no absolute
+// track to land on; re-grab anywhere to keep going. The right edge is
+// deliberate: iOS system swipes live on the LEFT (back) and BOTTOM (home)
+// edges, never the right, so nothing fights this gesture. Leaving the map
+// clear also frees it for two-finger pinch.
 //
+// A short gauge — a thumb on a rail down the very edge — floats between the
+// stats and the buttons. It is HIDDEN at rest and appears only while you
+// drag: the thumb shows how zoomed you are (top of the rail = fully out,
+// bottom = fully in). The touch zone is far taller than the gauge, so you
+// can grab the edge well above or below it. Nothing is on screen when you
+// are just flying.
+//
+// Sensitivity is a fixed screen distance (not the gauge's height): a full
+// zoom sweep takes DRAG_RANGE_PX of travel wherever you grab.
+const DRAG_RANGE_PX = 280;
+
 // Bounds are ground spans, not tile-stack limits: fully out ~30 mi across
 // the screen, fully in ~0.35 mi. Derived from the VISIBLE viewport width
 // (not the map container, which is inset by the render overscan and would
@@ -40,13 +50,8 @@ interface ZoomControlProps {
 }
 
 export default function ZoomControl({ map, onInput }: ZoomControlProps) {
-  const dragRef = useRef<{
-    startY: number;
-    startZoom: number;
-    railPx: number;
-  } | null>(null);
-  const railRef = useRef<HTMLDivElement>(null);
-  const dotRef = useRef<HTMLDivElement>(null);
+  const dragRef = useRef<{ startY: number; startZoom: number } | null>(null);
+  const [active, setActive] = useState(false);
   const [bounds, setBounds] = useState(() => spanBounds(map));
   const [zoom, setZoom] = useState(() => map.getZoom());
 
@@ -56,16 +61,16 @@ export default function ZoomControl({ map, onInput }: ZoomControlProps) {
       setZoom(map.getZoom());
     };
     sync();
-    // Zoom only: the dot tracks zoom, and latitude drift (which nudges the
-    // span-derived bounds) is imperceptible between zooms. A "move"
-    // listener would re-render this every follow-loop frame for nothing.
+    // Zoom only: latitude drift (which nudges the span-derived bounds) is
+    // imperceptible between zooms, and a "move" listener would re-render
+    // this every follow-loop frame for nothing.
     map.on("zoom", sync);
     return () => {
       map.off("zoom", sync);
     };
   }, [map]);
 
-  // 0 = fully out (dot at the top), 1 = fully in (dot at the bottom) —
+  // 0 = fully out (thumb at the top cap), 1 = fully in (bottom cap) —
   // matches down-to-zoom-in.
   const fraction = Math.min(
     1,
@@ -74,7 +79,7 @@ export default function ZoomControl({ map, onInput }: ZoomControlProps) {
 
   return (
     <div
-      className="zoom-control"
+      className={active ? "zoom-strip active" : "zoom-strip"}
       role="slider"
       aria-label="Zoom"
       aria-orientation="vertical"
@@ -83,42 +88,43 @@ export default function ZoomControl({ map, onInput }: ZoomControlProps) {
       aria-valuenow={Number(zoom.toFixed(2))}
       onPointerDown={(event) => {
         event.currentTarget.setPointerCapture(event.pointerId);
-        dragRef.current = {
-          startY: event.clientY,
-          startZoom: map.getZoom(),
-          railPx: railRef.current?.clientHeight || 1,
-        };
+        dragRef.current = { startY: event.clientY, startZoom: map.getZoom() };
+        setActive(true);
       }}
       onPointerMove={(event) => {
         const drag = dragRef.current;
         if (!drag) return;
         const { min, max } = spanBounds(map);
-        // Down (clientY increasing) zooms in. Scaling by the rail's own
-        // height makes the dot travel exactly as far as the finger.
+        // Down (clientY increasing) zooms in; a full sweep takes
+        // DRAG_RANGE_PX of travel regardless of where the strip is grabbed.
         const delta =
-          ((event.clientY - drag.startY) / drag.railPx) * (max - min);
+          ((event.clientY - drag.startY) / DRAG_RANGE_PX) * (max - min);
         const next = Math.min(max, Math.max(min, drag.startZoom + delta));
         onInput(next);
-        // Move the dot imperatively, in this same event — routing it through
-        // the map's zoom event and React state trails the finger by a frame.
-        if (dotRef.current) {
-          const f = (next - min) / (max - min);
-          dotRef.current.style.top = `${f * 100}%`;
-        }
       }}
       onPointerUp={() => {
         dragRef.current = null;
+        setActive(false);
       }}
       onPointerCancel={() => {
         dragRef.current = null;
+        setActive(false);
       }}
     >
-      <div ref={railRef} className="zoom-control-rail">
-        <div
-          ref={dotRef}
-          className="zoom-control-dot"
-          style={{ top: `${fraction * 100}%` }}
-        />
+      {/* The gauge: hidden until touched. A rounded triangle rides the rail,
+          pointing at the current zoom — top of the rail is fully out, bottom
+          fully in. */}
+      <div className="zoom-gauge" aria-hidden="true">
+        <div className="zoom-gauge-rail">
+          <div
+            className="zoom-gauge-thumb"
+            style={{ top: `${fraction * 100}%` }}
+          >
+            <svg viewBox="0 0 66 100" aria-hidden="true">
+              <path d="M18 12 L52 50 L18 88 Z" />
+            </svg>
+          </div>
+        </div>
       </div>
     </div>
   );
