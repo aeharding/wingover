@@ -556,6 +556,76 @@ describe("journaled stop", () => {
   });
 });
 
+describe("stale-flight gap detection (app gone mid-flight)", () => {
+  it("ends the flight at the fix before a >15 min gap in the stream", async () => {
+    const engine = createEngine();
+    await armAndTakeOff(engine);
+    expect(engine.snapshotSync().status).toBe("recording");
+    const lastBeforeGap = engine.snapshotSync().track.at(-1)!.timestamp;
+
+    // The app was gone; the next fix arrives 20 min later. Nothing recorded
+    // in between → the flight ended at the last fix before the gap, and the
+    // post-gap fix is a separate sitting, not part of it.
+    geolocation.emit(position({ speed: 6 }, 20 * 60 * 1000));
+
+    const snapshot = await engine.getSnapshot();
+    expect(snapshot.status).toBe("ended");
+    expect(snapshot.track.map((fix) => fix.speed)).toEqual([
+      2, 3, 6, 6, 6, 6, 6,
+    ]);
+    expect(snapshot.track.at(-1)!.timestamp).toBe(lastBeforeGap);
+    // Consuming stopped — no watch left on the dead flight.
+    expect(geolocation.watcherCount).toBe(0);
+  });
+
+  it("keeps recording across a continuous replayed backlog (native background)", async () => {
+    // The webview died but native capture kept running. On rebirth the
+    // native queue replays a long, CONTINUOUS backlog — consecutive fixes
+    // never more than a couple minutes apart. That is NOT a gap: the flight
+    // must keep recording and the backlog must NOT be lost.
+    const first = createEngine();
+    await armAndTakeOff(first);
+    await first.getSnapshot();
+
+    const reborn = createEngine();
+    await reborn.getSnapshot();
+    expect(reborn.snapshotSync().status).toBe("recording");
+    const before = reborn.snapshotSync().track.length;
+
+    // 30 minutes of background fixes, one a minute (well under the 15 min
+    // gap), replayed after the fact.
+    for (let i = 0; i < 30; i++) {
+      geolocation.emit(position({ speed: 6 }, 60_000));
+    }
+
+    const snapshot = await reborn.getSnapshot();
+    expect(snapshot.status).toBe("recording");
+    expect(snapshot.track.length).toBe(before + 30);
+  });
+
+  it("a reborn engine ends when GPS returns >15 min after the last fix", async () => {
+    // Phone died mid-flight; the app is reopened and GPS reacquires much
+    // later. The reborn engine replays (nothing new), then the first fresh
+    // fix is >15 min on — a gap — so the flight ends at the last real fix.
+    const first = createEngine();
+    await armAndTakeOff(first);
+    const lastFixTs = timestamp;
+    const flownSpeeds = first.snapshotSync().track.map((fix) => fix.speed);
+    await first.getSnapshot();
+
+    const reborn = createEngine();
+    await reborn.getSnapshot();
+    expect(reborn.snapshotSync().status).toBe("recording");
+
+    geolocation.emit(position({ speed: 3 }, 30 * 60 * 1000));
+
+    const snapshot = await reborn.getSnapshot();
+    expect(snapshot.status).toBe("ended");
+    expect(snapshot.track.map((fix) => fix.speed)).toEqual(flownSpeeds);
+    expect(snapshot.track.at(-1)!.timestamp).toBe(lastFixTs);
+  });
+});
+
 describe("storage failure", () => {
   it("surfaces WAL write failure, retains the fixes, and recovers", async () => {
     const engine = createEngine();
