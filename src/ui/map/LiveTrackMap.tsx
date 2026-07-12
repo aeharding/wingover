@@ -850,6 +850,11 @@ export default function LiveTrackMap({
           onInput={(zoom) => setSliderZoom({ zoom })}
         />
       )}
+      {/* Inert guard along the bottom edge — the iOS app-switch swipe
+          (home indicator). A touch that starts here targets the guard,
+          not MapLibre's canvas, so the map cannot pan while iOS decides
+          the edge swipe; the OS gesture, being system-level, still fires. */}
+      <div className="map-edge-guard map-edge-guard-bottom" aria-hidden="true" />
     </div>
   );
 }
