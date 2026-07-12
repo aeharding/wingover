@@ -34,21 +34,45 @@ export async function resolveMaptilerKey(): Promise<string> {
   );
 }
 
+interface TileJson {
+  tiles: string[];
+  maxzoom?: number;
+}
+
+// The 512px tiles get upscaled on a 3x phone, so satellite reads soft —
+// worst BETWEEN native zooms. @2x is 1024px for the same tile (~2x the
+// source pixels per screen pixel), the Apple-Maps sharpness difference.
+// Confirmed available on the maps/satellite endpoint (the raw
+// tiles/satellite-v2 tileset has no @2x variant); maps/satellite also
+// reaches maxzoom 22 vs the tileset's 20, so less overzoom up close.
+function retinaTemplate(standard: string): string {
+  // .../{z}/{x}/{y}.jpg?key=… ; @2x sits before the extension.
+  return standard.replace(/(\.\w+)(\?|$)/, "@2x$1$2");
+}
+
 async function satelliteStyle(): Promise<StyleSpecification | string> {
   const key = await resolveMaptilerKey();
-  const tileJsonUrl = `https://api.maptiler.com/tiles/satellite-v2/tiles.json?key=${key}`;
+  const tileJsonUrl = `https://api.maptiler.com/maps/satellite/tiles.json?key=${key}`;
 
-  const probe = await fetch(tileJsonUrl).catch(() => null);
-  if (!probe?.ok) {
+  const tileJson = await fetch(tileJsonUrl)
+    .then((response) =>
+      response.ok ? (response.json() as Promise<TileJson>) : null,
+    )
+    .catch(() => null);
+  if (!tileJson?.tiles?.length) {
     console.warn(
-      `Satellite unavailable (MapTiler ${probe ? probe.status : "network error"} — key not valid for this origin); showing street view`,
+      "Satellite unavailable (MapTiler tiles.json — key not valid for this origin); showing street view",
     );
     return STREET_STYLE_URL;
   }
 
   const satelliteSource = {
     type: "raster" as const,
-    url: tileJsonUrl,
+    tiles: tileJson.tiles.map(retinaTemplate),
+    tileSize: 512,
+    // From tiles.json so we never over-request past coverage (past maxzoom
+    // maplibre overzooms the deepest tile, which is fine).
+    ...(tileJson.maxzoom != null && { maxzoom: tileJson.maxzoom }),
     attribution:
       '© <a href="https://www.maptiler.com/">MapTiler</a> © OpenStreetMap contributors',
   };
