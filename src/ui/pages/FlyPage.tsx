@@ -402,6 +402,7 @@ export default function FlyPage() {
         <IonToast
           isOpen={savedToastOpen}
           message="Flight saved to logbook"
+          color="success"
           duration={2000}
           position="top"
           onDidDismiss={() => setSavedToastOpen(false)}
