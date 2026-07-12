@@ -69,24 +69,29 @@ test("live map survives a slow-loading style", async ({ page }) => {
   const pageErrors: string[] = [];
   page.on("pageerror", (error) => pageErrors.push(String(error)));
 
-  await page.route("**/tiles.openfreemap.org/styles/**", async (route) => {
-    await new Promise((resolve) => setTimeout(resolve, 800));
-    await route.fulfill({
-      contentType: "application/json",
-      body: JSON.stringify({
-        version: 8,
-        sources: {},
-        layers: [
-          {
-            id: "background",
-            type: "background",
-            paint: { "background-color": "#222" },
-          },
-        ],
-      }),
-    });
-  });
+  // Abort all MapTiler first, then win specifically for the street style
+  // (now MapTiler streets-v4-dark) with a slow, minimal style.
   await page.route("**/api.maptiler.com/**", (route) => route.abort());
+  await page.route(
+    "**/maps/streets-v4-dark/style.json**",
+    async (route) => {
+      await new Promise((resolve) => setTimeout(resolve, 800));
+      await route.fulfill({
+        contentType: "application/json",
+        body: JSON.stringify({
+          version: 8,
+          sources: {},
+          layers: [
+            {
+              id: "background",
+              type: "background",
+              paint: { "background-color": "#222" },
+            },
+          ],
+        }),
+      });
+    },
+  );
 
   await page.goto("/?mock-speed=40");
   await page.getByRole("button", { name: "Start Flight" }).click();
@@ -107,7 +112,14 @@ test("live map layers appear despite a slow sprite holding the style", async ({
   // style.load fires when the style JSON parses, but isStyleLoaded() stays
   // false until sprites finish — the window where layer setup used to get
   // permanently skipped until a view toggle.
-  await page.route("**/tiles.openfreemap.org/styles/**", (route) =>
+  const onePixelPng = Buffer.from(
+    "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mNk+M9QDwADhgGAWjR9awAAAABJRU5ErkJggg==",
+    "base64",
+  );
+  // Abort MapTiler first; the specific routes below win for the street
+  // style (now MapTiler streets-v4-dark) and the fake slow sprite.
+  await page.route("**/api.maptiler.com/**", (route) => route.abort());
+  await page.route("**/maps/streets-v4-dark/style.json**", (route) =>
     route.fulfill({
       contentType: "application/json",
       body: JSON.stringify({
@@ -124,10 +136,6 @@ test("live map layers appear despite a slow sprite holding the style", async ({
       }),
     }),
   );
-  const onePixelPng = Buffer.from(
-    "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mNk+M9QDwADhgGAWjR9awAAAABJRU5ErkJggg==",
-    "base64",
-  );
   await page.route("**/test-sprite/**", async (route) => {
     await new Promise((resolve) => setTimeout(resolve, 1200));
     if (route.request().url().includes(".json")) {
@@ -136,7 +144,6 @@ test("live map layers appear despite a slow sprite holding the style", async ({
       await route.fulfill({ contentType: "image/png", body: onePixelPng });
     }
   });
-  await page.route("**/api.maptiler.com/**", (route) => route.abort());
 
   await page.goto("/?mock-speed=40");
   await page.getByRole("button", { name: "Start Flight" }).click();

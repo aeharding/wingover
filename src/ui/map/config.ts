@@ -9,7 +9,13 @@ export type MapViewKind = "street" | "satellite";
 
 const DEFAULT_MAPTILER_KEY = "o4oQEM4UgYvcVV6NYfpr";
 
-export const STREET_STYLE_URL = "https://tiles.openfreemap.org/styles/dark";
+// Street view is MapTiler Streets v4 (vector, so labels stay upright when
+// the map rotates in track-up). maplibre loads the style.json URL
+// directly; no fetch/merge needed (unlike satellite). streets-v4 is the
+// light variant, streets-v4-dark the dark one.
+function streetStyleUrl(key: string): string {
+  return `https://api.maptiler.com/maps/streets-v4-dark/style.json?key=${key}`;
+}
 
 const initialSearch = location.search;
 
@@ -58,7 +64,7 @@ async function satelliteStyle(): Promise<StyleSpecification | string> {
     console.warn(
       "Satellite unavailable (MapTiler hybrid style — key not valid for this origin); showing street view",
     );
-    return STREET_STYLE_URL;
+    return streetStyleUrl(key);
   }
 
   const base = style.sources.satellite;
@@ -81,6 +87,6 @@ export async function resolveMapStyle(
   view: MapViewKind,
 ): Promise<StyleSpecification | string> {
   if (blankStyleRequested()) return BLANK_STYLE;
-  if (view === "street") return STREET_STYLE_URL;
+  if (view === "street") return streetStyleUrl(await resolveMaptilerKey());
   return satelliteStyle();
 }
