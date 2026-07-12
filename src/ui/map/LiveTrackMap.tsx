@@ -613,27 +613,45 @@ export default function LiveTrackMap({
   const ensureTrackLayers = useEffectEvent(
     (map: MapLibreMap, lib: MapLibreModule) => {
       if (!map.isStyleLoaded()) return;
-      if (map.getSource("track")) return;
-      map.addSource("track", { type: "geojson", data: toLineData([]) });
-      map.addLayer({
-        id: "track",
-        type: "line",
-        source: "track",
-        layout: { "line-cap": "round", "line-join": "round" },
-        paint: { "line-color": "#4cc2ff", "line-width": LINE_WIDTH_PX },
-      });
-      lineCoordsRef.current = [];
-      lineEndTsRef.current = null;
-      committedCountRef.current = 0;
-      pendingCountRef.current = null;
-      confirmArmedRef.current = false;
-      syncLine(map);
 
+      // A mid-flight style switch (setStyle) tears down every runtime-added
+      // source and layer. Restore each one INDEPENDENTLY: the old all-or-
+      // nothing guard ("track source exists → bail") left the aircraft
+      // custom layer gone forever whenever the geojson source outlived it
+      // — the line reappeared, the aircraft did not, until an app restart.
+      let restored = false;
+      if (!map.getSource("track")) {
+        map.addSource("track", { type: "geojson", data: toLineData([]) });
+        // A fresh source has no geometry — reset the incremental-append
+        // bookkeeping so syncLine rebuilds the committed line from scratch.
+        lineCoordsRef.current = [];
+        lineEndTsRef.current = null;
+        committedCountRef.current = 0;
+        pendingCountRef.current = null;
+        confirmArmedRef.current = false;
+        restored = true;
+      }
+      if (!map.getLayer("track")) {
+        map.addLayer({
+          id: "track",
+          type: "line",
+          source: "track",
+          layout: { "line-cap": "round", "line-join": "round" },
+          paint: { "line-color": "#4cc2ff", "line-width": LINE_WIDTH_PX },
+        });
+        restored = true;
+      }
       if (!map.getLayer("aircraft")) {
         map.addLayer(createAircraftLayer(lib, () => getAircraftFrame(map)));
         map.getContainer().setAttribute("data-aircraft-layer", "true");
+        restored = true;
       }
-      if (displayRef.current) renderFrame(map, displayRef.current);
+      // Only redraw when something was actually (re)created: styledata fires
+      // repeatedly while tiles stream in, and a jumpTo per event is waste.
+      if (restored) {
+        syncLine(map);
+        if (displayRef.current) renderFrame(map, displayRef.current);
+      }
     },
   );
 

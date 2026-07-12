@@ -278,3 +278,58 @@ test("edge guards stop an edge swipe from panning, inland drag still pans", asyn
   await page.mouse.up();
   await expect(follow).toHaveAttribute("data-active", "false");
 });
+
+test("a style reload that drops the aircraft layer restores it", async ({
+  page,
+}) => {
+  await page.goto("/?mock-speed=40&map-style=blank");
+  await page.getByRole("button", { name: "Start Flight" }).click();
+  await expect(page.getByTestId("recording")).toBeVisible({ timeout: 10_000 });
+
+  // Gate on the real map state, not the (write-once) DOM attribute: the
+  // style must be loaded and the aircraft layer actually present before we
+  // manipulate it, or firing styledata races an unloaded style.
+  await page.waitForFunction(
+    () => {
+      const map = (
+        document.querySelector(".map-container") as HTMLElement & {
+          __map?: {
+            isStyleLoaded: () => boolean;
+            getLayer: (id: string) => unknown;
+          };
+        }
+      )?.__map;
+      return !!map && map.isStyleLoaded() && !!map.getLayer("aircraft");
+    },
+    { timeout: 10_000 },
+  );
+
+  // A mid-flight map-style switch calls setStyle, which tears down every
+  // runtime-added custom layer while the geojson track source can outlive
+  // it. Reproduce that exact state — drop the aircraft layer but keep the
+  // track source — then let the app's own styledata listener run. It must
+  // restore the aircraft (the "aircraft vanishes until app restart" bug).
+  const result = await page.evaluate(() => {
+    const container = document.querySelector(".map-container") as HTMLElement & {
+      __map?: {
+        getLayer: (id: string) => unknown;
+        getSource: (id: string) => unknown;
+        removeLayer: (id: string) => void;
+        fire: (event: string) => void;
+      };
+    };
+    const map = container.__map!;
+    map.removeLayer("aircraft");
+    const goneAfterRemove = !map.getLayer("aircraft");
+    map.fire("styledata");
+    return {
+      goneAfterRemove,
+      trackSourceStillPresent: !!map.getSource("track"),
+      aircraftRestored: !!map.getLayer("aircraft"),
+    };
+  });
+
+  expect(result.goneAfterRemove).toBe(true);
+  expect(result.trackSourceStillPresent).toBe(true);
+  expect(result.aircraftRestored).toBe(true);
+});
