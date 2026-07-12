@@ -226,6 +226,10 @@ test("zoom control zooms one-fingered from anywhere without unpinning follow", a
   // Relative drag: press anywhere in the zone (off-center) and drag DOWN
   // to zoom in. No thumb to hit — the start point does not matter.
   const box = (await control.boundingBox())!;
+  // The zone hugs the right edge of the screen (the edge-slide gesture).
+  const viewport = page.viewportSize()!;
+  expect(box.x + box.width).toBeGreaterThanOrEqual(viewport.width - 1);
+  expect(box.width).toBeLessThan(viewport.width * 0.2);
   const downX = box.x + box.width * 0.6;
   await page.mouse.move(downX, box.y + 20);
   await page.mouse.down();
