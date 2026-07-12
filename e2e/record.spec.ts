@@ -55,7 +55,7 @@ test("arm, auto-takeoff, reload kill drill, stop, logbook", async ({
   expect(rehydrated).not.toBeNull();
 
   await page.getByRole("button", { name: "Stop flight" }).click();
-  await page.getByRole("button", { name: "Stop & save" }).click();
+  await page.getByRole("button", { name: "Stop", exact: true }).click();
   await expect(
     page.getByRole("button", { name: "Start Flight" }),
   ).toBeVisible({ timeout: 15_000 });
@@ -163,6 +163,13 @@ test("canceling while acquiring GPS discards the session", async ({ page }) => {
   await expect(page.getByTestId("armed")).toBeVisible();
   await expect(page.getByText("Acquiring GPS")).toBeVisible();
   await page.getByRole("button", { name: "Cancel" }).click();
+  // A stray Cancel tap only opens the same end-flight confirm; the
+  // discard needs the explicit second tap, so a missed launch can't
+  // happen by accident.
+  await page
+    .locator("ion-alert")
+    .getByRole("button", { name: "Stop" })
+    .click();
 
   await expect(
     page.getByRole("button", { name: "Start Flight" }),
@@ -170,6 +177,28 @@ test("canceling while acquiring GPS discards the session", async ({ page }) => {
 
   await page.getByText("Logbook", { exact: true }).click();
   await expect(page.getByText("No flights yet.")).toBeVisible();
+});
+
+test("dismissing the cancel confirmation keeps waiting for takeoff", async ({
+  page,
+}) => {
+  await page.goto("/?mock-speed=2&map-style=blank");
+  await page.getByRole("button", { name: "Start Flight" }).click();
+
+  await expect(page.getByTestId("armed")).toBeVisible();
+  await page.getByRole("button", { name: "Cancel" }).click();
+  // Dismiss the confirm — scope to the alert, since the acquiring screen's
+  // own button carries the same "Cancel" label.
+  await page
+    .locator("ion-alert")
+    .getByRole("button", { name: "Cancel" })
+    .click();
+
+  // The session survives the mistap: still armed, not discarded to idle.
+  await expect(page.getByTestId("armed")).toBeVisible();
+  await expect(
+    page.getByRole("button", { name: "Start Flight" }),
+  ).not.toBeVisible();
 });
 
 test("canceling the stop confirmation keeps recording", async ({ page }) => {
