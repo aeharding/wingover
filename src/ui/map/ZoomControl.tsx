@@ -12,11 +12,11 @@ import "./ZoomControl.css";
 // drag = a pixel of dot travel) — they never drift apart, and a taller
 // rail simply makes the drag less sensitive.
 //
-// Bounds are ground spans, not tile-stack limits: fully out ~20 mi across
+// Bounds are ground spans, not tile-stack limits: fully out ~30 mi across
 // the screen, fully in ~0.35 mi. Derived from the VISIBLE viewport width
 // (not the map container, which is inset by the render overscan and would
 // otherwise understate the span by ~half).
-const WIDEST_SPAN_M = 32_187; // ~20 mi across the screen
+const WIDEST_SPAN_M = 48_280; // ~30 mi across the screen
 const TIGHTEST_SPAN_M = 563; // ~0.35 mi
 const MERCATOR_M_PER_PX_Z0 = 156_543.033_92;
 
