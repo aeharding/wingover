@@ -34,18 +34,17 @@
   background: rgba(8, 9, 10, 0.9);
   padding: 0.1rem 0.6rem 0.15rem;
   min-width: 0;
+  line-height: 1;
 }
 
 .tile .label {
   font-size: 0.72rem;
-  line-height: 1.15;
   color: #c2c7cd;
 }
 
 .tile .value {
-  font-size: clamp(1.4rem, 6.6vw, 1.95rem);
+  font-size: clamp(1.4rem, 7vw, 1.95rem);
   font-weight: 800;
-  line-height: 1.12;
   color: #fff;
   font-variant-numeric: tabular-nums;
   white-space: nowrap;
