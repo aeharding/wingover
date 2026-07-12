@@ -6,7 +6,10 @@
   z-index: 5;
   display: grid;
   grid-template-columns: 1fr 1fr;
+  /* The 1px gaps sit over this light layer, so every cell reads as
+     divided by a crisp hairline — PPG Flyer's grid, not a faint seam. */
   gap: 1px;
+  background: rgba(255, 255, 255, 0.22);
   padding-top: env(safe-area-inset-top);
   pointer-events: none;
 }
@@ -22,25 +25,27 @@
   }
 }
 
-/* PPG-Flyer treatment: near-opaque black rows, small plain labels, huge
-   saturated values. Sunlight readability over looks — a translucent panel
-   over bright satellite imagery washes out. */
+/* PPG-Flyer treatment: near-opaque black rows, small plain labels, big
+   saturated values, packed TIGHT — in flight the block must read at a
+   glance and cede as little map as possible. Sunlight readability over
+   looks; a translucent panel over bright imagery washes out. */
 .tile {
   position: relative;
-  background: rgba(8, 9, 10, 0.88);
-  padding: 0.3rem 0.75rem 0.45rem;
+  background: rgba(8, 9, 10, 0.9);
+  padding: 0.1rem 0.6rem 0.15rem;
   min-width: 0;
 }
 
 .tile .label {
-  font-size: 0.8rem;
+  font-size: 0.72rem;
+  line-height: 1.15;
   color: #c2c7cd;
 }
 
 .tile .value {
-  font-size: clamp(1.7rem, 8vw, 2.4rem);
+  font-size: clamp(1.4rem, 6.6vw, 1.95rem);
   font-weight: 800;
-  line-height: 1.1;
+  line-height: 1.12;
   color: #fff;
   font-variant-numeric: tabular-nums;
   white-space: nowrap;
