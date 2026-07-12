@@ -328,7 +328,12 @@ export default function FlyPage() {
                       style={{ rotate: `${toLaunchRelative}deg` }}
                       aria-hidden="true"
                     >
-                      ↑
+                      {/* The same chevron as the map's blue location arrow,
+                          so "direction to launch" reads as an obvious
+                          pointer, not a thin glyph. */}
+                      <svg viewBox="-8 -11 16 20" className="launch-arrow-svg">
+                        <polygon points="0,-10 7,8 0,4 -7,8" />
+                      </svg>
                     </span>
                   ) : undefined
                 }

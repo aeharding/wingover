@@ -14,6 +14,8 @@ test("arm, auto-takeoff, reload kill drill, stop, logbook", async ({
   await expect(page.locator(".maplibregl-canvas")).toBeVisible();
   await expect(page.locator("[data-aircraft-layer='true']")).toBeVisible();
   await expect(page.getByTestId("instrument-duration")).not.toHaveText("0:00");
+  // The direction-to-launch arrow renders as the blue location chevron.
+  await expect(page.locator(".launch-arrow-svg")).toBeVisible();
 
   // Style regression guards. The attribution must stay transparent
   // (MapView.css loading after maplibre's css), and the fly page must not
