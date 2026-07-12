@@ -7,10 +7,7 @@ import { getSetting } from "../../storage/db";
 
 export type MapViewKind = "street" | "satellite";
 
-// SECURITY: this key is currently unrestricted. Lock it to the app's
-// origins (wingover.app + the native app) in the MapTiler dashboard — it
-// ships in a public repo, so anyone can otherwise spend the quota.
-const DEFAULT_MAPTILER_KEY = "JEBf65LTqPKsblnLcDZr";
+const DEFAULT_MAPTILER_KEY = "o4oQEM4UgYvcVV6NYfpr";
 
 export const STREET_STYLE_URL = "https://tiles.openfreemap.org/styles/dark";
 
