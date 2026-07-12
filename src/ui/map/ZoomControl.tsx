@@ -97,18 +97,12 @@ export default function ZoomControl({ map, onInput }: ZoomControlProps) {
         dragRef.current = null;
       }}
     >
-      <span className="zoom-control-cap" aria-hidden="true">
-        +
-      </span>
       <div className="zoom-control-rail">
         <div
           className="zoom-control-dot"
           style={{ top: `${(1 - fraction) * 100}%` }}
         />
       </div>
-      <span className="zoom-control-cap" aria-hidden="true">
-        −
-      </span>
     </div>
   );
 }
