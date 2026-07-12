@@ -177,14 +177,21 @@ export default function FlyPage() {
 
   // An explicit confirm beats the old long-press: nothing about a hold
   // gesture is discoverable mid-flight, and a stray tap must not end a
-  // recording. The landing prompt's own button stays direct — it IS the
-  // confirmation there.
+  // recording. The same reasoning covers the pre-launch Cancel button — a
+  // mistap while acquiring GPS or waiting for takeoff would silently miss
+  // the launch — so it reuses this exact dialog. Before takeoff there's
+  // nothing recorded to finalize (end() no-ops until launch), so the
+  // confirmed action discards the un-launched session instead of ending.
+  // The landing prompt's own button stays direct — it IS the confirmation
+  // there.
   function confirmEndFlight() {
+    const stop =
+      status === "acquiring" || status === "armed" ? cancelArmed : endFlight;
     presentAlert({
       header: "End flight?",
       buttons: [
         { text: "Cancel", role: "cancel" },
-        { text: "Stop & save", role: "destructive", handler: endFlight },
+        { text: "Stop", role: "destructive", handler: stop },
       ],
     });
   }
@@ -259,7 +266,7 @@ export default function FlyPage() {
                 {latest ? formatSpeed(latest.speed, units) : "—"}
               </div>
             )}
-            <button className="cancel-button" onClick={cancelArmed}>
+            <button className="cancel-button" onClick={confirmEndFlight}>
               Cancel
             </button>
           </div>
@@ -397,7 +404,7 @@ export default function FlyPage() {
                     Still flying
                   </button>
                   <button className="landing-stop" onClick={endFlight}>
-                    Stop &amp; save
+                    Stop
                     {snapshot.autoEnd ? ` (${landingSecondsLeft})` : ""}
                   </button>
                 </div>

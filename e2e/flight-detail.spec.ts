@@ -6,7 +6,7 @@ async function recordQuickFlight(page: import("@playwright/test").Page) {
   await expect(page.getByTestId("recording")).toBeVisible({ timeout: 10_000 });
   await page.waitForTimeout(500);
   await page.getByRole("button", { name: "Stop flight" }).click();
-  await page.getByRole("button", { name: "Stop & save" }).click();
+  await page.getByRole("button", { name: "Stop", exact: true }).click();
   await expect(
     page.getByRole("button", { name: "Start Flight" }),
   ).toBeVisible();
@@ -47,7 +47,7 @@ test("flight detail draws the track even when the map style loads slowly", async
   await expect(page.getByTestId("recording")).toBeVisible({ timeout: 10_000 });
   await page.waitForTimeout(500);
   await page.getByRole("button", { name: "Stop flight" }).click();
-  await page.getByRole("button", { name: "Stop & save" }).click();
+  await page.getByRole("button", { name: "Stop", exact: true }).click();
   await expect(
     page.getByRole("button", { name: "Start Flight" }),
   ).toBeVisible();

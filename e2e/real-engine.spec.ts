@@ -160,7 +160,7 @@ test("real engine: gate, backdated takeoff, reload kill drill, stop", async ({
   await expect(page.locator("[data-aircraft-layer='true']")).toBeVisible();
 
   await page.getByRole("button", { name: "Stop flight" }).click();
-  await page.getByRole("button", { name: "Stop & save" }).click();
+  await page.getByRole("button", { name: "Stop", exact: true }).click();
   await expect(
     page.getByRole("button", { name: "Start Flight" }),
   ).toBeVisible({ timeout: 15_000 });
@@ -213,7 +213,10 @@ test("landing prompt: dismiss re-arms, stop saves", async ({ page }) => {
   await emit(Array.from({ length: 15 }, () => ({ speed: 0.3 })));
   await expect(page.getByTestId("landing-prompt")).toBeVisible();
 
-  await page.getByRole("button", { name: /Stop & save/ }).click();
+  await page
+    .getByTestId("landing-prompt")
+    .getByRole("button", { name: /Stop/ })
+    .click();
   await expect(
     page.getByRole("button", { name: "Start Flight" }),
   ).toBeVisible();
