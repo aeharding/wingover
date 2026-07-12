@@ -193,39 +193,52 @@ test("a two-hour flight lands itself and reaches the logbook hands-free", async 
   await expect(page.locator("ion-tab-bar")).toBeVisible();
 });
 
-test("zoom slider zooms the map one-fingered without unpinning follow", async ({
+test("zoom control zooms one-fingered from anywhere without unpinning follow", async ({
   page,
 }) => {
   await page.goto("/?mock-speed=40&map-style=blank");
   await page.getByRole("button", { name: "Start Flight" }).click();
   await expect(page.getByTestId("recording")).toBeVisible({ timeout: 10_000 });
 
-  const slider = page.getByRole("slider", { name: "Zoom" });
-  await expect(slider).toBeVisible();
-  // Bounds are ground spans, not tile-stack limits: ~20 mi across at the
-  // bottom, ~0.35 mi at the top (both latitude/viewport dependent).
-  expect(Number(await slider.getAttribute("min"))).toBeGreaterThan(9);
-  expect(Number(await slider.getAttribute("min"))).toBeLessThan(12);
-  expect(Number(await slider.getAttribute("max"))).toBeGreaterThan(15);
-  expect(Number(await slider.getAttribute("max"))).toBeLessThan(18);
-  const before = Number(await slider.inputValue());
+  const control = page.getByRole("slider", { name: "Zoom" });
+  await expect(control).toBeVisible();
+  // Bounds are ground spans, not tile-stack limits: ~20 mi and ~0.35 mi
+  // across the screen (both latitude/viewport dependent).
+  const valuemin = async () =>
+    Number(await control.getAttribute("aria-valuemin"));
+  const valuemax = async () =>
+    Number(await control.getAttribute("aria-valuemax"));
+  const valuenow = async () =>
+    Number(await control.getAttribute("aria-valuenow"));
+  expect(await valuemin()).toBeGreaterThan(9);
+  expect(await valuemin()).toBeLessThan(12);
+  expect(await valuemax()).toBeGreaterThan(15);
+  expect(await valuemax()).toBeLessThan(18);
+  const before = await valuenow();
 
-  const box = (await slider.boundingBox())!;
-  await page.mouse.move(box.x + box.width / 2, box.y + box.height * 0.9);
+  // Relative drag: press anywhere in the zone (off-center) and drag DOWN
+  // to zoom in. No thumb to hit — the start point does not matter.
+  const box = (await control.boundingBox())!;
+  const downX = box.x + box.width * 0.6;
+  await page.mouse.move(downX, box.y + 20);
   await page.mouse.down();
-  await page.mouse.move(box.x + box.width / 2, box.y + box.height * 0.1, {
-    steps: 8,
-  });
+  await page.mouse.move(downX, box.y + 150, { steps: 8 });
   await page.mouse.up();
 
-  // Follow-mode zoom glides through the camera loop; poll until it lands.
-  await expect
-    .poll(async () => Number(await slider.inputValue()))
-    .toBeGreaterThan(before);
-  // Sliding is not a map drag: the follow camera must stay pinned.
+  await expect.poll(valuenow).toBeGreaterThan(before);
+  // Dragging the control is not a map drag: follow must stay pinned.
   await expect(
     page.getByRole("button", { name: "Follow aircraft" }),
   ).toHaveAttribute("data-active", "true");
+
+  // Dragging UP from a fresh grab zooms back out (relative each time).
+  const zoomedIn = await valuenow();
+  const upX = box.x + box.width * 0.4;
+  await page.mouse.move(upX, box.y + box.height - 10);
+  await page.mouse.down();
+  await page.mouse.move(upX, box.y + box.height - 140, { steps: 8 });
+  await page.mouse.up();
+  await expect.poll(valuenow).toBeLessThan(zoomedIn);
 });
 
 test("edge guards stop an edge swipe from panning, inland drag still pans", async ({

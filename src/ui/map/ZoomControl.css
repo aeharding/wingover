@@ -1,0 +1,44 @@
+.zoom-control {
+  position: absolute;
+  /* Rail centered over the right column of the 2x2 grid: the column's
+     center sits 0.9rem + 3.25rem/2 = 2.525rem from the right, and the
+     rail centers in this 3.5rem-wide zone, so right = 2.525 - 1.75. */
+  right: 0.775rem;
+  /* Above the 2x2 grid (0.9rem offset + two 3.25rem rows + 0.9rem gap =
+     8.3rem), with clear breathing room above the buttons. */
+  bottom: calc(9.4rem + env(safe-area-inset-bottom));
+  /* A wide touch zone — forgiveness comes from the width plus
+     touch-anywhere relative dragging, not from hitting a thumb or from
+     height (drag sensitivity is fixed, so the control can be short). */
+  width: 3.5rem;
+  height: min(27vh, 215px);
+  z-index: 6;
+  touch-action: none;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 0.15rem 0;
+}
+
+/* Deliberately quiet — a thin neutral rail with a small neutral thumb.
+   The control is for touching, not looking at; a bright accent and +/−
+   glyphs pulled the eye off the map. */
+.zoom-control-rail {
+  position: relative;
+  height: 100%;
+  width: 5px;
+  border-radius: 3px;
+  background: rgba(20, 22, 25, 0.7);
+  border: 1px solid rgba(255, 255, 255, 0.18);
+}
+
+.zoom-control-dot {
+  position: absolute;
+  left: 50%;
+  width: 1.15rem;
+  height: 1.15rem;
+  transform: translate(-50%, -50%);
+  border-radius: 50%;
+  background: rgba(235, 238, 242, 0.9);
+  border: 1px solid rgba(0, 0, 0, 0.4);
+}
