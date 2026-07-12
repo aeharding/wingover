@@ -12,7 +12,7 @@ import { relativeBearing } from "../../flight/nav";
 import type { MapViewKind } from "./config";
 import { readLiveViewState, writeLiveViewState } from "./liveViewState";
 import MapView, { type MapLibreModule } from "./MapView";
-import ZoomSlider from "./ZoomSlider";
+import ZoomControl from "./ZoomControl";
 
 import "./LiveTrackMap.css";
 
@@ -799,23 +799,17 @@ export default function LiveTrackMap({
     applyFollowChange(follow);
   }, [follow]);
 
-  // Slider zoom flows through state so the effect below can reach the
-  // loop (an Effect Event, uncallable from the slider's pointer events).
-  // A fresh wrapper object per input keeps repeated values distinct.
-  const [sliderZoom, setSliderZoom] = useState<{ zoom: number } | null>(null);
-  const appliedSliderZoomRef = useRef<{ zoom: number } | null>(null);
-
-  // No smoothing on slider zoom: the finger movement IS the animation, a
-  // glide behind it just reads as lag. Any in-flight wheel glide dies so
-  // the follow loop cannot tug the zoom back.
-  useEffect(() => {
-    if (!sliderZoom || !mapContext) return;
-    // Re-runs from map changes must not re-apply an old input.
-    if (appliedSliderZoomRef.current === sliderZoom) return;
-    appliedSliderZoomRef.current = sliderZoom;
+  // Zoom-control input jumps the map directly — no React state per move
+  // (this fires at pointer rate), no smoothing (the finger IS the
+  // animation). Any in-flight wheel glide dies so the follow loop cannot
+  // tug the zoom back; the loop preserves this zoom because it only writes
+  // zoom when zoomTargetRef is set.
+  function applyZoom(zoom: number) {
+    const map = mapContext?.map;
+    if (!map) return;
     zoomTargetRef.current = null;
-    mapContext.map.jumpTo({ zoom: sliderZoom.zoom });
-  }, [sliderZoom, mapContext]);
+    map.jumpTo({ zoom });
+  }
 
   const applyTrackUpChange = useEffectEvent((trackingUp: boolean) => {
     const map = mapContext?.map;
@@ -845,10 +839,7 @@ export default function LiveTrackMap({
         onReady={(map, lib) => setMapContext({ map, lib })}
       />
       {mapContext && (
-        <ZoomSlider
-          map={mapContext.map}
-          onInput={(zoom) => setSliderZoom({ zoom })}
-        />
+        <ZoomControl map={mapContext.map} onInput={applyZoom} />
       )}
       {/* Inert guard along the bottom edge — the iOS app-switch swipe
           (home indicator). A touch that starts here targets the guard,
