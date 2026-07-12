@@ -209,7 +209,7 @@ test("zoom control zooms one-fingered from anywhere without unpinning follow", a
 
   const control = page.getByRole("slider", { name: "Zoom" });
   await expect(control).toBeVisible();
-  // Bounds are ground spans, not tile-stack limits: ~20 mi and ~0.35 mi
+  // Bounds are ground spans, not tile-stack limits: ~30 mi and ~0.35 mi
   // across the screen (both latitude/viewport dependent).
   const valuemin = async () =>
     Number(await control.getAttribute("aria-valuemin"));
@@ -217,8 +217,8 @@ test("zoom control zooms one-fingered from anywhere without unpinning follow", a
     Number(await control.getAttribute("aria-valuemax"));
   const valuenow = async () =>
     Number(await control.getAttribute("aria-valuenow"));
-  expect(await valuemin()).toBeGreaterThan(9);
-  expect(await valuemin()).toBeLessThan(12);
+  expect(await valuemin()).toBeGreaterThan(8.5);
+  expect(await valuemin()).toBeLessThan(11);
   expect(await valuemax()).toBeGreaterThan(15);
   expect(await valuemax()).toBeLessThan(18);
   const before = await valuenow();
