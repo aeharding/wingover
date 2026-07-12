@@ -1,4 +1,7 @@
-import type { StyleSpecification, SymbolLayerSpecification } from "maplibre-gl";
+import type {
+  RasterSourceSpecification,
+  StyleSpecification,
+} from "maplibre-gl";
 
 import { getSetting } from "../../storage/db";
 
@@ -34,68 +37,44 @@ export async function resolveMaptilerKey(): Promise<string> {
   );
 }
 
+// Satellite view is MapTiler's Hybrid style: satellite imagery under the
+// style's own VECTOR road + label layers. Vector labels stay upright when
+// the map rotates (track-up) — the pre-baked hybrid RASTER tiles rotate
+// their text with the imagery, which is unreadable. We keep the style's
+// vector overlay, glyphs, and sprite as-is and only swap its standard-res
+// satellite-v2 source for @2x maps/satellite tiles: 1024px per tile (~2x
+// the source pixels per screen pixel, the Apple-Maps sharpness
+// difference) up to maxzoom 22. @3x/@4x are not offered (HTTP 400).
 async function satelliteStyle(): Promise<StyleSpecification | string> {
   const key = await resolveMaptilerKey();
-  const tileJsonUrl = `https://api.maptiler.com/tiles/satellite-v2/tiles.json?key=${key}`;
-
-  const probe = await fetch(tileJsonUrl).catch(() => null);
-  if (!probe?.ok) {
+  const style = await fetch(
+    `https://api.maptiler.com/maps/hybrid-v4/style.json?key=${key}`,
+  )
+    .then((response) =>
+      response.ok ? (response.json() as Promise<StyleSpecification>) : null,
+    )
+    .catch(() => null);
+  if (!style?.sources) {
     console.warn(
-      `Satellite unavailable (MapTiler ${probe ? probe.status : "network error"} — key not valid for this origin); showing street view`,
+      "Satellite unavailable (MapTiler hybrid style — key not valid for this origin); showing street view",
     );
     return STREET_STYLE_URL;
   }
 
-  const satelliteSource = {
-    type: "raster" as const,
-    url: tileJsonUrl,
-    attribution:
-      '© <a href="https://www.maptiler.com/">MapTiler</a> © OpenStreetMap contributors',
-  };
-  const backgroundLayer = {
-    id: "background",
-    type: "background" as const,
-    paint: { "background-color": "#191b1e" },
-  };
-  const satelliteLayer = {
-    id: "satellite",
-    type: "raster" as const,
-    source: "satellite",
-  };
-
-  try {
-    const response = await fetch(STREET_STYLE_URL);
-    const street = (await response.json()) as StyleSpecification;
-    return {
-      ...street,
-      sources: { ...street.sources, satellite: satelliteSource },
-      layers: [
-        backgroundLayer,
-        satelliteLayer,
-        ...street.layers
-          .filter(
-            (layer): layer is SymbolLayerSpecification =>
-              layer.type === "symbol",
-          )
-          .map((layer) => ({
-            ...layer,
-            paint: {
-              ...layer.paint,
-              "text-color": "#ffffff",
-              "text-halo-color": "rgba(0, 0, 0, 0.75)",
-              "text-halo-width": 1.4,
-              "text-halo-blur": 0.5,
-            },
-          })),
+  const base = style.sources.satellite;
+  if (base?.type === "raster") {
+    const retina: RasterSourceSpecification = {
+      type: "raster",
+      tiles: [
+        `https://api.maptiler.com/maps/satellite/{z}/{x}/{y}@2x.jpg?key=${key}`,
       ],
+      tileSize: 512,
+      maxzoom: 22,
+      attribution: base.attribution,
     };
-  } catch {
-    return {
-      version: 8,
-      sources: { satellite: satelliteSource },
-      layers: [backgroundLayer, satelliteLayer],
-    };
+    style.sources = { ...style.sources, satellite: retina };
   }
+  return style;
 }
 
 export async function resolveMapStyle(
