@@ -6,6 +6,7 @@ const COMMANDS: &[&str] = &[
     "share_file",
     "check_permissions",
     "request_permissions",
+    "current_position",
 ];
 
 fn main() {

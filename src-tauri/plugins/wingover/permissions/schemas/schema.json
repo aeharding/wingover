@@ -307,6 +307,18 @@
           "markdownDescription": "Denies the check_permissions command without any pre-configured scope."
         },
         {
+          "description": "Enables the current_position command without any pre-configured scope.",
+          "type": "string",
+          "const": "allow-current-position",
+          "markdownDescription": "Enables the current_position command without any pre-configured scope."
+        },
+        {
+          "description": "Denies the current_position command without any pre-configured scope.",
+          "type": "string",
+          "const": "deny-current-position",
+          "markdownDescription": "Denies the current_position command without any pre-configured scope."
+        },
+        {
           "description": "Enables the fixes_since command without any pre-configured scope.",
           "type": "string",
           "const": "allow-fixes-since",

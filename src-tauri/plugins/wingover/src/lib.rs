@@ -133,6 +133,14 @@ mod commands {
     ) -> Result<serde_json::Value> {
         app.wingover().request_permissions()
     }
+
+    // One-shot position for the map's Center-on-me (no capture session).
+    #[command]
+    pub(crate) async fn current_position<R: Runtime>(
+        app: AppHandle<R>,
+    ) -> Result<crate::Fix> {
+        app.wingover().current_position()
+    }
 }
 
 pub trait WingoverExt<R: Runtime> {
@@ -155,6 +163,7 @@ pub fn init<R: Runtime>() -> TauriPlugin<R> {
             commands::share_file,
             commands::check_permissions,
             commands::request_permissions,
+            commands::current_position,
         ])
         .setup(|app, api| {
             #[cfg(target_os = "ios")]

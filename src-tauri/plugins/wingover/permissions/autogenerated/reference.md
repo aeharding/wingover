@@ -36,6 +36,32 @@ Denies the check_permissions command without any pre-configured scope.
 <tr>
 <td>
 
+`wingover:allow-current-position`
+
+</td>
+<td>
+
+Enables the current_position command without any pre-configured scope.
+
+</td>
+</tr>
+
+<tr>
+<td>
+
+`wingover:deny-current-position`
+
+</td>
+<td>
+
+Denies the current_position command without any pre-configured scope.
+
+</td>
+</tr>
+
+<tr>
+<td>
+
 `wingover:allow-fixes-since`
 
 </td>
