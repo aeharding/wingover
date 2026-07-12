@@ -15,20 +15,13 @@
 }
 
 /* Above the map canvas, below the controls (z-index 6): a touch starting
-   in an edge guard is captured here instead of by MapLibre, so the map
-   won't pan during an iOS edge swipe. Kept narrow so they barely eat into
+   in the guard is captured here instead of by MapLibre, so the map won't
+   pan during the iOS app-switch swipe. Kept narrow so it barely eats into
    real map-drag area. */
 .map-edge-guard {
   position: absolute;
   z-index: 5;
   touch-action: none;
-}
-
-.map-edge-guard-left {
-  top: 0;
-  bottom: 0;
-  left: 0;
-  width: 20px;
 }
 
 .map-edge-guard-bottom {
