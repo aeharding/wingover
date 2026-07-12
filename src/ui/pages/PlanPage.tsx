@@ -9,6 +9,7 @@ import { locateOutline } from "ionicons/icons";
 import type { GeoJSONSource, Map as MapLibreMap, Marker } from "maplibre-gl";
 import { useEffect, useEffectEvent, useRef, useState } from "react";
 
+import { getCurrentPosition } from "../../engine/currentPosition";
 import {
   deletePin,
   getSetting,
@@ -190,13 +191,16 @@ export default function PlanPage() {
     });
   }, [pins, mapContext]);
 
-  function locate() {
-    navigator.geolocation.getCurrentPosition((position) => {
+  async function locate() {
+    try {
+      const position = await getCurrentPosition();
       mapRef.current?.flyTo({
-        center: [position.coords.longitude, position.coords.latitude],
+        center: [position.longitude, position.latitude],
         zoom: 12,
       });
-    });
+    } catch (error) {
+      console.warn("locate failed:", error);
+    }
   }
 
   return (

@@ -22,6 +22,7 @@ class WingoverPlugin: Plugin, CLLocationManagerDelegate {
   private let locationManager = CLLocationManager()
   private let speechSynthesizer = AVSpeechSynthesizer()
   private var permissionRequests: [Invoke] = []
+  private var positionRequests: [Invoke] = []
   private var lastError: String?
 
   // In-memory buffer between drains (~1 s of fixes). Mutated on the main
@@ -60,6 +61,21 @@ class WingoverPlugin: Plugin, CLLocationManagerDelegate {
       // so a webview death cannot let the screen sleep mid-flight.
       UIApplication.shared.isIdleTimerDisabled = true
       invoke.resolve()
+    }
+  }
+
+  // One-shot location for the map's Center-on-me, independent of capture:
+  // requestLocation() delivers a single fix (or one failure) to the
+  // delegate, which resolves/rejects the pending invoke below.
+  @objc public func currentPosition(_ invoke: Invoke) throws {
+    DispatchQueue.main.async {
+      let status = CLLocationManager.authorizationStatus()
+      guard status == .authorizedWhenInUse || status == .authorizedAlways else {
+        invoke.reject("location permission not granted")
+        return
+      }
+      self.positionRequests.append(invoke)
+      self.locationManager.requestLocation()
     }
   }
 
@@ -169,9 +185,27 @@ class WingoverPlugin: Plugin, CLLocationManagerDelegate {
       lastTimestamp = ts
       buffer.append(fix)
     }
+    // Resolve any one-shot currentPosition requests with the freshest valid
+    // fix (independent of the capture dedup above).
+    if !positionRequests.isEmpty,
+      let location = locations.last(where: { $0.horizontalAccuracy >= 0 })
+    {
+      let requests = positionRequests
+      positionRequests = []
+      let fix = convertLocation(location)
+      for request in requests { request.resolve(fix) }
+    }
   }
 
   public func locationManager(_ manager: CLLocationManager, didFailWithError error: Error) {
+    // requestLocation() delivers exactly one result, so a one-shot request
+    // must be rejected on failure (even a transient one) or its JS promise
+    // hangs forever.
+    if !positionRequests.isEmpty {
+      let requests = positionRequests
+      positionRequests = []
+      for request in requests { request.reject(error.localizedDescription) }
+    }
     if let clError = error as? CLError, clError.code == .locationUnknown {
       // Transient: CoreLocation keeps trying, updates resume on their own.
       return

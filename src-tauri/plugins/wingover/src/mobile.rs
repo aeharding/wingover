@@ -69,4 +69,10 @@ impl<R: Runtime> Wingover<R> {
             .run_mobile_plugin("requestPermissions", ())
             .map_err(Into::into)
     }
+
+    pub fn current_position(&self) -> crate::Result<Fix> {
+        self.0
+            .run_mobile_plugin("currentPosition", ())
+            .map_err(Into::into)
+    }
 }

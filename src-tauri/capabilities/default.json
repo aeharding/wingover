@@ -11,6 +11,7 @@
     "wingover:allow-set-waypoints",
     "wingover:allow-share-file",
     "wingover:allow-check-permissions",
-    "wingover:allow-request-permissions"
+    "wingover:allow-request-permissions",
+    "wingover:allow-current-position"
   ]
 }

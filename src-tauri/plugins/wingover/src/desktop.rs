@@ -44,4 +44,8 @@ impl<R: Runtime> Wingover<R> {
     pub fn request_permissions(&self) -> crate::Result<serde_json::Value> {
         Err(crate::Error::UnsupportedPlatform)
     }
+
+    pub fn current_position(&self) -> crate::Result<Fix> {
+        Err(crate::Error::UnsupportedPlatform)
+    }
 }
