@@ -3,18 +3,84 @@
 }
 
 .fly-idle {
+  position: relative;
+  overflow: hidden;
   display: flex;
   flex-direction: column;
   align-items: center;
   justify-content: center;
   gap: 3rem;
   height: 100%;
+  /* A very dark nod to the icon's sunset gradient: deep purple at the top
+     easing to a warm ember at the bottom. */
+  background: linear-gradient(
+    180deg,
+    #130d22 0%,
+    #1b1330 38%,
+    #281824 70%,
+    #2d1e13 100%
+  );
+}
+
+/* The icon's motifs, brought over as large near-transparent shapes. */
+.fly-idle-art {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  z-index: 0;
+  pointer-events: none;
+}
+
+.idle-star {
+  fill: #ffdfac;
+  opacity: 0.5;
+}
+
+.idle-sun {
+  fill: #ffc66b;
+  opacity: 0.12;
+}
+
+.idle-cloud {
+  fill: #ffdfac;
+  opacity: 0.14;
+}
+
+/* The icon's fanned flight-path curves — recolored warm so they read on the
+   dark sky (the icon draws them dark against a bright one). */
+.idle-lines path {
+  stroke: #ffe1b4;
+  stroke-width: 4;
+  opacity: 0.08;
+}
+
+.idle-canopy {
+  fill: #ffefd3;
+  stroke: #ffefd3;
+  stroke-width: 60;
+  stroke-linejoin: round;
+  stroke-linecap: round;
+  opacity: 0.09;
+}
+
+/* Content sits above the backdrop. */
+.fly-idle > h1,
+.fly-idle > .start-button,
+.fly-idle > .gps-error {
+  position: relative;
+  z-index: 1;
 }
 
 .fly-idle h1 {
   color: #fff;
   font-size: 2.5rem;
   font-weight: 700;
+  letter-spacing: 0.01em;
+  /* Depth over the backdrop, plus the faintest warm halo from the sun. */
+  text-shadow:
+    0 2px 22px rgba(0, 0, 0, 0.55),
+    0 0 46px rgba(255, 173, 95, 0.12);
 }
 
 .start-button {
