@@ -227,3 +227,32 @@ test("zoom slider zooms the map one-fingered without unpinning follow", async ({
     page.getByRole("button", { name: "Follow aircraft" }),
   ).toHaveAttribute("data-active", "true");
 });
+
+test("edge guards stop an edge swipe from panning, inland drag still pans", async ({
+  page,
+}) => {
+  await page.goto("/?mock-speed=40&map-style=blank");
+  await page.getByRole("button", { name: "Start Flight" }).click();
+  await expect(page.getByTestId("recording")).toBeVisible({ timeout: 10_000 });
+
+  const follow = page.getByRole("button", { name: "Follow aircraft" });
+  await expect(follow).toHaveAttribute("data-active", "true");
+
+  const map = (await page.locator(".live-map").boundingBox())!;
+  // A swipe from the very left edge lands on the guard, not the map: the
+  // map must not pan, so follow stays pinned (an iOS back-swipe in flight).
+  await page.mouse.move(map.x + 5, map.y + map.height / 2);
+  await page.mouse.down();
+  await page.mouse.move(map.x + 160, map.y + map.height / 2, { steps: 8 });
+  await page.mouse.up();
+  await expect(follow).toHaveAttribute("data-active", "true");
+
+  // A normal inland drag still pans, which unpins follow.
+  await page.mouse.move(map.x + map.width / 2, map.y + map.height / 2);
+  await page.mouse.down();
+  await page.mouse.move(map.x + map.width / 2 - 140, map.y + map.height / 2, {
+    steps: 8,
+  });
+  await page.mouse.up();
+  await expect(follow).toHaveAttribute("data-active", "false");
+});
