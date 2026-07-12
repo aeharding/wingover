@@ -156,6 +156,19 @@ test("live map layers appear despite a slow sprite holding the style", async ({
   expect(pageErrors).toEqual([]);
 });
 
+test("the idle screen shows the sunset backdrop and starts a flight", async ({
+  page,
+}) => {
+  await page.goto("/?mock-speed=40&map-style=blank");
+  const start = page.getByRole("button", { name: "Start Flight" });
+  await expect(start).toBeVisible({ timeout: 10_000 });
+  // The decorative backdrop renders and does NOT block the CTA
+  // (pointer-events: none) — the click still arms a flight.
+  await expect(page.locator(".fly-idle-art")).toBeVisible();
+  await start.click();
+  await expect(page.getByTestId("armed")).toBeVisible();
+});
+
 test("canceling while acquiring GPS discards the session", async ({ page }) => {
   await page.goto("/?mock-speed=2&map-style=blank");
   await page.getByRole("button", { name: "Start Flight" }).click();
