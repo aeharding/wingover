@@ -202,8 +202,8 @@ test("zoom control zooms one-fingered from anywhere without unpinning follow", a
 
   const control = page.getByRole("slider", { name: "Zoom" });
   await expect(control).toBeVisible();
-  // Bounds are ground spans, not tile-stack limits: ~20 mi across at the
-  // bottom, ~0.35 mi at the top (both latitude/viewport dependent).
+  // Bounds are ground spans, not tile-stack limits: ~20 mi and ~0.35 mi
+  // across the screen (both latitude/viewport dependent).
   const valuemin = async () =>
     Number(await control.getAttribute("aria-valuemin"));
   const valuemax = async () =>
@@ -216,14 +216,13 @@ test("zoom control zooms one-fingered from anywhere without unpinning follow", a
   expect(await valuemax()).toBeLessThan(18);
   const before = await valuenow();
 
-  // Relative drag: press anywhere in the zone (mid-height, off-center) and
-  // drag up. No thumb to hit — the start point does not matter.
+  // Relative drag: press anywhere in the zone (off-center) and drag DOWN
+  // to zoom in. No thumb to hit — the start point does not matter.
   const box = (await control.boundingBox())!;
-  await page.mouse.move(box.x + box.width * 0.7, box.y + box.height * 0.55);
+  const downX = box.x + box.width * 0.6;
+  await page.mouse.move(downX, box.y + 20);
   await page.mouse.down();
-  await page.mouse.move(box.x + box.width * 0.7, box.y + box.height * 0.15, {
-    steps: 8,
-  });
+  await page.mouse.move(downX, box.y + 150, { steps: 8 });
   await page.mouse.up();
 
   await expect.poll(valuenow).toBeGreaterThan(before);
@@ -232,13 +231,12 @@ test("zoom control zooms one-fingered from anywhere without unpinning follow", a
     page.getByRole("button", { name: "Follow aircraft" }),
   ).toHaveAttribute("data-active", "true");
 
-  // Dragging down from a fresh grab zooms back out (relative each time).
+  // Dragging UP from a fresh grab zooms back out (relative each time).
   const zoomedIn = await valuenow();
-  await page.mouse.move(box.x + box.width * 0.3, box.y + box.height * 0.4);
+  const upX = box.x + box.width * 0.4;
+  await page.mouse.move(upX, box.y + box.height - 10);
   await page.mouse.down();
-  await page.mouse.move(box.x + box.width * 0.3, box.y + box.height * 0.9, {
-    steps: 8,
-  });
+  await page.mouse.move(upX, box.y + box.height - 140, { steps: 8 });
   await page.mouse.up();
   await expect.poll(valuenow).toBeLessThan(zoomedIn);
 });

@@ -4,11 +4,13 @@ import { useEffect, useRef, useState } from "react";
 import "./ZoomControl.css";
 
 // A forgiving one-thumb zoom control: touch ANYWHERE in the (wide) zone
-// and drag — up zooms in, down zooms out — relative to where the drag
-// began. No thumb to hit, no absolute position to land on precisely;
-// dragging the control's full height covers the full range, and you can
-// re-grab anywhere to keep going. The rail + dot only indicate the
-// current zoom; they are not the touch target.
+// and drag — down zooms in, up zooms out — relative to where the drag
+// began (down = closer matches the "pull the ground toward you" feel).
+// No thumb to hit, no absolute position to land on; re-grab anywhere to
+// keep going. The rail + dot indicate the current zoom. Zoom-per-pixel is
+// tied to the rail's height, so the dot tracks the finger 1:1 (a pixel of
+// drag = a pixel of dot travel) — they never drift apart, and a taller
+// rail simply makes the drag less sensitive.
 //
 // Bounds are ground spans, not tile-stack limits: fully out ~20 mi across
 // the screen, fully in ~0.35 mi. Derived from the VISIBLE viewport width
@@ -38,9 +40,13 @@ interface ZoomControlProps {
 }
 
 export default function ZoomControl({ map, onInput }: ZoomControlProps) {
-  const dragRef = useRef<{ startY: number; startZoom: number; height: number } | null>(
-    null,
-  );
+  const dragRef = useRef<{
+    startY: number;
+    startZoom: number;
+    railPx: number;
+  } | null>(null);
+  const railRef = useRef<HTMLDivElement>(null);
+  const dotRef = useRef<HTMLDivElement>(null);
   const [bounds, setBounds] = useState(() => spanBounds(map));
   const [zoom, setZoom] = useState(() => map.getZoom());
 
@@ -59,7 +65,8 @@ export default function ZoomControl({ map, onInput }: ZoomControlProps) {
     };
   }, [map]);
 
-  // 0 = fully out (dot at the bottom), 1 = fully in (dot at the top).
+  // 0 = fully out (dot at the top), 1 = fully in (dot at the bottom) —
+  // matches down-to-zoom-in.
   const fraction = Math.min(
     1,
     Math.max(0, (zoom - bounds.min) / (bounds.max - bounds.min)),
@@ -79,16 +86,25 @@ export default function ZoomControl({ map, onInput }: ZoomControlProps) {
         dragRef.current = {
           startY: event.clientY,
           startZoom: map.getZoom(),
-          height: event.currentTarget.clientHeight,
+          railPx: railRef.current?.clientHeight || 1,
         };
       }}
       onPointerMove={(event) => {
         const drag = dragRef.current;
         if (!drag) return;
         const { min, max } = spanBounds(map);
-        // Up (clientY decreasing) zooms in; full height spans the range.
-        const delta = ((drag.startY - event.clientY) / drag.height) * (max - min);
-        onInput(Math.min(max, Math.max(min, drag.startZoom + delta)));
+        // Down (clientY increasing) zooms in. Scaling by the rail's own
+        // height makes the dot travel exactly as far as the finger.
+        const delta =
+          ((event.clientY - drag.startY) / drag.railPx) * (max - min);
+        const next = Math.min(max, Math.max(min, drag.startZoom + delta));
+        onInput(next);
+        // Move the dot imperatively, in this same event — routing it through
+        // the map's zoom event and React state trails the finger by a frame.
+        if (dotRef.current) {
+          const f = (next - min) / (max - min);
+          dotRef.current.style.top = `${f * 100}%`;
+        }
       }}
       onPointerUp={() => {
         dragRef.current = null;
@@ -97,10 +113,11 @@ export default function ZoomControl({ map, onInput }: ZoomControlProps) {
         dragRef.current = null;
       }}
     >
-      <div className="zoom-control-rail">
+      <div ref={railRef} className="zoom-control-rail">
         <div
+          ref={dotRef}
           className="zoom-control-dot"
-          style={{ top: `${(1 - fraction) * 100}%` }}
+          style={{ top: `${fraction * 100}%` }}
         />
       </div>
     </div>
