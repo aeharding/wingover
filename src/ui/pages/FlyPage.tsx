@@ -50,11 +50,11 @@ const savedLiveView = readLiveViewState();
 // Locking the phone is only safe where the native layer records through
 // it (background location); the PWA is foreground-only.
 const ACQUIRING_HINT = isTauri()
-  ? "Make sure you're in an open, unobstructed area — it's safe to lock your phone."
+  ? "Make sure you're in an open, unobstructed area. It's safe to lock your phone."
   : "Make sure you're in an open, unobstructed area.";
 
 const ARMED_HINT = isTauri()
-  ? "Recording starts automatically when you launch — it's safe to lock your phone."
+  ? "Recording starts automatically when you launch. It's safe to lock your phone."
   : "Recording starts automatically when you launch.";
 
 export default function FlyPage() {
@@ -357,19 +357,19 @@ export default function FlyPage() {
             <div className="flight-controls">
               <button
                 className="map-button"
-                aria-label="Follow aircraft"
-                data-active={follow}
-                onClick={() => changeFollow(true)}
-              >
-                <IonIcon icon={locateOutline} />
-              </button>
-              <button
-                className="map-button"
                 aria-label="Track up"
                 data-active={trackUp}
                 onClick={() => changeTrackUp(!trackUp)}
               >
                 <IonIcon icon={compassOutline} />
+              </button>
+              <button
+                className="map-button"
+                aria-label="Follow aircraft"
+                data-active={follow}
+                onClick={() => changeFollow(true)}
+              >
+                <IonIcon icon={locateOutline} />
               </button>
               <ViewToggle view={mapView} onChange={changeMapView} />
               <button
