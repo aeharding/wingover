@@ -27,6 +27,15 @@ import {
 // duplicates far faster (PPG Flyer exports contain 44 ms doubles).
 const MIN_FIX_INTERVAL_MS = 500;
 const DERIVE_COURSE_MIN_SPEED_MPS = 0.5;
+// A gap this long between two consecutive fixes means nothing recorded in
+// between — the app was gone (phone died, force-quit, evicted) while the
+// native background capture was NOT running. The flight ended at the fix
+// before the gap; the fix after it belongs to a different sitting. A gap
+// shorter than this is just GPS jitter or a brief outage and is kept.
+// Evaluated on the fix stream (after any backlog replays), never on wall
+// clock at hydration: the native queue can hold minutes of valid fixes
+// that must replay before we judge the flight over.
+const STALE_FLIGHT_MS = 15 * 60 * 1000;
 
 const STORAGE_ERROR: EngineError = {
   code: "storage",
@@ -176,6 +185,13 @@ export class GeolocationRecordingEngine implements RecordingEngine {
         // Rehydrating a live session restarts capture; a finalized flight
         // ("ended") stays parked until collected via stop(). If another
         // tab owns the recorder, this one stays a passive viewer.
+        //
+        // A flight the app was gone from is NOT ended here: the native
+        // source keeps recording in the background, so what looks like a
+        // stale last fix is usually just a backlog waiting to replay. The
+        // end is detected on the fix stream instead (a >= STALE_FLIGHT_MS
+        // gap between consecutive fixes; see handlePositions), so the
+        // backlog replays first and only a genuine gap finalizes.
         if (session && this.deriveStatus() !== "ended") {
           if (await this.acquireRecorderLock()) {
             this.ensureWatch();
@@ -466,6 +482,24 @@ export class GeolocationRecordingEngine implements RecordingEngine {
         position.timestamp - previous.timestamp < MIN_FIX_INTERVAL_MS
       ) {
         continue;
+      }
+      // A long gap to the next fix means the app was gone (phone died /
+      // evicted) with nothing recording. The active flight ended at
+      // `previous`; this fix and any after it are a separate sitting, so
+      // finalize here and stop consuming. Runs on the fix stream, so a
+      // replayed native backlog (continuous fixes, no gap) never trips it —
+      // only a genuine break does.
+      if (
+        previous &&
+        this.session.takeoffIndex !== null &&
+        this.session.stoppedAt == null &&
+        position.timestamp - previous.timestamp >= STALE_FLIGHT_MS
+      ) {
+        this.session = { ...this.session, stoppedAt: previous.timestamp };
+        const ended = this.session;
+        this.enqueueWal(() => writeWalSession(ended));
+        ingested = true;
+        break;
       }
       const fix = this.toFix(position, previous);
       this.buffer.push(fix);
