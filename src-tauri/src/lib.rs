@@ -1,6 +1,8 @@
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
-    let builder = tauri::Builder::default();
+    // opener: external links (map attribution) open in the system browser.
+    // WKWebView would otherwise swallow the tap or navigate away in-app.
+    let builder = tauri::Builder::default().plugin(tauri_plugin_opener::init());
     #[cfg(mobile)]
     let builder = builder.plugin(tauri_plugin_wingover::init());
     // WKWebView does NOT reload itself when iOS/macOS kills its content

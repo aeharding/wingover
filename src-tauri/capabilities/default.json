@@ -12,6 +12,7 @@
     "wingover:allow-share-file",
     "wingover:allow-check-permissions",
     "wingover:allow-request-permissions",
-    "wingover:allow-current-position"
+    "wingover:allow-current-position",
+    "opener:allow-open-url"
   ]
 }

@@ -8,5 +8,8 @@ import "./theme.css";
 import { createRoot } from "react-dom/client";
 
 import App from "./ui/App";
+import { installExternalLinkHandler } from "./ui/externalLinks";
+
+installExternalLinkHandler();
 
 createRoot(document.getElementById("root")!).render(<App />);
