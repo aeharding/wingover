@@ -1,4 +1,4 @@
-import { expect, test } from "./fixtures";
+import { expect, test } from "@playwright/test";
 
 test("arm, auto-takeoff, reload kill drill, stop, logbook", async ({
   page,

@@ -1,6 +1,4 @@
-import type { Page } from "@playwright/test";
-
-import { expect, test } from "./fixtures";
+import { expect, type Page, test } from "@playwright/test";
 
 // CDP setGeolocation cannot supply altitude/speed, which the accuracy gate
 // and takeoff detection require — stub watchPosition itself so the test

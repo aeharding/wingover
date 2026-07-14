@@ -1,4 +1,4 @@
-import { expect, test } from "./fixtures";
+import { expect, test } from "@playwright/test";
 
 test("imports GPX flights from the logbook menu", async ({ page }) => {
   await page.goto("/?map-style=blank");

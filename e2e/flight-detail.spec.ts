@@ -1,4 +1,4 @@
-import { expect, test } from "./fixtures";
+import { expect, test } from "@playwright/test";
 
 async function recordQuickFlight(page: import("@playwright/test").Page) {
   await page.goto("/?mock-speed=40&map-style=blank");
