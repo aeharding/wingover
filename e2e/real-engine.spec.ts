@@ -346,7 +346,7 @@ test("in-flight nav: planned distance, retarget on reach, remove to launch", asy
 
   // Take off: nav targets the next waypoint (label "next"), remove is offered.
   await armAndFly(page, emit);
-  await expect(page.getByText("Distance to next")).toBeVisible();
+  await expect(page.getByText("Distance to waypoint")).toBeVisible();
   await expect(page.getByTestId("remove-next-waypoint")).toBeVisible();
 
   // Fly through the first pin → "Waypoint reached"; nav retargets to the
@@ -360,7 +360,7 @@ test("in-flight nav: planned distance, retarget on reach, remove to launch", asy
       "Waypoint reached",
     ),
   );
-  await expect(page.getByText("Distance to next")).toBeVisible();
+  await expect(page.getByText("Distance to waypoint")).toBeVisible();
 
   // Remove the last remaining target → nav falls back to launch.
   await page.getByTestId("remove-next-waypoint").click();

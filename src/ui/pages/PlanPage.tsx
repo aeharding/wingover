@@ -8,6 +8,8 @@ import { locateOutline } from "ionicons/icons";
 import { useEffect, useEffectEvent, useRef, useState } from "react";
 
 import { getCurrentPosition } from "../../engine/currentPosition";
+import { formatDistance } from "../../flight/format";
+import { haversineMeters } from "../../flight/stats";
 import {
   deletePin,
   getSetting,
@@ -28,6 +30,7 @@ import {
   type MarkerSpec,
 } from "../map/types";
 import ViewToggle from "../map/ViewToggle";
+import { useSettings } from "../settings/SettingsContext";
 
 import "./PlanPage.css";
 
@@ -63,11 +66,19 @@ function routeCoords(pins: Pin[]): LngLat[] {
 }
 
 export default function PlanPage() {
+  const { units } = useSettings();
   const [view, setView] = useState<MapViewKind>("street");
   const [pins, setPins] = useState<Pin[]>([]);
   const [map, setMap] = useState<MapView | null>(null);
   const lineRef = useRef<Line | null>(null);
   const markersRef = useRef<MarkerLayer | null>(null);
+
+  // Total route length = sum of the legs between consecutive pins, for
+  // planning (matches the idle Fly screen's "Planned route").
+  const routeMeters = pins.reduce(
+    (sum, pin, i) => (i === 0 ? 0 : sum + haversineMeters(pins[i - 1], pin)),
+    0,
+  );
 
   useIonViewWillEnter(() => {
     listPins().then(setPins);
@@ -273,6 +284,11 @@ export default function PlanPage() {
           </button>
           <ViewToggle view={view} onChange={changeView} />
         </div>
+        {routeMeters > 0 && (
+          <div className="plan-distance" data-testid="plan-distance">
+            Route: {formatDistance(routeMeters, units)}
+          </div>
+        )}
       </IonContent>
     </IonPage>
   );

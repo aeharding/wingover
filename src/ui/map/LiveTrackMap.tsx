@@ -13,6 +13,7 @@ import {
   type MapView,
   type MarkerLayer,
   type MarkerSpec,
+  PLAN_LINE_COLOR,
   TRACK_LINE_WIDTH_PX,
 } from "./types";
 import ZoomControl from "./ZoomControl";
@@ -32,7 +33,6 @@ const PINCH_ZOOM_RATE = 1 / 100;
 // planned pin, plus numbered markers for the ACTIVE nav sequence (green =
 // planned, blue = ad-hoc). Passed points are simply absent from the active
 // list, so their markers disappear while the grey line stays.
-const PLAN_LINE_COLOR = "#8f96a3";
 const PLANNED_COLOR = "#35e06a";
 const ADHOC_COLOR = "#4cc2ff";
 

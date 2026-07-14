@@ -187,10 +187,20 @@
   position: absolute;
   right: 0.9rem;
   bottom: calc(0.9rem + env(safe-area-inset-bottom));
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end;
+  gap: 0.9rem;
+  z-index: 6;
+}
+
+/* The four regular controls in a fixed 2×2. Because .flight-controls is
+   bottom-anchored and this grid is its LAST child, the contextual skip button
+   above it grows the stack upward — these four never shift. */
+.flight-controls-grid {
   display: grid;
   grid-template-columns: repeat(2, auto);
   gap: 0.9rem;
-  z-index: 6;
 }
 
 .launch-arrow {

@@ -4,13 +4,12 @@ import {
   IonPage,
   IonToast,
   useIonAlert,
-  useIonToast,
   useIonViewWillEnter,
 } from "@ionic/react";
 import {
+  arrowRedoOutline,
   compassOutline,
   locateOutline,
-  playSkipForwardOutline,
   stop as stopIcon,
 } from "ionicons/icons";
 import {
@@ -25,7 +24,12 @@ import {
 import { engine } from "../../engine";
 import { isTauri } from "../../engine/platform";
 import { startFlight } from "../../engine/session";
-import type { EngineStatus, Fix } from "../../engine/types";
+import type {
+  EngineStatus,
+  Fix,
+  LngLat,
+  Waypoint,
+} from "../../engine/types";
 import {
   formatAltitude,
   formatClimb,
@@ -78,7 +82,6 @@ export default function FlyPage() {
   const [ready, setReady] = useState(false);
   const [savedToastOpen, setSavedToastOpen] = useState(false);
   const [presentAlert] = useIonAlert();
-  const [presentToast] = useIonToast();
   const [mapView, setMapView] = useState<MapViewKind>(
     savedLiveView.mapView ?? "street",
   );
@@ -112,9 +115,15 @@ export default function FlyPage() {
     writeLiveViewState({ trackUp: value });
   }
 
-  async function persistFlight(flown: Fix[]) {
+  async function persistFlight(flown: Fix[], plannedWaypoints: Waypoint[]) {
     if (flown.length <= 1) return;
     const startedAt = flown[0].timestamp;
+    // The planned pins ([lng, lat], in order) so the flight detail map can
+    // draw the grey optimal-path line alongside the flown track.
+    const plannedRoute: LngLat[] = plannedWaypoints.map((w) => [
+      w.longitude,
+      w.latitude,
+    ]);
     try {
       await saveFlight(
         {
@@ -126,6 +135,7 @@ export default function FlyPage() {
           startedAt,
           stats: computeStats(flown),
           updatedAt: Date.now(),
+          ...(plannedRoute.length > 0 ? { plannedRoute } : {}),
         },
         flown,
       );
@@ -141,7 +151,7 @@ export default function FlyPage() {
   const collectEndedFlight = useEffectEvent(async () => {
     const snapshot = await engine.getSnapshot();
     if (snapshot.status !== "ended") return;
-    await persistFlight(snapshot.track);
+    await persistFlight(snapshot.track, snapshot.waypoints);
     // Persisted — the engine's durable copy can go; idle follows.
     await engine.discard();
   });
@@ -242,7 +252,7 @@ export default function FlyPage() {
   // falls back to the launch point once the route is exhausted (nextWaypoint
   // null). Same distance/bearing math either way.
   const navTarget = nextWaypoint ?? first ?? null;
-  const navLabel = nextWaypoint ? "next" : "launch";
+  const navLabel = nextWaypoint ? "waypoint" : "launch";
   const toTargetDistance =
     latest && navTarget ? haversineMeters(latest, navTarget) : 0;
   const toTargetRelative =
@@ -396,13 +406,8 @@ export default function FlyPage() {
               navWaypoints={snapshot.activeWaypoints}
               onAddWaypoint={(at) => {
                 // Long-press: the new ad-hoc point becomes the next target;
-                // the "remove next" button is the instant undo for a mistap.
+                // the skip button is the instant undo for a mistap.
                 void engine.addAdhocWaypoint(at);
-                void presentToast({
-                  message: "Waypoint added",
-                  duration: 1500,
-                  position: "top",
-                });
               }}
               onFollowChange={changeFollow}
             />
@@ -416,40 +421,45 @@ export default function FlyPage() {
               </div>
             )}
             <div className="flight-controls">
-              <button
-                className="map-button"
-                aria-label="Track up"
-                data-active={trackUp}
-                onClick={() => changeTrackUp(!trackUp)}
-              >
-                <IonIcon icon={compassOutline} />
-              </button>
-              <button
-                className="map-button"
-                aria-label="Follow aircraft"
-                data-active={follow}
-                onClick={() => changeFollow(true)}
-              >
-                <IonIcon icon={locateOutline} />
-              </button>
-              <ViewToggle view={mapView} onChange={changeMapView} />
+              {/* Contextual: floats ABOVE the fixed control grid (which is
+                  bottom-anchored) so appearing/disappearing never nudges the
+                  four regular controls out of their fixed positions. */}
               {nextWaypoint && (
                 <button
-                  className="map-button"
-                  aria-label="Remove next waypoint"
+                  className="map-button skip-button"
+                  aria-label="Skip waypoint"
                   data-testid="remove-next-waypoint"
                   onClick={() => void engine.removeNextWaypoint()}
                 >
-                  <IonIcon icon={playSkipForwardOutline} />
+                  <IonIcon icon={arrowRedoOutline} />
                 </button>
               )}
-              <button
-                className="map-button stop-button"
-                aria-label="Stop flight"
-                onClick={confirmEndFlight}
-              >
-                <IonIcon icon={stopIcon} />
-              </button>
+              <div className="flight-controls-grid">
+                <button
+                  className="map-button"
+                  aria-label="Track up"
+                  data-active={trackUp}
+                  onClick={() => changeTrackUp(!trackUp)}
+                >
+                  <IonIcon icon={compassOutline} />
+                </button>
+                <button
+                  className="map-button"
+                  aria-label="Follow aircraft"
+                  data-active={follow}
+                  onClick={() => changeFollow(true)}
+                >
+                  <IonIcon icon={locateOutline} />
+                </button>
+                <ViewToggle view={mapView} onChange={changeMapView} />
+                <button
+                  className="map-button stop-button"
+                  aria-label="Stop flight"
+                  onClick={confirmEndFlight}
+                >
+                  <IonIcon icon={stopIcon} />
+                </button>
+              </div>
             </div>
             {status === "landed" && landingAt !== null && (
               <div className="landing-prompt" data-testid="landing-prompt">

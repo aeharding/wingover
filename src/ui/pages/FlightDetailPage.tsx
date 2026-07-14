@@ -43,6 +43,7 @@ import {
   type LngLat,
   type MapView,
   type MarkerLayer,
+  PLAN_LINE_COLOR,
 } from "../map/types";
 import ViewToggle from "../map/ViewToggle";
 import { useSettings } from "../settings/SettingsContext";
@@ -71,6 +72,7 @@ export default function FlightDetailPage() {
   const [draftName, setDraftName] = useState("");
   const [draftNotes, setDraftNotes] = useState("");
   const lineRef = useRef<Line | null>(null);
+  const planLineRef = useRef<Line | null>(null);
   const markersRef = useRef<MarkerLayer | null>(null);
   const overlayRef = useRef<HTMLDivElement>(null);
 
@@ -102,6 +104,14 @@ export default function FlightDetailPage() {
   }
 
   function handleReady(next: MapView) {
+    // Grey planned-route reference, created first so it sits UNDER the cyan
+    // flown track (later lines draw on top). No markers — just the line.
+    planLineRef.current = next.line({
+      color: PLAN_LINE_COLOR,
+      width: 3,
+      opacity: 0.7,
+      testId: "plan",
+    });
     lineRef.current = next.line({
       color: "#4cc2ff",
       width: 4,
@@ -118,6 +128,18 @@ export default function FlightDetailPage() {
 
     const launch = track[0];
     const landing = track[track.length - 1];
+
+    // The grey plan line: launch through every planned pin (no markers). Empty
+    // for flights recorded without a plan (and imports) — clears the line.
+    // Copy each stored (readonly) coord into a fresh map LngLat tuple.
+    const plannedRoute: LngLat[] = (flight?.plannedRoute ?? []).map(
+      (coord): LngLat => [coord[0], coord[1]],
+    );
+    planLineRef.current?.set(
+      plannedRoute.length > 0
+        ? [[launch.longitude, launch.latitude], ...plannedRoute]
+        : [],
+    );
     markersRef.current?.set([
       {
         id: "launch",
@@ -134,9 +156,12 @@ export default function FlightDetailPage() {
       },
     ]);
 
-    const bounds = boundsOf(
-      track.map((fix): LngLat => [fix.longitude, fix.latitude]),
-    );
+    // Fit the flown track and the planned pins together, so a plan that
+    // overshoots the track (unreached waypoints) still frames fully.
+    const bounds = boundsOf([
+      ...track.map((fix): LngLat => [fix.longitude, fix.latitude]),
+      ...plannedRoute,
+    ]);
     const overlayHeight =
       overlayRef.current?.getBoundingClientRect().height ?? 0;
     if (bounds) {
@@ -149,7 +174,7 @@ export default function FlightDetailPage() {
         },
       });
     }
-  }, [track, map, flight?.id]);
+  }, [track, map, flight?.id, flight?.plannedRoute]);
 
   const stats = flight?.stats;
 

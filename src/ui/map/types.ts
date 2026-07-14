@@ -22,6 +22,11 @@ export type { MapViewKind };
 // the live view can read it without pulling in a map backend.
 export const TRACK_LINE_WIDTH_PX = 4;
 
+// The planned optimal-path reference line: grey so it never competes with the
+// cyan flown track (which is how drift reads). Shared by the live map and the
+// flight detail map so the two never drift apart.
+export const PLAN_LINE_COLOR = "#8f96a3";
+
 // [longitude, latitude] — GeoJSON coordinate order, matching the geometry
 // the app already builds for its line sources.
 export type LngLat = [number, number];
