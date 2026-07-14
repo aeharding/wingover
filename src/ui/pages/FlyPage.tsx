@@ -2,8 +2,8 @@ import {
   IonContent,
   IonIcon,
   IonPage,
-  IonToast,
   useIonAlert,
+  useIonToast,
   useIonViewWillEnter,
 } from "@ionic/react";
 import {
@@ -61,6 +61,13 @@ import "./FlyPage.css";
 
 const savedLiveView = readLiveViewState();
 
+// WAL hydration happens once per app launch. The App swaps the whole nav shell
+// for a bare <FlyPage> when a flight is active, so FlyPage remounts mid-session
+// (the moment a flight starts, and again when it ends). Seeding `ready` from
+// this module flag keeps that remount from flashing the pre-hydration blank —
+// the engine is already hydrated by then.
+let hydratedOnce = false;
+
 // Locking the phone is only safe where the native layer records through
 // it (background location); the PWA is foreground-only.
 const ACQUIRING_HINT = isTauri()
@@ -80,9 +87,9 @@ export default function FlyPage() {
   const snapshot = useSyncExternalStore(engine.subscribe, engine.snapshotSync);
   // Hydration gate: before the WAL read the engine reports "idle", which
   // must not flash the Start button during a live-flight reload.
-  const [ready, setReady] = useState(false);
-  const [savedToastOpen, setSavedToastOpen] = useState(false);
+  const [ready, setReady] = useState(hydratedOnce);
   const [presentAlert] = useIonAlert();
+  const [presentToast] = useIonToast();
   const [mapView, setMapView] = useState<MapViewKind>(
     savedLiveView.mapView ?? "street",
   );
@@ -152,7 +159,15 @@ export default function FlyPage() {
     } catch (error) {
       if ((error as { name?: string }).name !== "conflict") throw error;
     }
-    setSavedToastOpen(true);
+    // Imperative toast (useIonToast): it lives on the toast controller, not
+    // this component, so it survives FlyPage unmounting the instant the flight
+    // ends and the nav shell swaps back in.
+    void presentToast({
+      message: "Flight saved to logbook",
+      color: "success",
+      duration: 2000,
+      position: "top",
+    });
   }
 
   // "ended" is a durable state: the finalized flight waits in the WAL.
@@ -172,7 +187,10 @@ export default function FlyPage() {
     });
     // Kick the one-time WAL hydration; the subscription picks up the
     // resulting state change like any other.
-    void engine.getSnapshot().then(() => setReady(true));
+    void engine.getSnapshot().then(() => {
+      hydratedOnce = true;
+      setReady(true);
+    });
   }, []);
 
   // A flight that ended — now, or while the app was away (durable "ended"
@@ -503,14 +521,6 @@ export default function FlyPage() {
             )}
           </div>
         )}
-        <IonToast
-          isOpen={savedToastOpen}
-          message="Flight saved to logbook"
-          color="success"
-          duration={2000}
-          position="top"
-          onDidDismiss={() => setSavedToastOpen(false)}
-        />
       </IonContent>
     </IonPage>
   );
