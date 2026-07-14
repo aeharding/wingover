@@ -4,9 +4,7 @@ import {
   IonPage,
   useIonViewWillEnter,
 } from "@ionic/react";
-import type { FeatureCollection } from "geojson";
 import { locateOutline } from "ionicons/icons";
-import type { GeoJSONSource, Map as MapLibreMap, Marker } from "maplibre-gl";
 import { useEffect, useEffectEvent, useRef, useState } from "react";
 
 import { getCurrentPosition } from "../../engine/currentPosition";
@@ -17,54 +15,59 @@ import {
   type Pin,
   savePin,
   setSetting,
+  updatePin,
 } from "../../storage/db";
 import type { MapViewKind } from "../map/config";
-import MapView, { type MapLibreModule } from "../map/MapView";
+import MapCanvas from "../map/MapCanvas";
+import {
+  boundsOf,
+  type Line,
+  type LngLat,
+  type MapView,
+  type MarkerLayer,
+  type MarkerSpec,
+} from "../map/types";
 import ViewToggle from "../map/ViewToggle";
 
 import "./PlanPage.css";
 
 // Route colors follow the logbook endpoint language: green = start,
 // red = end, blue in between (and for the planned line itself).
-const ROUTE_START_COLOR = "#35e06a";
-const ROUTE_END_COLOR = "#e0483a";
 const ROUTE_COLOR = "#4cc2ff";
 
-function pinSvg(color: string): string {
-  return `<svg viewBox="0 0 24 32" width="28" height="37" xmlns="http://www.w3.org/2000/svg"><path d="M12 0C5.4 0 0 5.4 0 12c0 9 12 20 12 20s12-11 12-20C24 5.4 18.6 0 12 0z" fill="${color}"/><circle cx="12" cy="12" r="5" fill="#fff"/></svg>`;
+function pinSvg(color: string, label: string): string {
+  return `<svg viewBox="0 0 24 32" width="28" height="37" xmlns="http://www.w3.org/2000/svg"><path d="M12 0C5.4 0 0 5.4 0 12c0 9 12 20 12 20s12-11 12-20C24 5.4 18.6 0 12 0z" fill="${color}"/><circle cx="12" cy="12" r="7" fill="#fff"/><text x="12" y="12" text-anchor="middle" dominant-baseline="central" font-size="9.5" font-weight="700" fill="${color}">${label}</text></svg>`;
+}
+
+// The DOM element for a midpoint handle: a small dot the color of the line, so
+// it reads as a draggable "bump" on the leg. A 0×0 wrapper (centered on the
+// coordinate like the aircraft glyph) holds an inner node that translates onto
+// that origin; the inner is the touch/drag target, its ::before the visible
+// bump. Rendered on every backend.
+function handleEl(): HTMLElement {
+  const wrapper = document.createElement("div");
+  wrapper.className = "midpoint-handle";
+  wrapper.setAttribute("aria-hidden", "true");
+  const dot = document.createElement("div");
+  dot.className = "midpoint-handle-dot";
+  wrapper.appendChild(dot);
+  return wrapper;
 }
 
 // Pins form an ordered route (creation order — the same order the flight
 // copies at start), drawn as a dashed line to read as "planned", not flown.
-function routeData(pins: Pin[]): FeatureCollection {
-  return {
-    type: "FeatureCollection",
-    features:
-      pins.length < 2
-        ? []
-        : [
-            {
-              type: "Feature",
-              properties: {},
-              geometry: {
-                type: "LineString",
-                coordinates: pins.map((pin) => [pin.longitude, pin.latitude]),
-              },
-            },
-          ],
-  };
+function routeCoords(pins: Pin[]): LngLat[] {
+  return pins.length < 2
+    ? []
+    : pins.map((pin): LngLat => [pin.longitude, pin.latitude]);
 }
 
 export default function PlanPage() {
   const [view, setView] = useState<MapViewKind>("street");
   const [pins, setPins] = useState<Pin[]>([]);
-  const [mapContext, setMapContext] = useState<{
-    map: MapLibreMap;
-    lib: MapLibreModule;
-  } | null>(null);
-  const mapRef = useRef<MapLibreMap | null>(null);
-  const libRef = useRef<MapLibreModule | null>(null);
-  const markersRef = useRef(new Map<string, Marker>());
+  const [map, setMap] = useState<MapView | null>(null);
+  const lineRef = useRef<Line | null>(null);
+  const markersRef = useRef<MarkerLayer | null>(null);
 
   useIonViewWillEnter(() => {
     listPins().then(setPins);
@@ -78,54 +81,14 @@ export default function PlanPage() {
     setSetting("mapView", value);
   }
 
-  const ensureRouteLayer = useEffectEvent((map: MapLibreMap) => {
-    if (!map.isStyleLoaded()) return;
-    if (map.getSource("plan-route")) return;
-    map.addSource("plan-route", { type: "geojson", data: routeData(pins) });
-    map.addLayer({
-      id: "plan-route",
-      type: "line",
-      source: "plan-route",
-      layout: { "line-cap": "round", "line-join": "round" },
-      paint: {
-        "line-color": ROUTE_COLOR,
-        "line-width": 3,
-        "line-dasharray": [1.5, 2],
-        "line-opacity": 0.9,
-      },
-    });
-  });
-
-  const setupMap = useEffectEvent((map: MapLibreMap, lib: MapLibreModule) => {
-    mapRef.current = map;
-    libRef.current = lib;
-    map.on("styledata", () => ensureRouteLayer(map));
-    map.on("idle", () => ensureRouteLayer(map));
-    const existing = pins;
-    if (existing.length === 1) {
-      map.jumpTo({
-        center: [existing[0].longitude, existing[0].latitude],
-        zoom: 12,
-      });
-    } else if (existing.length > 1) {
-      const bounds = new lib.LngLatBounds();
-      for (const pin of existing) bounds.extend([pin.longitude, pin.latitude]);
-      map.fitBounds(bounds, { padding: 60, animate: false });
-    }
-  });
-
-  useEffect(() => {
-    if (mapContext) setupMap(mapContext.map, mapContext.lib);
-  }, [mapContext]);
-
-  async function addPin(point: { longitude: number; latitude: number }) {
+  async function addPin(point: LngLat) {
     const now = Date.now();
     const pin: Pin = {
       id: crypto.randomUUID(),
       name: "Pin",
       notes: "",
-      latitude: point.latitude,
-      longitude: point.longitude,
+      latitude: point[1],
+      longitude: point[0],
       createdAt: now,
       updatedAt: now,
     };
@@ -138,66 +101,159 @@ export default function PlanPage() {
     setPins((current) => current.filter((pin) => pin.id !== pinId));
   }
 
-  useEffect(() => {
-    const map = mapRef.current;
-    const lib = libRef.current;
-    if (!map || !lib || !mapContext) return;
-    const source = map.getSource("plan-route") as GeoJSONSource | undefined;
-    if (source) {
-      source.setData(routeData(pins));
-    } else {
-      ensureRouteLayer(map);
-    }
-    map
-      .getContainer()
-      .setAttribute(
-        "data-route-coords",
-        pins.length < 2
-          ? ""
-          : pins
-              .map(
-                (pin) =>
-                  `${pin.latitude.toFixed(5)},${pin.longitude.toFixed(5)}`,
-              )
-              .join(";"),
-      );
-    for (const marker of markersRef.current.values()) marker.remove();
-    markersRef.current.clear();
+  // Live during a drag: redraw the route line with this pin at its dragged
+  // position, WITHOUT touching state — a setPins here would rebuild the
+  // markers and abort the in-flight drag. Effect Event so it reads the latest
+  // pins without being a marker-rebuild dependency.
+  const previewDrag = useEffectEvent((pinId: string, at: LngLat) => {
+    const preview = pins.map((pin) =>
+      pin.id === pinId ? { ...pin, longitude: at[0], latitude: at[1] } : pin,
+    );
+    lineRef.current?.set(routeCoords(preview));
+  });
+
+  // On drag release: commit the new position. updatePin does a get-then-put so
+  // PouchDB gets the current _rev (a bare savePin would 409-conflict on an
+  // existing doc). State updates functionally, so this reads no reactive value.
+  async function movePin(pinId: string, at: LngLat) {
+    await updatePin(pinId, { longitude: at[0], latitude: at[1] });
+    setPins((current) =>
+      current.map((pin) =>
+        pin.id === pinId
+          ? { ...pin, longitude: at[0], latitude: at[1], updatedAt: Date.now() }
+          : pin,
+      ),
+    );
+  }
+
+  // Live while dragging a midpoint "+" handle: redraw the line with the new
+  // point spliced into leg `legIndex`, so the route follows without committing.
+  const previewInsert = useEffectEvent((legIndex: number, at: LngLat) => {
+    const coords: LngLat[] = [];
     pins.forEach((pin, index) => {
-      const isTail = index === pins.length - 1;
-      const color =
-        isTail && pins.length > 1
-          ? ROUTE_END_COLOR
-          : index === 0
-            ? ROUTE_START_COLOR
-            : ROUTE_COLOR;
+      coords.push([pin.longitude, pin.latitude]);
+      if (index === legIndex) coords.push(at);
+    });
+    lineRef.current?.set(coords);
+  });
+
+  // On release of a midpoint handle: insert a new pin between the leg's two
+  // ends. Route order is by createdAt (listPins sorts on it), so the new pin
+  // takes a timestamp between its neighbors to land in the right spot.
+  const insertPinAfter = useEffectEvent(async (legIndex: number, at: LngLat) => {
+    const before = pins[legIndex];
+    const after = pins[legIndex + 1];
+    if (!before || !after) return;
+    const pin: Pin = {
+      id: crypto.randomUUID(),
+      name: "Pin",
+      notes: "",
+      latitude: at[1],
+      longitude: at[0],
+      createdAt: (before.createdAt + after.createdAt) / 2,
+      updatedAt: Date.now(),
+    };
+    await savePin(pin);
+    setPins((current) => {
+      const index = current.findIndex((p) => p.id === after.id);
+      const next = [...current];
+      next.splice(index < 0 ? next.length : index, 0, pin);
+      return next;
+    });
+  });
+
+  function handleReady(next: MapView) {
+    lineRef.current = next.line({
+      color: ROUTE_COLOR,
+      width: 3,
+      dash: [1.5, 2],
+      opacity: 0.9,
+    });
+    markersRef.current = next.markers();
+    next.on("longpress", (event) => addPin(event.at));
+    setMap(next);
+  }
+
+  // Initial camera, once — reads whatever pins exist when the map arrives.
+  const frameInitial = useEffectEvent((next: MapView) => {
+    if (pins.length === 1) {
+      next.moveTo(
+        { center: [pins[0].longitude, pins[0].latitude], zoom: 12 },
+        { animate: false },
+      );
+    } else if (pins.length > 1) {
+      const bounds = boundsOf(routeCoords(pins));
+      if (bounds) next.fitBounds(bounds, { padding: 60 });
+    }
+  });
+
+  useEffect(() => {
+    if (map) frameInitial(map);
+  }, [map]);
+
+  useEffect(() => {
+    if (!map) return;
+    lineRef.current?.set(routeCoords(pins));
+    map.el.setAttribute(
+      "data-route-coords",
+      pins.length < 2
+        ? ""
+        : pins
+            .map((pin) => `${pin.latitude.toFixed(5)},${pin.longitude.toFixed(5)}`)
+            .join(";"),
+    );
+    const specs: MarkerSpec[] = pins.map((pin, index) => {
+      // One color for every pin — the numbers carry order and direction now.
+      const color = ROUTE_COLOR;
+      // Route order (1, 2, 3…): shows the sequence and thus the direction.
+      const label = String(index + 1);
       const element = document.createElement("button");
-      // The tail pin is enlarged + haloed: it is what a tap deletes next
-      // and where the next long-press extends the route from.
-      element.className = isTail ? "pin-marker pin-tail" : "pin-marker";
-      element.setAttribute("aria-label", "Pin");
+      element.className = "pin-marker";
+      element.setAttribute("aria-label", `Pin ${label}`);
       element.setAttribute("data-testid", "pin-marker");
       element.setAttribute("data-lat", String(pin.latitude));
       element.setAttribute("data-lng", String(pin.longitude));
-      element.innerHTML = pinSvg(color);
-      element.addEventListener("click", (event) => {
-        event.stopPropagation();
-        removePin(pin.id);
-      });
-      const marker = new lib.Marker({ element, anchor: "bottom" })
-        .setLngLat([pin.longitude, pin.latitude])
-        .addTo(map);
-      markersRef.current.set(pin.id, marker);
+      element.innerHTML = pinSvg(color, label);
+      return {
+        id: pin.id,
+        at: [pin.longitude, pin.latitude],
+        el: element,
+        color,
+        label,
+        anchor: "bottom",
+        onClick: () => removePin(pin.id),
+        draggable: true,
+        onDrag: (at) => previewDrag(pin.id, at),
+        onDragEnd: (at) => movePin(pin.id, at),
+      };
     });
-  }, [pins, mapContext]);
+    // A "+" handle at each leg's midpoint — drag it out to insert a pin there.
+    const handles: MarkerSpec[] = [];
+    for (let leg = 0; leg < pins.length - 1; leg++) {
+      const a = pins[leg];
+      const b = pins[leg + 1];
+      handles.push({
+        id: `handle-${a.id}-${b.id}`,
+        at: [(a.longitude + b.longitude) / 2, (a.latitude + b.latitude) / 2],
+        el: handleEl(),
+        // Render the small DOM dot on-line rather than a heavy native balloon.
+        custom: true,
+        anchor: "center",
+        draggable: true,
+        onDrag: (at) => previewInsert(leg, at),
+        onDragEnd: (at) => insertPinAfter(leg, at),
+      });
+    }
+    markersRef.current?.set([...specs, ...handles]);
+  }, [pins, map]);
 
   async function locate() {
     try {
       const position = await getCurrentPosition();
-      mapRef.current?.flyTo({
-        center: [position.longitude, position.latitude],
-        zoom: 12,
-      });
+      map?.moveTo(
+        { center: [position.longitude, position.latitude], zoom: 12 },
+        { animate: "fly" },
+      );
     } catch (error) {
       console.warn("locate failed:", error);
     }
@@ -206,11 +262,7 @@ export default function PlanPage() {
   return (
     <IonPage>
       <IonContent scrollY={false}>
-        <MapView
-          view={view}
-          onReady={(map, lib) => setMapContext({ map, lib })}
-          onLongPress={addPin}
-        />
+        <MapCanvas base={view} onReady={handleReady} />
         <div className="map-overlay">
           <button
             className="map-button"

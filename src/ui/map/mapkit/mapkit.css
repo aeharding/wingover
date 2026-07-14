@@ -1,0 +1,13 @@
+/* MapKit builds its view inside our `.map-container`; make it fill the box.
+   Unlike maplibre-gl.css this does not fight MapView.css (MapKit styles its
+   own `.mk-map-view` child, not `.map-container`). */
+.map-container .mk-map-view {
+  position: absolute;
+  inset: 0;
+}
+
+/* The aircraft glyph and its wrapper must never swallow map gestures beyond
+   the pins' own footprint. */
+.mk-annotation-container .wingover-aircraft {
+  pointer-events: none;
+}

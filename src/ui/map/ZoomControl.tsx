@@ -1,5 +1,6 @@
-import type { Map as MapLibreMap } from "maplibre-gl";
 import { useEffect, useRef, useState } from "react";
+
+import type { MapView } from "./types";
 
 import "./ZoomControl.css";
 
@@ -35,47 +36,62 @@ function zoomForSpan(latDeg: number, widthPx: number, spanM: number): number {
   return Math.log2((MERCATOR_M_PER_PX_Z0 * Math.cos(lat) * widthPx) / spanM);
 }
 
-function spanBounds(map: MapLibreMap): { min: number; max: number } {
+function spanBounds(map: MapView): { min: number; max: number } {
   const widthPx = (typeof window !== "undefined" && window.innerWidth) || 390;
-  const latitude = map.getCenter().lat;
+  const latitude = map.camera().center[1];
   return {
     min: zoomForSpan(latitude, widthPx, WIDEST_SPAN_M),
     max: zoomForSpan(latitude, widthPx, TIGHTEST_SPAN_M),
   };
 }
 
+// 0 = fully out (thumb at the top cap), 1 = fully in (bottom cap) — matches
+// down-to-zoom-in.
+function clamp01(v: number): number {
+  return Math.min(1, Math.max(0, v));
+}
+
 interface ZoomControlProps {
-  map: MapLibreMap;
+  map: MapView;
   onInput: (zoom: number) => void;
 }
 
 export default function ZoomControl({ map, onInput }: ZoomControlProps) {
-  const dragRef = useRef<{ startY: number; startZoom: number } | null>(null);
+  const dragRef = useRef<{
+    startY: number;
+    min: number;
+    max: number;
+    startFraction: number;
+  } | null>(null);
+  const thumbRef = useRef<HTMLDivElement>(null);
   const [active, setActive] = useState(false);
   const [bounds, setBounds] = useState(() => spanBounds(map));
-  const [zoom, setZoom] = useState(() => map.getZoom());
+  const [zoom, setZoom] = useState(() => map.camera().zoom);
+
+  // The thumb's position is written straight to the DOM — never through React
+  // state — so during a drag it tracks the finger with zero render lag.
+  function placeThumb(fraction: number) {
+    if (thumbRef.current) {
+      thumbRef.current.style.top = `${clamp01(fraction) * 100}%`;
+    }
+  }
 
   useEffect(() => {
     const sync = () => {
-      setBounds(spanBounds(map));
-      setZoom(map.getZoom());
+      const b = spanBounds(map);
+      setBounds(b);
+      const z = map.camera().zoom;
+      setZoom(z);
+      // Park the (hidden) thumb at the live zoom when not dragging; the drag
+      // owns it imperatively.
+      if (!dragRef.current) placeThumb((z - b.min) / (b.max - b.min));
     };
     sync();
     // Zoom only: latitude drift (which nudges the span-derived bounds) is
     // imperceptible between zooms, and a "move" listener would re-render
-    // this every follow-loop frame for nothing.
-    map.on("zoom", sync);
-    return () => {
-      map.off("zoom", sync);
-    };
+    // this every fix for nothing.
+    return map.on("zoom", sync);
   }, [map]);
-
-  // 0 = fully out (thumb at the top cap), 1 = fully in (bottom cap) —
-  // matches down-to-zoom-in.
-  const fraction = Math.min(
-    1,
-    Math.max(0, (zoom - bounds.min) / (bounds.max - bounds.min)),
-  );
 
   return (
     <div
@@ -88,19 +104,27 @@ export default function ZoomControl({ map, onInput }: ZoomControlProps) {
       aria-valuenow={Number(zoom.toFixed(2))}
       onPointerDown={(event) => {
         event.currentTarget.setPointerCapture(event.pointerId);
-        dragRef.current = { startY: event.clientY, startZoom: map.getZoom() };
+        // Snapshot the starting fraction + bounds; the drag is a pure px→
+        // fraction offset from here, so the thumb never re-derives from the
+        // (laggy) zoom value.
+        const { min, max } = spanBounds(map);
+        const startFraction = (map.camera().zoom - min) / (max - min);
+        dragRef.current = { startY: event.clientY, min, max, startFraction };
         setActive(true);
+        placeThumb(startFraction);
       }}
       onPointerMove={(event) => {
         const drag = dragRef.current;
         if (!drag) return;
-        const { min, max } = spanBounds(map);
-        // Down (clientY increasing) zooms in; a full sweep takes
-        // DRAG_RANGE_PX of travel regardless of where the strip is grabbed.
-        const delta =
-          ((event.clientY - drag.startY) / DRAG_RANGE_PX) * (max - min);
-        const next = Math.min(max, Math.max(min, drag.startZoom + delta));
+        // Down (clientY increasing) zooms in; a full sweep takes DRAG_RANGE_PX
+        // of travel regardless of where the strip is grabbed.
+        const fraction = clamp01(
+          drag.startFraction + (event.clientY - drag.startY) / DRAG_RANGE_PX,
+        );
+        placeThumb(fraction); // imperative → no lag
+        const next = drag.min + fraction * (drag.max - drag.min);
         onInput(next);
+        setZoom(next); // aria only; does not drive the thumb
       }}
       onPointerUp={() => {
         dragRef.current = null;
@@ -116,10 +140,7 @@ export default function ZoomControl({ map, onInput }: ZoomControlProps) {
           fully in. */}
       <div className="zoom-gauge" aria-hidden="true">
         <div className="zoom-gauge-rail">
-          <div
-            className="zoom-gauge-thumb"
-            style={{ top: `${fraction * 100}%` }}
-          >
+          <div className="zoom-gauge-thumb" ref={thumbRef}>
             <svg viewBox="0 0 66 100" aria-hidden="true">
               <path d="M18 12 L52 50 L18 88 Z" />
             </svg>

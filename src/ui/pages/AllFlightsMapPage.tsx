@@ -9,8 +9,7 @@ import {
   useIonViewWillEnter,
 } from "@ionic/react";
 import type { Feature } from "geojson";
-import type { GeoJSONSource, Map as MapLibreMap } from "maplibre-gl";
-import { useEffect, useEffectEvent, useRef, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 
 import {
   getSetting,
@@ -19,7 +18,8 @@ import {
   setSetting,
 } from "../../storage/db";
 import type { MapViewKind } from "../map/config";
-import MapView, { type MapLibreModule } from "../map/MapView";
+import MapCanvas from "../map/MapCanvas";
+import { boundsOf, type Line, type LngLat, type MapView } from "../map/types";
 import ViewToggle from "../map/ViewToggle";
 
 import "./AllFlightsMapPage.css";
@@ -36,12 +36,8 @@ function rampColor(t: number): string {
 export default function AllFlightsMapPage() {
   const [view, setView] = useState<MapViewKind>("street");
   const [features, setFeatures] = useState<Feature[]>([]);
-  const [mapContext, setMapContext] = useState<{
-    map: MapLibreMap;
-    lib: MapLibreModule;
-  } | null>(null);
-  const mapRef = useRef<MapLibreMap | null>(null);
-  const libRef = useRef<MapLibreModule | null>(null);
+  const [map, setMap] = useState<MapView | null>(null);
+  const lineRef = useRef<Line | null>(null);
 
   useIonViewWillEnter(() => {
     getSetting("mapView").then((value) => {
@@ -74,64 +70,34 @@ export default function AllFlightsMapPage() {
     setSetting("mapView", value);
   }
 
-  // Effect Event: the styledata/idle listeners are registered once but
-  // must see the latest features state.
-  const ensureFlightsLayer = useEffectEvent((map: MapLibreMap) => {
-    if (!map.isStyleLoaded()) return;
-    if (map.getSource("flights") || features.length === 0) return;
-    map.addSource("flights", {
-      type: "geojson",
-      data: { type: "FeatureCollection", features: features },
+  function handleReady(next: MapView) {
+    lineRef.current = next.line({
+      color: ["get", "color"],
+      width: 3.5,
+      opacity: 0.9,
+      testId: "flights",
     });
-    map.addLayer({
-      id: "flights",
-      type: "line",
-      source: "flights",
-      layout: { "line-cap": "round", "line-join": "round" },
-      paint: {
-        "line-color": ["get", "color"],
-        "line-width": 3.5,
-        "line-opacity": 0.9,
-      },
-    });
-    map.getContainer().setAttribute("data-flights-layer", "true");
-  });
-
-  const setupMap = useEffectEvent((map: MapLibreMap, lib: MapLibreModule) => {
-    mapRef.current = map;
-    libRef.current = lib;
-    map.on("styledata", () => ensureFlightsLayer(map));
-    map.on("idle", () => ensureFlightsLayer(map));
-  });
+    setMap(next);
+  }
 
   useEffect(() => {
-    if (mapContext) setupMap(mapContext.map, mapContext.lib);
-  }, [mapContext]);
+    if (!map || features.length === 0) return;
+    lineRef.current?.set(features);
 
-  useEffect(() => {
-    const map = mapRef.current;
-    const lib = libRef.current;
-    if (!map || !lib || !mapContext || features.length === 0) return;
-
-    const source = map.getSource("flights") as GeoJSONSource | undefined;
-    if (source) {
-      source.setData({ type: "FeatureCollection", features });
-    } else {
-      ensureFlightsLayer(map);
-    }
-
-    const bounds = new lib.LngLatBounds();
+    const positions: LngLat[] = [];
     for (const feature of features) {
       if (feature.geometry.type !== "LineString") continue;
       for (const position of feature.geometry.coordinates) {
-        bounds.extend(position as [number, number]);
+        positions.push(position as LngLat);
       }
     }
-    map.fitBounds(bounds, {
-      padding: { top: 80, bottom: 60, left: 50, right: 50 },
-      animate: false,
-    });
-  }, [features, mapContext]);
+    const bounds = boundsOf(positions);
+    if (bounds) {
+      map.fitBounds(bounds, {
+        padding: { top: 80, bottom: 60, left: 50, right: 50 },
+      });
+    }
+  }, [features, map]);
 
   return (
     <IonPage>
@@ -145,10 +111,7 @@ export default function AllFlightsMapPage() {
       </IonHeader>
       <IonContent scrollY={false}>
         <div className="all-flights-map">
-          <MapView
-            view={view}
-            onReady={(map, lib) => setMapContext({ map, lib })}
-          />
+          <MapCanvas base={view} onReady={handleReady} />
           <div className="composite-legend">
             Oldest → newest
             <div className="legend-bar" />

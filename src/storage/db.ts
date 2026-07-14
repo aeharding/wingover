@@ -196,7 +196,7 @@ export async function listPins(): Promise<Pin[]> {
 
 export async function updatePin(
   pinId: string,
-  changes: Partial<Pick<Pin, "name" | "notes">>,
+  changes: Partial<Pick<Pin, "name" | "notes" | "latitude" | "longitude">>,
 ) {
   const doc = await db.get<PinDoc>(pinDocId(pinId));
   await db.put({ ...doc, ...changes, updatedAt: Date.now() });

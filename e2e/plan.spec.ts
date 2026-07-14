@@ -1,4 +1,4 @@
-import { expect, test } from "@playwright/test";
+import { expect, test } from "./fixtures";
 
 test.beforeEach(async ({ page }) => {
   await page.route("**/*", (route) => {
@@ -14,7 +14,7 @@ test("tap to drop pins, persist across reload, tap to delete", async ({
   await page.goto("/?map-style=blank");
   await page.getByText("Plan", { exact: true }).click();
 
-  const canvas = page.locator(".maplibregl-canvas");
+  const canvas = page.locator(".map-container");
   await expect(canvas).toBeVisible();
   await page.waitForTimeout(500);
 
@@ -31,8 +31,7 @@ test("tap to drop pins, persist across reload, tap to delete", async ({
 
   await expect(page.getByTestId("pin-marker")).toHaveCount(2);
 
-  // Two pins connect into an ordered route line; the newest is the tail.
-  await expect(page.locator(".pin-marker.pin-tail")).toHaveCount(1);
+  // Two pins connect into an ordered route line.
   const mapContainer = page.locator(".map-container");
   await expect(mapContainer).not.toHaveAttribute("data-route-coords", "");
   const routeBefore = await mapContainer.getAttribute("data-route-coords");

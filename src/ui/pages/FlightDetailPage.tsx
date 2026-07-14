@@ -12,14 +12,12 @@ import {
   useIonRouter,
   useIonViewWillEnter,
 } from "@ionic/react";
-import type { Feature } from "geojson";
 import {
   chevronDownOutline,
   chevronUpOutline,
   ellipsisHorizontal,
 } from "ionicons/icons";
-import type { Map as MapLibreMap } from "maplibre-gl";
-import { useEffect, useEffectEvent, useRef, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { useParams } from "react-router";
 
 import type { Fix } from "../../engine/types";
@@ -38,22 +36,25 @@ import {
   updateFlight,
 } from "../../storage/db";
 import type { MapViewKind } from "../map/config";
-import MapView, { type MapLibreModule } from "../map/MapView";
+import MapCanvas from "../map/MapCanvas";
+import {
+  boundsOf,
+  type Line,
+  type LngLat,
+  type MapView,
+  type MarkerLayer,
+} from "../map/types";
 import ViewToggle from "../map/ViewToggle";
 import { useSettings } from "../settings/SettingsContext";
 import { useFlightActions } from "../useFlightActions";
 
 import "./FlightDetailPage.css";
 
-function toLineData(track: Fix[]): Feature {
-  return {
-    type: "Feature",
-    properties: {},
-    geometry: {
-      type: "LineString",
-      coordinates: track.map((fix) => [fix.longitude, fix.latitude]),
-    },
-  };
+function endpointMarker(className: string, testId: string): HTMLElement {
+  const element = document.createElement("div");
+  element.className = className;
+  element.setAttribute("data-testid", testId);
+  return element;
 }
 
 export default function FlightDetailPage() {
@@ -65,15 +66,12 @@ export default function FlightDetailPage() {
   const [track, setTrack] = useState<Fix[]>([]);
   const [optionsOpen, setOptionsOpen] = useState(false);
   const [view, setView] = useState<MapViewKind>("street");
-  const [mapContext, setMapContext] = useState<{
-    map: MapLibreMap;
-    lib: MapLibreModule;
-  } | null>(null);
+  const [map, setMap] = useState<MapView | null>(null);
   const [expanded, setExpanded] = useState(true);
   const [draftName, setDraftName] = useState("");
   const [draftNotes, setDraftNotes] = useState("");
-  const mapRef = useRef<MapLibreMap | null>(null);
-  const libRef = useRef<MapLibreModule | null>(null);
+  const lineRef = useRef<Line | null>(null);
+  const markersRef = useRef<MarkerLayer | null>(null);
   const overlayRef = useRef<HTMLDivElement>(null);
 
   useIonViewWillEnter(() => {
@@ -103,83 +101,55 @@ export default function FlightDetailPage() {
     setFlight({ ...flight, name, notes });
   }
 
-  // Effect Event: the styledata/idle listeners are registered once but
-  // must see the latest track state.
-  const ensureTrackLayer = useEffectEvent((map: MapLibreMap) => {
-    if (!map.isStyleLoaded()) return;
-    if (map.getSource("track") || track.length === 0) return;
-    map.addSource("track", {
-      type: "geojson",
-      data: toLineData(track),
+  function handleReady(next: MapView) {
+    lineRef.current = next.line({
+      color: "#4cc2ff",
+      width: 4,
+      testId: "track",
     });
-    map.addLayer({
-      id: "track",
-      type: "line",
-      source: "track",
-      layout: { "line-cap": "round", "line-join": "round" },
-      paint: { "line-color": "#4cc2ff", "line-width": 4 },
-    });
-    map.getContainer().setAttribute("data-track-layer", "true");
-  });
-
-  const setupMap = useEffectEvent((map: MapLibreMap, lib: MapLibreModule) => {
-    mapRef.current = map;
-    libRef.current = lib;
-    map.on("styledata", () => ensureTrackLayer(map));
-    map.on("idle", () => ensureTrackLayer(map));
-  });
+    markersRef.current = next.markers();
+    setMap(next);
+  }
 
   useEffect(() => {
-    if (mapContext) setupMap(mapContext.map, mapContext.lib);
-  }, [mapContext]);
+    if (!map || track.length === 0) return;
 
-  useEffect(() => {
-    const map = mapRef.current;
-    const lib = libRef.current;
-    if (!map || !lib || !mapContext || track.length === 0) return;
-
-    ensureTrackLayer(map);
+    lineRef.current?.set(track.map((fix): LngLat => [fix.longitude, fix.latitude]));
 
     const launch = track[0];
     const landing = track[track.length - 1];
-    const markers = [
+    markersRef.current?.set([
       {
-        fix: launch,
-        className: "endpoint-marker launch",
-        testId: "launch-marker",
+        id: "launch",
+        at: [launch.longitude, launch.latitude],
+        el: endpointMarker("endpoint-marker launch", "launch-marker"),
+        // --wingover-green / landing red, for native (MapKit) pins.
+        color: "#35e06a",
       },
       {
-        fix: landing,
-        className: "endpoint-marker landing",
-        testId: "landing-marker",
+        id: "landing",
+        at: [landing.longitude, landing.latitude],
+        el: endpointMarker("endpoint-marker landing", "landing-marker"),
+        color: "#e0483a",
       },
-    ].map(({ fix, className, testId }) => {
-      const element = document.createElement("div");
-      element.className = className;
-      element.setAttribute("data-testid", testId);
-      return new lib.Marker({ element })
-        .setLngLat([fix.longitude, fix.latitude])
-        .addTo(map);
-    });
+    ]);
 
-    const bounds = new lib.LngLatBounds();
-    for (const fix of track) bounds.extend([fix.longitude, fix.latitude]);
+    const bounds = boundsOf(
+      track.map((fix): LngLat => [fix.longitude, fix.latitude]),
+    );
     const overlayHeight =
       overlayRef.current?.getBoundingClientRect().height ?? 0;
-    map.fitBounds(bounds, {
-      padding: {
-        top: (overlayHeight || 220) + 28,
-        bottom: 60,
-        left: 50,
-        right: 50,
-      },
-      animate: false,
-    });
-
-    return () => {
-      for (const marker of markers) marker.remove();
-    };
-  }, [track, mapContext, flight?.id]);
+    if (bounds) {
+      map.fitBounds(bounds, {
+        padding: {
+          top: (overlayHeight || 220) + 28,
+          bottom: 60,
+          left: 50,
+          right: 50,
+        },
+      });
+    }
+  }, [track, map, flight?.id]);
 
   const stats = flight?.stats;
 
@@ -204,10 +174,7 @@ export default function FlightDetailPage() {
       </IonHeader>
       <IonContent scrollY={false}>
         <div className="flight-detail-map">
-          <MapView
-            view={view}
-            onReady={(map, lib) => setMapContext({ map, lib })}
-          />
+          <MapCanvas base={view} onReady={handleReady} />
           {flight && stats && (
             <div className="detail-overlay" ref={overlayRef}>
               <div className="detail-overlay-header">

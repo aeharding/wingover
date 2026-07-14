@@ -9,7 +9,10 @@ import { createRoot } from "react-dom/client";
 
 import App from "./ui/App";
 import { installExternalLinkHandler } from "./ui/externalLinks";
+import { captureLaunchUrl } from "./ui/map/config";
 
 installExternalLinkHandler();
+// Pin launch-only URL flags before the router can strip the query string.
+captureLaunchUrl();
 
 createRoot(document.getElementById("root")!).render(<App />);
