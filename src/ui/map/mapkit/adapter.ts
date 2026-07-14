@@ -320,7 +320,10 @@ export async function createMapKitMapView(
           // tap and would swallow the tap-to-act event).
           ann = new mapkit.MarkerAnnotation(toCoord(spec.at), {
             color: spec.selected ? "#ffffff" : role,
-            glyphColor: spec.selected ? role : undefined,
+            // Near-black glyph on the bright green/blue balloon — MapKit's
+            // default white glyph is too low-contrast to read the number.
+            // (The selected pin inverts: role-color glyph on a white balloon.)
+            glyphColor: spec.selected ? role : "#10141a",
             // The pin's number (route order), shown in the balloon.
             ...(spec.label ? { glyphText: spec.label } : {}),
             calloutEnabled: false,

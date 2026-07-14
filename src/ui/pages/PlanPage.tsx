@@ -39,7 +39,7 @@ import "./PlanPage.css";
 const ROUTE_COLOR = "#4cc2ff";
 
 function pinSvg(color: string, label: string): string {
-  return `<svg viewBox="0 0 24 32" width="28" height="37" xmlns="http://www.w3.org/2000/svg"><path d="M12 0C5.4 0 0 5.4 0 12c0 9 12 20 12 20s12-11 12-20C24 5.4 18.6 0 12 0z" fill="${color}"/><circle cx="12" cy="12" r="7" fill="#fff"/><text x="12" y="12" text-anchor="middle" dominant-baseline="central" font-size="9.5" font-weight="700" fill="${color}">${label}</text></svg>`;
+  return `<svg viewBox="0 0 24 32" width="28" height="37" xmlns="http://www.w3.org/2000/svg"><path d="M12 0C5.4 0 0 5.4 0 12c0 9 12 20 12 20s12-11 12-20C24 5.4 18.6 0 12 0z" fill="${color}"/><circle cx="12" cy="12" r="7" fill="#fff"/><text x="12" y="12" text-anchor="middle" dominant-baseline="central" font-size="9.5" font-weight="700" fill="#10141a">${label}</text></svg>`;
 }
 
 // The DOM element for a midpoint handle: a small dot the color of the line, so
