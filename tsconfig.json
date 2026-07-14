@@ -13,7 +13,7 @@
     "noFallthroughCasesInSwitch": true,
     "noUnusedLocals": true,
     "noUnusedParameters": true,
-    "types": ["vite/client", "node", "apple-mapkit-js-browser"]
+    "types": ["vite/client", "node", "apple-mapkit"]
   },
   "include": ["src", "e2e", "vite.config.ts", "playwright.config.ts"]
 }

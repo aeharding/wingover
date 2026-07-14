@@ -1,3 +1,4 @@
+import type { Annotation, Coordinate, PolylineOverlay } from "apple-mapkit";
 import type { Feature } from "geojson";
 
 import type { MapViewKind } from "../config";
@@ -47,7 +48,7 @@ function shortestAngle(d: number) {
 const AIRCRAFT_SVG = `<svg width="48" height="48" viewBox="-24 -24 48 48" style="position:absolute;left:0;top:0;transform-origin:center"><polygon points="0,-20 14,16 0,8 -14,16" fill="#4cc2ff" stroke="#0b2230" stroke-width="2" stroke-linejoin="round"/></svg>`;
 
 interface MapKitEvent {
-  coordinate?: mapkit.Coordinate;
+  coordinate?: Coordinate;
   pointOnPage?: { x: number; y: number };
 }
 interface EventTargetLike {
@@ -55,10 +56,10 @@ interface EventTargetLike {
   removeEventListener(type: string, listener: (e: MapKitEvent) => void): void;
 }
 
-function baseToMapType(base: MapViewKind): string {
+function baseToMapType(base: MapViewKind) {
   return base === "satellite"
-    ? mapkit.Map.MapTypes.Hybrid
-    : mapkit.Map.MapTypes.MutedStandard;
+    ? mapkit.MapType.Hybrid
+    : mapkit.MapType.MutedStandard;
 }
 
 function featuresOf(
@@ -90,7 +91,7 @@ export async function createMapKitMapView(
     mapType: baseToMapType(initialBase),
     center: new mapkit.Coordinate(39.8, -98.5),
   });
-  map.colorScheme = mapkit.Map.ColorSchemes.Dark;
+  map.colorScheme = mapkit.ColorScheme.Dark;
 
   // The bearing the app last asked for. The glyph is oriented against this
   // (heading − lastBearing → 0 in track-up), so it holds pointing up.
@@ -230,7 +231,7 @@ export async function createMapKitMapView(
     },
 
     line(style: LineStyle): Line {
-      let overlays: mapkit.PolylineOverlay[] = [];
+      let overlays: PolylineOverlay[] = [];
       const solid = typeof style.color === "string" ? style.color : "#4cc2ff";
       const styleFor = (color: string) =>
         new mapkit.Style({
@@ -277,7 +278,7 @@ export async function createMapKitMapView(
     },
 
     markers(): MarkerLayer {
-      let anns: mapkit.Annotation[] = [];
+      let anns: Annotation[] = [];
       const clear = () => {
         for (const a of anns) map.removeAnnotation(a);
         anns = [];
@@ -295,7 +296,7 @@ export async function createMapKitMapView(
             const role = spec.color ?? "#4cc2ff";
             // A "custom" marker (the midpoint handle) renders its own small DOM
             // element instead of a native pin balloon, which reads too heavy.
-            let ann: mapkit.Annotation;
+            let ann: Annotation;
             if (spec.custom) {
               // Centered on the coordinate the same proven way as the aircraft
               // glyph: the element is a 0×0 wrapper — so its bottom-center,
@@ -364,7 +365,7 @@ export async function createMapKitMapView(
       wrapper.style.height = "0";
       wrapper.innerHTML = AIRCRAFT_SVG;
       const svg = wrapper.firstElementChild as SVGElement;
-      let ann: mapkit.Annotation | null = null;
+      let ann: Annotation | null = null;
       container.setAttribute("data-aircraft-layer", "true");
       return {
         set(state: AircraftState | null) {
