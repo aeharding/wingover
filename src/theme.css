@@ -1,7 +1,19 @@
 :root {
-  --wingover-accent: #4cc2ff;
+  /* The one app cyan (buttons, launch arrow) — wide-gamut display-p3, the same
+     value as the map's ACCENT_CYAN (types.ts) and the stat cyan below, so the
+     flown track, aircraft, markers, buttons and stats read as ONE cyan. */
+  --wingover-accent: color(display-p3 0 0.7 1);
   --wingover-green: #35e06a;
   --wingover-tile: #111214;
+
+  /* Wide-gamut display-p3 for the flight readouts — the instrument tiles and
+     the pre-flight speed/accuracy/pulse. Far more saturated than sRGB can
+     express on the near-black tiles, for glanceable contrast at arm's length
+     in daylight (STEERING: sunlight-readable). The build targets iOS/WKWebView
+     on P3 screens, so there is no sRGB fallback by design. */
+  --stat-cyan: var(--wingover-accent);
+  --stat-green: color(display-p3 0 1 0);
+  --stat-yellow: color(display-p3 1 0.95 0);
 }
 
 ion-tab-bar {

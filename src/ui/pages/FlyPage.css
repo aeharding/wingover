@@ -133,7 +133,7 @@
   height: 14px;
   margin: 0 auto 1rem;
   border-radius: 50%;
-  background: var(--wingover-green);
+  background: var(--stat-green);
   animation: pulse 1.2s ease-in-out infinite;
 }
 
@@ -147,18 +147,18 @@
   font-size: 3rem;
   font-weight: 700;
   font-variant-numeric: tabular-nums;
-  color: var(--wingover-green);
+  color: var(--stat-green);
 }
 
 .armed-accuracy {
   font-size: 1.4rem;
   font-weight: 600;
   font-variant-numeric: tabular-nums;
-  color: #ffd43b;
+  color: var(--stat-yellow);
 }
 
 .pulse.acquiring {
-  background: #ffd43b;
+  background: var(--stat-yellow);
 }
 
 .cancel-button {

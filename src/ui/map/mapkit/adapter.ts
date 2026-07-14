@@ -19,6 +19,7 @@ import type {
   MoveOptions,
   Unsub,
 } from "../types";
+import { ACCENT_CYAN } from "../types";
 import { loadMapKit } from "./loader";
 
 import "./mapkit.css";
@@ -45,7 +46,7 @@ function shortestAngle(d: number) {
 
 // The aircraft glyph — a blue chevron. Positioned by a 0×0 wrapper at the
 // coordinate; the inner SVG centers itself and rotates to the screen heading.
-const AIRCRAFT_SVG = `<svg width="48" height="48" viewBox="-24 -24 48 48" style="position:absolute;left:0;top:0;transform-origin:center"><polygon points="0,-20 14,16 0,8 -14,16" fill="#4cc2ff" stroke="#0b2230" stroke-width="2" stroke-linejoin="round"/></svg>`;
+const AIRCRAFT_SVG = `<svg width="48" height="48" viewBox="-24 -24 48 48" style="position:absolute;left:0;top:0;transform-origin:center"><polygon points="0,-20 14,16 0,8 -14,16" fill="${ACCENT_CYAN}" stroke="#0b2230" stroke-width="2" stroke-linejoin="round"/></svg>`;
 
 interface MapKitEvent {
   coordinate?: Coordinate;
@@ -232,7 +233,7 @@ export async function createMapKitMapView(
 
     line(style: LineStyle): Line {
       let overlays: PolylineOverlay[] = [];
-      const solid = typeof style.color === "string" ? style.color : "#4cc2ff";
+      const solid = typeof style.color === "string" ? style.color : ACCENT_CYAN;
       const styleFor = (color: string) =>
         new mapkit.Style({
           lineWidth: style.width,
@@ -298,7 +299,7 @@ export async function createMapKitMapView(
         );
 
       const create = (spec: MarkerSpec): Annotation => {
-        const role = spec.color ?? "#4cc2ff";
+        const role = spec.color ?? ACCENT_CYAN;
         // A "custom" marker (the midpoint handle) renders its own small DOM
         // element instead of a native pin balloon, which reads too heavy.
         let ann: Annotation;
@@ -388,7 +389,7 @@ export async function createMapKitMapView(
                 glyphText: string;
               };
               marker.coordinate = toCoord(spec.at);
-              marker.color = spec.color ?? "#4cc2ff";
+              marker.color = spec.color ?? ACCENT_CYAN;
               marker.glyphText = spec.label ?? "";
               next.set(spec.id, existing);
             } else {

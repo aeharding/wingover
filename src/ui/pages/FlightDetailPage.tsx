@@ -38,6 +38,7 @@ import {
 import type { MapViewKind } from "../map/config";
 import MapCanvas from "../map/MapCanvas";
 import {
+  ACCENT_CYAN,
   boundsOf,
   type Line,
   type LngLat,
@@ -113,7 +114,7 @@ export default function FlightDetailPage() {
       testId: "plan",
     });
     lineRef.current = next.line({
-      color: "#4cc2ff",
+      color: ACCENT_CYAN,
       width: 4,
       testId: "track",
     });

@@ -52,20 +52,17 @@
   overflow: hidden;
 }
 
-/* In-flight stat values in wide-gamut display-p3 — far more saturated than
-   the sRGB gamut can express, for maximum contrast on the near-black tile at
-   arm's length in full daylight (STEERING: sunlight-readable). The build
-   targets iOS/WKWebView on P3 screens, so no sRGB fallback by design. */
+/* In-flight stat values in wide-gamut display-p3 (see --stat-* in theme.css). */
 .tile.cyan .value {
-  color: color(display-p3 0 0.7 1);
+  color: var(--stat-cyan);
 }
 
 .tile.green .value {
-  color: color(display-p3 0 1 0);
+  color: var(--stat-green);
 }
 
 .tile.yellow .value {
-  color: color(display-p3 1 0.85 0);
+  color: var(--stat-yellow);
 }
 
 .tile.wide {

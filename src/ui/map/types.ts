@@ -27,6 +27,12 @@ export const TRACK_LINE_WIDTH_PX = 4;
 // flight detail map so the two never drift apart.
 export const PLAN_LINE_COLOR = "#8f96a3";
 
+// The one app cyan — the flown track, the aircraft glyph, ad-hoc markers, the
+// plan route line. Wide-gamut display-p3 so it matches the in-flight stat
+// cyan exactly; the TS twin of --wingover-accent / --stat-cyan in theme.css
+// (map colors are JS strings passed to the backends, not CSS). Keep in sync.
+export const ACCENT_CYAN = "color(display-p3 0 0.7 1)";
+
 // [longitude, latitude] — GeoJSON coordinate order, matching the geometry
 // the app already builds for its line sources.
 export type LngLat = [number, number];
