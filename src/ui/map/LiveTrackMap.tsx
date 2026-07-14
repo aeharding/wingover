@@ -40,7 +40,7 @@ function waypointPinEl(color: string, label: string): HTMLElement {
   const el = document.createElement("div");
   el.className = "waypoint-pin";
   el.setAttribute("aria-hidden", "true");
-  el.innerHTML = `<svg viewBox="0 0 24 32" width="26" height="35" xmlns="http://www.w3.org/2000/svg"><path d="M12 0C5.4 0 0 5.4 0 12c0 9 12 20 12 20s12-11 12-20C24 5.4 18.6 0 12 0z" fill="${color}"/><circle cx="12" cy="12" r="7" fill="#fff"/><text x="12" y="12" text-anchor="middle" dominant-baseline="central" font-size="9.5" font-weight="700" fill="#10141a">${label}</text></svg>`;
+  el.innerHTML = `<svg viewBox="0 0 24 32" width="26" height="35" xmlns="http://www.w3.org/2000/svg"><path d="M12 0C5.4 0 0 5.4 0 12c0 9 12 20 12 20s12-11 12-20C24 5.4 18.6 0 12 0z" fill="${color}"/><circle cx="12" cy="12" r="7" fill="#fff"/><text x="12" y="12" text-anchor="middle" dominant-baseline="central" font-size="9.5" font-weight="700" fill="#000">${label}</text></svg>`;
   return el;
 }
 

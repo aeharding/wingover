@@ -320,10 +320,12 @@ export async function createMapKitMapView(
           // tap and would swallow the tap-to-act event).
           ann = new mapkit.MarkerAnnotation(toCoord(spec.at), {
             color: spec.selected ? "#ffffff" : role,
-            // Near-black glyph on the bright green/blue balloon — MapKit's
-            // default white glyph is too low-contrast to read the number.
-            // (The selected pin inverts: role-color glyph on a white balloon.)
-            glyphColor: spec.selected ? role : "#10141a",
+            // Pure-black glyph on the bright green/blue balloon — max contrast
+            // for a number a pilot reads at a glance in full sun (STEERING:
+            // "Sunlight-readable. High contrast"). MapKit's default white glyph
+            // is far too low-contrast. (Selected pin inverts: role glyph on a
+            // white balloon.)
+            glyphColor: spec.selected ? role : "#000000",
             // The pin's number (route order), shown in the balloon.
             ...(spec.label ? { glyphText: spec.label } : {}),
             calloutEnabled: false,
