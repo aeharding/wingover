@@ -121,6 +121,9 @@ export interface MarkerSpec {
   // Short text shown inside a native marker (MapKit's glyphText) — used to
   // number route pins 1, 2, 3… so the order (and direction) reads at a glance.
   label?: string;
+  // Color of that glyph (MapKit's glyphColor). Defaults to near-black for the
+  // numbered pins; endpoints override to white for the start/stop symbols.
+  glyphColor?: string;
   anchor?: "center" | "bottom";
   onClick?: () => void;
   // Tap-to-SELECT (distinct from onClick's tap-to-act): the marker becomes the

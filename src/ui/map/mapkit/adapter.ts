@@ -318,9 +318,8 @@ export async function createMapKitMapView(
             color: role,
             // Pure-black glyph on the bright green/blue balloon — max contrast
             // for a number a pilot reads at a glance in full sun (STEERING:
-            // "Sunlight-readable. High contrast"). MapKit's default white glyph
-            // is far too low-contrast.
-            glyphColor: "#000000",
+            // "Sunlight-readable. High contrast"). Endpoints override to white.
+            glyphColor: spec.glyphColor ?? "#000000",
             // The pin's number (route order), shown in the balloon.
             ...(spec.label ? { glyphText: spec.label } : {}),
             calloutEnabled: false,
@@ -397,10 +396,12 @@ export async function createMapKitMapView(
                 coordinate: Coordinate;
                 color: string;
                 glyphText: string;
+                glyphColor: string;
               };
               marker.coordinate = toCoord(spec.at);
               marker.color = spec.color ?? ACCENT_CYAN;
               marker.glyphText = spec.label ?? "";
+              marker.glyphColor = spec.glyphColor ?? "#000000";
               next.set(spec.id, existing);
             } else {
               next.set(spec.id, { ann: create(spec), reusable: !isInteractive(spec) });
