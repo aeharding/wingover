@@ -146,14 +146,20 @@ export default function FlightDetailPage() {
         id: "launch",
         at: [launch.longitude, launch.latitude],
         el: endpointMarker("endpoint-marker launch", "launch-marker"),
-        // --wingover-green / landing red, for native (MapKit) pins.
+        // --wingover-green / landing red, for native (MapKit) pins. The glyph
+        // (MapKit's glyphText) is a white start ▶ / stop ■ symbol instead of
+        // the default pin dot.
         color: "#35e06a",
+        label: "▶",
+        glyphColor: "#ffffff",
       },
       {
         id: "landing",
         at: [landing.longitude, landing.latitude],
         el: endpointMarker("endpoint-marker landing", "landing-marker"),
         color: "#e0483a",
+        label: "■",
+        glyphColor: "#ffffff",
       },
     ]);
 
