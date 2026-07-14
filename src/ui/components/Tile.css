@@ -52,16 +52,17 @@
   overflow: hidden;
 }
 
+/* In-flight stat values in wide-gamut display-p3 (see --stat-* in theme.css). */
 .tile.cyan .value {
-  color: var(--wingover-accent);
+  color: var(--stat-cyan);
 }
 
 .tile.green .value {
-  color: var(--wingover-green);
+  color: var(--stat-green);
 }
 
 .tile.yellow .value {
-  color: #ffd43b;
+  color: var(--stat-yellow);
 }
 
 .tile.wide {

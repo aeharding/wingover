@@ -5,6 +5,7 @@ import type { MapViewKind } from "./config";
 import { readLiveViewState, writeLiveViewState } from "./liveViewState";
 import MapCanvas from "./MapCanvas";
 import {
+  ACCENT_CYAN,
   type Aircraft,
   type GestureEvent,
   type Insets,
@@ -34,7 +35,7 @@ const PINCH_ZOOM_RATE = 1 / 100;
 // planned, blue = ad-hoc). Passed points are simply absent from the active
 // list, so their markers disappear while the grey line stays.
 const PLANNED_COLOR = "#35e06a";
-const ADHOC_COLOR = "#4cc2ff";
+const ADHOC_COLOR = ACCENT_CYAN;
 
 function waypointPinEl(color: string, label: string): HTMLElement {
   const el = document.createElement("div");
@@ -160,7 +161,7 @@ export default function LiveTrackMap({
       testId: "plan",
     });
     trackLineRef.current = mapView.line({
-      color: "#4cc2ff",
+      color: ACCENT_CYAN,
       width: TRACK_LINE_WIDTH_PX,
       testId: "track",
     });

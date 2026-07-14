@@ -22,6 +22,7 @@ import {
 import type { MapViewKind } from "../map/config";
 import MapCanvas from "../map/MapCanvas";
 import {
+  ACCENT_CYAN,
   boundsOf,
   type Line,
   type LngLat,
@@ -34,9 +35,9 @@ import { useSettings } from "../settings/SettingsContext";
 
 import "./PlanPage.css";
 
-// Route colors follow the logbook endpoint language: green = start,
-// red = end, blue in between (and for the planned line itself).
-const ROUTE_COLOR = "#4cc2ff";
+// The route line + pins use the one app cyan (see ACCENT_CYAN), matching the
+// flown track, aircraft, and in-flight stats.
+const ROUTE_COLOR = ACCENT_CYAN;
 
 function pinSvg(color: string, label: string): string {
   return `<svg viewBox="0 0 24 32" width="28" height="37" xmlns="http://www.w3.org/2000/svg"><path d="M12 0C5.4 0 0 5.4 0 12c0 9 12 20 12 20s12-11 12-20C24 5.4 18.6 0 12 0z" fill="${color}"/><circle cx="12" cy="12" r="7" fill="#fff"/><text x="12" y="12" text-anchor="middle" dominant-baseline="central" font-size="9.5" font-weight="700" fill="#000">${label}</text></svg>`;
