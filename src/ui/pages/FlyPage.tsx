@@ -7,9 +7,10 @@ import {
   useIonViewWillEnter,
 } from "@ionic/react";
 import {
-  arrowRedoOutline,
+  checkboxOutline,
   compassOutline,
   locateOutline,
+  locationOutline,
   stop as stopIcon,
 } from "ionicons/icons";
 import {
@@ -427,11 +428,16 @@ export default function FlyPage() {
               {nextWaypoint && (
                 <button
                   className="map-button skip-button"
-                  aria-label="Skip waypoint"
+                  aria-label="Clear next waypoint"
                   data-testid="remove-next-waypoint"
                   onClick={() => void engine.removeNextWaypoint()}
                 >
-                  <IonIcon icon={arrowRedoOutline} />
+                  {/* A location pin with a checkbox badge: "mark this
+                      waypoint done / clear it". */}
+                  <span className="skip-icon" aria-hidden="true">
+                    <IonIcon icon={locationOutline} />
+                    <IonIcon className="skip-icon-badge" icon={checkboxOutline} />
+                  </span>
                 </button>
               )}
               <div className="flight-controls-grid">
