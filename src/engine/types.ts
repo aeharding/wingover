@@ -100,9 +100,10 @@ export interface RecordingEngine {
   // Long-press mid-flight: append an ad-hoc nav target. at = [longitude,
   // latitude] (map/pin tuple order). Joins this flight only; plan untouched.
   addAdhocWaypoint(at: LngLat): Promise<void>;
-  // "Remove next": advance past the current nav target (planned or ad-hoc),
-  // silently. No-op when there is no target left.
-  removeNextWaypoint(): Promise<void>;
+  // Remove a specific active waypoint (planned or ad-hoc) by id — the pilot
+  // selected it on the map and cleared it. Silent; no-op if the id is not a
+  // currently-active waypoint.
+  removeWaypoint(id: string): Promise<void>;
   // "I'm done flying": journals the pilot's stop into the session, so
   // status derives to "ended" — durable, crash-safe, collected by the
   // same persist-first path as a detected landing. Nothing is cleared.

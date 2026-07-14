@@ -116,6 +116,13 @@ export interface MarkerSpec {
   label?: string;
   anchor?: "center" | "bottom";
   onClick?: () => void;
+  // Tap-to-SELECT (distinct from onClick's tap-to-act): the marker becomes the
+  // selected one and STAYS selected/highlighted (MapKit's native grown pin);
+  // `onDeselect` fires when it is deselected (another picked, or tapped away).
+  // Unlike onClick/drag, a select-only marker is still reconciled in place, so
+  // a renumber never tears it down (and never drops a live selection).
+  onSelect?: () => void;
+  onDeselect?: () => void;
   // When true the marker can be dragged. `onDrag` fires continuously with the
   // live position (redraw the route line without committing); `onDragEnd`
   // fires once with the final position (commit + persist).

@@ -396,15 +396,15 @@ export class GeolocationRecordingEngine implements RecordingEngine {
     await this.walQueue;
   }
 
-  // "Remove next": journal the current target's id so it is skipped, silently.
-  // No-op when there is no target left (no write, no push).
-  async removeNextWaypoint(): Promise<void> {
+  // Remove a specific active waypoint by id: journal its id so it is skipped,
+  // silently. No-op if the id is not currently active (already passed, already
+  // removed, or unknown) — no write, no push.
+  async removeWaypoint(id: string): Promise<void> {
     if (!this.session || this.deriveStatus() === "ended") return;
-    const next = this.navState().nextWaypoint;
-    if (!next) return;
+    if (!this.activeWaypoints().some((w) => w.id === id)) return;
     this.session = {
       ...this.session,
-      removedIds: [...(this.session.removedIds ?? []), next.id],
+      removedIds: [...(this.session.removedIds ?? []), id],
     };
     const session = this.session;
     this.enqueueWal(() => writeWalSession(session));

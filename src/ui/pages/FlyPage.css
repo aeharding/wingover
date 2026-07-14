@@ -203,22 +203,35 @@
   gap: 0.9rem;
 }
 
-/* "Clear next waypoint": a location pin (outline) with a small checkbox badge
-   clipped onto its top-right corner. The badge's background matches the button
-   so it reads as sitting over the pin. */
+/* "Clear checkpoint": a location pin (outline) with an X in a circular cutout
+   at its top-right. A real cutout — a transparent hole masked out of the pin,
+   so the button's own (translucent, over-the-map) background shows through and
+   the X reads on it. A painted disc would not match the button's opacity. */
 .skip-icon {
   position: relative;
   display: inline-flex;
   line-height: 0;
 }
 
+.skip-icon > ion-icon:not(.skip-icon-badge) {
+  -webkit-mask-image: radial-gradient(
+    circle at 80% 20%,
+    transparent 0.42em,
+    #000 0.46em
+  );
+  mask-image: radial-gradient(
+    circle at 80% 20%,
+    transparent 0.42em,
+    #000 0.46em
+  );
+}
+
 .skip-icon-badge {
   position: absolute;
-  top: -0.28em;
-  right: -0.3em;
-  font-size: 0.62em;
-  background: rgba(24, 26, 29, 0.95);
-  border-radius: 4px;
+  left: 80%;
+  top: 20%;
+  transform: translate(-50%, -50%);
+  font-size: 0.55em;
 }
 
 .launch-arrow {

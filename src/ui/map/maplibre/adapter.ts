@@ -252,6 +252,15 @@ export async function createMapLibreMapView(
                 onClick();
               });
             }
+            if (spec.onSelect) {
+              // No native marker selection in maplibre — a tap reports the
+              // selection; the app tracks it and deselect rides reselect/remove.
+              const onSelect = spec.onSelect;
+              spec.el.addEventListener("click", (event) => {
+                event.stopPropagation();
+                onSelect();
+              });
+            }
             const marker = new Marker({
               element: spec.el,
               anchor: spec.anchor ?? "center",

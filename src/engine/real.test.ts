@@ -784,7 +784,7 @@ describe("waypoint config pushes", () => {
     geolocation.emit(position({ latitude: 43.03, speed: 6 }));
     await settle();
     // Remove the front (x) -> active [] -> 0.
-    await engine.removeNextWaypoint();
+    await engine.removeWaypoint(engine.snapshotSync().nextWaypoint!.id);
 
     await engine.discard(); // no push: watch teardown carries core.stop
     expect(pushes).toEqual([1, 2, 1, 0]);
@@ -930,30 +930,29 @@ describe("waypoint navigation", () => {
     expect(snap.nextWaypoint?.latitude).toBe(43.02); // still active, not reached
   });
 
-  // N9
-  it("remove advances silently through the plan", async () => {
+  // N9 — remove the current target by id → the plan advances.
+  it("removing the next planned waypoint advances the plan", async () => {
     const engine = createEngine();
     await armAndTakeOff(engine, { waypoints: [wp("a", 43.03), wp("b", 43.06)] });
-    await engine.removeNextWaypoint();
+    await engine.removeWaypoint("a");
     expect(engine.snapshotSync().waypointsCursor).toBe(1);
     expect(engine.snapshotSync().nextWaypoint?.id).toBe("b");
   });
 
-  // N10
-  it("remove takes the ad-hoc front first (FIFO)", async () => {
+  // N10 — remove a SPECIFIC waypoint, not the front: the ad-hoc target stays.
+  it("removeWaypoint clears the chosen waypoint, leaving the front target", async () => {
     const engine = createEngine();
     const p = wp("p", 43.03);
     await armAndTakeOff(engine, { waypoints: [p] });
-    await engine.addAdhocWaypoint([-89.4, 43.01]);
-    await engine.removeNextWaypoint();
+    await engine.addAdhocWaypoint([-89.4, 43.01]); // front target now the ad-hoc
+    await engine.removeWaypoint("p"); // clear the planned pin behind it
     const snap = engine.snapshotSync();
-    expect(snap.adhocWaypoints).toEqual([]);
-    expect(snap.nextWaypoint).toEqual(p);
-    expect(snap.waypointsCursor).toBe(0);
+    expect(snap.nextWaypoint?.latitude).toBe(43.01); // ad-hoc still the target
+    expect(snap.activeWaypoints.map((w) => w.latitude)).toEqual([43.01]); // p gone
   });
 
-  // N11
-  it("remove is a no-op when nothing is left", async () => {
+  // N11 — a no-op for an id that is not currently active.
+  it("removeWaypoint is a no-op for an unknown or already-removed id", async () => {
     const pushes: number[] = [];
     const engine = new GeolocationRecordingEngine({
       source: navigatorPositionSource,
@@ -961,12 +960,28 @@ describe("waypoint navigation", () => {
     });
     engines.push(engine);
     await armAndTakeOff(engine, { waypoints: [wp("a", 43.03)] });
-    await engine.removeNextWaypoint(); // cursor -> 1
+    const before = pushes.length;
+    await engine.removeWaypoint("nope"); // unknown id: no write, no push
+    expect(engine.snapshotSync().nextWaypoint?.id).toBe("a");
+    expect(pushes.length).toBe(before);
+    await engine.removeWaypoint("a"); // active: removed (one push)
     expect(engine.snapshotSync().nextWaypoint).toBeNull();
-    const pushesAfterFirst = pushes.length;
-    await engine.removeNextWaypoint(); // exhausted: no write, no push
-    expect(engine.snapshotSync().waypointsCursor).toBe(1);
-    expect(pushes.length).toBe(pushesAfterFirst);
+    const afterRemoval = pushes.length;
+    await engine.removeWaypoint("a"); // already removed: no-op
+    expect(pushes.length).toBe(afterRemoval);
+  });
+
+  // N11b — remove a middle planned pin; the current target is unchanged.
+  it("removing a not-yet-reached middle waypoint keeps the next target", async () => {
+    const engine = createEngine();
+    await armAndTakeOff(engine, {
+      waypoints: [wp("a", 43.03), wp("b", 43.06), wp("c", 43.09)],
+    });
+    await engine.removeWaypoint("b"); // clear the middle one
+    const snap = engine.snapshotSync();
+    expect(snap.nextWaypoint?.id).toBe("a"); // still steering to a
+    expect(snap.waypointsCursor).toBe(0);
+    expect(snap.activeWaypoints.map((w) => w.id)).toEqual(["a", "c"]);
   });
 
   // N12 — multi-hit in one batch (defects 4/9).
@@ -1138,7 +1153,7 @@ describe("waypoint navigation", () => {
     await armAndTakeOff(engine, {
       waypoints: [wp("a", 43.03), wp("b", 43.06)],
     });
-    await engine.removeNextWaypoint(); // remove a
+    await engine.removeWaypoint("a"); // remove a
     expect(engine.snapshotSync().nextWaypoint?.id).toBe("b");
     drive(43.03); // fly straight through a's ring
     const snap = engine.snapshotSync();
@@ -1270,7 +1285,7 @@ describe("waypoint navigation", () => {
     engine.end();
     expect(engine.snapshotSync().status).toBe("ended");
     const before = pushes.length;
-    await engine.removeNextWaypoint(); // guarded: inert
+    await engine.removeWaypoint("a"); // guarded: inert
     await engine.addAdhocWaypoint([-89.4, 43.05]); // guarded: inert
     const snap = engine.snapshotSync();
     expect(snap.waypointsCursor).toBe(0); // unchanged

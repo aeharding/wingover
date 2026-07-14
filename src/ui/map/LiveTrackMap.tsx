@@ -58,6 +58,9 @@ interface LiveTrackMapProps {
   navWaypoints: Waypoint[];
   // Long-press on the map to drop an ad-hoc waypoint. at = [longitude, latitude].
   onAddWaypoint?: (at: LngLat) => void;
+  // Tap a waypoint pin to select it (id), or deselect (null) — drives the
+  // "clear this checkpoint" control.
+  onSelectWaypoint?: (id: string | null) => void;
   onFollowChange: (follow: boolean) => void;
 }
 
@@ -71,6 +74,7 @@ export default function LiveTrackMap({
   plannedWaypoints,
   navWaypoints,
   onAddWaypoint,
+  onSelectWaypoint,
   onFollowChange,
 }: LiveTrackMapProps) {
   const [map, setMap] = useState<MapView | null>(null);
@@ -149,6 +153,12 @@ export default function LiveTrackMap({
 
   const handleLongPress = useEffectEvent((at: LngLat) => {
     onAddWaypoint?.(at);
+  });
+
+  // Stable, so a marker's tap handler stays correct across in-place reconciles
+  // (the id it carries never changes; this callback never does either).
+  const selectWaypoint = useEffectEvent((id: string | null) => {
+    onSelectWaypoint?.(id);
   });
 
   const setupMap = useEffectEvent((mapView: MapView) => {
@@ -243,6 +253,11 @@ export default function LiveTrackMap({
         color,
         label: String(index + 1),
         anchor: "bottom",
+        // Tap to select (id) / deselect (null). onSelect keeps the marker
+        // reconcilable in place, so this never re-renders the pins per fix and
+        // MapKit's native selection survives a renumber.
+        onSelect: () => selectWaypoint(w.id),
+        onDeselect: () => selectWaypoint(null),
       };
     });
     waypointMarkersRef.current?.set(specs);

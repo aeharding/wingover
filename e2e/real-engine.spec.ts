@@ -312,13 +312,13 @@ test("a pin becomes a spoken waypoint announcement mid-flight", async ({
   expect(spoken.filter((text) => text === "Waypoint reached")).toHaveLength(1);
 });
 
-test("in-flight nav: planned distance, retarget on reach, remove to launch", async ({
+test("in-flight nav: planned distance, tap-select and clear a checkpoint", async ({
   page,
 }) => {
   await page.addInitScript(GEO_STUB);
   const emit = makeEmitter(page);
 
-  // Two pins on the zoom-3 plan (far apart in coords → non-overlapping rings).
+  // Two pins on the zoom-3 plan.
   await page.goto(URL);
   await page.getByText("Plan", { exact: true }).click();
   const canvas = page.locator(".map-container");
@@ -344,34 +344,25 @@ test("in-flight nav: planned distance, retarget on reach, remove to launch", asy
   await page.getByText("Fly", { exact: true }).click();
   await expect(page.getByTestId("planned-route")).toContainText("Planned route:");
 
-  // Take off: nav targets the next waypoint (label "next"), remove is offered.
+  // Take off: nav targets the next waypoint, but with nothing SELECTED the
+  // clear-checkpoint button is not shown (it is not a "remove next" button).
   await armAndFly(page, emit);
   await expect(page.getByText("Distance to waypoint")).toBeVisible();
-  await expect(page.getByTestId("remove-next-waypoint")).toBeVisible();
+  await expect(page.getByTestId("remove-waypoint")).toHaveCount(0);
 
-  // Fly through the first pin → "Waypoint reached"; nav retargets to the
-  // second (still "next").
-  await emit([
-    { speed: 7, latitude: p1Lat - 0.005, longitude: p1Lng },
-    { speed: 7, latitude: p1Lat, longitude: p1Lng },
-  ]);
-  await page.waitForFunction(() =>
-    (window as unknown as { __spoken: string[] }).__spoken.includes(
-      "Waypoint reached",
-    ),
-  );
+  // Fly to just shy of the first pin so its marker sits on-screen (the ring is
+  // 322 m; 0.005° ≈ 556 m, so it is NOT reached).
+  await emit([{ speed: 7, latitude: p1Lat - 0.005, longitude: p1Lng }]);
+
+  // Tap the pin → it becomes selected → the clear-checkpoint button appears.
+  await page.locator(".waypoint-pin").first().click();
+  await expect(page.getByTestId("remove-waypoint")).toBeVisible();
+
+  // Clear it → that checkpoint is removed; nav retargets to the second pin and
+  // the button hides again (nothing selected).
+  await page.getByTestId("remove-waypoint").click();
+  await expect(page.getByTestId("remove-waypoint")).toHaveCount(0);
   await expect(page.getByText("Distance to waypoint")).toBeVisible();
-
-  // Remove the last remaining target → nav falls back to launch.
-  await page.getByTestId("remove-next-waypoint").click();
-  await expect(page.getByText("Distance to launch")).toBeVisible();
-  await expect(page.getByTestId("remove-next-waypoint")).toHaveCount(0);
-
-  // Only the physically-reached pin announced; the removed one was silent.
-  const spoken = await page.evaluate(
-    () => (window as unknown as { __spoken: string[] }).__spoken,
-  );
-  expect(spoken.filter((text) => text === "Waypoint reached")).toHaveLength(1);
 });
 
 test("track-up toggle rotates the camera immediately, not on a glide", async ({
