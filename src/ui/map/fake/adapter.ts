@@ -237,6 +237,13 @@ export function createFakeMapView(container: HTMLElement): MapView {
                 onClick();
               });
             }
+            if (spec.onSelect) {
+              const onSelect = spec.onSelect;
+              el.addEventListener("click", (event) => {
+                event.stopPropagation();
+                onSelect();
+              });
+            }
             markerRoot.appendChild(el);
             const marker: FakeMarker = {
               place() {

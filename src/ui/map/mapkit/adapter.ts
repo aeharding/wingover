@@ -338,6 +338,16 @@ export async function createMapKitMapView(
             onClick();
           });
         }
+        if (spec.onSelect) {
+          const onSelect = spec.onSelect;
+          // Tap-to-SELECT: let MapKit's native selection stand (the pin grows
+          // and stays) — that IS the highlight — and just report it.
+          target.addEventListener("select", () => onSelect());
+        }
+        if (spec.onDeselect) {
+          const onDeselect = spec.onDeselect;
+          target.addEventListener("deselect", () => onDeselect());
+        }
         if (spec.draggable) {
           // The annotation's own coordinate tracks the drag; read it on each
           // move (live line redraw) and on release (commit).

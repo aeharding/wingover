@@ -7,7 +7,7 @@ import {
   useIonViewWillEnter,
 } from "@ionic/react";
 import {
-  checkboxOutline,
+  closeOutline,
   compassOutline,
   locateOutline,
   locationOutline,
@@ -95,9 +95,18 @@ export default function FlyPage() {
   useIonViewWillEnter(() => {
     listPins().then(setPlannedPins);
   });
+  // The waypoint the pilot tapped on the map — gates the "clear checkpoint"
+  // control. Held as an id; the live active set decides whether it still exists.
+  const [selectedWaypointId, setSelectedWaypointId] = useState<string | null>(
+    null,
+  );
   const instrumentsRef = useRef<HTMLDivElement>(null);
 
   const { track, latest, landingAt, nextWaypoint, error: gpsError } = snapshot;
+  // Only a still-active selection surfaces the control; a reached/removed pin
+  // drops out of activeWaypoints and the button hides on its own.
+  const selectedWaypoint =
+    snapshot.activeWaypoints.find((w) => w.id === selectedWaypointId) ?? null;
   const status: EngineStatus | "loading" = ready ? snapshot.status : "loading";
 
   function changeMapView(value: MapViewKind) {
@@ -407,9 +416,10 @@ export default function FlyPage() {
               navWaypoints={snapshot.activeWaypoints}
               onAddWaypoint={(at) => {
                 // Long-press: the new ad-hoc point becomes the next target;
-                // the skip button is the instant undo for a mistap.
+                // tap it then clear if it was a mistap.
                 void engine.addAdhocWaypoint(at);
               }}
+              onSelectWaypoint={setSelectedWaypointId}
               onFollowChange={changeFollow}
             />
             {gpsError && (
@@ -425,18 +435,21 @@ export default function FlyPage() {
               {/* Contextual: floats ABOVE the fixed control grid (which is
                   bottom-anchored) so appearing/disappearing never nudges the
                   four regular controls out of their fixed positions. */}
-              {nextWaypoint && (
+              {selectedWaypoint && (
                 <button
                   className="map-button skip-button"
-                  aria-label="Clear next waypoint"
-                  data-testid="remove-next-waypoint"
-                  onClick={() => void engine.removeNextWaypoint()}
+                  aria-label="Clear selected waypoint"
+                  data-testid="remove-waypoint"
+                  onClick={() => {
+                    void engine.removeWaypoint(selectedWaypoint.id);
+                    setSelectedWaypointId(null);
+                  }}
                 >
-                  {/* A location pin with a checkbox badge: "mark this
-                      waypoint done / clear it". */}
+                  {/* A location pin with a small trash badge: "delete this
+                      selected checkpoint". */}
                   <span className="skip-icon" aria-hidden="true">
                     <IonIcon icon={locationOutline} />
-                    <IonIcon className="skip-icon-badge" icon={checkboxOutline} />
+                    <IonIcon className="skip-icon-badge" icon={closeOutline} />
                   </span>
                 </button>
               )}
