@@ -1,6 +1,6 @@
 import { useEffect, useEffectEvent, useRef, useState } from "react";
 
-import type { Fix } from "../../engine/types";
+import type { Fix, Waypoint } from "../../engine/types";
 import type { MapViewKind } from "./config";
 import { readLiveViewState, writeLiveViewState } from "./liveViewState";
 import MapCanvas from "./MapCanvas";
@@ -11,6 +11,8 @@ import {
   type Line,
   type LngLat,
   type MapView,
+  type MarkerLayer,
+  type MarkerSpec,
   TRACK_LINE_WIDTH_PX,
 } from "./types";
 import ZoomControl from "./ZoomControl";
@@ -26,6 +28,22 @@ import "./LiveTrackMap.css";
 const WHEEL_ZOOM_RATE = 1 / 450;
 const PINCH_ZOOM_RATE = 1 / 100;
 
+// The planned route reference: a static grey line from launch through every
+// planned pin, plus numbered markers for the ACTIVE nav sequence (green =
+// planned, blue = ad-hoc). Passed points are simply absent from the active
+// list, so their markers disappear while the grey line stays.
+const PLAN_LINE_COLOR = "#8f96a3";
+const PLANNED_COLOR = "#35e06a";
+const ADHOC_COLOR = "#4cc2ff";
+
+function waypointPinEl(color: string, label: string): HTMLElement {
+  const el = document.createElement("div");
+  el.className = "waypoint-pin";
+  el.setAttribute("aria-hidden", "true");
+  el.innerHTML = `<svg viewBox="0 0 24 32" width="26" height="35" xmlns="http://www.w3.org/2000/svg"><path d="M12 0C5.4 0 0 5.4 0 12c0 9 12 20 12 20s12-11 12-20C24 5.4 18.6 0 12 0z" fill="${color}"/><circle cx="12" cy="12" r="7" fill="#fff"/><text x="12" y="12" text-anchor="middle" dominant-baseline="central" font-size="9.5" font-weight="700" fill="${color}">${label}</text></svg>`;
+  return el;
+}
+
 interface LiveTrackMapProps {
   track: Fix[];
   latest: Fix | null;
@@ -33,6 +51,12 @@ interface LiveTrackMapProps {
   follow: boolean;
   trackUp: boolean;
   topInset?: number;
+  // All planned pins (immutable) — the grey optimal-path reference line.
+  plannedWaypoints: Waypoint[];
+  // The active nav sequence in steer-to order — the numbered markers.
+  navWaypoints: Waypoint[];
+  // Long-press on the map to drop an ad-hoc waypoint. at = [longitude, latitude].
+  onAddWaypoint?: (at: LngLat) => void;
   onFollowChange: (follow: boolean) => void;
 }
 
@@ -43,6 +67,9 @@ export default function LiveTrackMap({
   follow,
   trackUp,
   topInset = 0,
+  plannedWaypoints,
+  navWaypoints,
+  onAddWaypoint,
   onFollowChange,
 }: LiveTrackMapProps) {
   const [map, setMap] = useState<MapView | null>(null);
@@ -51,6 +78,12 @@ export default function LiveTrackMap({
   // aircraft() overlay the backend renders however it can.
   const trackLineRef = useRef<Line | null>(null);
   const aircraftRef = useRef<Aircraft | null>(null);
+  // The grey planned-route line + the numbered waypoint markers. The signature
+  // guards a rebuild to only when the plan/active-set/launch actually changes
+  // (not every ~1 Hz fix).
+  const planLineRef = useRef<Line | null>(null);
+  const waypointMarkersRef = useRef<MarkerLayer | null>(null);
+  const waypointSigRef = useRef<string>("");
   const positionInitializedRef = useRef(false);
   const interactingRef = useRef(false);
 
@@ -113,13 +146,27 @@ export default function LiveTrackMap({
     map.moveTo({ zoom: next }, { animate: false });
   });
 
+  const handleLongPress = useEffectEvent((at: LngLat) => {
+    onAddWaypoint?.(at);
+  });
+
   const setupMap = useEffectEvent((mapView: MapView) => {
+    // The grey plan reference is created FIRST so it sits UNDER the cyan flown
+    // track (later lines draw on top). A fresh map → force a marker rebuild.
+    planLineRef.current = mapView.line({
+      color: PLAN_LINE_COLOR,
+      width: 3,
+      opacity: 0.7,
+      testId: "plan",
+    });
     trackLineRef.current = mapView.line({
       color: "#4cc2ff",
       width: TRACK_LINE_WIDTH_PX,
       testId: "track",
     });
     aircraftRef.current = mapView.aircraft();
+    waypointMarkersRef.current = mapView.markers();
+    waypointSigRef.current = "";
 
     mapView.lockZoomAnchor(follow ? "center" : null);
     mapView.on("down", () => {
@@ -134,6 +181,7 @@ export default function LiveTrackMap({
     });
     mapView.on("dragstart", () => handleDragStart());
     mapView.on("wheel", (event) => handleWheel(event));
+    mapView.on("longpress", (event) => handleLongPress(event.at));
     mapView.on("zoomend", () => {
       writeLiveViewState({ zoom: mapView.camera().zoom });
     });
@@ -162,6 +210,42 @@ export default function LiveTrackMap({
   useEffect(() => {
     if (map) setupMap(map);
   }, [map]);
+
+  // Draw the grey plan line (launch → all planned pins) and the numbered active
+  // markers (green planned / blue ad-hoc). The signature skips a rebuild on the
+  // ~1 Hz fix cadence — only a reach/add/remove, or launch appearing, redraws.
+  useEffect(() => {
+    if (!map) return;
+    const launch = track[0];
+    const planCoords: LngLat[] =
+      launch && plannedWaypoints.length > 0
+        ? [
+            [launch.longitude, launch.latitude],
+            ...plannedWaypoints.map((w): LngLat => [w.longitude, w.latitude]),
+          ]
+        : [];
+    const sig = [
+      navWaypoints.map((w) => w.id).join(","),
+      plannedWaypoints.map((w) => w.id).join(","),
+      launch ? "L" : "",
+    ].join("|");
+    if (sig === waypointSigRef.current) return;
+    waypointSigRef.current = sig;
+    planLineRef.current?.set(planCoords);
+    const specs: MarkerSpec[] = navWaypoints.map((w, index) => {
+      const adhoc = !plannedWaypoints.some((p) => p.id === w.id);
+      const color = adhoc ? ADHOC_COLOR : PLANNED_COLOR;
+      return {
+        id: w.id,
+        at: [w.longitude, w.latitude],
+        el: waypointPinEl(color, String(index + 1)),
+        color,
+        label: String(index + 1),
+        anchor: "bottom",
+      };
+    });
+    waypointMarkersRef.current?.set(specs);
+  }, [map, track, plannedWaypoints, navWaypoints]);
 
   const handleNewFix = useEffectEvent((fix: Fix) => {
     if (!map) return;

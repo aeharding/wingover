@@ -2,6 +2,7 @@ import { IDBFactory } from "fake-indexeddb";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
 
 import { LANDING_SUSTAIN_FIXES } from "../flight/landing";
+import { createWaypointTracker, WAYPOINT_RADIUS_M } from "../flight/waypoints";
 import {
   GeolocationRecordingEngine,
   navigatorPositionSource,
@@ -714,36 +715,567 @@ describe("recorder lock", () => {
 });
 
 describe("session waypoints", () => {
-  it("seeds from start options, appends, survives rehydration, clears on stop", async () => {
-    const waypoint = { id: "a", latitude: 43, longitude: -89.4, radiusM: 200 };
+  it("seeds planned; ad-hoc is a separate group; survives rehydration; clears on discard", async () => {
+    const a = {
+      id: "a",
+      latitude: 43.03,
+      longitude: -89.4,
+      radiusM: WAYPOINT_RADIUS_M,
+    };
     const first = createEngine();
-    await first.start({ waypoints: [waypoint] });
-    expect((await first.getSnapshot()).waypoints).toEqual([waypoint]);
-    await first.addWaypoints([{ ...waypoint, id: "b" }]);
+    await first.start({ waypoints: [a] });
 
+    let snap = await first.getSnapshot();
+    expect(snap.waypoints).toEqual([a]);
+    expect(snap.adhocWaypoints).toEqual([]);
+    expect(snap.waypointsCursor).toBe(0);
+    expect(snap.nextWaypoint).toEqual(a);
+
+    // New API: [longitude, latitude] tuple; id + radius are minted.
+    await first.addAdhocWaypoint([-89.401, 43.001]);
+    snap = await first.getSnapshot();
+    expect(snap.waypoints).toEqual([a]); // planned untouched
+    expect(snap.adhocWaypoints).toHaveLength(1);
+    expect(snap.adhocWaypoints[0]).toMatchObject({
+      latitude: 43.001,
+      longitude: -89.401,
+      radiusM: WAYPOINT_RADIUS_M,
+    });
+    expect(snap.nextWaypoint).toEqual(snap.adhocWaypoints[0]); // ad-hoc wins
+
+    // Both groups survive a webview death.
     const reborn = createEngine();
-    const snapshot = await reborn.getSnapshot();
-    expect(snapshot.waypoints.map((w) => w.id)).toEqual(["a", "b"]);
+    const r = await reborn.getSnapshot();
+    expect(r.waypoints).toEqual([a]);
+    expect(r.adhocWaypoints).toHaveLength(1);
+    expect(r.adhocWaypoints[0].latitude).toBe(43.001);
+    expect(r.waypointsCursor).toBe(0);
 
     await reborn.discard();
-    expect((await reborn.getSnapshot()).waypoints).toEqual([]);
+    const cleared = await reborn.getSnapshot();
+    expect(cleared.waypoints).toEqual([]);
+    expect(cleared.adhocWaypoints).toEqual([]);
+    expect(cleared.waypointsCursor).toBe(0);
+    expect(cleared.nextWaypoint).toBeNull();
   });
 });
 
 describe("waypoint config pushes", () => {
-  it("pushes the session's set when the watch is established and on additions", async () => {
+  it("feeds the active remaining set on start, add, reach, and remove", async () => {
     const pushes: number[] = [];
     const engine = new GeolocationRecordingEngine({
       source: navigatorPositionSource,
       setWaypoints: (waypoints) => pushes.push(waypoints.length),
     });
     engines.push(engine);
-    const waypoint = { id: "a", latitude: 43, longitude: -89.4, radiusM: 200 };
-    await engine.start({ waypoints: [waypoint] });
-    await engine.addWaypoints([{ ...waypoint, id: "b" }]);
-    await engine.discard();
-    // No push at discard: the watch teardown carries core.stop on both
-    // platforms.
-    expect(pushes).toEqual([1, 2]);
+    const far = {
+      id: "a",
+      latitude: 43.03,
+      longitude: -89.4,
+      radiusM: WAYPOINT_RADIUS_M,
+    };
+
+    // ensureWatch feeds active = [far] -> 1. Arm/takeoff fixes at 43.0 are
+    // outside far, so no reach, no extra push.
+    await armAndTakeOff(engine, { waypoints: [far] });
+    // Ad-hoc prepends -> active [x, far] -> 2.
+    await engine.addAdhocWaypoint([-89.4, 43.01]);
+    // Reach far (armed outside during takeoff) -> active [x] -> 1.
+    geolocation.emit(position({ latitude: 43.03, speed: 6 }));
+    await settle();
+    // Remove the front (x) -> active [] -> 0.
+    await engine.removeNextWaypoint();
+
+    await engine.discard(); // no push: watch teardown carries core.stop
+    expect(pushes).toEqual([1, 2, 1, 0]);
+  });
+});
+
+describe("waypoint navigation", () => {
+  // radiusM = 321.8688 m. At lat 43, 1° lat ≈ 111 194.93 m. Launch is (43.0,
+  // -89.4) — armAndTakeOff never moves, so any waypoint off 43.0 arms OUTSIDE
+  // during takeoff and a later fix at its latitude crosses in. Keep test
+  // waypoints ≥ 0.01° (1112 m) apart so their 322 m rings never overlap,
+  // except where a boundary/overlap is deliberately exercised.
+  const wp = (id: string, latitude: number, longitude = -89.4) => ({
+    id,
+    latitude,
+    longitude,
+    radiusM: WAYPOINT_RADIUS_M,
+  });
+  const drive = (latitude: number, longitude = -89.4) =>
+    geolocation.emit(position({ latitude, longitude, speed: 6 }));
+
+  function manualSource() {
+    let deliver: ((batch: SourcePosition[]) => void) | null = null;
+    const source: PositionSource = {
+      watch(onPositions) {
+        deliver = onPositions;
+        return () => {
+          deliver = null;
+        };
+      },
+    };
+    return { source, push: (batch: SourcePosition[]) => deliver?.(batch) };
+  }
+
+  // N1
+  it("snapshot exposes waypoints, adhocWaypoints, waypointsCursor, nextWaypoint", async () => {
+    const engine = createEngine();
+    const far = wp("a", 43.03);
+    await engine.start({ waypoints: [far] });
+    const snap = await engine.getSnapshot();
+    expect(snap.waypoints).toEqual([far]);
+    expect(snap.adhocWaypoints).toEqual([]);
+    expect(snap.waypointsCursor).toBe(0);
+    expect(snap.nextWaypoint).toEqual(far);
+    expect(snap.activeWaypoints).toEqual([far]);
+  });
+
+  // N2
+  it("reaching a planned waypoint advances the cursor (derived, transition)", async () => {
+    const engine = createEngine();
+    const far = wp("a", 43.03);
+    await armAndTakeOff(engine, { waypoints: [far] });
+    expect(engine.snapshotSync().waypointsCursor).toBe(0);
+    expect(engine.snapshotSync().nextWaypoint).toEqual(far);
+    drive(43.03); // cross into far
+    expect(engine.snapshotSync().waypointsCursor).toBe(1);
+    expect(engine.snapshotSync().nextWaypoint).toBeNull();
+    drive(43.03); // dwelling: already passed, idempotent
+    expect(engine.snapshotSync().waypointsCursor).toBe(1);
+  });
+
+  // N3 — RED-critical: raw proximity would advance here.
+  it("launching inside a waypoint neither advances nor skips it", async () => {
+    const engine = createEngine();
+    const atLaunch = wp("a", 43.0); // fixes at 43.0 are inside its 322 m ring
+    await armAndTakeOff(engine, { waypoints: [atLaunch] });
+    expect(engine.snapshotSync().waypointsCursor).toBe(0);
+    expect(engine.snapshotSync().nextWaypoint).toEqual(atLaunch);
+  });
+
+  // N4
+  it("reach fires at the 322 m boundary (<= radius), not just outside it", async () => {
+    const engine = createEngine();
+    await armAndTakeOff(engine, { waypoints: [wp("a", 43.03)] }); // armed outside
+    drive(43.033); // 333.6 m out
+    expect(engine.snapshotSync().waypointsCursor).toBe(0);
+    drive(43.0328); // 311.3 m in
+    expect(engine.snapshotSync().waypointsCursor).toBe(1);
+  });
+
+  // N5
+  it("a dropped sub-500 ms duplicate never advances", async () => {
+    const engine = createEngine();
+    await armAndTakeOff(engine, { waypoints: [wp("a", 43.03)] });
+    geolocation.emit(position({ latitude: 43.03, speed: 6 }, 44)); // dropped
+    expect(engine.snapshotSync().waypointsCursor).toBe(0);
+    geolocation.emit(position({ latitude: 43.03, speed: 6 }, 1000)); // survives
+    expect(engine.snapshotSync().waypointsCursor).toBe(1);
+  });
+
+  // N6
+  it("ad-hoc waypoints queue FIFO, ahead of the plan", async () => {
+    const engine = createEngine();
+    await armAndTakeOff(engine, { waypoints: [wp("far", 43.03)] });
+    await engine.addAdhocWaypoint([-89.4, 43.01]); // x1
+    await engine.addAdhocWaypoint([-89.4, 43.02]); // x2
+    const snap = engine.snapshotSync();
+    expect(snap.adhocWaypoints.map((w) => w.latitude)).toEqual([43.01, 43.02]);
+    expect(snap.nextWaypoint).toEqual(snap.adhocWaypoints[0]); // FIFO head
+    expect(snap.waypointsCursor).toBe(0);
+    // Numbered nav order: ad-hoc x1, x2, then the planned far.
+    expect(snap.activeWaypoints.map((w) => w.latitude)).toEqual([
+      43.01, 43.02, 43.03,
+    ]);
+  });
+
+  // N7
+  it("passing ad-hoc drains the queue, then the plan resumes", async () => {
+    const engine = createEngine();
+    const far = wp("far", 43.03);
+    await armAndTakeOff(engine, { waypoints: [far] });
+    await engine.addAdhocWaypoint([-89.4, 43.01]); // x1
+    await engine.addAdhocWaypoint([-89.4, 43.02]); // x2
+    drive(43.0); // arm x1/x2 outside
+    drive(43.01); // reach x1
+    let snap = engine.snapshotSync();
+    expect(snap.adhocWaypoints.map((w) => w.latitude)).toEqual([43.02]);
+    expect(snap.nextWaypoint?.latitude).toBe(43.02);
+    drive(43.02); // reach x2
+    snap = engine.snapshotSync();
+    expect(snap.adhocWaypoints).toEqual([]);
+    expect(snap.nextWaypoint).toEqual(far);
+    expect(snap.waypointsCursor).toBe(0);
+    drive(43.03); // reach far
+    snap = engine.snapshotSync();
+    expect(snap.nextWaypoint).toBeNull();
+    expect(snap.waypointsCursor).toBe(1);
+  });
+
+  // N8 — RED-critical: without addedAtIndex the reborn replay would count the
+  // pre-add crossing and mark the ad-hoc reached.
+  it("an ad-hoc added after overflying its spot is not falsely reached", async () => {
+    const first = createEngine();
+    await armAndTakeOff(first); // no planned
+    drive(43.017); // a genuine cross THROUGH 43.02 while nothing is armed there
+    drive(43.02);
+    drive(43.023);
+    await first.addAdhocWaypoint([-89.4, 43.02]); // long-pressed after the fact
+    await first.getSnapshot(); // drain
+
+    const reborn = createEngine();
+    const snap = await reborn.getSnapshot();
+    expect(snap.nextWaypoint?.latitude).toBe(43.02); // still active, not reached
+  });
+
+  // N9
+  it("remove advances silently through the plan", async () => {
+    const engine = createEngine();
+    await armAndTakeOff(engine, { waypoints: [wp("a", 43.03), wp("b", 43.06)] });
+    await engine.removeNextWaypoint();
+    expect(engine.snapshotSync().waypointsCursor).toBe(1);
+    expect(engine.snapshotSync().nextWaypoint?.id).toBe("b");
+  });
+
+  // N10
+  it("remove takes the ad-hoc front first (FIFO)", async () => {
+    const engine = createEngine();
+    const p = wp("p", 43.03);
+    await armAndTakeOff(engine, { waypoints: [p] });
+    await engine.addAdhocWaypoint([-89.4, 43.01]);
+    await engine.removeNextWaypoint();
+    const snap = engine.snapshotSync();
+    expect(snap.adhocWaypoints).toEqual([]);
+    expect(snap.nextWaypoint).toEqual(p);
+    expect(snap.waypointsCursor).toBe(0);
+  });
+
+  // N11
+  it("remove is a no-op when nothing is left", async () => {
+    const pushes: number[] = [];
+    const engine = new GeolocationRecordingEngine({
+      source: navigatorPositionSource,
+      setWaypoints: () => pushes.push(1),
+    });
+    engines.push(engine);
+    await armAndTakeOff(engine, { waypoints: [wp("a", 43.03)] });
+    await engine.removeNextWaypoint(); // cursor -> 1
+    expect(engine.snapshotSync().nextWaypoint).toBeNull();
+    const pushesAfterFirst = pushes.length;
+    await engine.removeNextWaypoint(); // exhausted: no write, no push
+    expect(engine.snapshotSync().waypointsCursor).toBe(1);
+    expect(pushes.length).toBe(pushesAfterFirst);
+  });
+
+  // N12 — multi-hit in one batch (defects 4/9).
+  it("one replayed batch flying through several waypoints advances multiply", async () => {
+    const src = manualSource();
+    const engine = new GeolocationRecordingEngine({
+      source: src.source,
+      setWaypoints: () => {},
+    });
+    engines.push(engine);
+    await engine.start({ waypoints: [wp("A", 43.03), wp("B", 43.045)] }); // 1668 m apart
+    // Arm + take off at 43.0 (both armed outside).
+    const takeoff: SourcePosition[] = [];
+    for (let i = 0; i < 3; i++) takeoff.push(position({ speed: 0 }));
+    takeoff.push(position({ speed: 2 }));
+    takeoff.push(position({ speed: 3 }));
+    for (let i = 0; i < 5; i++) takeoff.push(position({ speed: 6 }));
+    src.push(takeoff);
+    expect(engine.snapshotSync().status).toBe("recording");
+    // ONE batch that crosses both A and B (then leaves).
+    src.push([
+      position({ latitude: 43.03, speed: 6 }),
+      position({ latitude: 43.045, speed: 6 }),
+      position({ latitude: 43.06, speed: 6 }),
+    ]);
+    const snap = engine.snapshotSync();
+    expect(snap.waypointsCursor).toBe(2);
+    expect(snap.nextWaypoint).toBeNull();
+  });
+
+  // N12b — a single fix inside two overlapping radii reaches both.
+  it("one fix inside two overlapping radii reaches both", async () => {
+    const engine = createEngine();
+    // A@43.030, B@43.031 — 111 m apart, rings overlap.
+    await armAndTakeOff(engine, { waypoints: [wp("A", 43.03), wp("B", 43.031)] });
+    drive(43.0305); // inside both A and B
+    const snap = engine.snapshotSync();
+    expect(snap.waypointsCursor).toBe(2);
+    expect(snap.nextWaypoint).toBeNull();
+  });
+
+  // N13 — blocker 1/8: reach emits no session write; reborn re-derives.
+  it("a reborn engine re-derives the cursor from the buffer (no journaled reach)", async () => {
+    const first = createEngine();
+    await armAndTakeOff(first, {
+      waypoints: [wp("a", 43.03), wp("b", 43.06)],
+    });
+    drive(43.03); // reach a
+    await first.getSnapshot(); // drain fix flush
+
+    const reborn = createEngine();
+    const snap = await reborn.getSnapshot();
+    expect(snap.waypointsCursor).toBe(1);
+    expect(snap.nextWaypoint?.id).toBe("b");
+  });
+
+  // N14 — reborn feeds only the remaining set (passed waypoint not re-armed).
+  it("a reborn engine feeds only the un-passed waypoints", async () => {
+    const first = createEngine();
+    await armAndTakeOff(first, {
+      waypoints: [wp("a", 43.03), wp("b", 43.06)],
+    });
+    drive(43.03); // reach a
+    await first.getSnapshot();
+
+    const pushes: string[][] = [];
+    const reborn = new GeolocationRecordingEngine({
+      source: navigatorPositionSource,
+      setWaypoints: (w) => pushes.push(w.map((x) => x.id)),
+    });
+    engines.push(reborn);
+    await reborn.getSnapshot();
+    expect(pushes[0]).toEqual(["b"]); // a excluded -> cannot re-announce
+  });
+
+  // N15 — the mirror stays in lockstep with the announcer's tracker.
+  it("reach count equals the tracker's announcement count over the same path", async () => {
+    const waypoints = [wp("A", 43.03), wp("B", 43.06)];
+    const path = [43.0, 43.0, 43.03, 43.045, 43.06, 43.07]; // arm outside, cross A, cross B
+
+    // Tracker: count "Waypoint reached" over the identical fed set + path.
+    const tracker = createWaypointTracker();
+    tracker.setWaypoints(waypoints);
+    let announced = 0;
+    for (const latitude of path) {
+      announced += tracker.ingest({ latitude, longitude: -89.4 }).length;
+    }
+
+    // Engine: count cursor advances over the same path.
+    const engine = createEngine();
+    await armAndTakeOff(engine, { waypoints });
+    for (const latitude of path) drive(latitude);
+    const advances = engine.snapshotSync().waypointsCursor;
+
+    expect(announced).toBe(2);
+    expect(advances).toBe(announced);
+  });
+
+  // N16 — ad-hoc reach round-trips and does not resurrect on reborn.
+  it("a reached ad-hoc stays passed across a reborn", async () => {
+    const first = createEngine();
+    const a = wp("a", 43.03);
+    await armAndTakeOff(first, { waypoints: [a] });
+    await first.addAdhocWaypoint([-89.4, 43.01]);
+    drive(43.0); // arm ad-hoc outside
+    drive(43.01); // reach the ad-hoc
+    await first.getSnapshot();
+
+    const reborn = createEngine();
+    const snap = await reborn.getSnapshot();
+    expect(snap.adhocWaypoints).toEqual([]); // passed, not resurrected
+    expect(snap.nextWaypoint).toEqual(a);
+    expect(snap.waypointsCursor).toBe(0);
+  });
+
+  // N17 — a finalized flight surfaces no live target.
+  it("an ended flight clears nextWaypoint even with waypoints unreached", async () => {
+    const engine = createEngine();
+    await armAndTakeOff(engine, {
+      waypoints: [wp("a", 43.03), wp("b", 43.06)],
+    });
+    engine.end();
+    const snap = engine.snapshotSync();
+    expect(snap.status).toBe("ended");
+    expect(snap.nextWaypoint).toBeNull();
+  });
+
+  // N18 — one fix crossing into an overlapping planned pin AND an ad-hoc
+  // (both armed outside first) reaches both, with a single coalesced push.
+  it("one fix reaches an overlapping planned + ad-hoc together, pushing once", async () => {
+    const pushes: string[][] = [];
+    const engine = new GeolocationRecordingEngine({
+      source: navigatorPositionSource,
+      setWaypoints: (w) => pushes.push(w.map((x) => x.id)),
+    });
+    engines.push(engine);
+    await armAndTakeOff(engine, { waypoints: [wp("p", 43.03)] }); // armed outside
+    await engine.addAdhocWaypoint([-89.4, 43.0305]); // 56 m from p — rings overlap
+    drive(43.0); // the ad-hoc's first evaluated fix arms it OUTSIDE
+    const before = pushes.length;
+    drive(43.0305); // one fix inside both rings
+    const snap = engine.snapshotSync();
+    expect(snap.waypointsCursor).toBe(1); // planned p passed
+    expect(snap.adhocWaypoints).toEqual([]); // ad-hoc passed
+    expect(snap.nextWaypoint).toBeNull();
+    expect(pushes.length).toBe(before + 1); // one coalesced push, not two
+  });
+
+  // N19 — an ad-hoc long-pressed while already inside its ring (addedAtIndex
+  // == the next fix's index) arms silently, is NOT falsely reached, and only
+  // reaches on a real re-entry. Guards the addedAtIndex <= index boundary.
+  it("an ad-hoc added inside its own ring arms silently, reaches on re-entry", async () => {
+    const engine = createEngine();
+    await armAndTakeOff(engine); // no planned
+    drive(43.02); // fly to the spot
+    await engine.addAdhocWaypoint([-89.4, 43.02]); // long-press where we stand
+    drive(43.02); // first evaluated fix is INSIDE -> arm silent, not reached
+    expect(engine.snapshotSync().nextWaypoint?.latitude).toBe(43.02);
+    drive(43.0); // leave the ring
+    expect(engine.snapshotSync().nextWaypoint?.latitude).toBe(43.02);
+    drive(43.02); // re-enter: outside -> inside = reached
+    expect(engine.snapshotSync().nextWaypoint).toBeNull();
+  });
+
+  // N20 — a removed waypoint later physically overflown stays removed
+  // (removedIds and reachedIds are disjoint); it never resurfaces as target.
+  it("a removed waypoint physically overflown stays removed", async () => {
+    const engine = createEngine();
+    await armAndTakeOff(engine, {
+      waypoints: [wp("a", 43.03), wp("b", 43.06)],
+    });
+    await engine.removeNextWaypoint(); // remove a
+    expect(engine.snapshotSync().nextWaypoint?.id).toBe("b");
+    drive(43.03); // fly straight through a's ring
+    const snap = engine.snapshotSync();
+    expect(snap.nextWaypoint?.id).toBe("b"); // a did NOT re-activate / reach
+    expect(snap.waypointsCursor).toBe(1);
+    drive(43.06); // b still reachable
+    expect(engine.snapshotSync().nextWaypoint).toBeNull();
+  });
+
+  // N21 — reach is derived in-memory, independent of the WAL. A flush that
+  // fails on the reaching fix still advances the cursor and flags a storage
+  // error; a reborn self-heals from the retained + re-flushed buffer.
+  it("a reach survives a failed fix-flush and self-heals on reborn", async () => {
+    const first = createEngine();
+    await armAndTakeOff(first, { waypoints: [wp("a", 43.03)] });
+    await first.getSnapshot(); // drain: durable so far
+
+    const workingIndexedDB = globalThis.indexedDB;
+    globalThis.indexedDB = {
+      open() {
+        throw new Error("quota exceeded");
+      },
+    } as unknown as IDBFactory;
+
+    drive(43.03); // reach a, but the flush fails
+    await settle();
+    expect(first.snapshotSync().error?.code).toBe("storage");
+    expect(first.snapshotSync().waypointsCursor).toBe(1); // derived, not journaled
+
+    // Storage recovers: the retained reaching fix flushes, the error clears.
+    globalThis.indexedDB = workingIndexedDB;
+    drive(43.03);
+    await expect
+      .poll(() => first.snapshotSync().error, { timeout: 5000 })
+      .toBeNull();
+    await first.getSnapshot(); // drain
+
+    const reborn = createEngine();
+    const snap = await reborn.getSnapshot();
+    expect(snap.waypointsCursor).toBe(1); // self-healed from the buffer
+  });
+
+  // N22 — a reach and a >= 15 min stale gap in the SAME batch: the reach is
+  // counted, the flight ends at the reaching fix, the track keeps it, and the
+  // ended state suppresses the reach re-feed push.
+  it("a reach then a stale gap in one batch ends the flight, cursor kept, no re-feed", async () => {
+    const pushes: number[] = [];
+    const src = manualSource();
+    const engine = new GeolocationRecordingEngine({
+      source: src.source,
+      setWaypoints: () => pushes.push(1),
+    });
+    engines.push(engine);
+    await engine.start({ waypoints: [wp("A", 43.03)] });
+    const takeoff: SourcePosition[] = [];
+    for (let i = 0; i < 3; i++) takeoff.push(position({ speed: 0 }));
+    takeoff.push(position({ speed: 2 }));
+    takeoff.push(position({ speed: 3 }));
+    for (let i = 0; i < 5; i++) takeoff.push(position({ speed: 6 }));
+    src.push(takeoff);
+    const before = pushes.length;
+    // One batch: cross into A, then a fix 20 min later (a stale gap).
+    src.push([
+      position({ latitude: 43.03, speed: 6 }),
+      position({ latitude: 43.03, speed: 6 }, 20 * 60 * 1000),
+    ]);
+    const snap = engine.snapshotSync();
+    expect(snap.status).toBe("ended");
+    expect(snap.waypointsCursor).toBe(1); // reach counted despite the gap
+    expect(snap.track.some((f) => f.latitude === 43.03)).toBe(true); // kept
+    expect(pushes.length).toBe(before); // ended -> the reach push is suppressed
+  });
+
+  // N23 — dismissLanding while the watch is still alive re-feeds nothing
+  // (ensureWatch early-returns on a live watch): no extra setWaypoints push.
+  it("dismissLanding while landed pushes no waypoints and returns to recording", async () => {
+    const pushes: number[] = [];
+    const engine = new GeolocationRecordingEngine({
+      source: navigatorPositionSource,
+      setWaypoints: () => pushes.push(1),
+    });
+    engines.push(engine);
+    await armAndTakeOff(engine, { waypoints: [wp("a", 43.03)] });
+    for (let i = 0; i < LANDING_SUSTAIN_FIXES; i++) {
+      geolocation.emit(position({ speed: 0.3 })); // stationary at 43.0, far from a
+    }
+    expect(engine.snapshotSync().status).toBe("landed");
+    const before = pushes.length;
+    engine.dismissLanding();
+    expect(engine.snapshotSync().status).toBe("recording");
+    expect(pushes.length).toBe(before); // no re-feed
+  });
+
+  // N24 — reach is ungated on takeoff so the engine mirrors the always-on
+  // announcer. A waypoint crossed while still acquiring/armed is already
+  // passed once airborne — it never re-surfaces. A future "gate reach on
+  // takeoff" refactor (which would desync the announcer) must fail here.
+  it("a waypoint crossed before takeoff is already passed once airborne", async () => {
+    const engine = createEngine();
+    await engine.start({ waypoints: [wp("a", 43.03)] });
+    geolocation.emit(position({ latitude: 43.0, speed: 0 })); // arm a outside
+    geolocation.emit(position({ latitude: 43.03, speed: 0 })); // cross a, pre-takeoff
+    expect(engine.snapshotSync().status).not.toBe("recording");
+    geolocation.emit(position({ latitude: 43.03, speed: 0 }));
+    geolocation.emit(position({ latitude: 43.03, speed: 2 }));
+    geolocation.emit(position({ latitude: 43.03, speed: 3 }));
+    for (let i = 0; i < 5; i++) {
+      geolocation.emit(position({ latitude: 43.03, speed: 6 })); // dwell + take off
+    }
+    const snap = engine.snapshotSync();
+    expect(snap.status).toBe("recording");
+    expect(snap.nextWaypoint).toBeNull(); // a passed pre-takeoff, not re-armed
+    expect(snap.activeWaypoints).toEqual([]);
+    expect(snap.waypointsCursor).toBe(1);
+  });
+
+  // N25 — the ended-guard makes both mutators inert once the flight of record
+  // is final: no cursor/queue change, no push, no session write.
+  it("mutations after end() are inert", async () => {
+    const pushes: number[] = [];
+    const engine = new GeolocationRecordingEngine({
+      source: navigatorPositionSource,
+      setWaypoints: () => pushes.push(1),
+    });
+    engines.push(engine);
+    await armAndTakeOff(engine, {
+      waypoints: [wp("a", 43.03), wp("b", 43.06)],
+    });
+    engine.end();
+    expect(engine.snapshotSync().status).toBe("ended");
+    const before = pushes.length;
+    await engine.removeNextWaypoint(); // guarded: inert
+    await engine.addAdhocWaypoint([-89.4, 43.05]); // guarded: inert
+    const snap = engine.snapshotSync();
+    expect(snap.waypointsCursor).toBe(0); // unchanged
+    expect(snap.adhocWaypoints).toEqual([]); // add ignored
+    expect(snap.nextWaypoint).toBeNull(); // ended
+    expect(pushes.length).toBe(before); // no push from either mutator
   });
 });

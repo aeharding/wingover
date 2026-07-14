@@ -9,7 +9,10 @@ export type { Waypoint } from "../engine/types";
 // by the shared golden vectors in src/flight/golden.json, executed by both
 // test suites — divergence fails CI in both languages.
 
-export const DEFAULT_WAYPOINT_RADIUS_M = 200;
+// 0.2 mi ≈ 321.869 m — the reach/announce geofence for both planned pins
+// (session.ts) and mid-flight ad-hoc waypoints (real.ts). golden.json and the
+// cargo/vitest waypoint vectors pass explicit radiusM, so they are unaffected.
+export const WAYPOINT_RADIUS_M = 0.2 * 1609.344;
 
 export interface WaypointTracker {
   setWaypoints(waypoints: Waypoint[]): void;

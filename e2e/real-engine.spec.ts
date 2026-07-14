@@ -312,6 +312,68 @@ test("a pin becomes a spoken waypoint announcement mid-flight", async ({
   expect(spoken.filter((text) => text === "Waypoint reached")).toHaveLength(1);
 });
 
+test("in-flight nav: planned distance, retarget on reach, remove to launch", async ({
+  page,
+}) => {
+  await page.addInitScript(GEO_STUB);
+  const emit = makeEmitter(page);
+
+  // Two pins on the zoom-3 plan (far apart in coords → non-overlapping rings).
+  await page.goto(URL);
+  await page.getByText("Plan", { exact: true }).click();
+  const canvas = page.locator(".map-container");
+  await expect(canvas).toBeVisible();
+  await page.waitForTimeout(500);
+  const box = (await canvas.boundingBox())!;
+  for (const [x, y] of [
+    [120, 160],
+    [320, 460],
+  ]) {
+    await page.mouse.move(box.x + x, box.y + y);
+    await page.mouse.down();
+    await page.waitForTimeout(700);
+    await page.mouse.up();
+  }
+  const markers = page.getByTestId("pin-marker");
+  await expect(markers).toHaveCount(2);
+  // First-dropped pin sorts first → it is the first nav target.
+  const p1Lat = Number(await markers.nth(0).getAttribute("data-lat"));
+  const p1Lng = Number(await markers.nth(0).getAttribute("data-lng"));
+
+  // Idle Fly screen shows the planned-route length.
+  await page.getByText("Fly", { exact: true }).click();
+  await expect(page.getByTestId("planned-route")).toContainText("Planned route:");
+
+  // Take off: nav targets the next waypoint (label "next"), remove is offered.
+  await armAndFly(page, emit);
+  await expect(page.getByText("Distance to next")).toBeVisible();
+  await expect(page.getByTestId("remove-next-waypoint")).toBeVisible();
+
+  // Fly through the first pin → "Waypoint reached"; nav retargets to the
+  // second (still "next").
+  await emit([
+    { speed: 7, latitude: p1Lat - 0.005, longitude: p1Lng },
+    { speed: 7, latitude: p1Lat, longitude: p1Lng },
+  ]);
+  await page.waitForFunction(() =>
+    (window as unknown as { __spoken: string[] }).__spoken.includes(
+      "Waypoint reached",
+    ),
+  );
+  await expect(page.getByText("Distance to next")).toBeVisible();
+
+  // Remove the last remaining target → nav falls back to launch.
+  await page.getByTestId("remove-next-waypoint").click();
+  await expect(page.getByText("Distance to launch")).toBeVisible();
+  await expect(page.getByTestId("remove-next-waypoint")).toHaveCount(0);
+
+  // Only the physically-reached pin announced; the removed one was silent.
+  const spoken = await page.evaluate(
+    () => (window as unknown as { __spoken: string[] }).__spoken,
+  );
+  expect(spoken.filter((text) => text === "Waypoint reached")).toHaveLength(1);
+});
+
 test("track-up toggle rotates the camera immediately, not on a glide", async ({
   page,
 }) => {

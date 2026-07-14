@@ -67,9 +67,19 @@
 /* Content sits above the backdrop. */
 .fly-idle > h1,
 .fly-idle > .start-button,
+.fly-idle > .planned-route,
 .fly-idle > .gps-error {
   position: relative;
   z-index: 1;
+}
+
+/* A caption tucked just under the Start button (pulled up out of the 3rem
+   idle gap). Muted so it reads as secondary to the call-to-action. */
+.planned-route {
+  margin-top: -2rem;
+  color: rgba(235, 238, 242, 0.75);
+  font-size: 1rem;
+  text-shadow: 0 1px 6px rgba(0, 0, 0, 0.6);
 }
 
 .fly-idle h1 {

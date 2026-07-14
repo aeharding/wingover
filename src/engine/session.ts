@@ -1,4 +1,4 @@
-import { DEFAULT_WAYPOINT_RADIUS_M } from "../flight/waypoints";
+import { WAYPOINT_RADIUS_M } from "../flight/waypoints";
 import { getBooleanSetting, listPins, type Pin } from "../storage/db";
 import { engine } from "./index";
 import type { Waypoint } from "./types";
@@ -12,7 +12,7 @@ function toWaypoint(pin: Pin): Waypoint {
     id: pin.id,
     latitude: pin.latitude,
     longitude: pin.longitude,
-    radiusM: DEFAULT_WAYPOINT_RADIUS_M,
+    radiusM: WAYPOINT_RADIUS_M,
   };
 }
 
