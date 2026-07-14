@@ -419,7 +419,11 @@ export default function FlyPage() {
                 // tap it then clear if it was a mistap.
                 void engine.addAdhocWaypoint(at);
               }}
-              onSelectWaypoint={setSelectedWaypointId}
+              onSelectWaypoint={(id) => {
+                // Only the next waypoint — the current target — can be selected
+                // to clear. A tap on any other pin (or a deselect) clears.
+                setSelectedWaypointId(id === nextWaypoint?.id ? id : null);
+              }}
               onFollowChange={changeFollow}
             />
             {gpsError && (
