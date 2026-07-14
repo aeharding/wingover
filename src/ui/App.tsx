@@ -30,13 +30,6 @@ import { SettingsProvider } from "./settings/SettingsContext";
 setupIonicReact({ mode: "ios" });
 
 export default function App() {
-  // Pre-hydration the engine reports "idle", so the tab bar shows during
-  // load and hides once a live session hydrates — same as before.
-  const inFlight = useSyncExternalStore(
-    engine.subscribe,
-    () => engine.snapshotSync().status !== "idle",
-  );
-
   useEffect(() => {
     // Kick the one-time WAL hydration (idempotent; FlyPage kicks it too).
     void engine.getSnapshot();
@@ -45,47 +38,69 @@ export default function App() {
   return (
     <IonApp>
       <SettingsProvider>
-        <IonReactRouter>
-          <IonTabs>
-            <IonRouterOutlet>
-              <Route exact path="/fly" component={FlyPage} />
-              <Route exact path="/logbook" component={LogbookPage} />
-              <Route exact path="/logbook/map" component={AllFlightsMapPage} />
-              <Route
-                exact
-                path="/logbook/:id(recorded-\d+|[0-9a-fA-F-]{36})"
-                component={FlightDetailPage}
-              />
-              <Route exact path="/plan" component={PlanPage} />
-              <Route exact path="/settings" component={SettingsPage} />
-              <Route exact path="/">
-                <Redirect to="/fly" />
-              </Route>
-            </IonRouterOutlet>
-            <IonTabBar
-              slot="bottom"
-              className={inFlight ? "tab-bar-hidden" : undefined}
-            >
-              <IonTabButton tab="fly" href="/fly">
-                <IonIcon icon={navigateOutline} />
-                <IonLabel>Fly</IonLabel>
-              </IonTabButton>
-              <IonTabButton tab="logbook" href="/logbook">
-                <IonIcon icon={bookOutline} />
-                <IonLabel>Logbook</IonLabel>
-              </IonTabButton>
-              <IonTabButton tab="plan" href="/plan">
-                <IonIcon icon={mapOutline} />
-                <IonLabel>Plan</IonLabel>
-              </IonTabButton>
-              <IonTabButton tab="settings" href="/settings">
-                <IonIcon icon={settingsOutline} />
-                <IonLabel>Settings</IonLabel>
-              </IonTabButton>
-            </IonTabBar>
-          </IonTabs>
-        </IonReactRouter>
+        <AppBody />
       </SettingsProvider>
     </IonApp>
+  );
+}
+
+// A live flight sheds the entire Ionic navigation shell — tab bar, router,
+// router-outlet, and every other tab's page. Ionic's router-outlet otherwise
+// keeps each visited page mounted, and the map-bearing ones (Plan, Logbook,
+// flight detail) each hold a live map + tile cache the whole time — the
+// WKWebView ballooning to 500–850 MB is what gets the app jetsammed mid-flight.
+// Rendering only <FlyPage> in flight makes the footprint the single live map
+// and nothing else. The tab bar is unreachable during a flight anyway, so this
+// is invisible to the pilot, and the full shell returns the instant the flight
+// ends. "idle" is the only non-flight state; pre-hydration the engine reports
+// it, so the shell shows during load.
+function AppBody() {
+  const inFlight = useSyncExternalStore(
+    engine.subscribe,
+    () => engine.snapshotSync().status !== "idle",
+  );
+  if (inFlight) return <FlyPage />;
+  return <TabShell />;
+}
+
+function TabShell() {
+  return (
+    <IonReactRouter>
+      <IonTabs>
+        <IonRouterOutlet>
+          <Route exact path="/fly" component={FlyPage} />
+          <Route exact path="/logbook" component={LogbookPage} />
+          <Route exact path="/logbook/map" component={AllFlightsMapPage} />
+          <Route
+            exact
+            path="/logbook/:id(recorded-\d+|[0-9a-fA-F-]{36})"
+            component={FlightDetailPage}
+          />
+          <Route exact path="/plan" component={PlanPage} />
+          <Route exact path="/settings" component={SettingsPage} />
+          <Route exact path="/">
+            <Redirect to="/fly" />
+          </Route>
+        </IonRouterOutlet>
+        <IonTabBar slot="bottom">
+          <IonTabButton tab="fly" href="/fly">
+            <IonIcon icon={navigateOutline} />
+            <IonLabel>Fly</IonLabel>
+          </IonTabButton>
+          <IonTabButton tab="logbook" href="/logbook">
+            <IonIcon icon={bookOutline} />
+            <IonLabel>Logbook</IonLabel>
+          </IonTabButton>
+          <IonTabButton tab="plan" href="/plan">
+            <IonIcon icon={mapOutline} />
+            <IonLabel>Plan</IonLabel>
+          </IonTabButton>
+          <IonTabButton tab="settings" href="/settings">
+            <IonIcon icon={settingsOutline} />
+            <IonLabel>Settings</IonLabel>
+          </IonTabButton>
+        </IonTabBar>
+      </IonTabs>
+    </IonReactRouter>
   );
 }
