@@ -6,6 +6,7 @@ import { readLiveViewState, writeLiveViewState } from "./liveViewState";
 import MapCanvas from "./MapCanvas";
 import {
   ACCENT_CYAN,
+  ADHOC_COLOR,
   type Aircraft,
   type GestureEvent,
   type Insets,
@@ -15,6 +16,7 @@ import {
   type MarkerLayer,
   type MarkerSpec,
   PLAN_LINE_COLOR,
+  PLANNED_COLOR,
   TRACK_LINE_WIDTH_PX,
 } from "./types";
 import ZoomControl from "./ZoomControl";
@@ -32,10 +34,8 @@ const PINCH_ZOOM_RATE = 1 / 100;
 
 // The planned route reference: a static grey line from launch through every
 // planned pin, plus numbered markers for the ACTIVE nav sequence (green =
-// planned, blue = ad-hoc). Passed points are simply absent from the active
-// list, so their markers disappear while the grey line stays.
-const PLANNED_COLOR = "#35e06a";
-const ADHOC_COLOR = ACCENT_CYAN;
+// planned, yellow = ad-hoc; see types.ts). Passed points are simply absent
+// from the active list, so their markers disappear while the grey line stays.
 
 function waypointPinEl(color: string, label: string): HTMLElement {
   const el = document.createElement("div");
