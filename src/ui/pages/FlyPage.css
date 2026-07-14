@@ -67,9 +67,19 @@
 /* Content sits above the backdrop. */
 .fly-idle > h1,
 .fly-idle > .start-button,
+.fly-idle > .planned-route,
 .fly-idle > .gps-error {
   position: relative;
   z-index: 1;
+}
+
+/* A caption tucked just under the Start button (pulled up out of the 3rem
+   idle gap). Muted so it reads as secondary to the call-to-action. */
+.planned-route {
+  margin-top: -2rem;
+  color: rgba(235, 238, 242, 0.75);
+  font-size: 1rem;
+  text-shadow: 0 1px 6px rgba(0, 0, 0, 0.6);
 }
 
 .fly-idle h1 {
@@ -177,10 +187,38 @@
   position: absolute;
   right: 0.9rem;
   bottom: calc(0.9rem + env(safe-area-inset-bottom));
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end;
+  gap: 0.9rem;
+  z-index: 6;
+}
+
+/* The four regular controls in a fixed 2×2. Because .flight-controls is
+   bottom-anchored and this grid is its LAST child, the contextual skip button
+   above it grows the stack upward — these four never shift. */
+.flight-controls-grid {
   display: grid;
   grid-template-columns: repeat(2, auto);
   gap: 0.9rem;
-  z-index: 6;
+}
+
+/* "Clear next waypoint": a location pin (outline) with a small checkbox badge
+   clipped onto its top-right corner. The badge's background matches the button
+   so it reads as sitting over the pin. */
+.skip-icon {
+  position: relative;
+  display: inline-flex;
+  line-height: 0;
+}
+
+.skip-icon-badge {
+  position: absolute;
+  top: -0.28em;
+  right: -0.3em;
+  font-size: 0.62em;
+  background: rgba(24, 26, 29, 0.95);
+  border-radius: 4px;
 }
 
 .launch-arrow {

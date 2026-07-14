@@ -25,6 +25,10 @@ export interface Waypoint {
   radiusM: number;
 }
 
+// [longitude, latitude] — the map/pin tuple order (structurally the same as
+// src/ui/map's LngLat). Named order here to kill the lat/lng swap footgun.
+export type LngLat = readonly [longitude: number, latitude: number];
+
 export interface StartOptions {
   waypoints?: Waypoint[];
   // Grace expiry auto-finalizes the landed flight (default true). Copied
@@ -48,7 +52,18 @@ export interface EngineSnapshot {
   latest: Fix | null;
   // Touchdown timestamp once landing is detected (pending finalization).
   landingAt: number | null;
+  // Planned route waypoints (copied from Plan pins at takeoff), immutable.
   waypoints: Waypoint[];
+  // Active (un-passed) ad-hoc nav queue, FIFO. Drained ahead of the plan.
+  adhocWaypoints: Waypoint[];
+  // Index of the next un-passed planned waypoint (= waypoints.length if done).
+  waypointsCursor: number;
+  // Current steer-to target: adhocActive[0] ?? plannedActive[0] ?? null.
+  // null = nothing left → the UI navigates back to launch. null when ended.
+  nextWaypoint: Waypoint | null;
+  // The active nav sequence in steer-to order (active ad-hoc, then active
+  // planned) — the numbered map markers, where index 0 is nextWaypoint.
+  activeWaypoints: Waypoint[];
   // Whether grace expiry will auto-finalize this flight (session-scoped).
   autoEnd: boolean;
   // Sticky GPS/permission failure; cleared by the next fix or start/stop.
@@ -82,8 +97,12 @@ export interface RecordingEngine {
   // Coalesced change signal; returns unsubscribe.
   subscribe(listener: () => void): () => void;
   start(options?: StartOptions): Promise<void>;
-  // Mid-flight additions join this flight only; the plan is untouched.
-  addWaypoints(waypoints: Waypoint[]): Promise<void>;
+  // Long-press mid-flight: append an ad-hoc nav target. at = [longitude,
+  // latitude] (map/pin tuple order). Joins this flight only; plan untouched.
+  addAdhocWaypoint(at: LngLat): Promise<void>;
+  // "Remove next": advance past the current nav target (planned or ad-hoc),
+  // silently. No-op when there is no target left.
+  removeNextWaypoint(): Promise<void>;
   // "I'm done flying": journals the pilot's stop into the session, so
   // status derives to "ended" — durable, crash-safe, collected by the
   // same persist-first path as a detected landing. Nothing is cleared.

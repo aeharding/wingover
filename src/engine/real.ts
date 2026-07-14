@@ -6,11 +6,13 @@ import {
 import { bearingBetween } from "../flight/nav";
 import { haversineMeters } from "../flight/stats";
 import { detectTakeoff, gpsReadyIndex } from "../flight/takeoff";
+import { WAYPOINT_RADIUS_M } from "../flight/waypoints";
 import type {
   EngineError,
   EngineSnapshot,
   EngineStatus,
   Fix,
+  LngLat,
   RecordingEngine,
   StartOptions,
   Waypoint,
@@ -122,6 +124,13 @@ export class GeolocationRecordingEngine implements RecordingEngine {
   private walQueue: Promise<unknown> = Promise.resolve();
   private pendingWalFixes: Fix[] = [];
   private walFlushQueued = false;
+  // Derived nav state — a cache of a pure function of (buffer × planned ×
+  // ad-hoc). Rebuilt from the buffer on hydration (rebuildReachState); never
+  // journaled, so a lost session write self-heals from the durable fix stream
+  // exactly like takeoffIndex/landingIndex. reachInside = per-waypoint arm
+  // state (outside/inside); reachedIds = the set that has crossed inside.
+  private reachInside = new Map<string, boolean>();
+  private reachedIds = new Set<string>();
   private hydrated = false;
   private hydration: Promise<void> | null = null;
   private error: EngineError | null = null;
@@ -182,6 +191,10 @@ export class GeolocationRecordingEngine implements RecordingEngine {
         this.hydrated = true;
         this.session = session;
         this.buffer = fixes;
+        // Derive reached state from the durable buffer BEFORE deriveStatus /
+        // ensureWatch, so the fed remaining set excludes already-passed
+        // waypoints (no re-arm, no re-announce on re-entry).
+        this.rebuildReachState();
         // Rehydrating a live session restarts capture; a finalized flight
         // ("ended") stays parked until collected via stop(). If another
         // tab owns the recorder, this one stays a passive viewer.
@@ -258,6 +271,10 @@ export class GeolocationRecordingEngine implements RecordingEngine {
         latest: null,
         landingAt: null,
         waypoints: [],
+        adhocWaypoints: [],
+        waypointsCursor: 0,
+        nextWaypoint: null,
+        activeWaypoints: [],
         autoEnd: true,
         error,
       };
@@ -266,6 +283,7 @@ export class GeolocationRecordingEngine implements RecordingEngine {
     const latest = this.buffer[this.buffer.length - 1] ?? null;
     const waypoints = session.waypoints ?? [];
     const autoEnd = session.autoEnd !== false;
+    const nav = this.navState();
     if (status === "ended") {
       const track = this.finalizedTrack();
       return {
@@ -275,6 +293,11 @@ export class GeolocationRecordingEngine implements RecordingEngine {
         latest,
         landingAt: this.landingAt(),
         waypoints,
+        adhocWaypoints: nav.adhocActive,
+        waypointsCursor: nav.waypointsCursor,
+        // A finalized flight surfaces no live nav target.
+        nextWaypoint: null,
+        activeWaypoints: [],
         autoEnd,
         error,
       };
@@ -287,6 +310,10 @@ export class GeolocationRecordingEngine implements RecordingEngine {
         latest,
         landingAt: null,
         waypoints,
+        adhocWaypoints: nav.adhocActive,
+        waypointsCursor: nav.waypointsCursor,
+        nextWaypoint: nav.nextWaypoint,
+        activeWaypoints: nav.active,
         autoEnd,
         error,
       };
@@ -299,6 +326,10 @@ export class GeolocationRecordingEngine implements RecordingEngine {
       latest,
       landingAt: this.landingAt(),
       waypoints,
+      adhocWaypoints: nav.adhocActive,
+      waypointsCursor: nav.waypointsCursor,
+      nextWaypoint: nav.nextWaypoint,
+      activeWaypoints: nav.active,
       autoEnd,
       error,
     };
@@ -329,24 +360,162 @@ export class GeolocationRecordingEngine implements RecordingEngine {
       autoEnd: options?.autoEnd ?? true,
     };
     this.buffer = [];
+    this.reachInside.clear();
+    this.reachedIds.clear();
     this.error = null;
     await writeWalSession(this.session);
     this.ensureWatch();
     this.invalidate();
   }
 
-  // Mid-flight additions join this flight only; the plan is untouched.
-  async addWaypoints(waypoints: Waypoint[]): Promise<void> {
-    if (!this.session || waypoints.length === 0) return;
+  // Long-press mid-flight: append an ad-hoc nav target (FIFO, drained ahead
+  // of the plan). at = [longitude, latitude]. Membership is journaled; the
+  // insertion anchor keeps a point long-pressed AFTER it was overflown from
+  // counting as instantly reached. Joins this flight only; plan untouched.
+  async addAdhocWaypoint(at: LngLat): Promise<void> {
+    // Ignore once the flight of record is final (a stray long-press on the
+    // frozen landed map must not mutate a done flight). Pre-takeoff marking
+    // (acquiring/armed) stays legitimate.
+    if (!this.session || this.deriveStatus() === "ended") return;
+    const [longitude, latitude] = at;
+    const adhoc = {
+      id: crypto.randomUUID(),
+      latitude,
+      longitude,
+      radiusM: WAYPOINT_RADIUS_M,
+      addedAtIndex: this.buffer.length,
+    };
     this.session = {
       ...this.session,
-      waypoints: [...(this.session.waypoints ?? []), ...waypoints],
+      adhocWaypoints: [...(this.session.adhocWaypoints ?? []), adhoc],
     };
     const session = this.session;
     this.enqueueWal(() => writeWalSession(session));
-    this.core.setWaypoints(session.waypoints ?? []);
+    this.core.setWaypoints(this.activeWaypoints());
     this.invalidate();
     await this.walQueue;
+  }
+
+  // "Remove next": journal the current target's id so it is skipped, silently.
+  // No-op when there is no target left (no write, no push).
+  async removeNextWaypoint(): Promise<void> {
+    if (!this.session || this.deriveStatus() === "ended") return;
+    const next = this.navState().nextWaypoint;
+    if (!next) return;
+    this.session = {
+      ...this.session,
+      removedIds: [...(this.session.removedIds ?? []), next.id],
+    };
+    const session = this.session;
+    this.enqueueWal(() => writeWalSession(session));
+    this.core.setWaypoints(this.activeWaypoints());
+    this.invalidate();
+    await this.walQueue;
+  }
+
+  // Derived nav — a pure function of (session × reachedIds), no side effects.
+  // active = active ad-hoc (FIFO) ++ active planned; a waypoint is active iff
+  // it is neither reached (derived) nor removed (journaled).
+  private navState(): {
+    active: Waypoint[];
+    adhocActive: Waypoint[];
+    nextWaypoint: Waypoint | null;
+    waypointsCursor: number;
+  } {
+    const s = this.session;
+    if (!s)
+      return {
+        active: [],
+        adhocActive: [],
+        nextWaypoint: null,
+        waypointsCursor: 0,
+      };
+    const removed = new Set(s.removedIds ?? []);
+    const isActive = (w: Waypoint) =>
+      !this.reachedIds.has(w.id) && !removed.has(w.id);
+    const adhocActive = (s.adhocWaypoints ?? [])
+      .filter(isActive)
+      // Drop the internal addedAtIndex anchor from the public Waypoint shape.
+      .map((w): Waypoint => ({
+        id: w.id,
+        latitude: w.latitude,
+        longitude: w.longitude,
+        radiusM: w.radiusM,
+      }));
+    const planned = s.waypoints ?? [];
+    const plannedActive = planned.filter(isActive);
+    let waypointsCursor = 0;
+    while (
+      waypointsCursor < planned.length &&
+      !isActive(planned[waypointsCursor])
+    ) {
+      waypointsCursor++;
+    }
+    const active = [...adhocActive, ...plannedActive];
+    return {
+      active,
+      adhocActive,
+      nextWaypoint: active[0] ?? null,
+      waypointsCursor,
+    };
+  }
+
+  private activeWaypoints(): Waypoint[] {
+    return this.navState().active;
+  }
+
+  // Reach detection — a faithful mirror of flight/waypoints.ts `ingest`
+  // (arm-silently on the first fix; reach ONLY on an outside→inside
+  // transition), so the derived reached set is in lockstep with what the
+  // tracker/announcer speaks on the same fed set. It records the reached id
+  // instead of the "Waypoint reached" string (we cannot observe the tracker:
+  // on web it lives inside WebCore, on device it is a separate Rust process).
+  // Runs on the de-noised buffer (post MIN_FIX_INTERVAL); a genuine
+  // outside→inside→outside crossing inside a <500 ms window would need
+  // >1.28 km/s at this radius, so the filter never hides a real crossing.
+  // Returns true if any waypoint newly reached on this fix.
+  private updateReach(index: number, fix: Fix): boolean {
+    const s = this.session;
+    if (!s) return false;
+    const removed = new Set(s.removedIds ?? []);
+    const targets: Waypoint[] = [];
+    for (const w of s.adhocWaypoints ?? []) {
+      if (
+        w.addedAtIndex <= index &&
+        !this.reachedIds.has(w.id) &&
+        !removed.has(w.id)
+      ) {
+        targets.push(w);
+      }
+    }
+    for (const w of s.waypoints ?? []) {
+      if (!this.reachedIds.has(w.id) && !removed.has(w.id)) targets.push(w);
+    }
+    let reached = false;
+    for (const w of targets) {
+      const nowInside = haversineMeters(fix, w) <= w.radiusM;
+      const prev = this.reachInside.get(w.id);
+      if (prev === undefined) {
+        this.reachInside.set(w.id, nowInside); // first fix arms, silent
+      } else if (!prev && nowInside) {
+        this.reachInside.set(w.id, true);
+        this.reachedIds.add(w.id); // outside → inside = reached
+        reached = true;
+      } else if (prev && !nowInside) {
+        this.reachInside.set(w.id, false);
+      }
+    }
+    return reached;
+  }
+
+  // Recompute the derived reach state from scratch over the durable buffer —
+  // called on hydration so a lost session write self-heals from the fixes.
+  private rebuildReachState() {
+    this.reachInside.clear();
+    this.reachedIds.clear();
+    for (let i = 0; i < this.buffer.length; i++) {
+      this.updateReach(i, this.buffer[i]);
+    }
   }
 
   async discard(): Promise<void> {
@@ -354,6 +523,8 @@ export class GeolocationRecordingEngine implements RecordingEngine {
     this.hydrated = true;
     this.session = null;
     this.buffer = [];
+    this.reachInside.clear();
+    this.reachedIds.clear();
     this.error = null;
     this.invalidate();
     await this.walQueue;
@@ -441,9 +612,9 @@ export class GeolocationRecordingEngine implements RecordingEngine {
       { since: latest?.timestamp },
     );
     // Config follows the watch: initial start and post-reload rehydration
-    // both re-push the session's set here (native: harmless overwrite of
-    // what waypoints.json already hydrated).
-    this.core.setWaypoints(this.session?.waypoints ?? []);
+    // both re-push the ACTIVE remaining set here (planned-past-cursor + active
+    // ad-hoc). A passed waypoint is excluded so it can't re-arm/re-announce.
+    this.core.setWaypoints(this.activeWaypoints());
   }
 
   private handleWatchError(error: SourceError) {
@@ -475,6 +646,7 @@ export class GeolocationRecordingEngine implements RecordingEngine {
   private handlePositions(positions: SourcePosition[]) {
     if (!this.session) return;
     let ingested = false;
+    let reachedChanged = false;
     for (const position of positions) {
       const previous = this.buffer[this.buffer.length - 1];
       if (
@@ -508,6 +680,12 @@ export class GeolocationRecordingEngine implements RecordingEngine {
       this.pendingWalFixes.push(fix);
       this.queueWalFlush();
 
+      // Reach detection runs on every ingested fix (ungated on takeoff —
+      // matches the announcer, which ingests from start()) and is purely
+      // derived, so it emits NO session write. Set-based: one fix can reach
+      // several waypoints (overlapping radii / a backlog fly-through).
+      if (this.updateReach(this.buffer.length - 1, fix)) reachedChanged = true;
+
       if (this.session.takeoffIndex === null) {
         const takeoffIndex = detectTakeoff(this.buffer);
         if (takeoffIndex !== null) {
@@ -527,6 +705,13 @@ export class GeolocationRecordingEngine implements RecordingEngine {
     // The flight of record is final: stop consuming. The WAL is retained
     // until the consumer persists the flight and calls discard().
     if (this.deriveStatus() === "ended") this.clearWatch();
+    // One coalesced config push per batch: re-feed the shrunk active set so
+    // the announcer drops just-reached waypoints. After the tracker has
+    // already spoken this batch (core.ingest runs before onPositions), so the
+    // re-feed cannot race the announcement.
+    if (reachedChanged && this.deriveStatus() !== "ended") {
+      this.core.setWaypoints(this.activeWaypoints());
+    }
     this.invalidate();
   }
 

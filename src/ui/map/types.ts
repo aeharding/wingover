@@ -22,6 +22,11 @@ export type { MapViewKind };
 // the live view can read it without pulling in a map backend.
 export const TRACK_LINE_WIDTH_PX = 4;
 
+// The planned optimal-path reference line: grey so it never competes with the
+// cyan flown track (which is how drift reads). Shared by the live map and the
+// flight detail map so the two never drift apart.
+export const PLAN_LINE_COLOR = "#8f96a3";
+
 // [longitude, latitude] — GeoJSON coordinate order, matching the geometry
 // the app already builds for its line sources.
 export type LngLat = [number, number];
@@ -103,9 +108,6 @@ export interface MarkerSpec {
   // Short text shown inside a native marker (MapKit's glyphText) — used to
   // number route pins 1, 2, 3… so the order (and direction) reads at a glance.
   label?: string;
-  // Marks the active/selected marker (e.g. the route's tail). Native-marker
-  // backends give it a distinct, inverted look; DOM backends style `el`.
-  selected?: boolean;
   anchor?: "center" | "bottom";
   onClick?: () => void;
   // When true the marker can be dragged. `onDrag` fires continuously with the

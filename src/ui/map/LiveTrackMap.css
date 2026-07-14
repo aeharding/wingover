@@ -21,3 +21,9 @@
   bottom: 0;
   height: max(22px, env(safe-area-inset-bottom));
 }
+
+/* Numbered waypoint pin (maplibre/fake backends; MapKit draws a native pin
+   from the marker color + label). Reset so only the SVG shows. */
+.waypoint-pin {
+  line-height: 0;
+}

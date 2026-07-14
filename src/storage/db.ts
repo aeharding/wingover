@@ -1,6 +1,6 @@
 import PouchDB from "pouchdb-browser";
 
-import type { Fix } from "../engine/types";
+import type { Fix, LngLat } from "../engine/types";
 import type { FlightStats } from "../flight/stats";
 
 export interface Flight {
@@ -14,6 +14,10 @@ export interface Flight {
   sourceFilename?: string;
   importBatchId?: string;
   importedAt?: number;
+  // The planned pins ([lng, lat], in order) copied at takeoff, for drawing
+  // the grey optimal-path reference on the flight detail map. Absent for
+  // flights recorded without a plan and for imported flights.
+  plannedRoute?: LngLat[];
 }
 
 export interface Pin {
@@ -40,6 +44,7 @@ interface FlightDoc {
   sourceFilename?: string;
   importBatchId?: string;
   importedAt?: number;
+  plannedRoute?: LngLat[];
 }
 
 export const db = new PouchDB("wingover", {
@@ -63,6 +68,7 @@ function toFlight(doc: FlightDoc): Flight {
     sourceFilename: doc.sourceFilename,
     importBatchId: doc.importBatchId,
     importedAt: doc.importedAt,
+    plannedRoute: doc.plannedRoute,
   };
 }
 
@@ -91,6 +97,7 @@ export async function saveFlight(flight: Flight, fixes: Fix[]) {
     sourceFilename: flight.sourceFilename,
     importBatchId: flight.importBatchId,
     importedAt: flight.importedAt,
+    plannedRoute: flight.plannedRoute,
     _attachments: {
       [TRACK_ATTACHMENT]: {
         content_type: "application/gzip",

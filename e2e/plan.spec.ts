@@ -37,6 +37,9 @@ test("tap to drop pins, persist across reload, tap to delete", async ({
   const routeBefore = await mapContainer.getAttribute("data-route-coords");
   expect(routeBefore!.split(";")).toHaveLength(2);
 
+  // Two pins → the route distance shows for planning.
+  await expect(page.getByTestId("plan-distance")).toContainText("Route:");
+
   await canvas.click({ position: { x: 60, y: 200 } });
   await expect(page.getByTestId("pin-marker")).toHaveCount(2);
 
@@ -52,6 +55,7 @@ test("tap to drop pins, persist across reload, tap to delete", async ({
 
   // One pin is no route.
   await expect(mapContainer).toHaveAttribute("data-route-coords", "");
+  await expect(page.getByTestId("plan-distance")).toHaveCount(0);
 
   await page.getByTestId("pin-marker").click();
   await expect(page.getByTestId("pin-marker")).toHaveCount(0);

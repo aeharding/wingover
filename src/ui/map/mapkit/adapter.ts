@@ -278,79 +278,124 @@ export async function createMapKitMapView(
     },
 
     markers(): MarkerLayer {
-      let anns: Annotation[] = [];
-      const clear = () => {
-        for (const a of anns) map.removeAnnotation(a);
-        anns = [];
+      // Keyed by spec.id. A re-set that only renumbers / nudges pure display
+      // pins — the live route markers renumbering after a "skip" — updates
+      // them IN PLACE (coordinate + glyph), instead of remove-then-re-add,
+      // which flashes every pin off for a beat on device. Interactive pins
+      // (Plan: tap-to-delete, drag, custom handles) are always recreated so
+      // their handler closures can never go stale.
+      let entries = new Map<string, { ann: Annotation; reusable: boolean }>();
+
+      // Only plain balloons — no click/drag/custom behavior — can be reused;
+      // everything else is torn down and rebuilt exactly as before.
+      const isInteractive = (spec: MarkerSpec) =>
+        !!(
+          spec.onClick ||
+          spec.onDrag ||
+          spec.onDragEnd ||
+          spec.draggable ||
+          spec.custom
+        );
+
+      const create = (spec: MarkerSpec): Annotation => {
+        const role = spec.color ?? "#4cc2ff";
+        // A "custom" marker (the midpoint handle) renders its own small DOM
+        // element instead of a native pin balloon, which reads too heavy.
+        let ann: Annotation;
+        if (spec.custom) {
+          // Centered on the coordinate the same proven way as the aircraft
+          // glyph: the element is a 0×0 wrapper — so its bottom-center, where
+          // MapKit anchors at offset (0,0), IS the point — holding an inner
+          // node translated −50%/−50% onto that origin. All the positioning
+          // lives in the element's CSS; no anchorOffset math.
+          ann = new mapkit.Annotation(toCoord(spec.at), () => spec.el, {
+            draggable: spec.draggable ?? false,
+            anchorOffset: new DOMPoint(0, 0),
+          });
+        } else {
+          ann = new mapkit.MarkerAnnotation(toCoord(spec.at), {
+            color: role,
+            // Pure-black glyph on the bright green/blue balloon — max contrast
+            // for a number a pilot reads at a glance in full sun (STEERING:
+            // "Sunlight-readable. High contrast"). MapKit's default white glyph
+            // is far too low-contrast.
+            glyphColor: "#000000",
+            // The pin's number (route order), shown in the balloon.
+            ...(spec.label ? { glyphText: spec.label } : {}),
+            calloutEnabled: false,
+            animates: false,
+            draggable: spec.draggable ?? false,
+          });
+        }
+        const target = ann as unknown as EventTargetLike;
+        if (spec.onClick) {
+          const onClick = spec.onClick;
+          target.addEventListener("select", () => {
+            // Drop the selection so it doesn't linger while React re-sets the
+            // annotation list, then act.
+            map.selectedAnnotation = null;
+            onClick();
+          });
+        }
+        if (spec.draggable) {
+          // The annotation's own coordinate tracks the drag; read it on each
+          // move (live line redraw) and on release (commit).
+          const at = (): LngLat => [
+            ann.coordinate.longitude,
+            ann.coordinate.latitude,
+          ];
+          if (spec.onDrag) {
+            const onDrag = spec.onDrag;
+            target.addEventListener("dragging", () => onDrag(at()));
+          }
+          if (spec.onDragEnd) {
+            const onDragEnd = spec.onDragEnd;
+            target.addEventListener("drag-end", () => onDragEnd(at()));
+          }
+        }
+        map.addAnnotation(ann);
+        return ann;
       };
+
+      const clear = () => {
+        for (const { ann } of entries.values()) map.removeAnnotation(ann);
+        entries = new Map();
+      };
+
       return {
         set(specs: MarkerSpec[]) {
-          clear();
-          // Native iOS pins. MarkerAnnotation's tip auto-anchors on the
-          // coordinate (no anchorOffset math, no bottom-center gotcha) and
-          // looks native. The maplibre + fake backends still render spec.el;
-          // MapKit uses the semantic color instead. A tap "selects" a pin —
-          // suppress the callout bubble and treat selection as the click, so a
-          // Plan tap deletes its pin as before.
-          anns = specs.map((spec) => {
-            const role = spec.color ?? "#4cc2ff";
-            // A "custom" marker (the midpoint handle) renders its own small DOM
-            // element instead of a native pin balloon, which reads too heavy.
-            let ann: Annotation;
-            if (spec.custom) {
-              // Centered on the coordinate the same proven way as the aircraft
-              // glyph: the element is a 0×0 wrapper — so its bottom-center,
-              // where MapKit anchors at offset (0,0), IS the point — holding an
-              // inner node translated −50%/−50% onto that origin. All the
-              // positioning lives in the element's CSS; no anchorOffset math.
-              ann = new mapkit.Annotation(toCoord(spec.at), () => spec.el, {
-                draggable: spec.draggable ?? false,
-                anchorOffset: new DOMPoint(0, 0),
-              });
+          // A survivor = same id, both old and new are plain display pins.
+          const reusedIds = new Set<string>();
+          for (const spec of specs) {
+            const existing = entries.get(spec.id);
+            if (existing?.reusable && !isInteractive(spec)) {
+              reusedIds.add(spec.id);
+            }
+          }
+          // Remove every prior pin not surviving (gone, or being recreated).
+          for (const [id, { ann }] of entries) {
+            if (!reusedIds.has(id)) map.removeAnnotation(ann);
+          }
+          // Rebuild the id→ann map in spec order: update survivors in place,
+          // create the rest.
+          const next = new Map<string, { ann: Annotation; reusable: boolean }>();
+          for (const spec of specs) {
+            const existing = entries.get(spec.id);
+            if (reusedIds.has(spec.id) && existing) {
+              const marker = existing.ann as unknown as {
+                coordinate: Coordinate;
+                color: string;
+                glyphText: string;
+              };
+              marker.coordinate = toCoord(spec.at);
+              marker.color = spec.color ?? "#4cc2ff";
+              marker.glyphText = spec.label ?? "";
+              next.set(spec.id, existing);
             } else {
-              // The active/selected pin inverts — a white balloon with its role
-              // color as the glyph — so it reads as "this one" among the solid
-              // pins (native `selected` can't be used: it toggles off on the
-              // next tap and would swallow the tap-to-act event).
-              ann = new mapkit.MarkerAnnotation(toCoord(spec.at), {
-                color: spec.selected ? "#ffffff" : role,
-                glyphColor: spec.selected ? role : undefined,
-                // The pin's number (route order), shown in the balloon.
-                ...(spec.label ? { glyphText: spec.label } : {}),
-                calloutEnabled: false,
-                animates: false,
-                draggable: spec.draggable ?? false,
-              });
+              next.set(spec.id, { ann: create(spec), reusable: !isInteractive(spec) });
             }
-            const target = ann as unknown as EventTargetLike;
-            if (spec.onClick) {
-              const onClick = spec.onClick;
-              target.addEventListener("select", () => {
-                // Drop the selection so it doesn't linger while React re-sets
-                // the annotation list, then act.
-                map.selectedAnnotation = null;
-                onClick();
-              });
-            }
-            if (spec.draggable) {
-              // The annotation's own coordinate tracks the drag; read it on
-              // each move (live line redraw) and on release (commit).
-              const at = (): LngLat => [
-                ann.coordinate.longitude,
-                ann.coordinate.latitude,
-              ];
-              if (spec.onDrag) {
-                const onDrag = spec.onDrag;
-                target.addEventListener("dragging", () => onDrag(at()));
-              }
-              if (spec.onDragEnd) {
-                const onDragEnd = spec.onDragEnd;
-                target.addEventListener("drag-end", () => onDragEnd(at()));
-              }
-            }
-            map.addAnnotation(ann);
-            return ann;
-          });
+          }
+          entries = next;
         },
         clear,
       };

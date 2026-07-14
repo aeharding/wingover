@@ -13,6 +13,17 @@ export interface WalSession {
   // expiry auto-finalizes only when true. Absent means true.
   autoEnd?: boolean;
   waypoints?: Waypoint[];
+  // Mid-flight ad-hoc nav targets. Append-only membership + an insertion
+  // anchor. "Passed" ad-hoc is DERIVED from the buffer (reachedIds in real.ts),
+  // never shifted here, so a lost write can never resurrect a passed point.
+  // addedAtIndex = buffer length at add time; the reach scan arms an ad-hoc
+  // only from fixes at/after it (so a point long-pressed after it was already
+  // overflown is not falsely counted as reached).
+  adhocWaypoints?: Array<Waypoint & { addedAtIndex: number }>;
+  // Ids advanced past by the "remove next" button (planned or ad-hoc).
+  // Journaled intent; self-correcting if a write is lost (the pilot re-taps),
+  // unlike a physical reach which must survive — hence reach is derived.
+  removedIds?: string[];
 }
 
 const DB_NAME = "wingover-wal";

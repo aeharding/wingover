@@ -43,6 +43,27 @@ describe("storage", () => {
     expect(track[0]).toEqual(fixes[0]);
   });
 
+  it("round-trips a flight's planned route, omitting it when absent", async () => {
+    const fixes = new FlightSimulator(11, 0).fixesUpTo(60);
+    const withPlan: Flight = {
+      ...makeFlight(fixes),
+      plannedRoute: [
+        [-112.2, 33.9],
+        [-112.1, 33.95],
+      ],
+    };
+    await saveFlight(withPlan, fixes);
+    expect((await getFlight(withPlan.id))?.plannedRoute).toEqual([
+      [-112.2, 33.9],
+      [-112.1, 33.95],
+    ]);
+
+    // A flight recorded without a plan reads back with no route (not []).
+    const noPlan = makeFlight(new FlightSimulator(12, 0).fixesUpTo(60));
+    await saveFlight(noPlan, fixes);
+    expect((await getFlight(noPlan.id))?.plannedRoute).toBeUndefined();
+  });
+
   it("lists flights newest first", async () => {
     const older = makeFlight(new FlightSimulator(1, 1000).fixesUpTo(30));
     const newer = makeFlight(new FlightSimulator(2, 999999000).fixesUpTo(30));

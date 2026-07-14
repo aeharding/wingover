@@ -93,6 +93,10 @@ export default defineConfig(
       "src-tauri/gen/",
       "playwright-report/",
       "test-results/",
+      // Local session scratch (git worktrees, agent state). An embedded
+      // worktree carries its own tsconfig, which otherwise breaks the
+      // typed-lint root resolution across the whole repo.
+      ".claude/",
     ],
   },
 );
