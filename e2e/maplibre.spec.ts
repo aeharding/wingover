@@ -142,13 +142,27 @@ test("a style reload that drops the aircraft layer restores it", async ({
     return {
       goneAfterRemove,
       trackSourceStillPresent: !!map.getSource("track"),
-      aircraftRestored: !!map.getLayer("aircraft"),
     };
   });
 
   expect(result.goneAfterRemove).toBe(true);
   expect(result.trackSourceStillPresent).toBe(true);
-  expect(result.aircraftRestored).toBe(true);
+
+  // The app's sync() re-adds the aircraft layer — but it only runs its work
+  // once the style is loaded, so under load the fired styledata can no-op and a
+  // following styledata/idle does the restore. Wait for the layer rather than
+  // reading it in the same tick we fired the event.
+  await page.waitForFunction(
+    () => {
+      const map = (
+        document.querySelector(".map-container") as HTMLElement & {
+          __map?: { getLayer: (id: string) => unknown };
+        }
+      )?.__map;
+      return !!map?.getLayer("aircraft");
+    },
+    { timeout: 10_000 },
+  );
 });
 
 test("flight detail draws the track even when the map style loads slowly", async ({
