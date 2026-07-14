@@ -14,6 +14,7 @@
     "lint": "eslint ."
   },
   "dependencies": {
+    "@apple/mapkit-loader": "^1.0.0",
     "@ionic/react": "^8.5.0",
     "@ionic/react-router": "^8.5.0",
     "@tauri-apps/api": "^2.11.1",
@@ -35,6 +36,7 @@
     "@playwright/test": "^1.48.0",
     "@rolldown/plugin-babel": "^0.2.3",
     "@tauri-apps/cli": "^2.11.4",
+    "@types/apple-mapkit": "^6.0.0",
     "@types/geojson": "^7946.0.16",
     "@types/node": "^26.1.1",
     "@types/pouchdb-browser": "^6.1.5",

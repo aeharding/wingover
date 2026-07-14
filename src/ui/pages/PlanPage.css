@@ -5,8 +5,32 @@
   line-height: 0;
 }
 
-.pin-marker.pin-tail svg {
-  transform: scale(1.3);
-  transform-origin: bottom center;
-  filter: drop-shadow(0 0 5px rgba(255, 255, 255, 0.85));
+/* Midpoint insert handle — a small dot the exact color of the route line, so
+   it reads as a draggable "bump" on the leg. The 0×0 wrapper sits on the
+   coordinate; the inner dot translates onto that origin (a larger, invisible
+   touch/drag target), and its ::before is the visible bump. Rendered on every
+   backend (MapKit draws this element as a custom annotation). */
+.midpoint-handle {
+  width: 0;
+  height: 0;
+}
+
+.midpoint-handle-dot {
+  position: absolute;
+  left: 0;
+  top: 0;
+  transform: translate(-50%, -50%);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 26px;
+  height: 26px;
+}
+
+.midpoint-handle-dot::before {
+  content: "";
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: #4cc2ff;
 }

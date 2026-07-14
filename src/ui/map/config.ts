@@ -17,10 +17,48 @@ function streetStyleUrl(key: string): string {
   return `https://api.maptiler.com/maps/streets-v4-dark/style.json?key=${key}`;
 }
 
-const initialSearch = location.search;
+// Launch-only URL flags (e.g. ?map-style=blank) must be read at app entry,
+// before the SPA router strips the query string. The map — and therefore
+// this module — loads lazily, so main.tsx calls captureLaunchUrl() eagerly
+// to pin the value; we fall back to the live search if that never ran.
+let launchSearch: string | null = null;
+
+export function captureLaunchUrl() {
+  if (launchSearch === null) launchSearch = location.search;
+}
+
+export function launchParam(name: string): string | null {
+  return new URLSearchParams(launchSearch ?? location.search).get(name);
+}
 
 function blankStyleRequested(): boolean {
-  return new URLSearchParams(initialSearch).get("map-style") === "blank";
+  return launchParam("map-style") === "blank";
+}
+
+export type MapBackend = "mapkit" | "maplibre" | "fake";
+
+// MapKit JS is the default map backend everywhere — its token authorizes on
+// localhost, so plain `vite` and the Tauri dev webview get it too. Overrides
+// (highest first): ?map= in the URL, then a "wingover.map" localStorage flag
+// (how e2e forces the fake, deterministic, network-free backend). The blank
+// debug style still implies MapLibre for offline manual debugging.
+export function resolveBackend(): MapBackend {
+  const override = backendOverride();
+  if (override === "mapkit" || override === "maplibre" || override === "fake") {
+    return override;
+  }
+  if (blankStyleRequested()) return "maplibre";
+  return "mapkit";
+}
+
+function backendOverride(): string | null {
+  const param = launchParam("map");
+  if (param) return param;
+  try {
+    return localStorage.getItem("wingover.map");
+  } catch {
+    return null;
+  }
 }
 
 const BLANK_STYLE: StyleSpecification = {

@@ -279,7 +279,7 @@ test("a pin becomes a spoken waypoint announcement mid-flight", async ({
   // Drop a pin on the plan page and read back where it landed
   await page.goto("/?map-style=blank");
   await page.getByText("Plan", { exact: true }).click();
-  const canvas = page.locator(".maplibregl-canvas");
+  const canvas = page.locator(".map-container");
   await expect(canvas).toBeVisible();
   await page.waitForTimeout(500);
   const box = (await canvas.boundingBox())!;

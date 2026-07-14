@@ -5,15 +5,6 @@
   overflow: hidden;
 }
 
-.live-map .map-container {
-  inset: -256px;
-}
-
-.live-map .maplibregl-ctrl-bottom-left {
-  left: 256px;
-  bottom: 256px;
-}
-
 /* Above the map canvas, below the controls (z-index 6): a touch starting
    in the guard is captured here instead of by MapLibre, so the map won't
    pan during the iOS app-switch swipe. Kept narrow so it barely eats into
