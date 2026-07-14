@@ -59,6 +59,7 @@ jobs:
         if: steps.creds.outputs.have == 'true'
         run: bundle exec fastlane ios deploy
         env:
+          VITE_MAPKIT_TOKEN_TAURI: ${{ vars.VITE_MAPKIT_TOKEN_TAURI }}
           MATCH_PASSWORD: ${{ secrets.MATCH_PASSWORD }}
           MATCH_GIT_BASIC_AUTHORIZATION: ${{ secrets.MATCH_GIT_BASIC_AUTHORIZATION }}
           BUILD_NUMBER: ${{ github.run_number }}
