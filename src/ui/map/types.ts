@@ -108,9 +108,6 @@ export interface MarkerSpec {
   // Short text shown inside a native marker (MapKit's glyphText) — used to
   // number route pins 1, 2, 3… so the order (and direction) reads at a glance.
   label?: string;
-  // Marks the active/selected marker (e.g. the route's tail). Native-marker
-  // backends give it a distinct, inverted look; DOM backends style `el`.
-  selected?: boolean;
   anchor?: "center" | "bottom";
   onClick?: () => void;
   // When true the marker can be dragged. `onDrag` fires continuously with the

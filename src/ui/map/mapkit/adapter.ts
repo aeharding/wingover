@@ -282,20 +282,19 @@ export async function createMapKitMapView(
       // pins — the live route markers renumbering after a "skip" — updates
       // them IN PLACE (coordinate + glyph), instead of remove-then-re-add,
       // which flashes every pin off for a beat on device. Interactive pins
-      // (Plan: tap-to-delete, drag, the selected tail, custom handles) are
-      // always recreated so their handler closures can never go stale.
+      // (Plan: tap-to-delete, drag, custom handles) are always recreated so
+      // their handler closures can never go stale.
       let entries = new Map<string, { ann: Annotation; reusable: boolean }>();
 
-      // Only plain balloons — no click/drag/select/custom behavior — can be
-      // reused; everything else is torn down and rebuilt exactly as before.
+      // Only plain balloons — no click/drag/custom behavior — can be reused;
+      // everything else is torn down and rebuilt exactly as before.
       const isInteractive = (spec: MarkerSpec) =>
         !!(
           spec.onClick ||
           spec.onDrag ||
           spec.onDragEnd ||
           spec.draggable ||
-          spec.custom ||
-          spec.selected
+          spec.custom
         );
 
       const create = (spec: MarkerSpec): Annotation => {
@@ -314,18 +313,13 @@ export async function createMapKitMapView(
             anchorOffset: new DOMPoint(0, 0),
           });
         } else {
-          // The active/selected pin inverts — a white balloon with its role
-          // color as the glyph — so it reads as "this one" among the solid
-          // pins (native `selected` can't be used: it toggles off on the next
-          // tap and would swallow the tap-to-act event).
           ann = new mapkit.MarkerAnnotation(toCoord(spec.at), {
-            color: spec.selected ? "#ffffff" : role,
+            color: role,
             // Pure-black glyph on the bright green/blue balloon — max contrast
             // for a number a pilot reads at a glance in full sun (STEERING:
             // "Sunlight-readable. High contrast"). MapKit's default white glyph
-            // is far too low-contrast. (Selected pin inverts: role glyph on a
-            // white balloon.)
-            glyphColor: spec.selected ? role : "#000000",
+            // is far too low-contrast.
+            glyphColor: "#000000",
             // The pin's number (route order), shown in the balloon.
             ...(spec.label ? { glyphText: spec.label } : {}),
             calloutEnabled: false,
