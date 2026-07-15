@@ -230,6 +230,20 @@ test("edge guards stop an edge swipe from panning, inland drag still pans", asyn
   const follow = page.getByRole("button", { name: "Follow aircraft" });
   await expect(follow).toHaveAttribute("data-active", "true");
 
+  // The guard is sized to the OS gesture area itself — env(safe-area-inset-bottom)
+  // — so it covers the home-indicator swipe strip exactly and steals no more
+  // map-drag area than the OS already owns. Chromium reports no inset, so zero
+  // here is correct and intentional: no gesture area, nothing to guard.
+  await expect(page.locator(".map-edge-guard-bottom")).toHaveCSS("height", "0px");
+
+  // So to exercise the guard at all, stand in for a device that HAS a home
+  // indicator. This tests the mechanism (a touch starting in the guard is
+  // captured, not passed to MapLibre), which is the part that can regress;
+  // the height is the OS's business.
+  await page.addStyleTag({
+    content: ".map-edge-guard-bottom { height: 22px; }",
+  });
+
   const map = (await page.locator(".live-map").boundingBox())!;
   // A swipe from the very bottom edge lands on the guard, not the map: the
   // map must not pan, so follow stays pinned (the iOS app-switch swipe).

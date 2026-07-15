@@ -19,7 +19,7 @@
   left: 0;
   right: 0;
   bottom: 0;
-  height: max(22px, env(safe-area-inset-bottom));
+  height: env(safe-area-inset-bottom);
 }
 
 /* Numbered waypoint pin (maplibre/fake backends; MapKit draws a native pin
