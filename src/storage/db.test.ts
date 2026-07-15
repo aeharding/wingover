@@ -3,20 +3,20 @@ import { describe, expect, it } from "vitest";
 import { FlightSimulator } from "../engine/simulator";
 import { computeStats } from "../flight/stats";
 import {
+  db,
   deleteFlight,
   deletePin,
   type Flight,
   getFlight,
-  getSetting,
   getTrack,
   listFlights,
   listPins,
   saveFlight,
   savePin,
-  setSetting,
   updateFlight,
   updatePin,
 } from "./db";
+import { getSetting, setSetting } from "./local";
 
 function makeFlight(fixes: ReturnType<FlightSimulator["fixesUpTo"]>): Flight {
   return {
@@ -80,6 +80,7 @@ describe("storage", () => {
     const fixes = new FlightSimulator(7, 0).fixesUpTo(60);
     const flight = makeFlight(fixes);
     await saveFlight(flight, fixes);
+    const trackBefore = await db.get(`track:${flight.id}`);
 
     await updateFlight(flight.id, { name: "Renamed", notes: "Great air" });
 
@@ -88,6 +89,20 @@ describe("storage", () => {
     expect(stored?.notes).toBe("Great air");
     expect(stored?.updatedAt).toBeGreaterThanOrEqual(flight.updatedAt);
     expect(await getTrack(flight.id)).toHaveLength(60);
+
+    // The track is a SEPARATE document precisely so this holds: PouchDB
+    // re-sends a doc's attachments on every revision of that doc when pushing,
+    // so a rename with the track attached re-uploaded the whole track (~275KB
+    // for two hours). Readable-after-rename doesn't prove that; these two do.
+    // The flight doc carrying NO attachment is the load-bearing one — watching
+    // only the track doc's _rev would miss the track being re-attached here,
+    // which is exactly how this regresses.
+    const renamed = await db.get<{ _attachments?: unknown }>(
+      `flight:${flight.id}`,
+      { attachments: false },
+    );
+    expect(renamed._attachments).toBeUndefined();
+    expect((await db.get(`track:${flight.id}`))._rev).toBe(trackBefore._rev);
   });
 
   it("deletes a flight and its track", async () => {

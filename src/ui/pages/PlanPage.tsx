@@ -12,13 +12,12 @@ import { formatDistance } from "../../flight/format";
 import { haversineMeters } from "../../flight/stats";
 import {
   deletePin,
-  getSetting,
   listPins,
   type Pin,
   savePin,
-  setSetting,
   updatePin,
 } from "../../storage/db";
+import { getSetting, setSetting } from "../../storage/local";
 import type { MapViewKind } from "../map/config";
 import MapCanvas from "../map/MapCanvas";
 import {

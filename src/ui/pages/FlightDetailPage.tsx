@@ -30,11 +30,10 @@ import {
 import {
   type Flight,
   getFlight,
-  getSetting,
   getTrack,
-  setSetting,
   updateFlight,
 } from "../../storage/db";
+import { getSetting, setSetting } from "../../storage/local";
 import type { MapViewKind } from "../map/config";
 import MapCanvas from "../map/MapCanvas";
 import {

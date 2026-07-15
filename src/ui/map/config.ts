@@ -3,7 +3,7 @@ import type {
   StyleSpecification,
 } from "maplibre-gl";
 
-import { getSetting } from "../../storage/db";
+import { getSetting } from "../../storage/local";
 
 export type MapViewKind = "street" | "satellite";
 

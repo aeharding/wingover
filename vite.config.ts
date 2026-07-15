@@ -2,6 +2,8 @@ import babel from "@rolldown/plugin-babel";
 import react, { reactCompilerPreset } from "@vitejs/plugin-react";
 import { defineConfig } from "vitest/config";
 
+import { fakeAuth } from "./dev/fake-auth-plugin";
+
 // Set by `tauri ios dev --host`: the LAN address the phone loads the dev
 // server from. Vite must listen on it (and serve HMR over it) or the
 // device gets a connection refused.
@@ -13,6 +15,9 @@ export default defineConfig({
     babel({
       presets: [reactCompilerPreset()],
     }),
+    // Dev/e2e only — serves POST /v1/session against the local dev CouchDB so
+    // sync is developable with no Apple, no StoreKit and no Mac. Never built.
+    fakeAuth(),
   ],
   optimizeDeps: {
     include: [
