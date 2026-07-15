@@ -58,12 +58,16 @@ jobs:
       # and expects dist/ to exist already: beforeBuildCommand only runs under
       # `tauri ios build`, which we deliberately aren't using.
       - run: pnpm build
+      # release, not debug: `tauri ios xcode-script` reads the debug
+      # configuration as `tauri ios dev` and goes looking for a running dev
+      # server's address file, which no CI runner has. Release points it at the
+      # dist/ built above.
       - name: Build for the simulator
         run: |
           xcodebuild build \
             -project src-tauri/gen/apple/wingover.xcodeproj \
             -scheme wingover_iOS \
-            -configuration debug \
+            -configuration release \
             -sdk iphonesimulator \
             -destination 'generic/platform=iOS Simulator' \
             CODE_SIGNING_ALLOWED=NO \
