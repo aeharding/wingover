@@ -29,3 +29,44 @@ jobs:
             playwright-report/
             test-results/
           retention-days: 7
+
+  # The only job that compiles Swift. Without it the native plugin is checked
+  # by nothing until TestFlight builds it — on main, after merge, where a
+  # failure is already everyone's problem. macOS minutes are free on public
+  # repos, so the only thing this ever cost was thinking to ask for it.
+  #
+  # Simulator, unsigned, on purpose: an archive needs the distribution cert,
+  # which a fork's PR can never have. Signing is TestFlight's job. This job
+  # answers one question — does it build — and answers it for every PR.
+  ios:
+    name: iOS build
+    runs-on: macos-26
+    steps:
+      - uses: actions/checkout@v7
+      - uses: pnpm/action-setup@v6
+      - uses: actions/setup-node@v6
+        with:
+          node-version-file: .tool-versions
+          cache: pnpm
+      # Apple silicon runners: the simulator slice is its own Rust target.
+      - run: rustup target add aarch64-apple-ios-sim
+      - uses: swatinem/rust-cache@v2
+        with:
+          workspaces: src-tauri
+      - run: pnpm install --frozen-lockfile
+      # The Xcode "Build Rust Code" phase shells out to `tauri ios xcode-script`
+      # and expects dist/ to exist already: beforeBuildCommand only runs under
+      # `tauri ios build`, which we deliberately aren't using.
+      - run: pnpm build
+      - name: Build for the simulator
+        run: |
+          xcodebuild build \
+            -project src-tauri/gen/apple/wingover.xcodeproj \
+            -scheme wingover_iOS \
+            -configuration debug \
+            -sdk iphonesimulator \
+            -destination 'generic/platform=iOS Simulator' \
+            CODE_SIGNING_ALLOWED=NO \
+            CODE_SIGNING_REQUIRED=NO \
+            CODE_SIGN_IDENTITY="" \
+            DEVELOPMENT_TEAM=""
