@@ -35,45 +35,29 @@ jobs:
   # failure is already everyone's problem. macOS minutes are free on public
   # repos, so the only thing this ever cost was thinking to ask for it.
   #
-  # Device SDK, unsigned, on purpose. Two things had to be true and only one
-  # was obvious:
+  # cargo, not xcodebuild, and this is the whole trick: the plugin's build
+  # script calls tauri_utils::build::link_apple_library() when the target OS is
+  # iOS, so `cargo build` IS the Swift compile (tauri-plugin-2.6.3,
+  # src/build/mobile.rs). No Xcode project, no signing, no dev server, no dist.
   #
-  # Unsigned, because an ARCHIVE needs the distribution cert, which a fork's PR
-  # can never have — signing is TestFlight's job. `xcodebuild build` doesn't
-  # need it.
-  #
-  # Device rather than simulator, because `tauri ios xcode-script` decides it is
-  # serving `tauri ios dev` from the PLATFORM, not the configuration: pass it
-  # "iOS Simulator" and it panics looking for a dev server's address file
-  # (tauri-cli/src/mobile/mod.rs:386) no matter how release the build is.
+  # Driving xcodebuild directly does not work and is not worth retrying: the
+  # generated project's "Build Rust Code" phase shells out to `tauri ios
+  # xcode-script`, which reads state that only `tauri ios build` writes, and
+  # panics on a missing dev-server address file
+  # (tauri-cli/src/mobile/mod.rs:386) for BOTH platforms and BOTH
+  # configurations. And `tauri ios build` itself archives, which needs the
+  # distribution cert a fork's PR can never have.
   ios:
     name: iOS build
     runs-on: macos-26
     steps:
       - uses: actions/checkout@v7
-      - uses: pnpm/action-setup@v6
-      - uses: actions/setup-node@v6
-        with:
-          node-version-file: .tool-versions
-          cache: pnpm
       - run: rustup target add aarch64-apple-ios
       - uses: swatinem/rust-cache@v2
         with:
-          workspaces: src-tauri
-      - run: pnpm install --frozen-lockfile
-      # The Xcode "Build Rust Code" phase shells out to `tauri ios xcode-script`
-      # and expects dist/ to exist already: beforeBuildCommand only runs under
-      # `tauri ios build`, which we deliberately aren't using.
-      - run: pnpm build
-      - name: Build the app
+          workspaces: src-tauri/plugins/wingover
+      - name: Compile the native plugin, Swift and all
         run: |
-          xcodebuild build \
-            -project src-tauri/gen/apple/wingover.xcodeproj \
-            -scheme wingover_iOS \
-            -configuration release \
-            -sdk iphoneos \
-            -destination 'generic/platform=iOS' \
-            CODE_SIGNING_ALLOWED=NO \
-            CODE_SIGNING_REQUIRED=NO \
-            CODE_SIGN_IDENTITY="" \
-            DEVELOPMENT_TEAM=""
+          cargo build --locked \
+            --manifest-path src-tauri/plugins/wingover/Cargo.toml \
+            --target aarch64-apple-ios
