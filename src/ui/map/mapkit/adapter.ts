@@ -92,7 +92,7 @@ export async function createMapKitMapView(
     mapType: baseToMapType(initialBase),
     center: new mapkit.Coordinate(39.8, -98.5),
   });
-  map.colorScheme = mapkit.ColorScheme.Dark;
+  map.colorScheme = mapkit.ColorScheme.Light;
 
   // The bearing the app last asked for. The glyph is oriented against this
   // (heading − lastBearing → 0 in track-up), so it holds pointing up.
