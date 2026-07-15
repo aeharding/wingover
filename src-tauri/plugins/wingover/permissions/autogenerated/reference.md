@@ -88,6 +88,110 @@ Denies the fixes_since command without any pre-configured scope.
 <tr>
 <td>
 
+`wingover:allow-keychain-available`
+
+</td>
+<td>
+
+Enables the keychain_available command without any pre-configured scope.
+
+</td>
+</tr>
+
+<tr>
+<td>
+
+`wingover:deny-keychain-available`
+
+</td>
+<td>
+
+Denies the keychain_available command without any pre-configured scope.
+
+</td>
+</tr>
+
+<tr>
+<td>
+
+`wingover:allow-keychain-delete`
+
+</td>
+<td>
+
+Enables the keychain_delete command without any pre-configured scope.
+
+</td>
+</tr>
+
+<tr>
+<td>
+
+`wingover:deny-keychain-delete`
+
+</td>
+<td>
+
+Denies the keychain_delete command without any pre-configured scope.
+
+</td>
+</tr>
+
+<tr>
+<td>
+
+`wingover:allow-keychain-get`
+
+</td>
+<td>
+
+Enables the keychain_get command without any pre-configured scope.
+
+</td>
+</tr>
+
+<tr>
+<td>
+
+`wingover:deny-keychain-get`
+
+</td>
+<td>
+
+Denies the keychain_get command without any pre-configured scope.
+
+</td>
+</tr>
+
+<tr>
+<td>
+
+`wingover:allow-keychain-set`
+
+</td>
+<td>
+
+Enables the keychain_set command without any pre-configured scope.
+
+</td>
+</tr>
+
+<tr>
+<td>
+
+`wingover:deny-keychain-set`
+
+</td>
+<td>
+
+Denies the keychain_set command without any pre-configured scope.
+
+</td>
+</tr>
+
+<tr>
+<td>
+
 `wingover:allow-request-permissions`
 
 </td>
@@ -211,6 +315,84 @@ Enables the stop_watch command without any pre-configured scope.
 <td>
 
 Denies the stop_watch command without any pre-configured scope.
+
+</td>
+</tr>
+
+<tr>
+<td>
+
+`wingover:allow-storekit-current-entitlement`
+
+</td>
+<td>
+
+Enables the storekit_current_entitlement command without any pre-configured scope.
+
+</td>
+</tr>
+
+<tr>
+<td>
+
+`wingover:deny-storekit-current-entitlement`
+
+</td>
+<td>
+
+Denies the storekit_current_entitlement command without any pre-configured scope.
+
+</td>
+</tr>
+
+<tr>
+<td>
+
+`wingover:allow-storekit-products`
+
+</td>
+<td>
+
+Enables the storekit_products command without any pre-configured scope.
+
+</td>
+</tr>
+
+<tr>
+<td>
+
+`wingover:deny-storekit-products`
+
+</td>
+<td>
+
+Denies the storekit_products command without any pre-configured scope.
+
+</td>
+</tr>
+
+<tr>
+<td>
+
+`wingover:allow-storekit-purchase`
+
+</td>
+<td>
+
+Enables the storekit_purchase command without any pre-configured scope.
+
+</td>
+</tr>
+
+<tr>
+<td>
+
+`wingover:deny-storekit-purchase`
+
+</td>
+<td>
+
+Denies the storekit_purchase command without any pre-configured scope.
 
 </td>
 </tr>

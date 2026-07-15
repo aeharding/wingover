@@ -1,11 +1,30 @@
 import AVFoundation
 import CoreLocation
 import Foundation
+import Security
+import StoreKit
 import Tauri
 import UIKit
 
 class SpeakArgs: Decodable {
   let text: String
+}
+
+class KeychainGetArgs: Decodable {
+  let key: String
+}
+
+class KeychainSetArgs: Decodable {
+  let key: String
+  let value: String
+}
+
+class ProductsArgs: Decodable {
+  let productIds: [String]
+}
+
+class PurchaseArgs: Decodable {
+  let productId: String
 }
 
 class ShareFileArgs: Decodable {
@@ -264,6 +283,156 @@ class WingoverPlugin: Plugin, CLLocationManagerDelegate {
       fix["course"] = location.course
     }
     return fix
+  }
+
+  //
+  // Keychain
+  //
+  // A dumb key/value shim, like everything else here. The sync credential is
+  // derived server-side, cannot be reset by the pilot, and grants remote
+  // read/write to the whole account — a bigger blast radius than the flights an
+  // app-container compromise already exposes. IndexedDB would also ride along
+  // into iCloud and iTunes backups; a Keychain item written ThisDeviceOnly
+  // never leaves the device at all. That costs nothing, because the credential
+  // is re-derivable from a StoreKit transaction on any device with the Apple
+  // Account — so it never needs backing up.
+
+  private func keychainQuery(_ key: String) -> [String: Any] {
+    [
+      kSecClass as String: kSecClassGenericPassword,
+      kSecAttrService as String: "app.wingover.wingover.sync",
+      kSecAttrAccount as String: key,
+    ]
+  }
+
+  @objc public func keychainAvailable(_ invoke: Invoke) throws {
+    invoke.resolve(["available": true])
+  }
+
+  @objc public func keychainGet(_ invoke: Invoke) throws {
+    let args = try invoke.parseArgs(KeychainGetArgs.self)
+    var query = keychainQuery(args.key)
+    query[kSecReturnData as String] = true
+    query[kSecMatchLimit as String] = kSecMatchLimitOne
+
+    var item: CFTypeRef?
+    let status = SecItemCopyMatching(query as CFDictionary, &item)
+    switch status {
+    case errSecSuccess:
+      guard let data = item as? Data, let value = String(data: data, encoding: .utf8) else {
+        invoke.reject("keychain item is not readable utf8")
+        return
+      }
+      invoke.resolve(["value": value])
+    case errSecItemNotFound:
+      invoke.resolve(["value": nil])
+    default:
+      invoke.reject("keychain read failed: \(status)")
+    }
+  }
+
+  @objc public func keychainSet(_ invoke: Invoke) throws {
+    let args = try invoke.parseArgs(KeychainSetArgs.self)
+    // Delete-then-add rather than update: an add over an existing item fails
+    // with errSecDuplicateItem, and this must be idempotent — every session
+    // rewrites the credential.
+    SecItemDelete(keychainQuery(args.key) as CFDictionary)
+
+    var query = keychainQuery(args.key)
+    query[kSecValueData as String] = Data(args.value.utf8)
+    // AfterFirstUnlock so a relaunch after reboot can still sync; ThisDeviceOnly
+    // so it is never in a backup or iCloud Keychain.
+    query[kSecAttrAccessible as String] = kSecAttrAccessibleAfterFirstUnlockThisDeviceOnly
+
+    let status = SecItemAdd(query as CFDictionary, nil)
+    guard status == errSecSuccess else {
+      invoke.reject("keychain write failed: \(status)")
+      return
+    }
+    invoke.resolve()
+  }
+
+  @objc public func keychainDelete(_ invoke: Invoke) throws {
+    let args = try invoke.parseArgs(KeychainGetArgs.self)
+    let status = SecItemDelete(keychainQuery(args.key) as CFDictionary)
+    guard status == errSecSuccess || status == errSecItemNotFound else {
+      invoke.reject("keychain delete failed: \(status)")
+      return
+    }
+    invoke.resolve()
+  }
+
+  //
+  // StoreKit
+  //
+  // Returns the raw signed transaction (jwsRepresentation) verbatim and decides
+  // nothing. The server verifies it against Apple's root CAs and is the only
+  // authority on entitlement — so an unverified result is still handed over
+  // rather than filtered here, because this shim's opinion doesn't count.
+
+  @objc public func storekitProducts(_ invoke: Invoke) throws {
+    let args = try invoke.parseArgs(ProductsArgs.self)
+    Task {
+      do {
+        let products = try await Product.products(for: args.productIds)
+        let payload: [JsonObject] = products.map { product in
+          [
+            "id": product.id,
+            "displayName": product.displayName,
+            // Apple's own localized price string — never format this ourselves.
+            "displayPrice": product.displayPrice,
+            "description": product.description,
+          ]
+        }
+        invoke.resolve(["products": payload])
+      } catch {
+        invoke.reject(error.localizedDescription)
+      }
+    }
+  }
+
+  // How a second device joins and how a reinstall recovers: same Apple Account,
+  // same transaction, same account. There is no "restore" button because there
+  // is nothing to restore — StoreKit already knows.
+  @objc public func storekitCurrentEntitlement(_ invoke: Invoke) throws {
+    Task {
+      for await result in Transaction.currentEntitlements {
+        invoke.resolve(["jws": result.jwsRepresentation])
+        return
+      }
+      invoke.resolve(["jws": nil])
+    }
+  }
+
+  @objc public func storekitPurchase(_ invoke: Invoke) throws {
+    let args = try invoke.parseArgs(PurchaseArgs.self)
+    Task {
+      do {
+        guard let product = try await Product.products(for: [args.productId]).first else {
+          invoke.reject("no such product: \(args.productId)")
+          return
+        }
+        switch try await product.purchase() {
+        case .success(let verification):
+          invoke.resolve(["jws": verification.jwsRepresentation])
+          // Finish only after handing the JWS over. If the server call then
+          // fails, currentEntitlements still returns this transaction, so the
+          // next session recovers — nothing is stranded.
+          if case .verified(let transaction) = verification {
+            await transaction.finish()
+          }
+        case .userCancelled:
+          invoke.reject("cancelled")
+        case .pending:
+          // Ask to Buy, or SCA. The webhook will land when it resolves.
+          invoke.reject("pending")
+        @unknown default:
+          invoke.reject("unknown purchase result")
+        }
+      } catch {
+        invoke.reject(error.localizedDescription)
+      }
+    }
   }
 }
 
