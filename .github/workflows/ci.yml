@@ -57,6 +57,14 @@ jobs:
         with:
           workspaces: src-tauri/plugins/wingover
       - name: Compile the native plugin, Swift and all
+        env:
+          # Xcode always exports this; a bare cargo build does not, and
+          # tauri-utils then hands swift-rs a default of "13.0" — Package.swift's
+          # .iOS(.v16) is never consulted (tauri-utils/src/build.rs). Without
+          # this line every StoreKit call fails as "only available in iOS 15.0
+          # or newer" and the job reports a bug the real build does not have.
+          # Must track project.yml's deploymentTarget.
+          IPHONEOS_DEPLOYMENT_TARGET: "16.0"
         run: |
           cargo build --locked \
             --manifest-path src-tauri/plugins/wingover/Cargo.toml \
