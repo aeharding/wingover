@@ -44,20 +44,29 @@ function teardown() {
  * True once a push was rejected while we believed we were entitled.
  *
  * PouchDB emits `denied` for a 403 and carries on: the doc is dropped from the
- * batch and the checkpoint advances past it (pouchdb-browser 9.0.0
- * index.es.js:9819-9830, :9871). Flights are immutable, so that sequence never
- * comes round again — a flight rejected during a lapse would never be pushed
- * again, not even after the pilot renews. This flag is how it gets a second
- * chance; see backfill().
+ * batch and the checkpoint advances past it. Measured against a real CouchDB —
+ * push into a rejecting validate_doc_update, then grant the write role and push
+ * again: docs_read 0, last_seq unchanged, doc still absent. It is never retried.
+ *
+ * This is invisible in most PouchDB apps, which is why it reads as wrong:
+ * where documents are MUTABLE, a denied doc gets edited later, that edit lands
+ * at a new seq past the checkpoint, and the whole thing self-heals unnoticed.
+ * Flights are immutable after landing (STEERING), so their seq never comes
+ * round again and nothing ever re-pushes them. Same library, opposite outcome —
+ * the data model is what turns a quirk into permanent loss.
+ *
+ * backfill() is the second chance.
  */
 let needsBackfill = false;
 
 /**
  * Re-push everything, ignoring the checkpoint.
  *
- * `checkpoint: false` makes PouchDB re-scan from the start instead of trusting
- * a checkpoint that has already skipped past rejected docs. One-shot and cheap:
- * a logbook is hundreds of docs, and the server rejects nothing it already has.
+ * `checkpoint: false` genuinely re-scans from the start rather than merely
+ * skipping the checkpoint WRITE — verified against a real CouchDB: the same
+ * push that read 0 docs with a checkpoint reads and writes the skipped doc
+ * without one. One-shot and cheap: a logbook is hundreds of docs, and the
+ * server rejects nothing it already has.
  */
 async function backfill(target: PouchDB.Database) {
   needsBackfill = false;
