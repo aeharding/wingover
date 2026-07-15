@@ -35,9 +35,17 @@ jobs:
   # failure is already everyone's problem. macOS minutes are free on public
   # repos, so the only thing this ever cost was thinking to ask for it.
   #
-  # Simulator, unsigned, on purpose: an archive needs the distribution cert,
-  # which a fork's PR can never have. Signing is TestFlight's job. This job
-  # answers one question — does it build — and answers it for every PR.
+  # Device SDK, unsigned, on purpose. Two things had to be true and only one
+  # was obvious:
+  #
+  # Unsigned, because an ARCHIVE needs the distribution cert, which a fork's PR
+  # can never have — signing is TestFlight's job. `xcodebuild build` doesn't
+  # need it.
+  #
+  # Device rather than simulator, because `tauri ios xcode-script` decides it is
+  # serving `tauri ios dev` from the PLATFORM, not the configuration: pass it
+  # "iOS Simulator" and it panics looking for a dev server's address file
+  # (tauri-cli/src/mobile/mod.rs:386) no matter how release the build is.
   ios:
     name: iOS build
     runs-on: macos-26
@@ -48,8 +56,7 @@ jobs:
         with:
           node-version-file: .tool-versions
           cache: pnpm
-      # Apple silicon runners: the simulator slice is its own Rust target.
-      - run: rustup target add aarch64-apple-ios-sim
+      - run: rustup target add aarch64-apple-ios
       - uses: swatinem/rust-cache@v2
         with:
           workspaces: src-tauri
@@ -58,18 +65,14 @@ jobs:
       # and expects dist/ to exist already: beforeBuildCommand only runs under
       # `tauri ios build`, which we deliberately aren't using.
       - run: pnpm build
-      # release, not debug: `tauri ios xcode-script` reads the debug
-      # configuration as `tauri ios dev` and goes looking for a running dev
-      # server's address file, which no CI runner has. Release points it at the
-      # dist/ built above.
-      - name: Build for the simulator
+      - name: Build the app
         run: |
           xcodebuild build \
             -project src-tauri/gen/apple/wingover.xcodeproj \
             -scheme wingover_iOS \
             -configuration release \
-            -sdk iphonesimulator \
-            -destination 'generic/platform=iOS Simulator' \
+            -sdk iphoneos \
+            -destination 'generic/platform=iOS' \
             CODE_SIGNING_ALLOWED=NO \
             CODE_SIGNING_REQUIRED=NO \
             CODE_SIGN_IDENTITY="" \
