@@ -425,21 +425,27 @@ class WingoverPlugin: Plugin, CLLocationManagerDelegate {
         return
       }
 
-      var newest: VerificationResult<Transaction>?
+      var newestJws: String?
       var newestDate = Date.distantPast
       for await result in Transaction.all {
-        // .unsafePayloadValue, not the verified payload: reading a field to
-        // sort by is not trusting it. If the signature is bad the server throws
-        // the whole thing out, which is exactly the arrangement we want.
-        let transaction = result.unsafePayloadValue
+        // Take the payload whether or not it verified: reading a field to sort
+        // by is not trusting it, and the server throws out anything whose
+        // signature is bad. Pattern-matched rather than .unsafePayloadValue so
+        // there is no availability question to get wrong — this file cannot be
+        // compiled anywhere but a Mac.
+        let transaction: Transaction
+        switch result {
+        case .verified(let value): transaction = value
+        case .unverified(let value, _): transaction = value
+        }
         guard args.productIds.contains(transaction.productID) else { continue }
         let stamp = transaction.expirationDate ?? transaction.purchaseDate
         if stamp > newestDate {
           newestDate = stamp
-          newest = result
+          newestJws = result.jwsRepresentation
         }
       }
-      invoke.resolve(["jws": newest?.jwsRepresentation])
+      invoke.resolve(["jws": newestJws])
     }
   }
 
