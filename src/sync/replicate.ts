@@ -202,8 +202,19 @@ function connect() {
   const sources = sub ? [sub.push, sub.pull] : [handle];
   for (const source of sources) {
     source.on("paused", (error?: unknown) => {
-      if (error) set({ state: "error", message: String(error) });
-      else idle();
+      // An error here is NOT a problem, and calling it one was a lie the pilot
+      // could see: `paused` carries a bare "Failed to fetch" (no status —
+      // measured) every time the live _changes long-poll is aborted, which
+      // happens on any reconnect, teardown or blip. The status flashed red and
+      // healed itself seconds later, which is exactly how an indicator teaches
+      // you to ignore it.
+      //
+      // retry:true means the library WILL come back, so there is nothing for
+      // the pilot to do and nothing to announce. "Last synced 10:32" is already
+      // the honest answer to "are my flights backed up?" — it goes stale on its
+      // own if this keeps failing, without ever crying wolf. Only a rejected
+      // credential is a real problem, and that arrives on `error`.
+      if (!error) idle();
     });
   }
 }
