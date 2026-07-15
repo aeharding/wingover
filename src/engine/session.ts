@@ -1,5 +1,6 @@
 import { WAYPOINT_RADIUS_M } from "../flight/waypoints";
-import { getBooleanSetting, listPins, type Pin } from "../storage/db";
+import { listPins, type Pin } from "../storage/db";
+import { getBooleanSetting } from "../storage/local";
 import { engine } from "./index";
 import type { Waypoint } from "./types";
 

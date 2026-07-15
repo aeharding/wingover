@@ -7,7 +7,7 @@ import {
 } from "react";
 
 import type { Units } from "../../flight/format";
-import { getSetting, setSetting } from "../../storage/db";
+import { getSetting, setSetting } from "../../storage/local";
 
 interface SettingsValue {
   units: Units;

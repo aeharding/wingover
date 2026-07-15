@@ -13,7 +13,7 @@ The defining feature is not the map or the stats. It is that **recording never l
 These mirror Voyager for Lemmy, by the same author:
 
 - **Open source, AGPL-3.0.** Development in the open, contributions welcome.
-- **Privacy-first, zero backend.** No accounts, no telemetry, no analytics, no crash reporters, no server operated by the project. All data stays on-device. The only network traffic is map tile fetches, and the tile endpoint is user-visible and eventually user-configurable.
+- **Privacy-first, no backend by default.** No telemetry, no analytics, no crash reporters. Out of the box there is no account and no server: data stays on-device and the only network traffic is map tile fetches, with the tile endpoint user-visible and eventually user-configurable. Sync is the sole exception and is strictly opt-in — off until a pilot turns it on, and then only to the server they chose. The app is whole without it; nothing degrades if it is never enabled.
 - **Local-first, data ownership.** Open export formats (GPX; IGC candidate). An uninstall or a dead phone should never be the only copy — export/import is core, not an afterthought.
 - **Native feel.** Ionic-polished UI that respects platform conventions, matching the bar Voyager sets.
 - **Reliability over features.** A smaller app that never drops a track beats a bigger one that sometimes does.
@@ -31,7 +31,7 @@ These mirror Voyager for Lemmy, by the same author:
 
 ### Explicit non-goals (v1)
 
-- No backend, no accounts, no cloud sync, no social/live-tracking features.
+- No social/live-tracking features. No account is required to record, plan or export — ever. (Opt-in sync now exists; see Data & sync. It is a feature you switch on, not a thing the app needs.)
 - No offline map region downloads (rely on tile caching; revisit in v2 — pilots fly from remote fields, so this is a strong v2 candidate, not a rejected idea).
 - No airspace overlays (large data + rendering scope; revisit later).
 - No native desktop app — ever, as currently envisioned. Native wrappers exist solely for recording reliability on mobile; the desktop/computer story is the **PWA** (same web app, installable, syncing via CouchDB once sync exists).
@@ -39,7 +39,7 @@ These mirror Voyager for Lemmy, by the same author:
 
 ### Ideas parked for later
 
-Offline map regions, airspace (openAIP), engine hours / maintenance log (PPG pilots track two-stroke maintenance religiously — natural fit, cheap to add once the logbook exists), IGC export, live wind estimation from track drift, opt-in CouchDB sync/backup (self-hosted or paid hosted) enabling flights-on-your-computer via the PWA.
+Offline map regions, airspace (openAIP), engine hours / maintenance log (PPG pilots track two-stroke maintenance religiously — natural fit, cheap to add once the logbook exists), IGC export, live wind estimation from track drift. (Opt-in CouchDB sync/backup — self-hosted or paid hosted — has since shipped; see Data & sync.)
 
 ## Architecture
 
@@ -59,15 +59,23 @@ realtime core, and the annunciator seams — lives in
 | --------------------------- | -------------------------------------------------- | ------------------------------------------------ |
 | Active flight (in progress) | Native append-only write-ahead log (app container) | Must survive webview death and app relaunch      |
 | Finished flights (logbook)  | PouchDB (on IndexedDB)                             | Webview-convenient; only written at finalization |
-| Planning pins, settings     | PouchDB (on IndexedDB)                             | Low stakes, UI-owned                             |
+| Planning pins               | PouchDB `wingover` (synced)                        | Low stakes, UI-owned                             |
+| Settings                    | PouchDB `wingover-local` (never synced)            | Device preferences, not possessions              |
+| Sync credential             | iOS Keychain; IndexedDB elsewhere                  | Derived, un-resettable, grants remote access     |
 
 The native WAL is the _only_ holder of in-flight data. On stop, the flight is finalized into IndexedDB and the WAL is cleared. IndexedDB is durable in an app-embedded WKWebView (app container storage, not subject to Safari's web-data eviction), but export remains the real backup story.
 
-### Data & future sync
+### Data & sync
 
-The store is **PouchDB** (Apache PouchDB, incubating — the same stewardship ecosystem as CouchDB itself), adopted from day one so the sync future is native rather than a migration. Flight metadata is a document; the immutable track is a gzipped attachment on it (content-addressed, so metadata edits replicate as stubs without re-sending track bytes); deletes are native tombstones; auto-compaction is on from birth so revision bodies never accumulate. Flights are effectively immutable after landing, so the real conflict surface is tiny.
+The store is **PouchDB** (Apache PouchDB, incubating — the same stewardship ecosystem as CouchDB itself), adopted from day one so sync was native rather than a migration. Flight metadata is a document; the immutable track is a gzipped attachment on a **separate** `track:` document, because PouchDB re-sends a document's attachments on every revision of that document when pushing — with the track attached to the flight, renaming one re-uploaded the whole track. Split, a rename replicates a few hundred bytes and the track is sent exactly once. Deletes are native tombstones; auto-compaction is on from birth so revision bodies never accumulate. Flights are effectively immutable after landing, so the real conflict surface is tiny.
 
-When opt-in sync/backup arrives it is plain **CouchDB replication**: users self-host CouchDB for free, or use an optional paid hosted instance — the honest FOSS monetization shape. Proprietary sync substrates (iCloud, Dexie Cloud) are rejected on principle.
+Opt-in sync is plain **CouchDB replication**: users self-host CouchDB for free, or use an optional paid hosted instance — the honest FOSS monetization shape. Proprietary sync substrates (iCloud, Dexie Cloud) are rejected on principle.
+
+The client speaks basic auth to a stock CouchDB and knows how to do nothing else. Self-host is a URL and credentials a pilot types; the hosted instance hands back the same triple after a subscription. That is one code path, not two that happen to agree — which is what keeps "run your own CouchDB" from quietly becoming theatre.
+
+**Paying buys writes, not reads.** A lapsed subscription is read-only, never locked out: every flight stays readable, pullable to a new phone, and exportable. Sync is also paused for the duration of a flight — recording outranks it, always.
+
+The billing service is closed-source and lives outside this repo; it is a payment gate for the hosted instance and has no part in self-hosting, which needs only CouchDB itself.
 
 ## Reliability Doctrine
 
@@ -138,7 +146,7 @@ Real test flights exist but are precious — the maintainer can fly, but not ite
 - **Browser-ring e2e (Playwright).** Full user journeys against the real UI with the mocked seam: record → interrupt → rehydrate → stop → logbook → replay → export. Runs on Linux on every commit; this is where the bulk of e2e coverage lives.
 - **Simulator-ring e2e.** The real app and real native plugin against simulated location, with the kill drills scripted: background the app, kill the webview content process, kill the app, relaunch — assert recording continues or recovers with nothing lost beyond the flush window. Runs on the Mac sparingly at first, then in CI on macOS runners as part of the Voyager-style beta pipeline.
 - **Native engine tests.** The location source is abstracted so the Swift (later Kotlin) engine is unit-tested with injected fixes: WAL write/flush ordering, recovery from truncated and corrupt WALs, finalization, baro handling.
-- **Golden-track tests.** Known input flight → asserted stats (duration, distance, max altitude/speed, launch/land detection) and stable export output; export → import round-trips losslessly.
+- **Golden-track tests.** Known input flight → asserted stats (duration, distance, max altitude/speed, launch/land detection) and stable export output. Export is deliberately lossy and that is the trade: GPX 1.1 carries lat/lon/ele/time and dropped `<speed>`/`<course>` from 1.0, and has no home at all for climb rate or accuracy-in-meters (`hdop`/`vdop` are dilution-of-precision, a different quantity). So a round-trip returns a track that is interoperable, not identical — import reconstructs speed, course and climb rate from geometry, and the accuracies are gone. Interop is worth that at the export boundary; it is why the stored track stays JSON, where the record is complete.
 - **Soak test.** A long simulated flight with randomized interruption events injected throughout, asserting zero data loss — run scheduled in CI, not on every commit.
 - **Honest gaps, ground-truthed before flying.** Simulators can't reproduce real jetsam decisions, GPS chip behavior, or battery/thermal reality. That gap closes on the ground first: unattended real-device drills — phone recording in a pocket during a long drive or walk, screen off, hours at a stretch — exercise the identical pipeline; a flight is the same data, just higher. TestFlight beta pilots widen coverage before 1.0.
 
@@ -184,7 +192,8 @@ No backend, so the MapTiler key is a build-time constant (origin-restricted, cli
 
 ## Privacy Posture
 
-- Location data never leaves the device. Period.
+- Location data never leaves the device unless the pilot turns sync on, and then only to the server they chose — wingover.app, or their own CouchDB. There is no third party in either path, and no copy anywhere the pilot did not ask for.
+- **Sync can remove a flight from a device.** Replication carries deletes: delete a flight on one device and it goes on the others. That is what sync means and it is correct CouchDB behaviour, but it is the first mechanism in the app by which a flight can vanish from a device the pilot never touched — worth stating plainly against "recording never loses a flight", which is about capture, not about a pilot's own later decision to delete.
 - No telemetry of any kind, including "anonymous" analytics and crash reporting.
 - Minimal permissions: When-In-Use location (not Always), motion/baro. Each permission requested in context with an explanation.
 - Documented honestly: map tile requests expose the user's IP and rough viewport to the tile provider; this is the app's entire network surface.

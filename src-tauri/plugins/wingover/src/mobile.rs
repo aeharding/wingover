@@ -22,6 +22,21 @@ struct DrainResponse {
     fixes: Vec<Fix>,
 }
 
+#[derive(Deserialize)]
+struct AvailableResponse {
+    available: bool,
+}
+
+#[derive(Deserialize)]
+struct ValueResponse {
+    value: Option<String>,
+}
+
+#[derive(Deserialize)]
+struct JwsResponse {
+    jws: Option<String>,
+}
+
 // Sensor/actuator shim: five dumb primitives, all logic lives in Rust.
 pub struct Wingover<R: Runtime>(PluginHandle<R>);
 
@@ -41,6 +56,61 @@ impl<R: Runtime> Wingover<R> {
     pub fn drain(&self) -> crate::Result<Vec<Fix>> {
         let response: DrainResponse = self.0.run_mobile_plugin("drain", ())?;
         Ok(response.fixes)
+    }
+
+    pub fn keychain_available(&self) -> crate::Result<bool> {
+        let response: AvailableResponse = self.0.run_mobile_plugin("keychainAvailable", ())?;
+        Ok(response.available)
+    }
+
+    pub fn keychain_get(&self, key: &str) -> crate::Result<Option<String>> {
+        let response: ValueResponse = self
+            .0
+            .run_mobile_plugin("keychainGet", serde_json::json!({ "key": key }))?;
+        Ok(response.value)
+    }
+
+    pub fn keychain_set(&self, key: &str, value: &str) -> crate::Result<()> {
+        self.0
+            .run_mobile_plugin(
+                "keychainSet",
+                serde_json::json!({ "key": key, "value": value }),
+            )
+            .map_err(Into::into)
+    }
+
+    pub fn keychain_delete(&self, key: &str) -> crate::Result<()> {
+        self.0
+            .run_mobile_plugin("keychainDelete", serde_json::json!({ "key": key }))
+            .map_err(Into::into)
+    }
+
+    pub fn storekit_products(&self, product_ids: Vec<String>) -> crate::Result<serde_json::Value> {
+        self.0
+            .run_mobile_plugin(
+                "storekitProducts",
+                serde_json::json!({ "productIds": product_ids }),
+            )
+            .map_err(Into::into)
+    }
+
+    pub fn storekit_current_entitlement(
+        &self,
+        product_ids: Vec<String>,
+    ) -> crate::Result<Option<String>> {
+        let response: JwsResponse = self.0.run_mobile_plugin(
+            "storekitCurrentEntitlement",
+            serde_json::json!({ "productIds": product_ids }),
+        )?;
+        Ok(response.jws)
+    }
+
+    pub fn storekit_purchase(&self, product_id: &str) -> crate::Result<Option<String>> {
+        let response: JwsResponse = self.0.run_mobile_plugin(
+            "storekitPurchase",
+            serde_json::json!({ "productId": product_id }),
+        )?;
+        Ok(response.jws)
     }
 
     pub fn speak(&self, text: &str) -> crate::Result<()> {

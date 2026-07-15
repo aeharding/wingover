@@ -13,6 +13,13 @@
     "wingover:allow-check-permissions",
     "wingover:allow-request-permissions",
     "wingover:allow-current-position",
+    "wingover:allow-keychain-available",
+    "wingover:allow-keychain-get",
+    "wingover:allow-keychain-set",
+    "wingover:allow-keychain-delete",
+    "wingover:allow-storekit-products",
+    "wingover:allow-storekit-current-entitlement",
+    "wingover:allow-storekit-purchase",
     "opener:allow-open-url"
   ]
 }

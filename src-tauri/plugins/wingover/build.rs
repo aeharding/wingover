@@ -7,6 +7,13 @@ const COMMANDS: &[&str] = &[
     "check_permissions",
     "request_permissions",
     "current_position",
+    "keychain_available",
+    "keychain_get",
+    "keychain_set",
+    "keychain_delete",
+    "storekit_products",
+    "storekit_current_entitlement",
+    "storekit_purchase",
 ];
 
 fn main() {

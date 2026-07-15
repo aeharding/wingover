@@ -136,10 +136,63 @@ mod commands {
 
     // One-shot position for the map's Center-on-me (no capture session).
     #[command]
-    pub(crate) async fn current_position<R: Runtime>(
-        app: AppHandle<R>,
-    ) -> Result<crate::Fix> {
+    pub(crate) async fn current_position<R: Runtime>(app: AppHandle<R>) -> Result<crate::Fix> {
         app.wingover().current_position()
+    }
+
+    // Keychain and StoreKit are pass-through, like share_file: no Core, no
+    // state. The sync credential's authority is the server, and the WAL knows
+    // nothing about either.
+
+    #[command]
+    pub(crate) async fn keychain_available<R: Runtime>(app: AppHandle<R>) -> Result<bool> {
+        app.wingover().keychain_available()
+    }
+
+    #[command]
+    pub(crate) async fn keychain_get<R: Runtime>(
+        app: AppHandle<R>,
+        key: String,
+    ) -> Result<Option<String>> {
+        app.wingover().keychain_get(&key)
+    }
+
+    #[command]
+    pub(crate) async fn keychain_set<R: Runtime>(
+        app: AppHandle<R>,
+        key: String,
+        value: String,
+    ) -> Result<()> {
+        app.wingover().keychain_set(&key, &value)
+    }
+
+    #[command]
+    pub(crate) async fn keychain_delete<R: Runtime>(app: AppHandle<R>, key: String) -> Result<()> {
+        app.wingover().keychain_delete(&key)
+    }
+
+    #[command]
+    pub(crate) async fn storekit_products<R: Runtime>(
+        app: AppHandle<R>,
+        product_ids: Vec<String>,
+    ) -> Result<serde_json::Value> {
+        app.wingover().storekit_products(product_ids)
+    }
+
+    #[command]
+    pub(crate) async fn storekit_current_entitlement<R: Runtime>(
+        app: AppHandle<R>,
+        product_ids: Vec<String>,
+    ) -> Result<Option<String>> {
+        app.wingover().storekit_current_entitlement(product_ids)
+    }
+
+    #[command]
+    pub(crate) async fn storekit_purchase<R: Runtime>(
+        app: AppHandle<R>,
+        product_id: String,
+    ) -> Result<Option<String>> {
+        app.wingover().storekit_purchase(&product_id)
     }
 }
 
@@ -164,6 +217,13 @@ pub fn init<R: Runtime>() -> TauriPlugin<R> {
             commands::check_permissions,
             commands::request_permissions,
             commands::current_position,
+            commands::keychain_available,
+            commands::keychain_get,
+            commands::keychain_set,
+            commands::keychain_delete,
+            commands::storekit_products,
+            commands::storekit_current_entitlement,
+            commands::storekit_purchase,
         ])
         .setup(|app, api| {
             #[cfg(target_os = "ios")]

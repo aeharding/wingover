@@ -11,12 +11,8 @@ import {
 import type { Feature } from "geojson";
 import { useEffect, useRef, useState } from "react";
 
-import {
-  getSetting,
-  getTrack,
-  listFlights,
-  setSetting,
-} from "../../storage/db";
+import { getTrack, listFlights } from "../../storage/db";
+import { getSetting, setSetting } from "../../storage/local";
 import type { MapViewKind } from "../map/config";
 import MapCanvas from "../map/MapCanvas";
 import { boundsOf, type Line, type LngLat, type MapView } from "../map/types";

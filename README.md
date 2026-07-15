@@ -5,7 +5,7 @@
 <h1 align="center">Wingover</h1>
 
 <p align="center">
-Flight recorder and planner for paramotor pilots. Open source, privacy-first, zero backend — your flights never leave your device.
+Flight recorder and planner for paramotor pilots. Open source and privacy-first: no account, no telemetry, no server — your flights stay on your device. Optional sync, if you want it, goes only to a server you choose: your own CouchDB, or ours.
 </p>
 
 - [STEERING.md](./STEERING.md) — project direction and values
@@ -24,6 +24,54 @@ pnpm test       # unit tests
 pnpm e2e        # Playwright e2e, including reload kill drills
 pnpm build      # typecheck + production build
 ```
+
+Sync is developed against a real CouchDB, with no Apple developer account, no
+StoreKit and no Mac — only the credential is faked:
+
+```sh
+docker compose -f dev/couchdb/docker-compose.yml up -d
+pnpm dev
+```
+
+Then Settings → Subscription → **Use my own server**:
+
+| Server   | `http://localhost:5984` |
+| -------- | ----------------------- |
+| Database | `dev-db`                |
+| Username | `dev-user`              |
+| Password | `dev-pw`                |
+
+That account is provisioned on demand, with the real `validate_doc_update` that
+is the paywall. A second browser profile is a second device. For a lapsed
+(read-only) account, ask for one:
+
+```sh
+curl -XPOST localhost:5173/v1/session -H 'content-type: application/json' \
+  -d '{"fake":true,"account":"lapsed","entitled":false}'   # -> lapsed-db/-user/-pw
+```
+
+## Syncing to your own CouchDB
+
+Settings → Subscription → **Use my own server**. Wingover talks to CouchDB
+directly and never to anything else, so CouchDB has to allow the app's origin —
+a stock install ships with CORS **off**, and without this the app cannot reach
+your server at all:
+
+```ini
+[chttpd]
+enable_cors = true
+
+[cors]
+credentials = true
+; the origin you serve Wingover from; tauri://localhost is the iOS app
+origins = https://wingover.app, tauri://localhost
+headers = accept, authorization, content-type, origin, referer
+methods = GET, PUT, POST, HEAD, DELETE
+```
+
+You need a database and a user who can read and write it. Nothing else — no
+design documents, no schema. Wingover puts flights in whatever database you
+name, and a lapsed subscription is somebody else's problem on a server you own.
 
 ## License
 

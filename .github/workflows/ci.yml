@@ -29,3 +29,43 @@ jobs:
             playwright-report/
             test-results/
           retention-days: 7
+
+  # The only job that compiles Swift. Without it the native plugin is checked
+  # by nothing until TestFlight builds it — on main, after merge, where a
+  # failure is already everyone's problem. macOS minutes are free on public
+  # repos, so the only thing this ever cost was thinking to ask for it.
+  #
+  # cargo, not xcodebuild, and this is the whole trick: the plugin's build
+  # script calls tauri_utils::build::link_apple_library() when the target OS is
+  # iOS, so `cargo build` IS the Swift compile (tauri-plugin-2.6.3,
+  # src/build/mobile.rs). No Xcode project, no signing, no dev server, no dist.
+  #
+  # Driving xcodebuild directly does not work and is not worth retrying: the
+  # generated project's "Build Rust Code" phase shells out to `tauri ios
+  # xcode-script`, which reads state that only `tauri ios build` writes, and
+  # panics on a missing dev-server address file
+  # (tauri-cli/src/mobile/mod.rs:386) for BOTH platforms and BOTH
+  # configurations. And `tauri ios build` itself archives, which needs the
+  # distribution cert a fork's PR can never have.
+  ios:
+    name: iOS build
+    runs-on: macos-26
+    steps:
+      - uses: actions/checkout@v7
+      - run: rustup target add aarch64-apple-ios
+      - uses: swatinem/rust-cache@v2
+        with:
+          workspaces: src-tauri/plugins/wingover
+      - name: Compile the native plugin, Swift and all
+        env:
+          # Xcode always exports this; a bare cargo build does not, and
+          # tauri-utils then hands swift-rs a default of "13.0" — Package.swift's
+          # .iOS(.v16) is never consulted (tauri-utils/src/build.rs). Without
+          # this line every StoreKit call fails as "only available in iOS 15.0
+          # or newer" and the job reports a bug the real build does not have.
+          # Must track project.yml's deploymentTarget.
+          IPHONEOS_DEPLOYMENT_TARGET: "16.0"
+        run: |
+          cargo build --locked \
+            --manifest-path src-tauri/plugins/wingover/Cargo.toml \
+            --target aarch64-apple-ios

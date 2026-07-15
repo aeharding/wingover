@@ -43,13 +43,8 @@ import {
 import { LANDING_GRACE_MS } from "../../flight/landing";
 import { bearingBetween, relativeBearing } from "../../flight/nav";
 import { computeStats, haversineMeters } from "../../flight/stats";
-import {
-  getSetting,
-  listPins,
-  type Pin,
-  saveFlight,
-  setSetting,
-} from "../../storage/db";
+import { listPins, type Pin, saveFlight } from "../../storage/db";
+import { getSetting, setSetting } from "../../storage/local";
 import Tile from "../components/Tile";
 import type { MapViewKind } from "../map/config";
 import LiveTrackMap from "../map/LiveTrackMap";

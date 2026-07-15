@@ -47,6 +47,12 @@ interface FlightDoc {
   plannedRoute?: LngLat[];
 }
 
+/**
+ * The synced store: flights and pins, and nothing else.
+ *
+ * Everything in here replicates to a pilot's other devices once sync is on, so
+ * anything device-local belongs in storage/local.ts instead.
+ */
 export const db = new PouchDB("wingover", {
   auto_compaction: true,
   revs_limit: 25,
@@ -54,6 +60,11 @@ export const db = new PouchDB("wingover", {
 
 function flightDocId(flightId: string): string {
   return `flight:${flightId}`;
+}
+
+// Sorts outside the flight: range, so listFlights never sees these.
+function trackDocId(flightId: string): string {
+  return `track:${flightId}`;
 }
 
 function toFlight(doc: FlightDoc): Flight {
@@ -85,7 +96,39 @@ async function gunzip(data: Blob | Buffer): Promise<string> {
   return new Response(stream).text();
 }
 
+/**
+ * Metadata and track are separate documents on purpose.
+ *
+ * PouchDB's push replication re-sends a document's attachments on every
+ * revision of that document — the digest check that would skip unchanged bytes
+ * only runs when pulling FROM a remote (pouchdb 9.0.0,
+ * getDocAttachmentsFromTargetOrSource). So with the track attached to the
+ * flight, renaming a flight re-uploaded the whole track: ~275KB for a two-hour
+ * recording, every edit. Splitting them means a rename replicates a few hundred
+ * bytes and the track — immutable once landed — is sent exactly once, ever.
+ *
+ * Track first: a failure then leaves an orphan track doc that nothing lists,
+ * and the caller sees the throw with the WAL still holding the flight. The
+ * other order would leave a flight visible in the logbook with no track, which
+ * looks exactly like data loss.
+ */
 export async function saveFlight(flight: Flight, fixes: Fix[]) {
+  try {
+    await db.put({
+      _id: trackDocId(flight.id),
+      _attachments: {
+        [TRACK_ATTACHMENT]: {
+          content_type: "application/gzip",
+          data: await gzip(JSON.stringify(fixes)),
+        },
+      },
+    });
+  } catch (error) {
+    // Already there: a retry after the track landed but the metadata didn't.
+    // A track is immutable, so the existing one is the same bytes — throwing
+    // here would wedge the retry that is supposed to rescue the flight.
+    if ((error as { status?: number }).status !== 409) throw error;
+  }
   await db.put({
     _id: flightDocId(flight.id),
     name: flight.name,
@@ -98,12 +141,6 @@ export async function saveFlight(flight: Flight, fixes: Fix[]) {
     importBatchId: flight.importBatchId,
     importedAt: flight.importedAt,
     plannedRoute: flight.plannedRoute,
-    _attachments: {
-      [TRACK_ATTACHMENT]: {
-        content_type: "application/gzip",
-        data: await gzip(JSON.stringify(fixes)),
-      },
-    },
   });
 }
 
@@ -126,16 +163,24 @@ export async function getFlight(flightId: string): Promise<Flight | null> {
   }
 }
 
-export async function getTrack(flightId: string): Promise<Fix[]> {
+async function readTrack(docId: string): Promise<Fix[] | null> {
   try {
-    const attachment = await db.getAttachment(
-      flightDocId(flightId),
-      TRACK_ATTACHMENT,
-    );
+    const attachment = await db.getAttachment(docId, TRACK_ATTACHMENT);
     return JSON.parse(await gunzip(attachment as Blob | Buffer)) as Fix[];
   } catch {
-    return [];
+    return null;
   }
+}
+
+export async function getTrack(flightId: string): Promise<Fix[]> {
+  // Flights recorded before the track was split still carry it on the flight
+  // doc. Falling back costs one miss on those and nothing on new ones — and
+  // real test flights are precious enough (STEERING) not to drop for tidiness.
+  return (
+    (await readTrack(trackDocId(flightId))) ??
+    (await readTrack(flightDocId(flightId))) ??
+    []
+  );
 }
 
 export async function updateFlight(
@@ -149,6 +194,15 @@ export async function updateFlight(
 export async function deleteFlight(flightId: string) {
   const doc = await db.get(flightDocId(flightId));
   await db.remove(doc);
+  // The track is a separate document now; deleting only the metadata would
+  // strand a few hundred KB per flight, invisibly, forever. Tolerated absence:
+  // flights recorded before the split have no track doc to remove.
+  try {
+    const track = await db.get(trackDocId(flightId));
+    await db.remove(track);
+  } catch {
+    // Nothing to remove.
+  }
 }
 
 interface PinDoc {
@@ -214,35 +268,3 @@ export async function deletePin(pinId: string) {
   await db.remove(doc);
 }
 
-export async function getSetting(key: string): Promise<string | null> {
-  try {
-    const doc = await db.get<{ value: string }>(`setting:${key}`);
-    return doc.value;
-  } catch {
-    return null;
-  }
-}
-
-export async function setSetting(key: string, value: string) {
-  const _id = `setting:${key}`;
-  try {
-    const existing = await db.get(_id);
-    await db.put({ ...existing, value });
-  } catch {
-    await db.put({ _id, value });
-  }
-}
-
-// The settings store is string-valued; booleans cross that edge HERE and
-// nowhere else — callers never see (or mis-parse) "false".
-export async function getBooleanSetting(
-  key: string,
-  fallback: boolean,
-): Promise<boolean> {
-  const value = await getSetting(key);
-  return value === null ? fallback : value === "true";
-}
-
-export async function setBooleanSetting(key: string, value: boolean) {
-  await setSetting(key, value ? "true" : "false");
-}

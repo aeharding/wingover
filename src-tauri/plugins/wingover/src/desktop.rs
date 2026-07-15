@@ -29,6 +29,40 @@ impl<R: Runtime> Wingover<R> {
         Err(crate::Error::UnsupportedPlatform)
     }
 
+    // Not an error: the JS credential store PROBES this and falls back to
+    // IndexedDB. Answering false is the honest reply on a platform with no
+    // Keychain, and it is what keeps the Linux desktop dev ring working.
+    pub fn keychain_available(&self) -> crate::Result<bool> {
+        Ok(false)
+    }
+
+    pub fn keychain_get(&self, _key: &str) -> crate::Result<Option<String>> {
+        Err(crate::Error::UnsupportedPlatform)
+    }
+
+    pub fn keychain_set(&self, _key: &str, _value: &str) -> crate::Result<()> {
+        Err(crate::Error::UnsupportedPlatform)
+    }
+
+    pub fn keychain_delete(&self, _key: &str) -> crate::Result<()> {
+        Err(crate::Error::UnsupportedPlatform)
+    }
+
+    pub fn storekit_products(&self, _product_ids: Vec<String>) -> crate::Result<serde_json::Value> {
+        Err(crate::Error::UnsupportedPlatform)
+    }
+
+    pub fn storekit_current_entitlement(
+        &self,
+        _product_ids: Vec<String>,
+    ) -> crate::Result<Option<String>> {
+        Err(crate::Error::UnsupportedPlatform)
+    }
+
+    pub fn storekit_purchase(&self, _product_id: &str) -> crate::Result<Option<String>> {
+        Err(crate::Error::UnsupportedPlatform)
+    }
+
     pub fn speak(&self, _text: &str) -> crate::Result<()> {
         Err(crate::Error::UnsupportedPlatform)
     }

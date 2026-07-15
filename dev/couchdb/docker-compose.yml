@@ -1,0 +1,28 @@
+# The browser ring's CouchDB.
+#
+#   docker compose -f dev/couchdb/docker-compose.yml up -d
+#   pnpm dev
+#
+# That's the whole setup for developing and e2e-testing sync: no Apple developer
+# account, no StoreKit, no subscription, no Mac. The Vite dev server fakes the
+# entitlement service (dev/fake-auth-plugin.ts); everything below the credential
+# is the production replication path.
+services:
+  couchdb:
+    build:
+      context: .
+    ports:
+      # Loopback only. "5984:5984" binds 0.0.0.0 and would put an
+      # admin:password CouchDB on whatever network this laptop is on — and the
+      # published password is only defensible because this is unreachable.
+      - "127.0.0.1:5984:5984"
+    environment:
+      COUCHDB_USER: admin
+      COUCHDB_PASSWORD: password
+    healthcheck:
+      test: ["CMD", "curl", "-fsS", "http://localhost:5984/_up"]
+      interval: 5s
+      timeout: 3s
+      retries: 12
+      start_period: 10s
+    # No volume: a dev database is disposable, and starting clean is a feature.

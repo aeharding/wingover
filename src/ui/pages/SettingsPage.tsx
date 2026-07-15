@@ -13,18 +13,23 @@ import {
   IonToggle,
   IonToolbar,
 } from "@ionic/react";
-import { useEffect, useState } from "react";
+import { useEffect, useState, useSyncExternalStore } from "react";
 
 import {
   getBooleanSetting,
   getSetting,
   setBooleanSetting,
   setSetting,
-} from "../../storage/db";
+} from "../../storage/local";
+import * as sync from "../../sync";
 import { useSettings } from "../settings/SettingsContext";
+import { describe as describeSync, useSyncSheet } from "../sync/SyncSheet";
 
 export default function SettingsPage() {
   const { units, setUnits } = useSettings();
+  const openSync = useSyncSheet();
+  const syncStatus = useSyncExternalStore(sync.subscribe, sync.currentStatus);
+  const syncLabel = describeSync(syncStatus).label;
   const [maptilerKey, setMaptilerKey] = useState("");
   const [autoEnd, setAutoEnd] = useState(true);
 
@@ -52,6 +57,10 @@ export default function SettingsPage() {
       </IonHeader>
       <IonContent>
         <IonList>
+          <IonItem button detail onClick={openSync} data-testid="settings-sync">
+            <IonLabel>Subscription</IonLabel>
+            <IonNote slot="end">{syncLabel}</IonNote>
+          </IonItem>
           <IonItem>
             <IonInput
               label="MapTiler key"

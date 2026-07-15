@@ -2427,6 +2427,30 @@
           "markdownDescription": "Enables the fixes_since command without any pre-configured scope."
         },
         {
+          "description": "Enables the keychain_available command without any pre-configured scope.",
+          "type": "string",
+          "const": "wingover:allow-keychain-available",
+          "markdownDescription": "Enables the keychain_available command without any pre-configured scope."
+        },
+        {
+          "description": "Enables the keychain_delete command without any pre-configured scope.",
+          "type": "string",
+          "const": "wingover:allow-keychain-delete",
+          "markdownDescription": "Enables the keychain_delete command without any pre-configured scope."
+        },
+        {
+          "description": "Enables the keychain_get command without any pre-configured scope.",
+          "type": "string",
+          "const": "wingover:allow-keychain-get",
+          "markdownDescription": "Enables the keychain_get command without any pre-configured scope."
+        },
+        {
+          "description": "Enables the keychain_set command without any pre-configured scope.",
+          "type": "string",
+          "const": "wingover:allow-keychain-set",
+          "markdownDescription": "Enables the keychain_set command without any pre-configured scope."
+        },
+        {
           "description": "Enables the request_permissions command without any pre-configured scope.",
           "type": "string",
           "const": "wingover:allow-request-permissions",
@@ -2457,6 +2481,24 @@
           "markdownDescription": "Enables the stop_watch command without any pre-configured scope."
         },
         {
+          "description": "Enables the storekit_current_entitlement command without any pre-configured scope.",
+          "type": "string",
+          "const": "wingover:allow-storekit-current-entitlement",
+          "markdownDescription": "Enables the storekit_current_entitlement command without any pre-configured scope."
+        },
+        {
+          "description": "Enables the storekit_products command without any pre-configured scope.",
+          "type": "string",
+          "const": "wingover:allow-storekit-products",
+          "markdownDescription": "Enables the storekit_products command without any pre-configured scope."
+        },
+        {
+          "description": "Enables the storekit_purchase command without any pre-configured scope.",
+          "type": "string",
+          "const": "wingover:allow-storekit-purchase",
+          "markdownDescription": "Enables the storekit_purchase command without any pre-configured scope."
+        },
+        {
           "description": "Denies the check_permissions command without any pre-configured scope.",
           "type": "string",
           "const": "wingover:deny-check-permissions",
@@ -2473,6 +2515,30 @@
           "type": "string",
           "const": "wingover:deny-fixes-since",
           "markdownDescription": "Denies the fixes_since command without any pre-configured scope."
+        },
+        {
+          "description": "Denies the keychain_available command without any pre-configured scope.",
+          "type": "string",
+          "const": "wingover:deny-keychain-available",
+          "markdownDescription": "Denies the keychain_available command without any pre-configured scope."
+        },
+        {
+          "description": "Denies the keychain_delete command without any pre-configured scope.",
+          "type": "string",
+          "const": "wingover:deny-keychain-delete",
+          "markdownDescription": "Denies the keychain_delete command without any pre-configured scope."
+        },
+        {
+          "description": "Denies the keychain_get command without any pre-configured scope.",
+          "type": "string",
+          "const": "wingover:deny-keychain-get",
+          "markdownDescription": "Denies the keychain_get command without any pre-configured scope."
+        },
+        {
+          "description": "Denies the keychain_set command without any pre-configured scope.",
+          "type": "string",
+          "const": "wingover:deny-keychain-set",
+          "markdownDescription": "Denies the keychain_set command without any pre-configured scope."
         },
         {
           "description": "Denies the request_permissions command without any pre-configured scope.",
@@ -2503,6 +2569,24 @@
           "type": "string",
           "const": "wingover:deny-stop-watch",
           "markdownDescription": "Denies the stop_watch command without any pre-configured scope."
+        },
+        {
+          "description": "Denies the storekit_current_entitlement command without any pre-configured scope.",
+          "type": "string",
+          "const": "wingover:deny-storekit-current-entitlement",
+          "markdownDescription": "Denies the storekit_current_entitlement command without any pre-configured scope."
+        },
+        {
+          "description": "Denies the storekit_products command without any pre-configured scope.",
+          "type": "string",
+          "const": "wingover:deny-storekit-products",
+          "markdownDescription": "Denies the storekit_products command without any pre-configured scope."
+        },
+        {
+          "description": "Denies the storekit_purchase command without any pre-configured scope.",
+          "type": "string",
+          "const": "wingover:deny-storekit-purchase",
+          "markdownDescription": "Denies the storekit_purchase command without any pre-configured scope."
         }
       ]
     },
