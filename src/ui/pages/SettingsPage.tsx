@@ -23,20 +23,13 @@ import {
 } from "../../storage/local";
 import * as sync from "../../sync";
 import { useSettings } from "../settings/SettingsContext";
-import { useSyncSheet } from "../sync/SyncSheet";
+import { describe as describeSync, useSyncSheet } from "../sync/SyncSheet";
 
 export default function SettingsPage() {
   const { units, setUnits } = useSettings();
   const openSync = useSyncSheet();
   const syncStatus = useSyncExternalStore(sync.subscribe, sync.currentStatus);
-  const syncLabel =
-    syncStatus.state === "syncing" && syncStatus.readOnly
-      ? "Read-only"
-      : syncStatus.state === "off"
-        ? "Off"
-        : syncStatus.state === "syncing"
-          ? "On"
-          : syncStatus.state;
+  const syncLabel = describeSync(syncStatus).label;
   const [maptilerKey, setMaptilerKey] = useState("");
   const [autoEnd, setAutoEnd] = useState(true);
 

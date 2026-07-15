@@ -136,9 +136,7 @@ mod commands {
 
     // One-shot position for the map's Center-on-me (no capture session).
     #[command]
-    pub(crate) async fn current_position<R: Runtime>(
-        app: AppHandle<R>,
-    ) -> Result<crate::Fix> {
+    pub(crate) async fn current_position<R: Runtime>(app: AppHandle<R>) -> Result<crate::Fix> {
         app.wingover().current_position()
     }
 
@@ -169,10 +167,7 @@ mod commands {
     }
 
     #[command]
-    pub(crate) async fn keychain_delete<R: Runtime>(
-        app: AppHandle<R>,
-        key: String,
-    ) -> Result<()> {
+    pub(crate) async fn keychain_delete<R: Runtime>(app: AppHandle<R>, key: String) -> Result<()> {
         app.wingover().keychain_delete(&key)
     }
 
@@ -187,8 +182,9 @@ mod commands {
     #[command]
     pub(crate) async fn storekit_current_entitlement<R: Runtime>(
         app: AppHandle<R>,
+        product_ids: Vec<String>,
     ) -> Result<Option<String>> {
-        app.wingover().storekit_current_entitlement()
+        app.wingover().storekit_current_entitlement(product_ids)
     }
 
     #[command]

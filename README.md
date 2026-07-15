@@ -25,6 +25,37 @@ pnpm e2e        # Playwright e2e, including reload kill drills
 pnpm build      # typecheck + production build
 ```
 
+Sync is developed against a real CouchDB, with no Apple developer account, no
+StoreKit and no Mac — only the credential is faked:
+
+```sh
+docker compose -f dev/couchdb/docker-compose.yml up -d
+pnpm dev
+```
+
+## Syncing to your own CouchDB
+
+Settings → Subscription → **Use my own server**. Wingover talks to CouchDB
+directly and never to anything else, so CouchDB has to allow the app's origin —
+a stock install ships with CORS **off**, and without this the app cannot reach
+your server at all:
+
+```ini
+[chttpd]
+enable_cors = true
+
+[cors]
+credentials = true
+; the origin you serve Wingover from; tauri://localhost is the iOS app
+origins = https://wingover.app, tauri://localhost
+headers = accept, authorization, content-type, origin, referer
+methods = GET, PUT, POST, HEAD, DELETE
+```
+
+You need a database and a user who can read and write it. Nothing else — no
+design documents, no schema. Wingover puts flights in whatever database you
+name, and a lapsed subscription is somebody else's problem on a server you own.
+
 ## License
 
 [AGPL-3.0](./LICENSE)

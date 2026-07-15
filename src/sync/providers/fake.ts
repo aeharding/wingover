@@ -32,7 +32,7 @@ export function fakeProvider(
       if (!response.ok) {
         throw new Error(`fake session failed: ${response.status}`);
       }
-      return (await response.json()) as Credentials;
+      return { ...((await response.json()) as Credentials), kind: "fake" };
     },
   };
 }

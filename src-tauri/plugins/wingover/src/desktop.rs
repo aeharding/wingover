@@ -52,7 +52,10 @@ impl<R: Runtime> Wingover<R> {
         Err(crate::Error::UnsupportedPlatform)
     }
 
-    pub fn storekit_current_entitlement(&self) -> crate::Result<Option<String>> {
+    pub fn storekit_current_entitlement(
+        &self,
+        _product_ids: Vec<String>,
+    ) -> crate::Result<Option<String>> {
         Err(crate::Error::UnsupportedPlatform)
     }
 

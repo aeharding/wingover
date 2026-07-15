@@ -81,7 +81,13 @@ export function SyncSheetProvider({ children }: { children: ReactNode }) {
   );
 }
 
-function describe(status: sync.SyncStatus): {
+/**
+ * The one place a sync state becomes words. Exported because the Settings row
+ * needs the same label, and the version that fell back to `status.state` put
+ * "paused" — an internal identifier — in the row for the length of every
+ * flight.
+ */
+export function describe(status: sync.SyncStatus): {
   label: string;
   detail: string;
   tone: string;
@@ -249,6 +255,14 @@ function SelfHostPage({ onConnected }: { onConnected: () => void }) {
 
   const ready = Boolean(server.url && server.dbName) && !busy;
 
+  // Enter connects, from any field. A <form> can't do this for us: IonInput's
+  // real <input> lives in its shadow root, so it isn't a form control of any
+  // light-DOM form and implicit submission never fires. Key events do cross the
+  // boundary (composed), so this is the seam that actually works.
+  function onKeyDown(event: React.KeyboardEvent) {
+    if (event.key === "Enter" && ready) void connect();
+  }
+
   // Ionic's own docs: the autofocus attribute "may not be sufficient", and
   // inside a modal you should setFocus after the presentation settles. This is
   // a nav push inside a modal, so wait out the transition rather than race it.
@@ -264,7 +278,9 @@ function SelfHostPage({ onConnected }: { onConnected: () => void }) {
       await sync.enable(sync.manualProvider(server));
       onConnected();
     } catch (error) {
-      setProblem(String(error));
+      // .message, not String(error): the provider writes these for the pilot,
+      // and "Error: " in front of a sentence is a stack trace leaking into copy.
+      setProblem(error instanceof Error ? error.message : String(error));
     } finally {
       setBusy(false);
     }
@@ -294,7 +310,9 @@ function SelfHostPage({ onConnected }: { onConnected: () => void }) {
         </IonToolbar>
       </IonHeader>
       <IonContent>
-        {problem && <p className="sync-error-message ion-padding">{problem}</p>}
+        {problem && (
+          <p className="sync-error-message sync-form-problem">{problem}</p>
+        )}
         {/* inset: margin + rounded corners in iOS mode — the grouped-card form
             iOS Settings uses. Hand-rolled padding around a plain list fights it
             and lands edge-to-edge and cramped. */}
@@ -308,6 +326,8 @@ function SelfHostPage({ onConnected }: { onConnected: () => void }) {
               autocapitalize="off"
               autocorrect="off"
               inputmode="url"
+              enterkeyhint="go"
+              onKeyDown={onKeyDown}
               value={server.url}
               onIonInput={(e) =>
                 setServer((s) => ({ ...s, url: e.detail.value ?? "" }))
@@ -321,6 +341,8 @@ function SelfHostPage({ onConnected }: { onConnected: () => void }) {
               placeholder="wingover"
               autocapitalize="off"
               autocorrect="off"
+              enterkeyhint="go"
+              onKeyDown={onKeyDown}
               value={server.dbName}
               onIonInput={(e) =>
                 setServer((s) => ({ ...s, dbName: e.detail.value ?? "" }))
@@ -333,6 +355,8 @@ function SelfHostPage({ onConnected }: { onConnected: () => void }) {
               labelPlacement="stacked"
               autocapitalize="off"
               autocorrect="off"
+              enterkeyhint="go"
+              onKeyDown={onKeyDown}
               value={server.username}
               onIonInput={(e) =>
                 setServer((s) => ({ ...s, username: e.detail.value ?? "" }))
@@ -344,6 +368,8 @@ function SelfHostPage({ onConnected }: { onConnected: () => void }) {
               label="Password"
               labelPlacement="stacked"
               type="password"
+              enterkeyhint="go"
+              onKeyDown={onKeyDown}
               value={server.password}
               onIonInput={(e) =>
                 setServer((s) => ({ ...s, password: e.detail.value ?? "" }))

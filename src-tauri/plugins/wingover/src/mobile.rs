@@ -72,7 +72,10 @@ impl<R: Runtime> Wingover<R> {
 
     pub fn keychain_set(&self, key: &str, value: &str) -> crate::Result<()> {
         self.0
-            .run_mobile_plugin("keychainSet", serde_json::json!({ "key": key, "value": value }))
+            .run_mobile_plugin(
+                "keychainSet",
+                serde_json::json!({ "key": key, "value": value }),
+            )
             .map_err(Into::into)
     }
 
@@ -91,10 +94,14 @@ impl<R: Runtime> Wingover<R> {
             .map_err(Into::into)
     }
 
-    pub fn storekit_current_entitlement(&self) -> crate::Result<Option<String>> {
-        let response: JwsResponse = self
-            .0
-            .run_mobile_plugin("storekitCurrentEntitlement", ())?;
+    pub fn storekit_current_entitlement(
+        &self,
+        product_ids: Vec<String>,
+    ) -> crate::Result<Option<String>> {
+        let response: JwsResponse = self.0.run_mobile_plugin(
+            "storekitCurrentEntitlement",
+            serde_json::json!({ "productIds": product_ids }),
+        )?;
         Ok(response.jws)
     }
 

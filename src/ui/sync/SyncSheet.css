@@ -16,8 +16,7 @@
       rgba(0, 0, 0, 0.72) 72%,
       var(--ion-background-color) 97%
     ),
-    url("/sync-hero.jpg") center / cover no-repeat,
-    var(--ion-background-color);
+    url("/sync-hero.jpg") center / cover no-repeat, var(--ion-background-color);
 }
 
 /* Flex the scroll container so the condensed header takes its natural height
@@ -137,6 +136,14 @@
   padding: 0 1.25rem;
 }
 
+/* Same reason as .sync-form-note — this used to carry `ion-padding`, which is
+   a no-op here, so the one message that has to be readable rendered
+   edge-to-edge. Aligned with the inset list it belongs to. */
+.sync-form-problem {
+  padding: 0 1.25rem;
+  margin: 1rem 0 0;
+}
+
 .sync-fine-print {
   display: block;
   color: var(--ion-color-medium);
@@ -144,4 +151,3 @@
   line-height: 1.4;
   margin-top: 0.5rem;
 }
-

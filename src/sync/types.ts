@@ -1,3 +1,5 @@
+export type CredentialKind = "apple" | "manual" | "fake";
+
 /**
  * Everything needed to replicate, and nothing else.
  *
@@ -7,6 +9,13 @@
  * rest of the year without sync noticing.
  */
 export interface Credentials {
+  /**
+   * Which provider minted this, so the next launch can refresh it from the
+   * same place. Without it, resume() cannot tell a StoreKit credential from a
+   * typed CouchDB URL, and would either skip the refresh or make every
+   * self-hoster pay a failed StoreKit round-trip on every launch.
+   */
+  kind: CredentialKind;
   /** CouchDB origin, e.g. https://db.wingover.app */
   url: string;
   dbName: string;
@@ -44,7 +53,7 @@ export interface CredentialStore {
  * everything is identical.
  */
 export interface CredentialProvider {
-  readonly kind: "apple" | "manual" | "fake";
+  readonly kind: CredentialKind;
   obtain(): Promise<Credentials>;
 }
 

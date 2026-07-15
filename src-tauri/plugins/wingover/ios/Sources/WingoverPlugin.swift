@@ -27,6 +27,13 @@ class PurchaseArgs: Decodable {
   let productId: String
 }
 
+class EntitlementArgs: Decodable {
+  /// Which products count as "our subscription". Transaction.all carries every
+  /// SKU this Apple Account ever bought from us, so the fallback below has to
+  /// know what it is looking for.
+  let productIds: [String]
+}
+
 class ShareFileArgs: Decodable {
   let name: String
   let content: String
@@ -394,13 +401,45 @@ class WingoverPlugin: Plugin, CLLocationManagerDelegate {
   // How a second device joins and how a reinstall recovers: same Apple Account,
   // same transaction, same account. There is no "restore" button because there
   // is nothing to restore — StoreKit already knows.
+  //
+  // The fallback is the whole reason this isn't three lines. `currentEntitlements`
+  // emits NOTHING for an expired subscription, and a lapsed pilot on a new phone
+  // has an empty Keychain by design — so with only that channel, the one door
+  // into their own logbook is locked, and the only key on offer is to subscribe
+  // again. STEERING: "A lapsed subscription is read-only, never locked out:
+  // every flight stays readable, pullable to a new phone, and exportable." The
+  // server already honours that (it returns working read-only credentials for a
+  // lapsed transaction); it just never gets asked.
+  //
+  // Transaction.all keeps expired ones. Filter to our subscription and take the
+  // NEWEST: `all` also carries every prior renewal, and handing the server a
+  // stale transaction would let its monotonic expiresAt write regress a live
+  // entitlement. Verification stays the server's job either way — we are the
+  // courier, and a courier that drops the letter is worse than one who carries
+  // a bad one.
   @objc public func storekitCurrentEntitlement(_ invoke: Invoke) throws {
+    let args = try invoke.parseArgs(EntitlementArgs.self)
     Task {
       for await result in Transaction.currentEntitlements {
         invoke.resolve(["jws": result.jwsRepresentation])
         return
       }
-      invoke.resolve(["jws": nil])
+
+      var newest: VerificationResult<Transaction>?
+      var newestDate = Date.distantPast
+      for await result in Transaction.all {
+        // .unsafePayloadValue, not the verified payload: reading a field to
+        // sort by is not trusting it. If the signature is bad the server throws
+        // the whole thing out, which is exactly the arrangement we want.
+        let transaction = result.unsafePayloadValue
+        guard args.productIds.contains(transaction.productID) else { continue }
+        let stamp = transaction.expirationDate ?? transaction.purchaseDate
+        if stamp > newestDate {
+          newestDate = stamp
+          newest = result
+        }
+      }
+      invoke.resolve(["jws": newest?.jwsRepresentation])
     }
   }
 
