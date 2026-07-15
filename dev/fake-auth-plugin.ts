@@ -43,10 +43,31 @@ async function couch(path: string, init: RequestInit = {}) {
   });
 }
 
+/**
+ * One root, three suffixes: `dev` gives dev-db / dev-user / dev-pw.
+ *
+ * These get typed by hand into the self-host form all day. This used to mirror
+ * production's shape — u_dev_alex / userdb-u_dev_alex / dev-u_dev_alex — for a
+ * realism the client cannot observe: it replicates to whatever dbName the
+ * server hands back and never inspects any of it. All that bought was a
+ * five-minute account lockout every time a human fat-fingered a field.
+ *
+ * Distinct, though, not three copies of the same word. Identical values would
+ * authenticate even if the client swapped dbName for username, and the e2e
+ * suite would report that as working — the fields have to be told apart by
+ * something other than luck.
+ */
+function rootFor(account: string): string {
+  const clean = account.replace(/[^a-z0-9_]/gi, "").toLowerCase();
+  // CouchDB database names must start with a lowercase letter.
+  return /^[a-z]/.test(clean) ? clean : `d${clean}`;
+}
+
 async function provision(account: string, entitled: boolean) {
-  const userId = `u_dev_${account.replace(/[^a-z0-9_]/gi, "").toLowerCase()}`;
-  const dbName = `userdb-${userId}`;
-  const password = `dev-${userId}`;
+  const root = rootFor(account);
+  const dbName = `${root}-db`;
+  const userId = `${root}-user`;
+  const password = `${root}-pw`;
 
   // The system databases aren't created by the official image's entrypoint,
   // and _users must exist before we can write a user into it.
@@ -89,7 +110,9 @@ async function provision(account: string, entitled: boolean) {
   return { url: COUCH, dbName, username: userId, password, entitled };
 }
 
-async function readJson(req: IncomingMessage): Promise<Record<string, unknown>> {
+async function readJson(
+  req: IncomingMessage,
+): Promise<Record<string, unknown>> {
   const chunks: Uint8Array[] = [];
   for await (const chunk of req) chunks.push(chunk as Uint8Array);
   try {
@@ -111,7 +134,7 @@ export function fakeAuth(): Plugin {
             try {
               const body = await readJson(req);
               const credentials = await provision(
-                typeof body.account === "string" ? body.account : "devpilot",
+                typeof body.account === "string" ? body.account : "dev",
                 body.entitled !== false,
               );
               res.end(JSON.stringify(credentials));

@@ -33,6 +33,23 @@ docker compose -f dev/couchdb/docker-compose.yml up -d
 pnpm dev
 ```
 
+Then Settings → Subscription → **Use my own server**:
+
+| Server   | `http://localhost:5984` |
+| -------- | ----------------------- |
+| Database | `dev-db`                |
+| Username | `dev-user`              |
+| Password | `dev-pw`                |
+
+That account is provisioned on demand, with the real `validate_doc_update` that
+is the paywall. A second browser profile is a second device. For a lapsed
+(read-only) account, ask for one:
+
+```sh
+curl -XPOST localhost:5173/v1/session -H 'content-type: application/json' \
+  -d '{"fake":true,"account":"lapsed","entitled":false}'   # -> lapsed-db/-user/-pw
+```
+
 ## Syncing to your own CouchDB
 
 Settings → Subscription → **Use my own server**. Wingover talks to CouchDB

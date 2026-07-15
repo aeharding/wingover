@@ -23,7 +23,7 @@ export function fakeProvider(
         headers: { "content-type": "application/json" },
         body: JSON.stringify({
           fake: true,
-          account: options.account ?? "devpilot",
+          account: options.account ?? "dev",
           // Lets an e2e test drive the lapsed, read-only path — the one a
           // paying pilot must never hit, and the one nobody tests by hand.
           entitled: options.entitled ?? true,
