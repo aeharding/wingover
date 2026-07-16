@@ -106,11 +106,6 @@ class WingoverPlugin: Plugin, CLLocationManagerDelegate {
   private var siwa: SiwaDelegate?
   private var lastError: String?
 
-  override init() {
-    super.init()
-    _ = Self.allowProgrammaticKeyboard
-  }
-
   // WKWebView raises the keyboard only for focus born of a user gesture; a
   // programmatic focus() lands a caret with no keyboard — which is how the
   // self-host form's autofocus "didn't work" on device while working in every
@@ -149,6 +144,7 @@ class WingoverPlugin: Plugin, CLLocationManagerDelegate {
   override init() {
     super.init()
     locationManager.delegate = self
+    _ = Self.allowProgrammaticKeyboard
   }
 
   //
