@@ -152,10 +152,17 @@ export async function resume(override?: CredentialProvider): Promise<void> {
  * "pending" (Ask to Buy / bank approval) — the UI treats those as non-errors.
  */
 export async function purchase(): Promise<void> {
-  const jws = await purchaseJWS(SUBSCRIPTION_PRODUCT_ID);
+  const purchased = await purchaseJWS(SUBSCRIPTION_PRODUCT_ID);
   // The supporter guard (SYNC-UX.md, junction 2): a pilot already synced to
   // their own server bought support, not a migration — their login is theirs.
   if (replicate.currentAccount()?.kind === "manual") return;
+  // The purchase sheet can hand back a STALE transaction when Apple decides
+  // the sub is already owned (observed: Resubscribe on a lapsed sandbox sub
+  // returned the original purchase while currentEntitlements held the fresh
+  // renewal — the device then connected read-only until a relaunch). The
+  // current entitlement is the newest truth; the sheet's return value is
+  // only the fallback.
+  const jws = (await probeEntitlementJWS()) ?? purchased;
   await enable(appleProvider(API_URL, jws));
 }
 
