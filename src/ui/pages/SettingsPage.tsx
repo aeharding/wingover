@@ -69,8 +69,13 @@ export default function SettingsPage() {
             <IonLabel>Sync</IonLabel>
             <IonNote
               slot="end"
-              color={off ? "danger" : undefined}
-              className="settings-sync-note"
+              className={`settings-sync-note ${
+                off
+                  ? "settings-sync-off"
+                  : syncNote === "On"
+                    ? "settings-sync-on"
+                    : ""
+              }`}
             >
               {off && <IonIcon icon={closeCircle} aria-hidden="true" />}
               {syncNote}
