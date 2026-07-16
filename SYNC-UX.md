@@ -174,16 +174,6 @@ login, and gating the free path would break the FOSS promise. (Open check:
 whether /s/ share links pin to an account's database; relevant to account
 deletion, the one way an account ends.)
 
-## Interim device linking (until Sign in with Apple ships)
-
-**Connect another device** on the iOS Sync sheet reveals the CouchDB
-server/database/username/password with copy buttons; the pilot pastes them
-into the PWA's own-server form. It is the self-host path wearing a different
-hat — zero new sync code, honest about what it is, and removed the release
-SIWA ships. Known limit: the linked device holds a `manual`-kind credential,
-so a server-side password rotation strands it; the stale-credential error on
-such a device should say "re-link from your iPhone," not fail generically.
-
 ## Onboarding, by person
 
 | Who, where | What happens |
@@ -195,7 +185,7 @@ such a device should say "re-link from your iPhone," not fail generically.
 | Lapsed subscriber | Row: `Sync — Not subscribed`. The sheet explains (new flights stay local, synced history is safe) and offers Resubscribe. Never locked out (STEERING: paying buys writes, not reads). |
 | Self-hoster, any platform | Log In → Use my own server. Their rows finally tell the truth: `Subscription — · Sync — On`. The `—` is a standing, non-naggy invitation to support. |
 | Supporter (subscribes while self-hosting) | Subscription activates; login untouched (junction 2 guard). |
-| Subscriber wanting desktop, today | iOS Log In → Connect another device → paste into PWA form. |
+| Subscriber wanting desktop | The post-purchase page (or "Use on your computer") links the Apple ID; Sign in with Apple at wingover.app. |
 | Subscriber wanting desktop, later | PWA → Sign in with Apple. The login flow is born on the PWA; iOS only borrows its door. |
 | Web subscriber _(later)_ gets an iPhone | iOS Log In → Sign in with Apple → same status screen. Their subscription is managed on the web; the iOS app never mentions web pricing. |
 
@@ -240,14 +230,12 @@ destructive act — required in-app once linking exists (guideline 5.1.1(v)).
 1. **Pre-TestFlight:** split the surfaces; two Settings rows; "Use my
    subscription" door; Resubscribe on read-only; Manage Subscription;
    paywall fine print.
-2. **First hosted users:** Connect another device; PWA Subscription-row
-   explainer copy.
-3. **Identity milestone (SIWA):** the client side is built — the door on both
-   platforms, the post-purchase interstitial, the iOS self-heal, account
-   deletion. It lights up with the Apple portal setup (App ID capability,
-   Services ID + verified domain, server `clientIds`) and a server deploy;
-   web checkout is the remaining piece of the PWA subscribe flow. Then remove
-   Connect another device.
+2. ~~First hosted users: Connect another device~~ — retired unbuilt: Sign in
+   with Apple shipped first and made the credential-reveal interim moot.
+3. **Identity milestone (SIWA): SHIPPED** (2026-07-15) — the door on both
+   platforms, the post-purchase page, the iOS self-heal, account deletion,
+   portal setup, server deploy. Web checkout is the remaining piece of the
+   PWA subscribe flow.
 4. **Web checkout (Stripe)** — the attach machinery, all of it, found by
    adversarial review and deferred here on purpose:
    - Per-rail entitlement schema and **renewal-status ingestion** (Apple's
