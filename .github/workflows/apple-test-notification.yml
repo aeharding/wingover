@@ -1,0 +1,48 @@
+name: apple-test-notification
+
+# Asks Apple's App Store Server API to POST a TEST notification to whatever
+# URLs are configured in App Store Connect — the only way to verify the
+# webhook wiring end to end without waiting for a real billing event. Fire
+# it, then look for "notify: TEST" in the api container's logs on the box.
+#
+# Lives in THIS repo because the deploy environment here holds the App Store
+# Connect API key the TestFlight pipeline already uses.
+on: workflow_dispatch
+
+jobs:
+  request:
+    runs-on: ubuntu-latest
+    environment: deploy
+    steps:
+      - uses: actions/setup-node@v6
+        with:
+          node-version: 22
+      - run: npm i jose@5
+      - name: Request test notifications (production + sandbox)
+        env:
+          APP_STORE_CONNECT_KEY: ${{ secrets.APP_STORE_CONNECT_KEY }}
+        # A real file, not `node -e`: eval'd ESM can't resolve bare imports.
+        run: |
+          cat > request.mjs <<'SCRIPT'
+            import { SignJWT, importPKCS8 } from "jose";
+            const key = JSON.parse(process.env.APP_STORE_CONNECT_KEY);
+            const pk = await importPKCS8(key.key, "ES256");
+            const jwt = await new SignJWT({ bid: "app.wingover.wingover" })
+              .setProtectedHeader({ alg: "ES256", kid: key.key_id, typ: "JWT" })
+              .setIssuer(key.issuer_id)
+              .setIssuedAt()
+              .setExpirationTime("5m")
+              .setAudience("appstoreconnect-v1")
+              .sign(pk);
+            for (const [env, host] of [
+              ["production", "api.storekit.itunes.apple.com"],
+              ["sandbox", "api.storekit-sandbox.itunes.apple.com"],
+            ]) {
+              const res = await fetch(`https://${host}/inApps/v1/notifications/test`, {
+                method: "POST",
+                headers: { authorization: `Bearer ${jwt}` },
+              });
+              console.log(env, res.status, await res.text());
+            }
+          SCRIPT
+          node request.mjs

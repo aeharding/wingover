@@ -3,6 +3,18 @@ name: TestFlight
 on:
   push:
     branches: [main]
+    # Only things that ship in the app: docs and unrelated workflows were
+    # burning a ~10-minute macOS build per push.
+    paths:
+      - "src/**"
+      - "src-tauri/**"
+      - "public/**"
+      - "index.html"
+      - "package.json"
+      - "pnpm-lock.yaml"
+      - "vite.config.ts"
+      - "fastlane/**"
+      - ".github/workflows/testflight.yml"
   workflow_dispatch:
 
 jobs:
