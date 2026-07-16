@@ -1,6 +1,7 @@
 import {
   IonContent,
   IonHeader,
+  IonIcon,
   IonInput,
   IonItem,
   IonLabel,
@@ -13,6 +14,7 @@ import {
   IonToggle,
   IonToolbar,
 } from "@ionic/react";
+import { closeCircle } from "ionicons/icons";
 import { useEffect, useState, useSyncExternalStore } from "react";
 
 import {
@@ -32,12 +34,10 @@ export default function SettingsPage() {
   const syncStatus = useSyncExternalStore(sync.subscribe, sync.currentStatus);
 
   // One row, one question: are the flights backed up? Off is never a neutral
-  // dash — it means the flights live only on this phone, and that gets said,
-  // in red. Everything subscription-shaped lives inside the sheet.
-  const syncNote =
-    syncStatus.state === "off"
-      ? "Local Only"
-      : describeSync(syncStatus).label;
+  // dash — it reads as red "⊗ Off": flights live only on this phone.
+  // Everything subscription-shaped lives inside the sheet.
+  const off = syncStatus.state === "off";
+  const syncNote = off ? "Off" : describeSync(syncStatus).label;
   const [maptilerKey, setMaptilerKey] = useState("");
   const [autoEnd, setAutoEnd] = useState(true);
 
@@ -69,8 +69,10 @@ export default function SettingsPage() {
             <IonLabel>Sync</IonLabel>
             <IonNote
               slot="end"
-              color={syncNote === "Local Only" ? "danger" : undefined}
+              color={off ? "danger" : undefined}
+              className="settings-sync-note"
             >
+              {off && <IonIcon icon={closeCircle} aria-hidden="true" />}
               {syncNote}
             </IonNote>
           </IonItem>
