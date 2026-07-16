@@ -1,6 +1,14 @@
 import { engine } from "../engine/index";
+import { isTauri } from "../engine/platform";
 import { purgeSyncedSettings } from "../storage/local";
-import { appleProvider } from "./providers/apple";
+import {
+  appleIdentityToken,
+  appleProvider,
+  probeEntitlementJWS,
+  purchaseJWS,
+  siwaProvider,
+  SUBSCRIPTION_PRODUCT_ID,
+} from "./providers/apple";
 import * as replicate from "./replicate";
 import { credentialStore } from "./store";
 import type { CredentialProvider, Credentials, SyncStatus } from "./types";
@@ -11,12 +19,21 @@ import type { CredentialProvider, Credentials, SyncStatus } from "./types";
  */
 const API_URL = "https://api.wingover.app";
 
-export type { Credentials, SyncStatus } from "./types";
-export { appleProvider, purchaseJWS } from "./providers/apple";
+export type { Credentials, SyncAccount, SyncStatus } from "./types";
+export type { StoreProduct } from "./providers/apple";
+export {
+  appleProvider,
+  appleSubscriptionState,
+  probeEntitlementJWS,
+  purchaseJWS,
+  siwaProvider,
+  subscriptionProduct,
+} from "./providers/apple";
 export { fakeProvider } from "./providers/fake";
 export { manualProvider } from "./providers/manual";
 export const subscribe = replicate.subscribe;
 export const status = replicate.syncStatus;
+export const currentAccount = replicate.currentAccount;
 
 /**
  * Recording outranks sync, wired here rather than in a component.
@@ -48,7 +65,11 @@ let watching = false;
 function refresherFor(stored: Credentials): CredentialProvider | null {
   switch (stored.kind) {
     case "apple":
-      return appleProvider(API_URL);
+      // StoreKit is the refresher where it exists — a lapse or a renewal shows
+      // up in the transaction. A browser has no StoreKit and no way to silently
+      // re-prove identity at launch (identity tokens live minutes), so there
+      // the stored copy is the truth until the pilot signs in again.
+      return isTauri() ? appleProvider(API_URL) : null;
     case "manual":
     case "fake":
       // Nothing to re-derive: the pilot typed these, or the dev ring minted
@@ -91,6 +112,107 @@ export async function resume(override?: CredentialProvider): Promise<void> {
   }
 
   begin(credentials);
+}
+
+/**
+ * The Subscribe button. Apple's sheet does the selling; the signed transaction
+ * it hands back is traded to the server for CouchDB credentials, and from there
+ * this is the same enable() as self-host. A pilot who is already subscribed
+ * (second device, reinstall) lands here too — StoreKit tells them so instead of
+ * charging twice, and still returns the transaction.
+ *
+ * Rejects with Apple's own "cancelled" (the pilot closed the sheet) and
+ * "pending" (Ask to Buy / bank approval) — the UI treats those as non-errors.
+ */
+export async function purchase(): Promise<void> {
+  const jws = await purchaseJWS(SUBSCRIPTION_PRODUCT_ID);
+  // The supporter guard (SYNC-UX.md, junction 2): a pilot already synced to
+  // their own server bought support, not a migration — their login is theirs.
+  if (replicate.currentAccount()?.kind === "manual") return;
+  await enable(appleProvider(API_URL, jws));
+}
+
+/**
+ * Connect this device with the Apple subscription it already has — the Log In
+ * page's "Use my subscription" door, and Restore Purchases (SYNC-UX.md).
+ * Pass the JWS when a probe already fetched it; omitted, the provider asks
+ * StoreKit itself.
+ */
+export async function connectWithSubscription(jws?: string): Promise<void> {
+  await enable(appleProvider(API_URL, jws));
+}
+
+/**
+ * The Sign in with Apple door: one identity token, traded for credentials.
+ *
+ * The transaction outranks the sign-in (SYNC-UX.md junction 4): a device
+ * whose StoreKit holds a subscription belongs on the account that
+ * subscription feeds — landing there and linking as we go heals a skipped
+ * link step. Without one (every browser; an unsubscribed iPhone), the
+ * sign-in itself is the account: the server minds an existing one or mints
+ * the sign-in-born placeholder, and "Not subscribed" is a legitimate place
+ * to land.
+ */
+export async function signIn(): Promise<void> {
+  const jws = await probeEntitlementJWS();
+  const token = await appleIdentityToken();
+  if (jws) {
+    await connectWithSubscription(jws);
+    await linkAppleAccount(token);
+    return;
+  }
+  await enable(siwaProvider(API_URL, token));
+}
+
+/** Basic auth for our API, from the pilot's own CouchDB credential — the
+ * server verifies it against CouchDB itself; there is no second token type. */
+function basicAuth(credentials: Credentials): string {
+  return `Basic ${btoa(`${credentials.username}:${credentials.password}`)}`;
+}
+
+/**
+ * Attach this Apple ID to the connected account (the post-purchase "use
+ * Wingover on your computer?" step, and its catch-up on the Log In page).
+ * Pass a token when the caller already holds a fresh one.
+ */
+export async function linkAppleAccount(token?: string): Promise<void> {
+  const identityToken = token ?? (await appleIdentityToken());
+  const store = await credentialStore();
+  const stored = await store.load();
+  if (!stored) throw new Error("Turn on sync first.");
+  const response = await fetch(`${API_URL}/v1/link`, {
+    method: "POST",
+    headers: {
+      "content-type": "application/json",
+      authorization: basicAuth(stored),
+    },
+    body: JSON.stringify({ identityToken }),
+  });
+  if (response.status === 409) {
+    throw new Error("This Apple ID is already linked to a different account.");
+  }
+  if (!response.ok) {
+    throw new Error(`link failed: ${response.status} ${await response.text()}`);
+  }
+}
+
+/**
+ * Guideline 5.1.1(v), and basic decency: the hosted database and account,
+ * actually gone. Local flights stay; the subscription is Apple's to cancel.
+ * Distinct from disable(), which forgets only this device's connection.
+ */
+export async function deleteAccount(): Promise<void> {
+  const store = await credentialStore();
+  const stored = await store.load();
+  if (!stored) return;
+  const response = await fetch(`${API_URL}/v1/account`, {
+    method: "DELETE",
+    headers: { authorization: basicAuth(stored) },
+  });
+  if (!response.ok) {
+    throw new Error(`delete failed: ${response.status}`);
+  }
+  await disable();
 }
 
 /** Turn sync on: obtain credentials, persist them, replicate. */

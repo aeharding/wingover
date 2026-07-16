@@ -1,7 +1,7 @@
 import PouchDB from "pouchdb-browser";
 
 import { db } from "../storage/db";
-import type { Credentials, SyncStatus } from "./types";
+import type { Credentials, SyncAccount, SyncStatus } from "./types";
 
 /**
  * PouchDB replication against the pilot's CouchDB.
@@ -38,6 +38,24 @@ export function subscribe(listener: () => void): () => void {
 
 export function syncStatus(): SyncStatus {
   return status;
+}
+
+/**
+ * Memoized on the credential reference, not rebuilt per call:
+ * useSyncExternalStore compares snapshots with Object.is, so a fresh object
+ * every call would re-render forever. Every place `held` changes (start, stop,
+ * the denied downgrade) also notifies subscribers via set(), so the UI re-reads
+ * this at the right moments without this module knowing the UI exists.
+ */
+let accountFor: Credentials | null = null;
+let account: SyncAccount | null = null;
+
+export function currentAccount(): SyncAccount | null {
+  if (held !== accountFor) {
+    accountFor = held;
+    account = held ? { kind: held.kind, entitled: held.entitled } : null;
+  }
+  return account;
 }
 
 function set(next: SyncStatus) {
@@ -181,6 +199,16 @@ function connect() {
       connect();
     })
     .on("error", (error: unknown) => {
+      // A 404 on an unentitled credential is the sign-in-born account: the
+      // server provisions the database at FIRST entitlement (SYNC-UX.md), so
+      // until the pilot subscribes there is genuinely nothing to sync — a
+      // resting state, not a problem to display.
+      const status = (error as { status?: number } | null)?.status;
+      if (status === 404 && held && !held.entitled) {
+        set({ state: "unsubscribed" });
+        teardown();
+        return;
+      }
       // Where a rejected credential lands (measured — not `paused`, which is
       // where retry:true reports a stalled network).
       const fatal = fatalAuthFailure(error);

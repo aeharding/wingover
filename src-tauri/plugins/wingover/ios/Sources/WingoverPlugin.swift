@@ -1,3 +1,4 @@
+import AuthenticationServices
 import AVFoundation
 import CoreLocation
 import Foundation
@@ -5,6 +6,59 @@ import Security
 import StoreKit
 import Tauri
 import UIKit
+
+// Holds the in-flight Sign in with Apple request. ASAuthorizationController
+// keeps only weak references to its delegate, so the plugin retains this until
+// Apple's sheet resolves — dropping it early would strand the invoke forever.
+class SiwaDelegate: NSObject, ASAuthorizationControllerDelegate,
+  ASAuthorizationControllerPresentationContextProviding
+{
+  private let invoke: Invoke
+  private let done: () -> Void
+
+  init(invoke: Invoke, done: @escaping () -> Void) {
+    self.invoke = invoke
+    self.done = done
+  }
+
+  func authorizationController(
+    controller: ASAuthorizationController,
+    didCompleteWithAuthorization authorization: ASAuthorization
+  ) {
+    defer { done() }
+    // The raw JWT, verbatim. The server verifies it against Apple's JWKS and
+    // reads only the stable subject — re-encoding it would break the signature,
+    // same rule as the StoreKit JWS below.
+    guard
+      let credential = authorization.credential as? ASAuthorizationAppleIDCredential,
+      let data = credential.identityToken,
+      let token = String(data: data, encoding: .utf8)
+    else {
+      invoke.reject("no identity token in authorization")
+      return
+    }
+    invoke.resolve(["identityToken": token])
+  }
+
+  func authorizationController(
+    controller: ASAuthorizationController, didCompleteWithError error: Error
+  ) {
+    defer { done() }
+    // "cancelled" verbatim, matching storekitPurchase — the JS side treats a
+    // closed sheet as a non-event, not a problem to display.
+    if let authError = error as? ASAuthorizationError, authError.code == .canceled {
+      invoke.reject("cancelled")
+    } else {
+      invoke.reject(error.localizedDescription)
+    }
+  }
+
+  func presentationAnchor(for controller: ASAuthorizationController) -> ASPresentationAnchor {
+    UIApplication.shared.connectedScenes
+      .compactMap { ($0 as? UIWindowScene)?.keyWindow }
+      .first ?? ASPresentationAnchor()
+  }
+}
 
 class SpeakArgs: Decodable {
   let text: String
@@ -49,6 +103,7 @@ class WingoverPlugin: Plugin, CLLocationManagerDelegate {
   private let speechSynthesizer = AVSpeechSynthesizer()
   private var permissionRequests: [Invoke] = []
   private var positionRequests: [Invoke] = []
+  private var siwa: SiwaDelegate?
   private var lastError: String?
 
   // In-memory buffer between drains (~1 s of fixes). Mutated on the main
@@ -477,6 +532,26 @@ class WingoverPlugin: Plugin, CLLocationManagerDelegate {
       } catch {
         invoke.reject(error.localizedDescription)
       }
+    }
+  }
+
+  //
+  // Sign in with Apple
+  //
+  // No scopes requested: the server derives the account from the token's
+  // stable subject, and a name or email would only be data we then have to
+  // protect. Requires the applesignin entitlement (wingover_iOS.entitlements)
+  // and the capability on the App ID in the developer portal.
+
+  @objc public func signInWithApple(_ invoke: Invoke) throws {
+    DispatchQueue.main.async {
+      let request = ASAuthorizationAppleIDProvider().createRequest()
+      let controller = ASAuthorizationController(authorizationRequests: [request])
+      let delegate = SiwaDelegate(invoke: invoke) { [weak self] in self?.siwa = nil }
+      self.siwa = delegate
+      controller.delegate = delegate
+      controller.presentationContextProvider = delegate
+      controller.performRequests()
     }
   }
 }

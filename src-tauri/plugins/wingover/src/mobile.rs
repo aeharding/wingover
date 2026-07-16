@@ -113,6 +113,17 @@ impl<R: Runtime> Wingover<R> {
         Ok(response.jws)
     }
 
+    pub fn sign_in_with_apple(&self) -> crate::Result<String> {
+        #[derive(Deserialize)]
+        #[serde(rename_all = "camelCase")]
+        struct IdentityTokenResponse {
+            identity_token: String,
+        }
+        let response: IdentityTokenResponse =
+            self.0.run_mobile_plugin("signInWithApple", ())?;
+        Ok(response.identity_token)
+    }
+
     pub fn speak(&self, text: &str) -> crate::Result<()> {
         self.0
             .run_mobile_plugin("speak", serde_json::json!({ "text": text }))
