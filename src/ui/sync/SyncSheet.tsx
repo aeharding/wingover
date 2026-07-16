@@ -590,6 +590,10 @@ function LinkAccountPage({
 }: {
   nav: RefObject<HTMLIonNavElement | null>;
 }) {
+  // Live, not asserted: this page once claimed "On" while the connect had
+  // actually landed read-only (a stale purchase transaction) — the pilot
+  // popped back to a contradiction.
+  const status = useSyncExternalStore(sync.subscribe, sync.currentStatus);
   const [busy, setBusy] = useState(false);
   const [problem, setProblem] = useState<string | null>(null);
   const [linked, setLinked] = useState(false);
@@ -626,10 +630,12 @@ function LinkAccountPage({
       </IonHeader>
       <IonContent>
         <div className="sync-login-body">
-          <div className="sync-state">
-            <span className="sync-state-label">On</span>
+          <div className={`sync-state ${describe(status).tone}`}>
+            <span className="sync-state-label">{describe(status).label}</span>
             <span className="sync-state-detail">
-              Your flights now back up automatically.
+              {status.state === "syncing" && !status.readOnly
+                ? "Your flights now back up automatically."
+                : describe(status).detail}
             </span>
           </div>
 
