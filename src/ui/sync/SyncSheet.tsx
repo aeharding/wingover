@@ -1,5 +1,6 @@
 import {
   IonButton,
+  IonButtons,
   IonContent,
   IonHeader,
   IonIcon,
@@ -16,7 +17,13 @@ import {
   desktopOutline,
   logoApple,
 } from "ionicons/icons";
-import { useEffect, useState, useSyncExternalStore } from "react";
+import {
+  type RefObject,
+  useEffect,
+  useRef,
+  useState,
+  useSyncExternalStore,
+} from "react";
 
 import { isTauri } from "../../engine/platform";
 import * as sync from "../../sync";
@@ -35,10 +42,19 @@ import { SelfHostPage } from "./SelfHostPage";
  * of subscribing once web checkout exists).
  */
 export function SyncSheet({ onClose }: { onClose: () => void }) {
-  return <IonNav root={() => <SyncHome onClose={onClose} />} />;
+  const nav = useRef<HTMLIonNavElement>(null);
+  return (
+    <IonNav ref={nav} root={() => <SyncHome onClose={onClose} nav={nav} />} />
+  );
 }
 
-function SyncHome({ onClose }: { onClose: () => void }) {
+function SyncHome({
+  onClose,
+  nav,
+}: {
+  onClose: () => void;
+  nav: RefObject<HTMLIonNavElement | null>;
+}) {
   const status = useSyncExternalStore(sync.subscribe, sync.currentStatus);
   const account = useSyncExternalStore(sync.subscribe, sync.currentAccount);
   const [busy, setBusy] = useState(false);
@@ -49,10 +65,6 @@ function SyncHome({ onClose }: { onClose: () => void }) {
   // The subscription rail's own state, straight from StoreKit: what makes a
   // supporter or a signed-out subscriber see the truth here.
   const [appleSub, setAppleSub] = useState<"active" | "expired" | null>(null);
-  // Post-purchase "use it on your computer" offer (SYNC-UX.md junction 2).
-  const [linkOffer, setLinkOffer] = useState<"hidden" | "offered" | "linked">(
-    "hidden",
-  );
   const [presentAlert] = useIonAlert();
 
   useEffect(() => {
@@ -79,8 +91,12 @@ function SyncHome({ onClose }: { onClose: () => void }) {
     setProblem(null);
     try {
       await sync.purchase();
+      // The thank-you/link page gets its own screen (SYNC-UX.md junction 2):
+      // the inline offer was cramped and hard to read. Only when the purchase
+      // actually connected this device (the supporter guard means a self-
+      // hoster's purchase doesn't).
       if (isTauri() && sync.currentAccount()?.kind === "apple") {
-        setLinkOffer("offered");
+        void nav.current?.push(() => <LinkAccountPage nav={nav} />);
       }
     } catch (error) {
       const text = error instanceof Error ? error.message : String(error);
@@ -144,16 +160,11 @@ function SyncHome({ onClose }: { onClose: () => void }) {
               product={product}
               busy={busy}
               problem={problem}
-              linkOffer={linkOffer}
               onBuy={buy}
               onConnect={() => run(() => sync.connectWithSubscription())}
               onLink={() =>
-                run(async () => {
-                  await sync.linkAppleAccount();
-                  setLinkOffer("linked");
-                })
+                void nav.current?.push(() => <LinkAccountPage nav={nav} />)
               }
-              onSkipLink={() => setLinkOffer("hidden")}
               onSignIn={() => run(() => sync.signIn())}
               onTurnOff={() => run(() => sync.disable())}
               onConnected={onClose}
@@ -350,11 +361,9 @@ function Connected({
   product,
   busy,
   problem,
-  linkOffer,
   onBuy,
   onConnect,
   onLink,
-  onSkipLink,
   onSignIn,
   onTurnOff,
   onDelete,
@@ -367,11 +376,9 @@ function Connected({
   product: sync.StoreProduct | null;
   busy: boolean;
   problem: string | null;
-  linkOffer: "hidden" | "offered" | "linked";
   onBuy: () => void;
   onConnect: () => void;
   onLink: () => void;
-  onSkipLink: () => void;
   onSignIn: () => void;
   onTurnOff: () => void;
   onDelete: () => void;
@@ -483,39 +490,6 @@ function Connected({
           </p>
         ))}
 
-      {linkOffer === "offered" && (
-        <>
-          <p className="sync-fine-print">
-            Want your flights on your computer? Link your Apple Account: one
-            tap, and you can sign in anywhere.
-          </p>
-          <IonButton
-            expand="block"
-            className="sync-siwa-button"
-            disabled={busy}
-            onClick={onLink}
-            data-testid="sync-link-offer"
-          >
-            <IonIcon slot="start" icon={logoApple} aria-hidden="true" />
-            Link Apple Account
-          </IonButton>
-          <IonButton
-            fill="clear"
-            size="small"
-            className="sync-quiet-action"
-            onClick={onSkipLink}
-            data-testid="sync-link-skip"
-          >
-            Skip for now
-          </IonButton>
-        </>
-      )}
-      {linkOffer === "linked" && (
-        <p className="sync-fine-print" data-testid="sync-link-done">
-          Linked. Sign in with Apple on your computer to sync there.
-        </p>
-      )}
-
       {/* Off + a lapsed or absent sub still deserves a way in. */}
       {off && appleSub !== "active" && (
         <IonButton
@@ -561,9 +535,10 @@ function Connected({
         </IonButton>
       )}
 
-      {hosted && isTauri() && linkOffer === "hidden" && !dormant && (
-        // Junction 2 catch-up for pilots who skipped the post-purchase link.
-        // Idempotent server-side; harmless for the already-linked.
+      {hosted && isTauri() && !dormant && (
+        // Junction 2 catch-up for pilots who skipped the post-purchase page —
+        // opens the same page. Idempotent server-side; harmless when already
+        // linked.
         <IonButton
           fill="clear"
           size="small"
@@ -600,6 +575,109 @@ function Connected({
           is unchanged.
         </p>
       )}
+    </>
+  );
+}
+
+/**
+ * Pushed right after a purchase connects this device (and reachable later via
+ * "Use on your computer"): the thank-you, and the one optional step,
+ * explained simply. Its own page because the inline version was cramped and
+ * hard to read. Done or the back chevron pops to the sheet.
+ */
+function LinkAccountPage({
+  nav,
+}: {
+  nav: RefObject<HTMLIonNavElement | null>;
+}) {
+  const [busy, setBusy] = useState(false);
+  const [problem, setProblem] = useState<string | null>(null);
+  const [linked, setLinked] = useState(false);
+
+  function pop() {
+    void nav.current?.pop();
+  }
+
+  async function link() {
+    setBusy(true);
+    setProblem(null);
+    try {
+      await sync.linkAppleAccount();
+      setLinked(true);
+    } catch (error) {
+      const text = error instanceof Error ? error.message : String(error);
+      if (!/cancelled/i.test(text)) setProblem(text);
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  return (
+    <>
+      <IonHeader>
+        <IonToolbar>
+          <IonTitle>You&apos;re synced</IonTitle>
+          <IonButtons slot="end">
+            <IonButton strong onClick={pop} data-testid="link-page-done">
+              Done
+            </IonButton>
+          </IonButtons>
+        </IonToolbar>
+      </IonHeader>
+      <IonContent>
+        <div className="sync-login-body">
+          <div className="sync-state">
+            <span className="sync-state-label">On</span>
+            <span className="sync-state-detail">
+              Your flights now back up automatically.
+            </span>
+          </div>
+
+          {linked ? (
+            <p className="sync-login-lede" data-testid="link-page-linked">
+              Linked. Sign in with Apple at wingover.app any time.
+            </p>
+          ) : (
+            <>
+              <p className="sync-login-lede">
+                One optional step: link your Apple Account, and you can sign
+                in at wingover.app to see your flights on any computer.
+              </p>
+
+              {problem && <p className="sync-error-message">{problem}</p>}
+
+              <IonButton
+                expand="block"
+                className="sync-siwa-button"
+                disabled={busy}
+                onClick={link}
+                data-testid="link-page-link"
+              >
+                {busy ? (
+                  <IonSpinner name="crescent" />
+                ) : (
+                  <>
+                    <IonIcon slot="start" icon={logoApple} aria-hidden="true" />
+                    Link Apple Account
+                  </>
+                )}
+              </IonButton>
+              <IonButton
+                fill="clear"
+                size="small"
+                className="sync-quiet-action"
+                onClick={pop}
+                data-testid="link-page-skip"
+              >
+                Skip for now
+              </IonButton>
+              <p className="sync-fine-print">
+                You can always do this later from the Sync screen.
+              </p>
+            </>
+          )}
+        </div>
+      </IonContent>
     </>
   );
 }

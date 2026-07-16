@@ -44,8 +44,8 @@ no state conflates the two.
 ```
 
 One row, one question: are the flights backed up? The note is the sync state
-(`On` / `Read-only` / `Paused` / `Not subscribed` / `Problem`), and a red
-`Local Only` when sync is off — off is never a neutral dash. Payment facts
+(`On` / `Paused` / `Not subscribed` / `Problem`), and a red `Local Only` when
+sync is off — off is never a neutral dash. Payment facts
 (Active/Expired, price) live inside the sheet. The two rails stay real in the
 architecture and on the server; they stopped being Settings geography after
 both two-rows and a transforming label shipped and got reverted — pilots
@@ -68,8 +68,11 @@ doesn't earn:
   Manage Subscription (StoreKit's native sheet — the only surface that shows
   sandbox subs) + "Use on your computer" (the SIWA link catch-up) + Delete
   account.
-- **Lapsed** — Read-only + Resubscribe, same screen; the remedy needs no
-  navigation.
+- **Lapsed** — reads "Not subscribed" ("read-only" was database vocabulary
+  that meant nothing to a pilot): new flights stay on this device, everything
+  already synced stays safe — the courtesy is the point, not a mode to learn.
+  Resubscribe sits on the same screen. Under the hood it is still pull-only,
+  so a new phone can fetch the logbook.
 - **Signed in, unsubscribed** — "Not subscribed" + Subscribe (the web says
   "subscribe on your iPhone" until checkout exists) + Sign out.
 - **Subscribed but off** — Off + "Turn on sync". Rare by construction: the
@@ -88,13 +91,14 @@ Each is deliberate; anything else touching across rails is drift.
 1. **Purchase auto-connects the purchasing device.** "You paid, now go log in"
    on the same phone would be absurd. This is the one moment Subscription
    performs a login, and it performs it silently.
-2. **The post-purchase interstitial.** Immediately after purchase: _"Want your
-   flights on your computer? Link your Apple Account — one tap."_ Native SIWA,
-   Face ID, **Skip always visible** (account creation must stay optional —
-   guideline 5.1.1). Skippers can link any time from the sheet ("Use on your computer").
-   **Supporter guard:** if the pilot is already logged in to their own server,
-   the interstitial must not clobber that — "You're synced to your own server —
-   keep it (default), or switch to hosted?"
+2. **The post-purchase page.** A page pushes the moment a purchase connects
+   the device: the thank-you ("your flights now back up automatically") and
+   ONE optional step, explained simply — link your Apple Account to sign in
+   at wingover.app on any computer. Link, or Skip/Done pops back to the
+   sheet. **Skip always visible** (account creation stays optional —
+   guideline 5.1.1); skippers reach the same page later via the quiet "Use
+   on your computer" row. **Supporter guard:** a purchase made while synced
+   to the pilot's own server never touches that login, and no page pushes.
 3. **Read-only offers the remedy in place.** The lapse is discovered on the
    connection rail; the remedy is a purchase — and it sits on the same
    screen: the read-only state renders Resubscribe directly. A lapsed pilot
@@ -188,7 +192,7 @@ such a device should say "re-link from your iPhone," not fail generically.
 | New pilot subscribes | Apple's sheet → paid → device auto-connects → interstitial offers the Apple Account link → done. Zero credentials seen. |
 | Subscriber, reinstall/migrated phone | Keychain survives → auto-connects. The best login flow is none; preserve it at all costs. |
 | Subscriber, clean new device | Log In → Use my subscription (or Sign in with Apple, once linked). Never shown a price. |
-| Lapsed subscriber | Row: `Subscription — Expired · Sync — Read-only`. Status screen explains, offers Resubscribe. Never locked out (STEERING: paying buys writes, not reads). |
+| Lapsed subscriber | Row: `Sync — Not subscribed`. The sheet explains (new flights stay local, synced history is safe) and offers Resubscribe. Never locked out (STEERING: paying buys writes, not reads). |
 | Self-hoster, any platform | Log In → Use my own server. Their rows finally tell the truth: `Subscription — · Sync — On`. The `—` is a standing, non-naggy invitation to support. |
 | Supporter (subscribes while self-hosting) | Subscription activates; login untouched (junction 2 guard). |
 | Subscriber wanting desktop, today | iOS Log In → Connect another device → paste into PWA form. |
@@ -212,8 +216,9 @@ destructive act — required in-app once linking exists (guideline 5.1.1(v)).
 - The word "PWA" never appears. Say "on your computer."
 - The iOS app never states or implies web pricing (anti-steering; rules vary
   by storefront and year — silence is the one answer safe everywhere).
-- Read-only is never styled as an error. Amber, not red; the pilot's flights
-  are all still there.
+- "Read-only" never appears in copy — it's database vocabulary. A lapse reads
+  "Not subscribed", amber, never red: the pilot's flights are all still
+  there.
 - Credentials are shown only behind an explicit reveal (Connect another
   device), never resting on screen.
 
