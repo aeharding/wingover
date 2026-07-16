@@ -34,8 +34,14 @@ export function describe(status: sync.SyncStatus): {
     case "syncing":
       return status.readOnly
         ? {
-            label: "Read-only",
-            detail: "Your flights are still here, and still yours.",
+            // "Read-only" was database vocabulary; the pilot's reality is
+            // simply "not subscribed": new flights stay on the phone, and
+            // everything already synced stays safe on the server — that
+            // courtesy is the point, not a mode to learn. (Under the hood it
+            // is still pull-only, so a new phone can fetch the logbook.)
+            label: "Not subscribed",
+            detail:
+              "New flights stay on this device. Everything synced is safe.",
             tone: "sync-state-readonly",
           }
         : {

@@ -1,5 +1,7 @@
 app_identifier(["app.wingover.wingover"])
-apple_id("alex@harding.dev")
+# No apple_id here on purpose: CI authenticates with the App Store Connect
+# API key (api_key_path), which never needs it — and a personal email has no
+# business in a public repo.
 
 itc_team_id("126507712") # App Store Connect Team ID
 team_id("SYTN44U2UN") # Developer Portal Team ID
