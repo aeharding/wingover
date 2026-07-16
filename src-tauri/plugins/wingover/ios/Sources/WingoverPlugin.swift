@@ -106,6 +106,40 @@ class WingoverPlugin: Plugin, CLLocationManagerDelegate {
   private var siwa: SiwaDelegate?
   private var lastError: String?
 
+  override init() {
+    super.init()
+    _ = Self.allowProgrammaticKeyboard
+  }
+
+  // WKWebView raises the keyboard only for focus born of a user gesture; a
+  // programmatic focus() lands a caret with no keyboard — which is how the
+  // self-host form's autofocus "didn't work" on device while working in every
+  // browser. There is no public switch. This is the WKContentView swizzle
+  // Capacitor and Cordova have shipped for years (their
+  // keyboardDisplayRequiresUserAction=false): force the internal focus call's
+  // userIsInteracting flag to true. Selector guarded, so a WebKit that
+  // renames it degrades to the old behavior instead of crashing.
+  private static let allowProgrammaticKeyboard: Void = {
+    guard let contentView: AnyClass = NSClassFromString("WKContentView") else {
+      return
+    }
+    let selector = sel_getUid(
+      "_elementDidFocus:userIsInteracting:blurPreviousNode:activityStateChanges:userObject:")
+    guard let method = class_getInstanceMethod(contentView, selector) else {
+      return
+    }
+    typealias OriginalFn = @convention(c) (
+      AnyObject, Selector, UnsafeRawPointer, Bool, Bool, Int, AnyObject?
+    ) -> Void
+    let original = unsafeBitCast(method_getImplementation(method), to: OriginalFn.self)
+    let swizzled: @convention(block) (
+      AnyObject, UnsafeRawPointer, Bool, Bool, Int, AnyObject?
+    ) -> Void = { view, node, _, blurPrevious, changes, userObject in
+      original(view, selector, node, true, blurPrevious, changes, userObject)
+    }
+    method_setImplementation(method, imp_implementationWithBlock(swizzled))
+  }()
+
   // In-memory buffer between drains (~1 s of fixes). Mutated on the main
   // thread only. A hard process kill loses only this window — the accepted
   // torn-tail class; everything drained is already durable in Rust.
@@ -529,6 +563,29 @@ class WingoverPlugin: Plugin, CLLocationManagerDelegate {
         @unknown default:
           invoke.reject("unknown purchase result")
         }
+      } catch {
+        invoke.reject(error.localizedDescription)
+      }
+    }
+  }
+
+  // Apple's own subscription-management sheet, for the CURRENT storefront.
+  // This is the difference between "my subscription is missing" and seeing
+  // it: the public apps.apple.com page never lists sandbox/TestFlight
+  // subscriptions, but this sheet does.
+  @objc public func storekitManageSubscriptions(_ invoke: Invoke) throws {
+    Task { @MainActor in
+      guard
+        let scene = UIApplication.shared.connectedScenes
+          .compactMap({ $0 as? UIWindowScene })
+          .first
+      else {
+        invoke.reject("no active scene to present from")
+        return
+      }
+      do {
+        try await AppStore.showManageSubscriptions(in: scene)
+        invoke.resolve()
       } catch {
         invoke.reject(error.localizedDescription)
       }

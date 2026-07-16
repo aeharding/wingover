@@ -63,6 +63,10 @@ impl<R: Runtime> Wingover<R> {
         Err(crate::Error::UnsupportedPlatform)
     }
 
+    pub fn storekit_manage_subscriptions(&self) -> crate::Result<()> {
+        Err(crate::Error::UnsupportedPlatform)
+    }
+
     pub fn sign_in_with_apple(&self) -> crate::Result<String> {
         Err(crate::Error::UnsupportedPlatform)
     }

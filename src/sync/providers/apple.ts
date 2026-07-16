@@ -178,11 +178,16 @@ export function siwaProvider(
   return {
     kind: "apple",
     async obtain(): Promise<Credentials> {
-      const response = await fetch(`${apiUrl}/v1/session`, {
-        method: "POST",
-        headers: { "content-type": "application/json" },
-        body: JSON.stringify({ identityToken }),
-      });
+      let response: Response;
+      try {
+        response = await fetch(`${apiUrl}/v1/session`, {
+          method: "POST",
+          headers: { "content-type": "application/json" },
+          body: JSON.stringify({ identityToken }),
+        });
+      } catch (error) {
+        throw unreachable(error);
+      }
       if (response.status === 404) {
         // The server knows this Apple ID from nowhere: no linked account.
         // Marked, because on iOS the caller can self-heal via StoreKit.
@@ -237,15 +242,37 @@ export async function subscriptionProduct(): Promise<StoreProduct | null> {
   }
 }
 
+/**
+ * Apple's subscription-management sheet, in-app. The public apps.apple.com
+ * page never lists sandbox/TestFlight subscriptions; this sheet shows the
+ * current storefront's, real or test. Native only.
+ */
+export async function manageSubscriptions(): Promise<void> {
+  return invoke("plugin:wingover|storekit_manage_subscriptions");
+}
+
+/** fetch rejects with WebKit's bare "Load failed" — name the actual problem. */
+function unreachable(error: unknown): Error {
+  return new Error(
+    "Couldn't reach wingover.app. Check your connection and try again.",
+    { cause: error },
+  );
+}
+
 async function session(
   apiUrl: string,
   transactionJWS: string,
 ): Promise<Credentials> {
-  const response = await fetch(`${apiUrl}/v1/session`, {
-    method: "POST",
-    headers: { "content-type": "application/json" },
-    body: JSON.stringify({ transactionJWS }),
-  });
+  let response: Response;
+  try {
+    response = await fetch(`${apiUrl}/v1/session`, {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({ transactionJWS }),
+    });
+  } catch (error) {
+    throw unreachable(error);
+  }
   if (!response.ok) {
     throw new Error(
       `session failed: ${response.status} ${await response.text()}`,

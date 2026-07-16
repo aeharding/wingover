@@ -196,6 +196,13 @@ mod commands {
     }
 
     #[command]
+    pub(crate) async fn storekit_manage_subscriptions<R: Runtime>(
+        app: AppHandle<R>,
+    ) -> Result<()> {
+        app.wingover().storekit_manage_subscriptions()
+    }
+
+    #[command]
     pub(crate) async fn sign_in_with_apple<R: Runtime>(app: AppHandle<R>) -> Result<String> {
         app.wingover().sign_in_with_apple()
     }
@@ -229,6 +236,7 @@ pub fn init<R: Runtime>() -> TauriPlugin<R> {
             commands::storekit_products,
             commands::storekit_current_entitlement,
             commands::storekit_purchase,
+            commands::storekit_manage_subscriptions,
             commands::sign_in_with_apple,
         ])
         .setup(|app, api| {

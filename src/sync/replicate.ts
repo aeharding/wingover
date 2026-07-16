@@ -139,7 +139,7 @@ function fatalAuthFailure(error: unknown): string | null {
       "",
   );
   if (/locked/i.test(reason)) {
-    return "Too many failed attempts — the server locked this account. Wait five minutes, then turn sync on again.";
+    return "Too many failed attempts. The server locked this account; wait five minutes, then turn sync on again.";
   }
   return status === 401
     ? "The server rejected this device's password. Turn sync off and connect again."

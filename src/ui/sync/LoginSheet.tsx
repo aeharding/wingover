@@ -5,12 +5,13 @@ import {
   IonIcon,
   IonNav,
   IonNavLink,
+  IonSpinner,
   IonTitle,
   IonToolbar,
   useIonAlert,
 } from "@ionic/react";
 import { logoApple } from "ionicons/icons";
-import { useEffect, useState, useSyncExternalStore } from "react";
+import { useState, useSyncExternalStore } from "react";
 
 import { isTauri } from "../../engine/platform";
 import * as sync from "../../sync";
@@ -57,14 +58,6 @@ function LoginHome({
   // credential, so this is session state, not account state.
   const [linked, setLinked] = useState(false);
   const [presentAlert] = useIonAlert();
-  // The "Use my subscription" door only exists once StoreKit says there is a
-  // subscription to use — probed, not assumed, so the browser and the desktop
-  // ring simply never see it.
-  const [subscriptionJws, setSubscriptionJws] = useState<string | null>(null);
-
-  useEffect(() => {
-    void sync.probeEntitlementJWS().then(setSubscriptionJws);
-  }, []);
 
   const on = status.state !== "off";
   const { label, detail, tone } = describe(status);
@@ -133,7 +126,7 @@ function LoginHome({
                     onClick={onSubscription}
                     data-testid="sync-resubscribe-link"
                   >
-                    Your subscription ended — Resubscribe
+                    Your subscription ended. Resubscribe
                   </IonButton>
                 )}
 
@@ -178,7 +171,7 @@ function LoginHome({
                       data-testid="sync-link-apple"
                     >
                       {linked
-                        ? "Linked — sign in on your computer"
+                        ? "Linked. Sign in on your computer"
                         : "Link Apple Account for web access"}
                     </IonButton>
                   )}
@@ -199,8 +192,8 @@ function LoginHome({
                       presentAlert({
                         header: "Delete account?",
                         message: account.entitled
-                          ? "Your subscription is still active, and deleting does not stop billing — cancel with Apple first, or your next launch will quietly re-create an empty account. Deleting removes your hosted database and every flight on it, permanently. Flights on this device stay here."
-                          : "Deletes your hosted database and every flight on it, permanently. Flights on this device stay here. Any subscription is managed by Apple — cancel it in the App Store.",
+                          ? "Your subscription is still active, and deleting does not stop billing. Cancel with Apple first, or your next launch will quietly re-create an empty account. Deleting removes your hosted database and every flight on it, permanently. Flights on this device stay here."
+                          : "Deletes your hosted database and every flight on it, permanently. Flights on this device stay here. Any subscription is managed by Apple; cancel it in the App Store.",
                         buttons: [
                           { text: "Cancel", role: "cancel" },
                           {
@@ -231,7 +224,7 @@ function LoginHome({
               )}
               <p className="sync-fine-print">
                 Turning sync off forgets this device&apos;s connection. Nothing
-                is deleted — every flight stays on this device and on the
+                is deleted: every flight stays on this device and on the
                 server. If you subscribe, billing is unchanged.
               </p>
             </>
@@ -243,9 +236,11 @@ function LoginHome({
 
               {problem && <p className="sync-error-message">{problem}</p>}
 
-              {/* Doors in SYNC-UX.md order: identity, transaction, own server.
-                  On iOS an unlinked sign-in self-heals through StoreKit
-                  (junction 4), so this button is never a dead end there. */}
+              {/* One hosted door, deliberately (a separate "Use my
+                  subscription" button confused more than it helped): sign-in
+                  prefers the device's StoreKit transaction internally, so a
+                  subscribed iPhone lands on its account either way, and an
+                  unlinked one self-heals (SYNC-UX.md junction 4). */}
               <IonButton
                 expand="block"
                 className="sync-siwa-button"
@@ -253,27 +248,19 @@ function LoginHome({
                 onClick={() => run(() => sync.signIn())}
                 data-testid="login-apple"
               >
-                <IonIcon slot="start" icon={logoApple} aria-hidden="true" />
-                Sign in with Apple
+                {busy ? (
+                  <IonSpinner name="crescent" />
+                ) : (
+                  <>
+                    <IonIcon slot="start" icon={logoApple} aria-hidden="true" />
+                    Sign in with Apple
+                  </>
+                )}
               </IonButton>
-
-              {subscriptionJws && (
-                <IonButton
-                  expand="block"
-                  fill="outline"
-                  disabled={busy}
-                  onClick={() =>
-                    run(() => sync.connectWithSubscription(subscriptionJws))
-                  }
-                  data-testid="login-subscription"
-                >
-                  Use my subscription
-                </IonButton>
-              )}
 
               {/* Deliberately quiet — blue text, not a filled button. Self-host
                   is a promise we keep, not the typical pilot's flow; the loud
-                  doors here are (and will be) the hosted ones. */}
+                  door here is (and will be) the hosted one. */}
               <IonNavLink
                 routerDirection="forward"
                 component={() => (
@@ -286,12 +273,11 @@ function LoginHome({
                   className="sync-selfhost-toggle"
                   data-testid="login-own-server"
                 >
-                  Use my own server
+                  Self-hosted config
                 </IonButton>
               </IonNavLink>
               <p className="sync-fine-print">
-                Any CouchDB works — yours for free, or ours with a
-                subscription.
+                Any CouchDB works: yours for free, or ours with a subscription.
               </p>
             </>
           )}

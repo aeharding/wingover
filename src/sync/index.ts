@@ -24,6 +24,7 @@ export type { StoreProduct } from "./providers/apple";
 export {
   appleProvider,
   appleSubscriptionState,
+  manageSubscriptions,
   probeEntitlementJWS,
   purchaseJWS,
   siwaProvider,

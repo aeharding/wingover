@@ -113,6 +113,12 @@ impl<R: Runtime> Wingover<R> {
         Ok(response.jws)
     }
 
+    pub fn storekit_manage_subscriptions(&self) -> crate::Result<()> {
+        self.0
+            .run_mobile_plugin("storekitManageSubscriptions", ())
+            .map_err(Into::into)
+    }
+
     pub fn sign_in_with_apple(&self) -> crate::Result<String> {
         #[derive(Deserialize)]
         #[serde(rename_all = "camelCase")]

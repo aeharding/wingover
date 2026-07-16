@@ -52,7 +52,7 @@ async function explain(response: Response, url: string, dbName: string) {
       .catch(() => "");
     if (/locked/i.test(reason)) {
       throw new Error(
-        "Too many failed attempts — CouchDB locked this account. Wait five minutes, then try again.",
+        "Too many failed attempts. CouchDB locked this account; wait five minutes, then try again.",
       );
     }
     throw new Error(`This user can't access ${dbName}.`);
