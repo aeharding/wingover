@@ -160,9 +160,12 @@ function SyncHome({ onClose }: { onClose: () => void }) {
               onDelete={() =>
                 presentAlert({
                   header: "Delete account?",
+                  // Deleting also turns sync off, and off persists — so the
+                  // account can't resurrect by itself at launch. Only an
+                  // explicit reconnect re-creates it, and the copy says so.
                   message:
                     account?.kind === "apple" && account.entitled
-                      ? "Your subscription is still active, and deleting does not stop billing. Cancel with Apple first, or your next launch will quietly re-create an empty account. Deleting removes your hosted database and every flight on it, permanently. Flights on this device stay here."
+                      ? "Your subscription is still active, and deleting does not stop billing; cancel it with Apple. While it keeps renewing, turning sync back on would re-create an empty account. Deleting removes your hosted database and every flight on it, permanently. Flights on this device stay here."
                       : "Deletes your hosted database and every flight on it, permanently. Flights on this device stay here. Any subscription is managed by Apple; cancel it in the App Store.",
                   buttons: [
                     { text: "Cancel", role: "cancel" },
