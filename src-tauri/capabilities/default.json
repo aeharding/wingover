@@ -20,6 +20,7 @@
     "wingover:allow-storekit-products",
     "wingover:allow-storekit-current-entitlement",
     "wingover:allow-storekit-purchase",
-    "opener:allow-open-url"
+    "wingover:allow-sign-in-with-apple",
+    "opener:default"
   ]
 }

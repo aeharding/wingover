@@ -57,10 +57,26 @@ export interface CredentialProvider {
   obtain(): Promise<Credentials>;
 }
 
+/**
+ * The slice of the held credential the UI is allowed to see — enough for the
+ * Settings rows (Subscription: Active/Expired/—) and for the Log In page to
+ * pick its furniture (Manage subscription vs. nothing), and never the password.
+ */
+export interface SyncAccount {
+  kind: CredentialKind;
+  entitled: boolean;
+}
+
 export type SyncStatus =
   | { state: "off" }
   | { state: "connecting" }
   | { state: "syncing"; lastSyncedAt: number | null; readOnly: boolean }
   /** A flight is in progress. Recording outranks sync, always. */
   | { state: "paused" }
+  /**
+   * Signed in to an account that has never been entitled — the server
+   * provisions storage at first subscription (SYNC-UX.md), so there is
+   * nothing to replicate yet. A legitimate resting state, not an error.
+   */
+  | { state: "unsubscribed" }
   | { state: "error"; message: string };

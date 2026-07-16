@@ -53,6 +53,12 @@ async function enableSync(
   );
 }
 
+/** Settings → Log In → Use my own server: the door every self-host test walks. */
+async function openOwnServerForm(page: import("@playwright/test").Page) {
+  await page.getByTestId("settings-login").click();
+  await page.getByTestId("login-own-server").click();
+}
+
 test("a flight recorded on one device appears on another", async ({
   browser,
 }) => {
@@ -195,7 +201,7 @@ test("a lapsed client replicates pull-only and never pushes into a 403", async (
   await page.close();
 });
 
-test("the sync sheet opens from settings and connects a self-hosted server", async ({
+test("the two rails split cleanly: Subscription pitches, Log In connects", async ({
   browser,
   request,
 }) => {
@@ -218,39 +224,46 @@ test("the sync sheet opens from settings and connects a self-hosted server", asy
   page.on("pageerror", (e) => errors.push(String(e)));
   await page.goto("/settings?map-style=blank");
 
-  // The row reports state without opening anything — a pilot shouldn't have to
-  // go looking to find out whether their flights are backed up.
-  await expect(page.getByTestId("settings-sync")).toContainText("Off");
+  // Two rows, two rails (SYNC-UX.md): Subscription is payments, Log In is
+  // connection. The rows report state without opening anything — a pilot
+  // shouldn't have to go looking to find out whether their flights are
+  // backed up.
+  await expect(page.getByTestId("settings-subscription")).toContainText("—");
+  await expect(page.getByTestId("settings-login")).toContainText("Log In");
 
-  await page.getByTestId("settings-sync").click();
-  // Off is a pitch, not a status screen: the headline sells, and the presence
-  // of Subscribe is what says it's off.
+  // The Subscription sheet is a pitch, never a status screen — and a browser
+  // has no StoreKit to sell through, so it says where subscribing lives
+  // rather than failing on tap.
+  await page.getByTestId("settings-subscription").click();
   await expect(page.getByTestId("sync-headline")).toBeVisible();
-  await expect(page.getByTestId("sync-state")).toHaveCount(0);
-  // Subscribe is inert until the StoreKit plugin exists; it must say so rather
-  // than fail on tap. (Ionic exposes this as aria-disabled, not the native
-  // attribute — that's also what assistive tech reads.)
-  await expect(page.getByTestId("sync-subscribe")).toHaveAttribute(
-    "aria-disabled",
-    "true",
-  );
+  await expect(page.getByTestId("subscription-state")).toHaveCount(0);
 
-  await page.getByTestId("sync-selfhost-toggle").click();
+  // The PWA pitch leads with identity, right on the landing page: sign in
+  // with a valid subscription and you're connected on the spot; without one,
+  // the pilot is prompted about subscribing instead. No money moves before
+  // an account exists to attach it to.
+  await expect(page.getByTestId("sync-signin-web")).toBeVisible();
+
+  // The self-host cross-link pushes the Log In rail's form IN PLACE — a nav
+  // push inside this sheet, not a close-and-reopen of another modal.
+  await page.getByTestId("sync-goto-login").click();
   await page.getByLabel("Server").fill(credentials.url);
   await page.getByLabel("Database").fill(credentials.dbName);
   await page.getByLabel("Username").fill(credentials.username);
   await page.getByLabel("Password").fill(credentials.password);
   await page.getByTestId("sync-connect").click();
 
-  await expect(page.getByTestId("settings-sync")).not.toContainText("Off", {
+  await expect(page.getByTestId("settings-login")).toContainText("On", {
     timeout: 15_000,
   });
+  // Self-host is a login, not a subscription: the other rail must not move.
+  await expect(page.getByTestId("settings-subscription")).toContainText("—");
 
   // ...and off again, without deleting anything.
-  await page.getByTestId("settings-sync").click();
+  await page.getByTestId("settings-login").click();
   await expect(page.getByTestId("sync-state")).toHaveText("On");
   await page.getByTestId("sync-off").click();
-  await expect(page.getByTestId("sync-headline")).toBeVisible();
+  await expect(page.getByTestId("login-own-server")).toBeVisible();
 
   expect(errors).toEqual([]);
   await context.close();
@@ -328,14 +341,13 @@ test("sync survives a relaunch", async ({ browser, request }) => {
   const page = await context.newPage();
   await page.goto("/settings?map-style=blank");
 
-  await page.getByTestId("settings-sync").click();
-  await page.getByTestId("sync-selfhost-toggle").click();
+  await openOwnServerForm(page);
   await page.getByLabel("Server").fill(credentials.url);
   await page.getByLabel("Database").fill(credentials.dbName);
   await page.getByLabel("Username").fill(credentials.username);
   await page.getByLabel("Password").fill(credentials.password);
   await page.getByTestId("sync-connect").click();
-  await expect(page.getByTestId("settings-sync")).not.toContainText("Off", {
+  await expect(page.getByTestId("settings-login")).toContainText("On", {
     timeout: 15_000,
   });
 
@@ -345,7 +357,7 @@ test("sync survives a relaunch", async ({ browser, request }) => {
   // back, so a relaunch showed "Off" and quietly stopped backing anything up.
   await page.reload();
 
-  await expect(page.getByTestId("settings-sync")).toContainText("On", {
+  await expect(page.getByTestId("settings-login")).toContainText("On", {
     timeout: 15_000,
   });
 
@@ -362,8 +374,7 @@ test("one wrong password must not lock the pilot out of their own server", async
   const page = await context.newPage();
 
   await page.goto("/settings?map-style=blank");
-  await page.getByTestId("settings-sync").click();
-  await page.getByTestId("sync-selfhost-toggle").click();
+  await openOwnServerForm(page);
   await page.getByLabel("Server").fill(credentials.url);
   await page.getByLabel("Database").fill(credentials.dbName);
   await page.getByLabel("Username").fill(credentials.username);
@@ -408,8 +419,7 @@ test("Enter connects, from any field", async ({ browser, request }) => {
   const page = await context.newPage();
   await page.goto("/settings?map-style=blank");
 
-  await page.getByTestId("settings-sync").click();
-  await page.getByTestId("sync-selfhost-toggle").click();
+  await openOwnServerForm(page);
   await page.getByLabel("Server").fill(credentials.url);
   await page.getByLabel("Database").fill(credentials.dbName);
   await page.getByLabel("Username").fill(credentials.username);
@@ -418,7 +428,7 @@ test("Enter connects, from any field", async ({ browser, request }) => {
   // so a <form> around these would never see an implicit submit.
   await page.getByLabel("Password").press("Enter");
 
-  await expect(page.getByTestId("settings-sync")).not.toContainText("Off", {
+  await expect(page.getByTestId("settings-login")).toContainText("On", {
     timeout: 15_000,
   });
 
@@ -435,14 +445,13 @@ test("a credential that goes stale is explained, not dumped raw", async ({
   const page = await context.newPage();
   await page.goto("/settings?map-style=blank");
 
-  await page.getByTestId("settings-sync").click();
-  await page.getByTestId("sync-selfhost-toggle").click();
+  await openOwnServerForm(page);
   await page.getByLabel("Server").fill(credentials.url);
   await page.getByLabel("Database").fill(credentials.dbName);
   await page.getByLabel("Username").fill(credentials.username);
   await page.getByLabel("Password").fill(credentials.password);
   await page.getByTestId("sync-connect").click();
-  await expect(page.getByTestId("settings-sync")).not.toContainText("Off", {
+  await expect(page.getByTestId("settings-login")).toContainText("On", {
     timeout: 15_000,
   });
 
@@ -471,7 +480,7 @@ test("a credential that goes stale is explained, not dumped raw", async ({
   // thing that must not happen is the pilot being shown a raw PouchDB error
   // object and left to guess. The sentence IS the fix, so the sentence is what
   // is asserted.
-  await page.getByTestId("settings-sync").click();
+  await page.getByTestId("settings-login").click();
   await expect(page.getByTestId("sync-state")).toHaveText("Problem", {
     timeout: 20_000,
   });

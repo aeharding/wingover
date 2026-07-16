@@ -194,6 +194,11 @@ mod commands {
     ) -> Result<Option<String>> {
         app.wingover().storekit_purchase(&product_id)
     }
+
+    #[command]
+    pub(crate) async fn sign_in_with_apple<R: Runtime>(app: AppHandle<R>) -> Result<String> {
+        app.wingover().sign_in_with_apple()
+    }
 }
 
 pub trait WingoverExt<R: Runtime> {
@@ -224,6 +229,7 @@ pub fn init<R: Runtime>() -> TauriPlugin<R> {
             commands::storekit_products,
             commands::storekit_current_entitlement,
             commands::storekit_purchase,
+            commands::sign_in_with_apple,
         ])
         .setup(|app, api| {
             #[cfg(target_os = "ios")]

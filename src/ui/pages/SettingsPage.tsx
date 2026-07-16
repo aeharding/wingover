@@ -23,13 +23,37 @@ import {
 } from "../../storage/local";
 import * as sync from "../../sync";
 import { useSettings } from "../settings/SettingsContext";
-import { describe as describeSync, useSyncSheet } from "../sync/SyncSheet";
+import { describe as describeSync } from "../sync/describe";
+import { useSyncSheets } from "../sync/SyncSheets";
 
 export default function SettingsPage() {
   const { units, setUnits } = useSettings();
-  const openSync = useSyncSheet();
+  const { openSubscription, openLogin } = useSyncSheets();
   const syncStatus = useSyncExternalStore(sync.subscribe, sync.currentStatus);
-  const syncLabel = describeSync(syncStatus).label;
+  const account = useSyncExternalStore(sync.subscribe, sync.currentAccount);
+  const loggedIn = syncStatus.state !== "off";
+  const [appleSub, setAppleSub] = useState<"active" | "expired" | null>(null);
+
+  useEffect(() => {
+    void sync.appleSubscriptionState().then(setAppleSub);
+  }, []);
+
+  // Subscription is the payments rail (SYNC-UX.md), and its note reflects the
+  // RAIL, not the login: StoreKit outranks the held credential, so the
+  // supporter (paying while self-hosting) and the lapsed pilot who turned
+  // sync off still read the truth instead of "—". A self-host login with no
+  // subscription reads "—" — also true, and the standing, non-naggy
+  // invitation to support.
+  const subscriptionNote =
+    appleSub === "active"
+      ? "Active"
+      : account?.kind === "apple"
+        ? account.entitled
+          ? "Active"
+          : "Expired"
+        : appleSub === "expired"
+          ? "Expired"
+          : "—";
   const [maptilerKey, setMaptilerKey] = useState("");
   const [autoEnd, setAutoEnd] = useState(true);
 
@@ -57,9 +81,27 @@ export default function SettingsPage() {
       </IonHeader>
       <IonContent>
         <IonList>
-          <IonItem button detail onClick={openSync} data-testid="settings-sync">
+          <IonItem
+            button
+            detail
+            onClick={openSubscription}
+            data-testid="settings-subscription"
+          >
             <IonLabel>Subscription</IonLabel>
-            <IonNote slot="end">{syncLabel}</IonNote>
+            <IonNote slot="end">{subscriptionNote}</IonNote>
+          </IonItem>
+          {/* Transforms like iOS Settings' Apple ID row: "Log In" is a thing
+              you do, "Sync" is a thing you have. */}
+          <IonItem
+            button
+            detail
+            onClick={openLogin}
+            data-testid="settings-login"
+          >
+            <IonLabel>{loggedIn ? "Sync" : "Log In"}</IonLabel>
+            {loggedIn && (
+              <IonNote slot="end">{describeSync(syncStatus).label}</IonNote>
+            )}
           </IonItem>
           <IonItem>
             <IonInput

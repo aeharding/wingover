@@ -38,13 +38,14 @@ platform :ios do
     ipa = Dir[File.join(export_dir, "*.ipa")].first
     UI.user_error!("No IPA produced by exportArchive") unless ipa
 
+    # Internal-first: internal testers can install the moment processing
+    # finishes, no Beta App Review. External distribution (a "Public Testers"
+    # group + distribute_external: true) comes back when there's a public
+    # beta to run — it needs the group to exist AND a review pass per build.
     upload_to_testflight(
       ipa: ipa,
       app_identifier: APP_IDENTIFIER,
       api_key_path: "authkey.json",
-      distribute_external: true,
-      groups: ["Public Testers"],
-      reject_build_waiting_for_review: true,
       changelog: "GitHub Actions build #{build_number}, ref #{ENV['GITHUB_REF']}, sha #{ENV['GITHUB_SHA']}, msg #{ENV['COMMIT_MSG']}",
     )
   end

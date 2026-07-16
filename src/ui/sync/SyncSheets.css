@@ -1,7 +1,3 @@
-.sync-sheet-body {
-  padding: 0 1rem 1.5rem;
-}
-
 /* Drop a photo at public/sync-hero.jpg. Layered under a scrim, not raw: a
    photograph behind text is unreadable in the exact conditions this app is
    built for (STEERING: sunlight-readable, high contrast, leg-mounted phone).
@@ -75,6 +71,18 @@
   flex-shrink: 0;
 }
 
+/* The Log In sheet is a plain page — no photo, no scrim. It shares the state
+   block and fine print with the Subscription sheet, minus the shadows. */
+.sync-login-body {
+  padding: 1.5rem 1.25rem;
+  text-align: center;
+}
+
+.sync-login-lede {
+  margin: 0.5rem 0 1.5rem;
+  color: var(--ion-color-medium);
+}
+
 .sync-state {
   display: flex;
   flex-direction: column;
@@ -86,19 +94,26 @@
 .sync-state-label {
   font-size: 2rem;
   font-weight: 700;
-  /* Against a photo the scrim can't be trusted everywhere — a text shadow is
-     what keeps this legible over a bright cloud. */
-  text-shadow: 0 1px 12px rgba(0, 0, 0, 0.8);
 }
 
 .sync-state-detail {
   color: var(--ion-color-medium);
   font-size: 0.875rem;
+}
+
+/* Shadows only over the photo — on the Subscription sheet the scrim can't be
+   trusted everywhere (a bright cloud), and on the plain Log In page the same
+   shadow reads as a smudge. */
+.sync-home-body .sync-state-label {
+  text-shadow: 0 1px 12px rgba(0, 0, 0, 0.8);
+}
+
+.sync-home-body .sync-state-detail {
   text-shadow: 0 1px 8px rgba(0, 0, 0, 0.8);
 }
 
-/* Read-only is not an error and must not look like one: the pilot's flights
-   are all still there. Amber, not red. */
+/* Read-only / Expired is not an error and must not look like one: the pilot's
+   flights are all still there. Amber, not red. */
 .sync-state-readonly .sync-state-label {
   color: var(--ion-color-warning);
 }
@@ -114,12 +129,36 @@
   margin: 0 0 1rem;
 }
 
-/* Gloves-first (STEERING): every control here is well past the platform
+/* Over the hero photo — same shadow deal as every other word there. */
+.sync-home-body .sync-error-message {
+  text-shadow: 0 1px 8px rgba(0, 0, 0, 0.8);
+}
+
+/* Gloves-first (STEERING): every block action here is well past the platform
    minimum, even though this is ground UI. */
-.sync-sheet-body ion-button {
+.sync-home-body ion-button[expand="block"],
+.sync-login-body ion-button[expand="block"] {
   --padding-top: 1.25rem;
   --padding-bottom: 1.25rem;
   margin-bottom: 0.75rem;
+}
+
+/* Quiet, secondary actions (Restore Purchases, Manage subscription): present
+   for the pilot who is looking for them, silent for everyone else. */
+.sync-quiet-action {
+  --padding-top: 1rem;
+  --padding-bottom: 1rem;
+}
+
+/* Apple's HIG wants their sign-in button monochrome — never the app's accent
+   color — and the white variant on dark backgrounds. This app imports
+   dark.always.css (sunlight-readable, STEERING), so white it is, always. */
+.sync-siwa-button {
+  --background: #fff;
+  --background-activated: #e6e6e6;
+  --background-focused: #e6e6e6;
+  --background-hover: #e6e6e6;
+  --color: #000;
 }
 
 .sync-selfhost-toggle {
@@ -150,4 +189,8 @@
   font-size: 0.8125rem;
   line-height: 1.4;
   margin-top: 0.5rem;
+}
+
+.sync-fine-print a {
+  color: inherit;
 }

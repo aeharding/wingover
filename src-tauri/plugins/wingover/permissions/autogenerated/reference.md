@@ -270,6 +270,32 @@ Denies the share_file command without any pre-configured scope.
 <tr>
 <td>
 
+`wingover:allow-sign-in-with-apple`
+
+</td>
+<td>
+
+Enables the sign_in_with_apple command without any pre-configured scope.
+
+</td>
+</tr>
+
+<tr>
+<td>
+
+`wingover:deny-sign-in-with-apple`
+
+</td>
+<td>
+
+Denies the sign_in_with_apple command without any pre-configured scope.
+
+</td>
+</tr>
+
+<tr>
+<td>
+
 `wingover:allow-start-watch`
 
 </td>

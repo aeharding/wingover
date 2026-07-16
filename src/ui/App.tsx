@@ -26,7 +26,7 @@ import LogbookPage from "./pages/LogbookPage";
 import PlanPage from "./pages/PlanPage";
 import SettingsPage from "./pages/SettingsPage";
 import { SettingsProvider } from "./settings/SettingsContext";
-import { SyncSheetProvider } from "./sync/SyncSheet";
+import { SyncSheetsProvider } from "./sync/SyncSheets";
 
 setupIonicReact({ mode: "ios" });
 
@@ -40,11 +40,11 @@ export default function App() {
     <IonApp>
       <SettingsProvider>
         {/* Mounted above AppBody, which sheds the whole nav shell during a
-            flight — the sheet outlives that, so it can be raised from
+            flight — the sheets outlive that, so either can be raised from
             anywhere without each page owning a modal. */}
-        <SyncSheetProvider>
+        <SyncSheetsProvider>
           <AppBody />
-        </SyncSheetProvider>
+        </SyncSheetsProvider>
       </SettingsProvider>
     </IonApp>
   );
