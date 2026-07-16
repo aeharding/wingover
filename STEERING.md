@@ -15,7 +15,7 @@ These mirror Voyager for Lemmy, by the same author:
 - **Open source, AGPL-3.0.** Development in the open, contributions welcome.
 - **Privacy-first, no backend by default.** No telemetry, no analytics, no crash reporters. Out of the box there is no account and no server: data stays on-device and the only network traffic is map tile fetches, with the tile endpoint user-visible and eventually user-configurable. Sync is the sole exception and is strictly opt-in — off until a pilot turns it on, and then only to the server they chose. The app is whole without it; nothing degrades if it is never enabled.
 - **Local-first, data ownership.** Open export formats (GPX; IGC candidate). An uninstall or a dead phone should never be the only copy — export/import is core, not an afterthought.
-- **Native feel.** Ionic-polished UI that respects platform conventions, matching the bar Voyager sets.
+- **Native feel.** Ionic-polished UI that respects platform conventions, matching the bar Voyager sets. Color is authored in `display-p3` — every target device is wide-gamut, so it is the baseline, and sRGB fallbacks are never added.
 - **Reliability over features.** A smaller app that never drops a track beats a bigger one that sometimes does.
 
 ## Scope
