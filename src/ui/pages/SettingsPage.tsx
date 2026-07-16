@@ -14,7 +14,7 @@ import {
   IonToggle,
   IonToolbar,
 } from "@ionic/react";
-import { closeCircle } from "ionicons/icons";
+import { checkmarkOutline, closeCircle } from "ionicons/icons";
 import { useEffect, useState, useSyncExternalStore } from "react";
 
 import {
@@ -78,6 +78,9 @@ export default function SettingsPage() {
               }`}
             >
               {off && <IonIcon icon={closeCircle} aria-hidden="true" />}
+              {!off && syncNote === "On" && (
+                <IonIcon icon={checkmarkOutline} aria-hidden="true" />
+              )}
               {syncNote}
             </IonNote>
           </IonItem>
