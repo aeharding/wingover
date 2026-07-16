@@ -15,9 +15,11 @@ platform :ios do
       api_key_path: "authkey.json",
       # One-shot: the App ID gained the Sign in with Apple capability
       # (2026-07-15) and the stored profile predates it — force regenerates
-      # the profile with the capability baked in. Revert once a build ships:
+      # the profile with the capability baked in, and readonly must yield or
+      # match can't write the new profile back. Revert once a build ships:
       # left on, every run rewrites the shared voyager-match repo.
       force: true,
+      readonly: false,
     )
 
     build_number = ENV.fetch("BUILD_NUMBER", "1")
