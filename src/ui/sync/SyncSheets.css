@@ -202,9 +202,8 @@
   gap: 0.3em;
 }
 
-/* Full-saturation status colors. display-p3 is this app's color baseline —
-   every target device is wide-gamut — so no sRGB fallbacks, here or anywhere
-   (STEERING). */
+/* Full-saturation status colors. P3 support is baseline on every target
+   device, so display-p3 colors never carry sRGB fallbacks (STEERING). */
 .settings-sync-off {
   color: color(display-p3 1 0 0);
 }
