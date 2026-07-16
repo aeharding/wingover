@@ -201,3 +201,15 @@
   align-items: center;
   gap: 0.3em;
 }
+
+/* Full-saturation status colors, P3 where the display has it (every target
+   iPhone does), sRGB primaries as the fallback line. */
+.settings-sync-off {
+  color: #f00;
+  color: color(display-p3 1 0 0);
+}
+
+.settings-sync-on {
+  color: #0f0;
+  color: color(display-p3 0 1 0);
+}
