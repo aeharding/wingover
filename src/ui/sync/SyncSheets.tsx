@@ -4,44 +4,28 @@ import {
   type ReactNode,
   useCallback,
   useContext,
-  useMemo,
   useState,
 } from "react";
 
-import { LoginSheet } from "./LoginSheet";
-import { SubscriptionSheet } from "./SubscriptionSheet";
+import { SyncSheet } from "./SyncSheet";
 
 import "./SyncSheets.css";
 
 /**
- * Sync's two surfaces, per SYNC-UX.md: Subscription (payments only) and
- * Log In (connection only). They live in modals, not pages, so either can be
- * raised from anywhere — the Settings rows today, a post-flight nudge later —
- * without every caller owning a modal or the router growing screens for them.
- * Mounted once at the app root; open them with useSyncSheets().
+ * One sheet for everything sync (SYNC-UX.md): a modal, not a page, so it can
+ * be raised from anywhere — the Settings row today, a post-flight nudge or an
+ * empty logbook later — without every caller owning a modal or the router
+ * growing a screen for it. Mounted once at the app root; open it with
+ * useSyncSheet().
  */
-type Sheet = "subscription" | "login" | null;
+const SyncSheetContext = createContext<() => void>(() => {});
 
-interface SyncSheetOpeners {
-  openSubscription: () => void;
-  openLogin: () => void;
-}
-
-const SyncSheetsContext = createContext<SyncSheetOpeners>({
-  openSubscription: () => {},
-  openLogin: () => {},
-});
-
-export function useSyncSheets(): SyncSheetOpeners {
-  return useContext(SyncSheetsContext);
+export function useSyncSheet(): () => void {
+  return useContext(SyncSheetContext);
 }
 
 export function SyncSheetsProvider({ children }: { children: ReactNode }) {
-  // One sheet at a time: the rails are separate, and the cross-links between
-  // them (self-host from the pitch, Resubscribe from read-only) are sheet
-  // SWITCHES — setting this straight to the other value dismisses one modal
-  // and presents the other.
-  const [sheet, setSheet] = useState<Sheet>(null);
+  const [open, setOpen] = useState(false);
   const [presenting, setPresenting] = useState<HTMLElement | null>(null);
 
   // Full-screen card modal: `presentingElement` is what makes the page behind
@@ -49,55 +33,25 @@ export function SyncSheetsProvider({ children }: { children: ReactNode }) {
   // Resolved at present time, not at mount: a live flight sheds the whole nav
   // shell — router outlet included — and a stale ref would present against a
   // detached element. Null just means a plain full-screen modal.
-  const open = useCallback((which: Exclude<Sheet, null>) => {
+  const present = useCallback(() => {
     setPresenting(document.querySelector<HTMLElement>("ion-router-outlet"));
-    setSheet(which);
+    setOpen(true);
   }, []);
 
-  const openers = useMemo<SyncSheetOpeners>(
-    () => ({
-      openSubscription: () => open("subscription"),
-      openLogin: () => open("login"),
-    }),
-    [open],
-  );
-
-  const close = useCallback(() => setSheet(null), []);
-
-  // NOT `() => setSheet(null)`: during a sheet switch the outgoing modal's
-  // dismiss lands AFTER the state already points at the incoming sheet, and an
-  // unconditional null would close it in the same breath it opened.
-  const dismissed = useCallback(
-    (which: Sheet) => setSheet((current) => (current === which ? null : current)),
-    [],
-  );
+  const close = useCallback(() => setOpen(false), []);
 
   return (
-    <SyncSheetsContext.Provider value={openers}>
+    <SyncSheetContext.Provider value={present}>
       {children}
       <IonModal
-        isOpen={sheet === "subscription"}
-        onDidDismiss={() => dismissed("subscription")}
+        isOpen={open}
+        onDidDismiss={close}
         presentingElement={presenting ?? undefined}
       >
         {/* Keyed on open so a dismissed sheet reopens at its root instead of
-            wherever its inner nav was left — same for Log In below. */}
-        <SubscriptionSheet
-          key={String(sheet === "subscription")}
-          onClose={close}
-        />
+            wherever its inner nav was left. */}
+        <SyncSheet key={String(open)} onClose={close} />
       </IonModal>
-      <IonModal
-        isOpen={sheet === "login"}
-        onDidDismiss={() => dismissed("login")}
-        presentingElement={presenting ?? undefined}
-      >
-        <LoginSheet
-          key={String(sheet === "login")}
-          onClose={close}
-          onSubscription={openers.openSubscription}
-        />
-      </IonModal>
-    </SyncSheetsContext.Provider>
+    </SyncSheetContext.Provider>
   );
 }

@@ -30,69 +30,56 @@ with a self-host login is _support_, and the UI must not treat it as a
 misconfiguration. A lapse kills entitlement, never the login — matching the
 sync engine, which drops to pull-only and keeps the credential.
 
-Neither surface may absorb the other's verbs. The Subscription dialog never
-shows a credential form, a status readout, or a logout. The Log In page never
-shows a price.
+The rails share one sheet but never blur: payment verbs (Subscribe, Restore,
+Manage, Resubscribe) and connection verbs (Sign in, Turn off sync, the
+self-host form, Delete account) appear only in the states that earn them, and
+no state conflates the two.
 
-## Settings: exactly two rows
+## Settings: one row
 
 ```
-Logged out:                          Logged in:
-┌───────────────────────────────┐    ┌───────────────────────────────┐
-│ Subscription     Local Only  ›│    │ Subscription         Active  ›│
-│ Log In                       ›│    │ Log In                   On  ›│
-└───────────────────────────────┘    └───────────────────────────────┘
+┌───────────────────────────────┐
+│ Sync             Local Only  ›│      ← red when nothing backs the flights up
+└───────────────────────────────┘
 ```
 
-- **Subscription** — note reads `Active` / `Expired` / red `Local Only` when
-  nothing is backing the flights up / `—` when a self-host login is. Opens
-  the Subscription dialog. Present on **all platforms**. On the PWA the pitch
-  itself leads with identity: **Sign in with Apple sits directly on the
-  landing page** (with the self-host link beneath). Sign in holding a valid
-  subscription and the sheet lands on the status view — done, the common
-  case, one tap. Signed in without one, the pilot is prompted to subscribe
-  (web checkout when it exists; until then the prompt points at the iOS app).
-  A web purchase never happens before an account exists to attach it to.
-- **Log In** — the label NEVER changes (a row that renames itself after a
-  purchase reads as the row disappearing — tried, disliked, reverted); the
-  connection state is its note (`On` / `Not subscribed` / `Read-only` /
-  `Paused` / `Problem`), absent while logged out. Both states open the same
-  page, also titled Log In, always.
+One row, one question: are the flights backed up? The note is the sync state
+(`On` / `Read-only` / `Paused` / `Not subscribed` / `Problem`), and a red
+`Local Only` when sync is off — off is never a neutral dash. Payment facts
+(Active/Expired, price) live inside the sheet. The two rails stay real in the
+architecture and on the server; they stopped being Settings geography after
+both two-rows and a transforming label shipped and got reverted — pilots
+think in one question, and the org chart of the billing system is not their
+problem.
 
-No third row, ever. Sync earns two lines of Settings and no more (STEERING:
-the app is whole without it).
+## The Sync sheet
 
-## The Subscription dialog (payments only)
+One modal, every view derived from state, nothing to operate that the state
+doesn't earn:
 
-Pitch (hero photo, the three reasons), Apple's localized price on the
-Subscribe button, Restore Purchases, Manage Subscription (Apple's sheet —
-cancellation lives with Apple and we say so), and the required fine print
-(price, period, terms of use, privacy policy).
+- **Nothing yet** — the pitch. iOS: **Subscribe** is primary (no login exists
+  or is needed — the transaction is the identity), **Sign in with Apple**
+  beneath it for an account born elsewhere (the web/Stripe future), Restore
+  Purchases and **Self-hosted config** as quiet links. Web: Sign in with
+  Apple is primary — it is the account door, and step one of web checkout
+  once that exists — over the Self-hosted config link. Paywall fine print
+  (price, period, terms, privacy) lives here.
+- **Connected** — status headline (On, last synced) + Turn off sync +
+  Manage Subscription (StoreKit's native sheet — the only surface that shows
+  sandbox subs) + "Use on your computer" (the SIWA link catch-up) + Delete
+  account.
+- **Lapsed** — Read-only + Resubscribe, same screen; the remedy needs no
+  navigation.
+- **Signed in, unsubscribed** — "Not subscribed" + Subscribe (the web says
+  "subscribe on your iPhone" until checkout exists) + Sign out.
+- **Subscribed but off** — Off + "Turn on sync". Rare by construction: the
+  standing opt-in reconnects at launch, so only an explicit Turn off lands
+  here.
 
-One quiet cross-link is allowed: "Self-host config", and it pushes the
-own-server form IN PLACE — a nav push inside this sheet with a back chevron to
-the pitch, never a close-and-reopen of another modal. The form remains the
-Log In rail's page; this is a shortcut to it, not a second copy. Self-host
-must always be discoverable from the pitch — hiding the free path is the
-moment honest FOSS monetization stops being honest.
-
-## The Log In page (connection only)
-
-**Logged out — the doors, in order:**
-
-1. **Sign in with Apple** — the one hosted door, any platform. It prefers the
-   device's StoreKit transaction internally, so a subscribed iPhone lands on
-   its account either way, and an unlinked one self-heals (junction 4). A
-   separate "Use my subscription" button shipped briefly and confused more
-   than it clarified — two doors to one room; Restore Purchases on the
-   Subscription dialog remains the payments-rail door and App Review's
-   restore.
-2. **Self-hosted config** — the CouchDB form. Works today, everywhere, free.
-
-**Logged in:** status headline and detail, **Turn off sync**, and — depending
-on state — **Link Apple Account** (connected via subscription but not yet
-linked), **Connect another device** (interim; see below), **Delete account**
-_(later, once identity exists)_, and the read-only cross-link (below).
+Self-hosted config pushes the CouchDB form IN PLACE — a nav push inside the
+one sheet with a back chevron, never a second modal — and must always be
+discoverable from the pitch: hiding the free path is the moment honest FOSS
+monetization stops being honest.
 
 ## Junctions — the only four places the rails touch
 
@@ -104,21 +91,26 @@ Each is deliberate; anything else touching across rails is drift.
 2. **The post-purchase interstitial.** Immediately after purchase: _"Want your
    flights on your computer? Link your Apple Account — one tap."_ Native SIWA,
    Face ID, **Skip always visible** (account creation must stay optional —
-   guideline 5.1.1). Skippers can link any time from the Log In page.
+   guideline 5.1.1). Skippers can link any time from the sheet ("Use on your computer").
    **Supporter guard:** if the pilot is already logged in to their own server,
    the interstitial must not clobber that — "You're synced to your own server —
    keep it (default), or switch to hosted?"
-3. **Read-only cross-links to Subscription.** The lapse is discovered on the
-   Log In rail; the remedy lives on the other rail. The read-only status
-   screen carries exactly one deep link: "Your subscription ended —
-   Resubscribe." Without it the separation strands the person we most want
+3. **Read-only offers the remedy in place.** The lapse is discovered on the
+   connection rail; the remedy is a purchase — and it sits on the same
+   screen: the read-only state renders Resubscribe directly. A lapsed pilot
+   never navigates to fix it, because that pilot is the one we most want
    back.
-4. **The transaction outranks the sign-in.** A device whose StoreKit holds a
-   subscription logs in through it — landing on the account the subscription
-   feeds — and links the Apple ID as it goes, healing a skipped link step. A
-   bare sign-in (every browser; an unsubscribed iPhone) lands on, or mints,
-   the sign-in-born account: "Not subscribed" is a resting state, never an
-   error. A sub pointing at a never-entitled placeholder yields to a real
+4. **The transaction outranks the sign-in — and is a STANDING opt-in.** A
+   device whose StoreKit holds a subscription logs in through it — landing on
+   the account the subscription feeds — and links the Apple ID as it goes,
+   healing a skipped link step. It also connects ITSELF at launch when no
+   login is held (fresh install, reinstall, a connect that failed halfway):
+   holding the subscription is the consent, so sync just works, the same way
+   the original purchase needed no login. The one thing that outranks it is
+   an explicit "Turn off sync", which persists across launches — off means
+   off until the pilot says otherwise. A bare sign-in (every browser; an
+   unsubscribed iPhone) lands on, or mints, the sign-in-born account: "Not
+   subscribed" is a resting state, never an error. A sub pointing at a never-entitled placeholder yields to a real
    account at link time; a sub linked to a different real account is a true
    conflict. (A pilot who revokes Sign in with Apple in their Apple settings
    just severs the link — Apple's server notifications land at
@@ -180,7 +172,7 @@ deletion, the one way an account ends.)
 
 ## Interim device linking (until Sign in with Apple ships)
 
-**Connect another device** on the iOS Log In page reveals the CouchDB
+**Connect another device** on the iOS Sync sheet reveals the CouchDB
 server/database/username/password with copy buttons; the pilot pastes them
 into the PWA's own-server form. It is the self-host path wearing a different
 hat — zero new sync code, honest about what it is, and removed the release
@@ -233,8 +225,8 @@ destructive act — required in-app once linking exists (guideline 5.1.1(v)).
 | 3.1.3(b) — multiplatform services | Web-subscribed pilots may sign in on iOS because IAP is also offered |
 | 4.8 — login services | SIWA is the only social login; trivially satisfied |
 | 5.1.1 — no forced account creation | Purchase works with zero identity; linking is skippable |
-| 5.1.1(v) — account deletion | In-app, on the Log In page, same milestone as linking |
-| Paywall metadata | Price, period, terms, privacy on the Subscription dialog |
+| 5.1.1(v) — account deletion | In-app, on the Sync sheet, same milestone as linking |
+| Paywall metadata | Price, period, terms, privacy on the pitch |
 | Family Sharing | **Off, deliberately** — identity is the transaction; sharing it is undesigned. Enforced only by an App Store Connect toggle; the store code tolerates a shared originalTransactionId defensively |
 | The login gate | **Our invention; no guideline blesses it.** Refusing a login until a sub stops renewing could read to a reviewer as holding access hostage. Accepted risk: the refusal must offer the refund and manage doors in the same breath, never bare — and the copy gets review-eyes before it ships (Stripe milestone) |
 
@@ -274,6 +266,6 @@ destructive act — required in-app once linking exists (guideline 5.1.1(v)).
   credentials on new devices; after that the app speaks basic auth to a stock
   CouchDB and nothing else (STEERING). If a design requires a live session to
   sync, it is wrong.
-- **The Log In page is not an account system.** No profiles, no avatars, no
+- **The Sync sheet is not an account system.** No profiles, no avatars, no
   settings that live "in the account." Possessions sync; preferences are
   per-device.

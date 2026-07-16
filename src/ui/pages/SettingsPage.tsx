@@ -24,41 +24,20 @@ import {
 import * as sync from "../../sync";
 import { useSettings } from "../settings/SettingsContext";
 import { describe as describeSync } from "../sync/describe";
-import { useSyncSheets } from "../sync/SyncSheets";
+import { useSyncSheet } from "../sync/SyncSheets";
 
 export default function SettingsPage() {
   const { units, setUnits } = useSettings();
-  const { openSubscription, openLogin } = useSyncSheets();
+  const openSync = useSyncSheet();
   const syncStatus = useSyncExternalStore(sync.subscribe, sync.currentStatus);
-  const account = useSyncExternalStore(sync.subscribe, sync.currentAccount);
-  const loggedIn = syncStatus.state !== "off";
-  const [appleSub, setAppleSub] = useState<"active" | "expired" | null>(null);
 
-  useEffect(() => {
-    void sync.appleSubscriptionState().then(setAppleSub);
-  }, []);
-
-  // Subscription is the payments rail (SYNC-UX.md), and its note reflects the
-  // RAIL, not the login: StoreKit outranks the held credential, so the
-  // supporter (paying while self-hosting) and the lapsed pilot who turned
-  // sync off still read the truth instead of a dash. With no subscription at
-  // all, the note says what that MEANS for the flights: "Local Only", red,
-  // unless something else (self-host) is backing them up.
-  const backedUp = ["syncing", "paused", "connecting"].includes(
-    syncStatus.state,
-  );
-  const subscriptionNote =
-    appleSub === "active"
-      ? "Active"
-      : account?.kind === "apple" && syncStatus.state !== "unsubscribed"
-        ? account.entitled
-          ? "Active"
-          : "Expired"
-        : appleSub === "expired"
-          ? "Expired"
-          : backedUp
-            ? "—"
-            : "Local Only";
+  // One row, one question: are the flights backed up? Off is never a neutral
+  // dash — it means the flights live only on this phone, and that gets said,
+  // in red. Everything subscription-shaped lives inside the sheet.
+  const syncNote =
+    syncStatus.state === "off"
+      ? "Local Only"
+      : describeSync(syncStatus).label;
   const [maptilerKey, setMaptilerKey] = useState("");
   const [autoEnd, setAutoEnd] = useState(true);
 
@@ -86,32 +65,14 @@ export default function SettingsPage() {
       </IonHeader>
       <IonContent>
         <IonList>
-          <IonItem
-            button
-            detail
-            onClick={openSubscription}
-            data-testid="settings-subscription"
-          >
-            <IonLabel>Subscription</IonLabel>
+          <IonItem button detail onClick={openSync} data-testid="settings-sync">
+            <IonLabel>Sync</IonLabel>
             <IonNote
               slot="end"
-              color={subscriptionNote === "Local Only" ? "danger" : undefined}
+              color={syncNote === "Local Only" ? "danger" : undefined}
             >
-              {subscriptionNote}
+              {syncNote}
             </IonNote>
-          </IonItem>
-          {/* The label never changes — a row that renames itself after a
-              purchase reads as the row disappearing. State lives in the note. */}
-          <IonItem
-            button
-            detail
-            onClick={openLogin}
-            data-testid="settings-login"
-          >
-            <IonLabel>Log In</IonLabel>
-            {loggedIn && (
-              <IonNote slot="end">{describeSync(syncStatus).label}</IonNote>
-            )}
           </IonItem>
           <IonItem>
             <IonInput
