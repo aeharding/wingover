@@ -53,7 +53,7 @@ async function enableSync(
   );
 }
 
-/** Settings → Log In → Use my own server: the door every self-host test walks. */
+/** Settings → Log In → Self-hosted config: the door every self-host test walks. */
 async function openOwnServerForm(page: import("@playwright/test").Page) {
   await page.getByTestId("settings-login").click();
   await page.getByTestId("login-own-server").click();
@@ -227,8 +227,11 @@ test("the two rails split cleanly: Subscription pitches, Log In connects", async
   // Two rows, two rails (SYNC-UX.md): Subscription is payments, Log In is
   // connection. The rows report state without opening anything — a pilot
   // shouldn't have to go looking to find out whether their flights are
-  // backed up.
-  await expect(page.getByTestId("settings-subscription")).toContainText("—");
+  // backed up. With no subscription AND nothing backing up, the note says
+  // what that means: Local Only, in red.
+  await expect(page.getByTestId("settings-subscription")).toContainText(
+    "Local Only",
+  );
   await expect(page.getByTestId("settings-login")).toContainText("Log In");
 
   // The Subscription sheet is a pitch, never a status screen — and a browser

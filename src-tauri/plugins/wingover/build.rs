@@ -14,6 +14,7 @@ const COMMANDS: &[&str] = &[
     "storekit_products",
     "storekit_current_entitlement",
     "storekit_purchase",
+    "storekit_manage_subscriptions",
     "sign_in_with_apple",
 ];
 

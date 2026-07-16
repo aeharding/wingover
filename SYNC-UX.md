@@ -78,13 +78,14 @@ moment honest FOSS monetization stops being honest.
 
 **Logged out — the doors, in order:**
 
-1. **Sign in with Apple** — hosted subscribers, any platform; on iOS an
-   unlinked sign-in self-heals through StoreKit (junction 4).
-2. **Use my subscription** _(iOS only)_ — entitlement probe via StoreKit; one
-   tap, no credentials. This is how "turned sync off, wants back in" and
-   "new phone" reconnect without touching the payments surface. It also
-   satisfies App Review's restore expectation.
-3. **Use my own server** — the CouchDB form. Works today, everywhere, free.
+1. **Sign in with Apple** — the one hosted door, any platform. It prefers the
+   device's StoreKit transaction internally, so a subscribed iPhone lands on
+   its account either way, and an unlinked one self-heals (junction 4). A
+   separate "Use my subscription" button shipped briefly and confused more
+   than it clarified — two doors to one room; Restore Purchases on the
+   Subscription dialog remains the payments-rail door and App Review's
+   restore.
+2. **Self-hosted config** — the CouchDB form. Works today, everywhere, free.
 
 **Logged in:** status headline and detail, **Turn off sync**, and — depending
 on state — **Link Apple Account** (connected via subscription but not yet
@@ -212,6 +213,8 @@ destructive act — required in-app once linking exists (guideline 5.1.1(v)).
 
 ## Copy rules
 
+- No em dashes in user-facing copy. Periods, commas, semicolons, colons or
+  parentheses instead.
 - The word "PWA" never appears. Say "on your computer."
 - The iOS app never states or implies web pricing (anti-steering; rules vary
   by storefront and year — silence is the one answer safe everywhere).

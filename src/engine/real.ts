@@ -42,7 +42,7 @@ const STALE_FLIGHT_MS = 15 * 60 * 1000;
 const STORAGE_ERROR: EngineError = {
   code: "storage",
   message:
-    "Storage writes are failing — this flight is not being saved. Keep the app open.",
+    "Storage writes are failing. This flight is not being saved. Keep the app open.",
 };
 
 const BUSY_ERROR: EngineError = {
@@ -627,7 +627,7 @@ export class GeolocationRecordingEngine implements RecordingEngine {
         }
       : {
           code: "unavailable",
-          message: "GPS unavailable — check that location services are on.",
+          message: "GPS unavailable. Check that location services are on.",
         };
     this.invalidate();
   }

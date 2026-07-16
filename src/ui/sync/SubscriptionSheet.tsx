@@ -5,6 +5,7 @@ import {
   IonIcon,
   IonNav,
   IonNavLink,
+  IonSpinner,
   IonTitle,
   IonToolbar,
 } from "@ionic/react";
@@ -18,6 +19,7 @@ import { useEffect, useState, useSyncExternalStore } from "react";
 
 import { isTauri } from "../../engine/platform";
 import * as sync from "../../sync";
+import { openExternal } from "../externalLinks";
 import { SelfHostPage } from "./SelfHostPage";
 
 /**
@@ -168,6 +170,11 @@ function SubscriptionHome({ onClose }: { onClose: () => void }) {
                 })
               }
               onSkipLink={() => setLinkOffer("hidden")}
+              // The healer for "paid, but the connect call failed": the rail
+              // shows Active from StoreKit while no login is held. One tap
+              // re-runs the connect without touching the purchase.
+              showConnect={isTauri() && status.state === "off"}
+              onConnect={() => run(() => sync.connectWithSubscription())}
             />
           ) : (
             <>
@@ -194,7 +201,7 @@ function SubscriptionHome({ onClose }: { onClose: () => void }) {
 
               {supporting ? (
                 <p className="sync-fine-print" data-testid="sync-supporting">
-                  Subscribed — thank you for supporting Wingover. Your own
+                  Subscribed. Thank you for supporting Wingover; your own
                   server stays connected.
                 </p>
               ) : product ? (
@@ -206,20 +213,24 @@ function SubscriptionHome({ onClose }: { onClose: () => void }) {
                   onClick={buy}
                   data-testid="sync-subscribe"
                 >
-                  Subscribe — {product.displayPrice}/month
+                  {busy ? (
+                    <IonSpinner name="crescent" />
+                  ) : (
+                    `Subscribe for ${product.displayPrice}/month`
+                  )}
                 </IonButton>
               ) : isTauri() ? (
                 // StoreKit exists but has no product behind it, so a tap could
                 // only fail — the button says so rather than lying.
                 <IonButton expand="block" disabled data-testid="sync-subscribe">
-                  Subscribe — coming soon
+                  Subscribe (coming soon)
                 </IonButton>
               ) : account ? (
                 // Already signed in, never subscribed — the prompt-to-
                 // subscribe resting state (SYNC-UX.md). Web checkout replaces
                 // this sentence when it exists.
                 <p className="sync-fine-print" data-testid="sync-signedin-web">
-                  Signed in — subscribe in the iOS app to start syncing.
+                  Signed in. Subscribe in the iOS app to start syncing.
                 </p>
               ) : (
                 // The PWA pitch leads with identity, right here (SYNC-UX.md):
@@ -255,7 +266,8 @@ function SubscriptionHome({ onClose }: { onClose: () => void }) {
                   and must always be discoverable from the pitch — hiding the
                   free path is where honest FOSS monetization stops being
                   honest. Pushed in place: the tap already said what the pilot
-                  wants, and back returns them right here. */}
+                  wants, and back returns them right here. Styled like Restore
+                  above: quiet siblings. */}
               <IonNavLink
                 routerDirection="forward"
                 component={() => (
@@ -263,12 +275,12 @@ function SubscriptionHome({ onClose }: { onClose: () => void }) {
                 )}
               >
                 <IonButton
-                  expand="block"
                   fill="clear"
-                  className="sync-selfhost-toggle"
+                  size="small"
+                  className="sync-quiet-action"
                   data-testid="sync-goto-login"
                 >
-                  Self-host config
+                  Self-hosted config
                 </IonButton>
               </IonNavLink>
             </>
@@ -295,6 +307,8 @@ function Subscribed({
   linkOffer,
   onLink,
   onSkipLink,
+  showConnect,
+  onConnect,
 }: {
   entitled: boolean;
   product: sync.StoreProduct | null;
@@ -304,6 +318,8 @@ function Subscribed({
   linkOffer: "hidden" | "offered" | "linked";
   onLink: () => void;
   onSkipLink: () => void;
+  showConnect: boolean;
+  onConnect: () => void;
 }) {
   return (
     <>
@@ -320,10 +336,21 @@ function Subscribed({
 
       {problem && <p className="sync-error-message">{problem}</p>}
 
+      {showConnect && (
+        <IonButton
+          expand="block"
+          disabled={busy}
+          onClick={onConnect}
+          data-testid="sync-connect-device"
+        >
+          {busy ? <IonSpinner name="crescent" /> : "Turn on sync"}
+        </IonButton>
+      )}
+
       {linkOffer === "offered" && (
         <>
           <p className="sync-fine-print">
-            Want your flights on your computer? Link your Apple Account — one
+            Want your flights on your computer? Link your Apple Account: one
             tap, and you can sign in anywhere.
           </p>
           <IonButton
@@ -349,7 +376,7 @@ function Subscribed({
       )}
       {linkOffer === "linked" && (
         <p className="sync-fine-print" data-testid="sync-link-done">
-          Linked — sign in with Apple on your computer to sync there.
+          Linked. Sign in with Apple on your computer to sync there.
         </p>
       )}
 
@@ -361,7 +388,11 @@ function Subscribed({
             onClick={onResubscribe}
             data-testid="sync-resubscribe"
           >
-            Resubscribe — {product.displayPrice}/month
+            {busy ? (
+              <IonSpinner name="crescent" />
+            ) : (
+              `Resubscribe for ${product.displayPrice}/month`
+            )}
           </IonButton>
         ) : (
           // No product means no App Store right now (offline at a remote
@@ -371,18 +402,26 @@ function Subscribed({
             className="sync-fine-print"
             data-testid="sync-resubscribe-unavailable"
           >
-            Resubscribing needs the App Store — check your connection and
+            Resubscribing needs the App Store. Check your connection and
             reopen this screen.
           </p>
         ))}
 
-      {/* A plain anchor: under Tauri the external-link handler hands it to the
-          system browser; billing lives with Apple, never in here. */}
+      {/* Native: StoreKit's own management sheet — the only surface that
+          shows sandbox/TestFlight subscriptions. Web: the public page. */}
       <IonButton
         expand="block"
         fill="outline"
         color="medium"
-        href="https://apps.apple.com/account/subscriptions"
+        onClick={() => {
+          if (isTauri()) {
+            void sync.manageSubscriptions().catch(() => {
+              openExternal("https://apps.apple.com/account/subscriptions");
+            });
+          } else {
+            openExternal("https://apps.apple.com/account/subscriptions");
+          }
+        }}
         data-testid="sync-manage"
       >
         Manage Subscription

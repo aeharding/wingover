@@ -105,7 +105,7 @@ describe("manualProvider", () => {
       },
     });
     await expect(manualProvider(input).obtain()).rejects.toThrow(
-      /locked this account. Wait five minutes/,
+      /locked this account; wait five minutes/,
     );
   });
 

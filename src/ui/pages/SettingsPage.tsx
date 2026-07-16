@@ -41,19 +41,24 @@ export default function SettingsPage() {
   // Subscription is the payments rail (SYNC-UX.md), and its note reflects the
   // RAIL, not the login: StoreKit outranks the held credential, so the
   // supporter (paying while self-hosting) and the lapsed pilot who turned
-  // sync off still read the truth instead of "—". A self-host login with no
-  // subscription reads "—" — also true, and the standing, non-naggy
-  // invitation to support.
+  // sync off still read the truth instead of a dash. With no subscription at
+  // all, the note says what that MEANS for the flights: "Local Only", red,
+  // unless something else (self-host) is backing them up.
+  const backedUp = ["syncing", "paused", "connecting"].includes(
+    syncStatus.state,
+  );
   const subscriptionNote =
     appleSub === "active"
       ? "Active"
-      : account?.kind === "apple"
+      : account?.kind === "apple" && syncStatus.state !== "unsubscribed"
         ? account.entitled
           ? "Active"
           : "Expired"
         : appleSub === "expired"
           ? "Expired"
-          : "—";
+          : backedUp
+            ? "—"
+            : "Local Only";
   const [maptilerKey, setMaptilerKey] = useState("");
   const [autoEnd, setAutoEnd] = useState(true);
 
@@ -88,7 +93,12 @@ export default function SettingsPage() {
             data-testid="settings-subscription"
           >
             <IonLabel>Subscription</IonLabel>
-            <IonNote slot="end">{subscriptionNote}</IonNote>
+            <IonNote
+              slot="end"
+              color={subscriptionNote === "Local Only" ? "danger" : undefined}
+            >
+              {subscriptionNote}
+            </IonNote>
           </IonItem>
           {/* Transforms like iOS Settings' Apple ID row: "Log In" is a thing
               you do, "Sync" is a thing you have. */}
