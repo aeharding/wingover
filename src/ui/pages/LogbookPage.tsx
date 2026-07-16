@@ -25,7 +25,7 @@ import { useEffect, useRef, useState } from "react";
 import { Virtualizer } from "virtua";
 
 import { formatDistance, formatDuration } from "../../flight/format";
-import { type Flight, listFlights } from "../../storage/db";
+import { type Flight, listFlights, onDocsChanged } from "../../storage/db";
 import { importGpxFiles } from "../../storage/importGpx";
 import { useSettings } from "../settings/SettingsContext";
 import { useFlightActions } from "../useFlightActions";
@@ -61,6 +61,10 @@ export default function LogbookPage() {
   useIonViewWillEnter(() => {
     refresh();
   });
+
+  // A flight replicated in from another device appears without a refresh —
+  // the feed fires for pulls and local writes alike.
+  useEffect(() => onDocsChanged("flight", () => void refresh()), []);
 
   const { exportFlight, confirmDeleteFlight } = useFlightActions();
 

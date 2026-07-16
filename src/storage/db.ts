@@ -144,6 +144,60 @@ export async function saveFlight(flight: Flight, fixes: Fix[]) {
   });
 }
 
+/**
+ * UI reactivity: one live changes feed, started on first subscriber, fanned
+ * out by doc-id prefix ("flight" / "pin" / "track"). It fires for local
+ * writes AND replicated pulls alike — which is what makes a flight landing
+ * from another device appear in the logbook without a refresh. Coalesced
+ * with a short timer: replication delivers in batches, and one re-render per
+ * batch is plenty.
+ */
+type DocPrefix = "flight" | "track" | "pin";
+const changeListeners = new Map<DocPrefix, Set<() => void>>();
+let changesFeed: PouchDB.Core.Changes<object> | null = null;
+
+function ensureChangesFeed() {
+  if (changesFeed) return;
+  changesFeed = db.changes({ since: "now", live: true });
+  const pending = new Set<string>();
+  let timer: ReturnType<typeof setTimeout> | null = null;
+  changesFeed
+    .on("change", (change) => {
+      pending.add(change.id.split(":")[0] ?? "");
+      timer ??= setTimeout(() => {
+        timer = null;
+        const prefixes = [...pending];
+        pending.clear();
+        for (const prefix of prefixes) {
+          const listeners = changeListeners.get(prefix as DocPrefix);
+          if (listeners) for (const listener of listeners) listener();
+        }
+      }, 50);
+    })
+    .on("error", () => {
+      // A dead feed silently stops notifying forever; let the next
+      // subscription (or the next call here) start a fresh one.
+      changesFeed = null;
+    });
+}
+
+export function onDocsChanged(
+  prefix: DocPrefix,
+  listener: () => void,
+): () => void {
+  ensureChangesFeed();
+  let listeners = changeListeners.get(prefix);
+  if (!listeners) {
+    listeners = new Set();
+    changeListeners.set(prefix, listeners);
+  }
+  listeners.add(listener);
+  const set = listeners;
+  return () => {
+    set.delete(listener);
+  };
+}
+
 export async function listFlights(): Promise<Flight[]> {
   const result = await db.allDocs<FlightDoc>({
     include_docs: true,

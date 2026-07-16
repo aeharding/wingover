@@ -92,24 +92,13 @@ test("a flight recorded on one device appears on another", async ({
   await b.goto("/logbook?map-style=blank");
   await enableSync(b, account);
 
-  await expect
-    .poll(
-      () =>
-        b.evaluate(async () => {
-          const specifier = "/src/storage/db.ts";
-          const { listFlights } = (await import(
-            /* @vite-ignore */ specifier
-          )) as {
-            listFlights(): Promise<unknown[]>;
-          };
-          return (await listFlights()).length;
-        }),
-      {
-        timeout: 30_000,
-        message: "flight should replicate to the second device",
-      },
-    )
-    .toBeGreaterThan(0);
+  // Asserted in the UI, not the database: device B is already LOOKING at its
+  // logbook, and the flight must appear with no reload and no tab revisit —
+  // the page subscribes to the local database's changes feed, which fires for
+  // replicated pulls the same as for local writes.
+  await expect(b.locator("ion-item, .flight-row").first()).toBeVisible({
+    timeout: 30_000,
+  });
 
   await contextA.close();
   await contextB.close();
