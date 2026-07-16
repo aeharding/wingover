@@ -9,15 +9,28 @@ platform :ios do
   lane :deploy do
     setup_ci if ENV["CI"]
     # Installs the shared distribution cert + profile into the CI keychain.
-    # If export ever fails with "profile doesn't include the X capability",
-    # the App ID grew an entitlement the stored profile predates: add
-    # `force: true, readonly: false` here for ONE run to regenerate it, then
-    # revert (left on, every run rewrites the shared voyager-match repo).
-    # Last needed 2026-07-15, for Sign in with Apple.
+    # Cert only. The PROFILE is fetched from the developer portal each run
+    # (below): profiles go stale whenever the App ID gains a capability, and
+    # the CI token cannot write a regenerated one back to the match cache —
+    # its push 403s (observed 2026-07-15, when Sign in with Apple landed, and
+    # the "fixed" profile silently evaporated after one green run). Apple is
+    # the source of truth for profiles; the git cache holds only the cert.
     match(
       type: "appstore",
       app_identifier: APP_IDENTIFIER,
       api_key_path: "authkey.json",
+      skip_provisioning_profiles: true,
+    )
+
+    # Pinned to the name export-options.plist maps to. readonly: false is the
+    # self-healing part — when a future capability invalidates the portal
+    # profile, sigh repairs it in place instead of failing the build.
+    get_provisioning_profile(
+      app_identifier: APP_IDENTIFIER,
+      api_key_path: "authkey.json",
+      provisioning_name: "match AppStore app.wingover.wingover",
+      ignore_profiles_with_different_name: true,
+      readonly: false,
     )
 
     build_number = ENV.fetch("BUILD_NUMBER", "1")
