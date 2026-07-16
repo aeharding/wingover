@@ -13,6 +13,7 @@ import { haversineMeters } from "../../flight/stats";
 import {
   deletePin,
   listPins,
+  onDocsChanged,
   type Pin,
   savePin,
   updatePin,
@@ -86,6 +87,13 @@ export default function PlanPage() {
       if (value === "street" || value === "satellite") setView(value);
     });
   });
+
+  // Pins placed on another device appear without a refresh — the feed fires
+  // for replicated pulls and local writes alike.
+  useEffect(
+    () => onDocsChanged("pin", () => void listPins().then(setPins)),
+    [],
+  );
 
   function changeView(value: MapViewKind) {
     setView(value);
