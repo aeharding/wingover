@@ -53,10 +53,10 @@ async function enableSync(
   );
 }
 
-/** Settings → Log In → Self-hosted config: the door every self-host test walks. */
+/** Settings → Sync → Self-hosted config: the door every self-host test walks. */
 async function openOwnServerForm(page: import("@playwright/test").Page) {
-  await page.getByTestId("settings-login").click();
-  await page.getByTestId("login-own-server").click();
+  await page.getByTestId("settings-sync").click();
+  await page.getByTestId("sync-goto-login").click();
 }
 
 test("a flight recorded on one device appears on another", async ({
@@ -201,7 +201,7 @@ test("a lapsed client replicates pull-only and never pushes into a 403", async (
   await page.close();
 });
 
-test("the two rails split cleanly: Subscription pitches, Log In connects", async ({
+test("one sheet: pitch when nothing, self-host connects, status when on", async ({
   browser,
   request,
 }) => {
@@ -224,31 +224,21 @@ test("the two rails split cleanly: Subscription pitches, Log In connects", async
   page.on("pageerror", (e) => errors.push(String(e)));
   await page.goto("/settings?map-style=blank");
 
-  // Two rows, two rails (SYNC-UX.md): Subscription is payments, Log In is
-  // connection. The rows report state without opening anything — a pilot
-  // shouldn't have to go looking to find out whether their flights are
-  // backed up. With no subscription AND nothing backing up, the note says
-  // what that means: Local Only, in red.
-  await expect(page.getByTestId("settings-subscription")).toContainText(
-    "Local Only",
-  );
-  await expect(page.getByTestId("settings-login")).toContainText("Log In");
+  // One row, one question (SYNC-UX.md): are the flights backed up? Off is
+  // never a neutral dash — it reads "Local Only", in red, without the pilot
+  // opening anything.
+  await expect(page.getByTestId("settings-sync")).toContainText("Local Only");
 
-  // The Subscription sheet is a pitch, never a status screen — and a browser
-  // has no StoreKit to sell through, so it says where subscribing lives
-  // rather than failing on tap.
-  await page.getByTestId("settings-subscription").click();
+  // Nothing yet → the pitch. On the web the hosted door is Sign in with
+  // Apple (step one of subscribing, once web checkout exists); no status
+  // block renders.
+  await page.getByTestId("settings-sync").click();
   await expect(page.getByTestId("sync-headline")).toBeVisible();
-  await expect(page.getByTestId("subscription-state")).toHaveCount(0);
+  await expect(page.getByTestId("sync-state")).toHaveCount(0);
+  await expect(page.getByTestId("sync-signin")).toBeVisible();
 
-  // The PWA pitch leads with identity, right on the landing page: sign in
-  // with a valid subscription and you're connected on the spot; without one,
-  // the pilot is prompted about subscribing instead. No money moves before
-  // an account exists to attach it to.
-  await expect(page.getByTestId("sync-signin-web")).toBeVisible();
-
-  // The self-host cross-link pushes the Log In rail's form IN PLACE — a nav
-  // push inside this sheet, not a close-and-reopen of another modal.
+  // Self-hosted config pushes the form IN PLACE — a nav push inside the one
+  // sheet, never a second modal.
   await page.getByTestId("sync-goto-login").click();
   await page.getByLabel("Server").fill(credentials.url);
   await page.getByLabel("Database").fill(credentials.dbName);
@@ -256,17 +246,15 @@ test("the two rails split cleanly: Subscription pitches, Log In connects", async
   await page.getByLabel("Password").fill(credentials.password);
   await page.getByTestId("sync-connect").click();
 
-  await expect(page.getByTestId("settings-login")).toContainText("On", {
+  await expect(page.getByTestId("settings-sync")).toContainText("On", {
     timeout: 15_000,
   });
-  // Self-host is a login, not a subscription: the other rail must not move.
-  await expect(page.getByTestId("settings-subscription")).toContainText("—");
 
-  // ...and off again, without deleting anything.
-  await page.getByTestId("settings-login").click();
+  // ...and off again, without deleting anything: back to the pitch.
+  await page.getByTestId("settings-sync").click();
   await expect(page.getByTestId("sync-state")).toHaveText("On");
   await page.getByTestId("sync-off").click();
-  await expect(page.getByTestId("login-own-server")).toBeVisible();
+  await expect(page.getByTestId("sync-headline")).toBeVisible();
 
   expect(errors).toEqual([]);
   await context.close();
@@ -350,7 +338,7 @@ test("sync survives a relaunch", async ({ browser, request }) => {
   await page.getByLabel("Username").fill(credentials.username);
   await page.getByLabel("Password").fill(credentials.password);
   await page.getByTestId("sync-connect").click();
-  await expect(page.getByTestId("settings-login")).toContainText("On", {
+  await expect(page.getByTestId("settings-sync")).toContainText("On", {
     timeout: 15_000,
   });
 
@@ -360,7 +348,7 @@ test("sync survives a relaunch", async ({ browser, request }) => {
   // back, so a relaunch showed "Off" and quietly stopped backing anything up.
   await page.reload();
 
-  await expect(page.getByTestId("settings-login")).toContainText("On", {
+  await expect(page.getByTestId("settings-sync")).toContainText("On", {
     timeout: 15_000,
   });
 
@@ -431,7 +419,7 @@ test("Enter connects, from any field", async ({ browser, request }) => {
   // so a <form> around these would never see an implicit submit.
   await page.getByLabel("Password").press("Enter");
 
-  await expect(page.getByTestId("settings-login")).toContainText("On", {
+  await expect(page.getByTestId("settings-sync")).toContainText("On", {
     timeout: 15_000,
   });
 
@@ -454,7 +442,7 @@ test("a credential that goes stale is explained, not dumped raw", async ({
   await page.getByLabel("Username").fill(credentials.username);
   await page.getByLabel("Password").fill(credentials.password);
   await page.getByTestId("sync-connect").click();
-  await expect(page.getByTestId("settings-login")).toContainText("On", {
+  await expect(page.getByTestId("settings-sync")).toContainText("On", {
     timeout: 15_000,
   });
 
@@ -483,7 +471,7 @@ test("a credential that goes stale is explained, not dumped raw", async ({
   // thing that must not happen is the pilot being shown a raw PouchDB error
   // object and left to guess. The sentence IS the fix, so the sentence is what
   // is asserted.
-  await page.getByTestId("settings-login").click();
+  await page.getByTestId("settings-sync").click();
   await expect(page.getByTestId("sync-state")).toHaveText("Problem", {
     timeout: 20_000,
   });

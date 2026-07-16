@@ -1,6 +1,10 @@
 import { engine } from "../engine/index";
 import { isTauri } from "../engine/platform";
-import { purgeSyncedSettings } from "../storage/local";
+import {
+  getBooleanSetting,
+  purgeSyncedSettings,
+  setBooleanSetting,
+} from "../storage/local";
 import {
   appleIdentityToken,
   appleProvider,
@@ -96,10 +100,32 @@ function refresherFor(stored: Credentials): CredentialProvider | null {
  * stored credential is used instead, because a pilot offline in a field must
  * still sync when they land.
  */
+/**
+ * "Turn off sync" must survive relaunches, or the standing opt-in below would
+ * quietly re-enable what the pilot explicitly ended. Device-local, never
+ * synced. Cleared by any successful enable().
+ */
+const SYNC_DISABLED_KEY = "syncDisabled";
+
 export async function resume(override?: CredentialProvider): Promise<void> {
   const store = await credentialStore();
   const stored = await store.load();
-  if (!stored) return;
+  if (!stored) {
+    // The subscription is a STANDING opt-in (SYNC-UX.md): the transaction is
+    // the login, so a device that holds one syncs — fresh install, reinstall,
+    // or a purchase whose connect call failed halfway. Only an explicit
+    // "Turn off sync" keeps this quiet. A lapsed transaction connects too:
+    // read-only is how a new phone pulls the logbook down.
+    if (await getBooleanSetting(SYNC_DISABLED_KEY, false)) return;
+    const jws = await probeEntitlementJWS();
+    if (!jws) return;
+    try {
+      await enable(appleProvider(API_URL, jws));
+    } catch {
+      // Offline, or the service is down. The next launch tries again.
+    }
+    return;
+  }
 
   let credentials = stored;
   const provider = override ?? refresherFor(stored);
@@ -221,6 +247,8 @@ export async function enable(provider: CredentialProvider): Promise<void> {
   const credentials = await provider.obtain();
   const store = await credentialStore();
   await store.save(credentials);
+  // Any successful connect is consent again: the standing opt-in resumes.
+  await setBooleanSetting(SYNC_DISABLED_KEY, false);
 
   // Settings used to live in the synced database. Clear any that a previous
   // build left there BEFORE the first replication, or they travel to the server
@@ -253,6 +281,8 @@ export async function disable(): Promise<void> {
   replicate.stop();
   const store = await credentialStore();
   await store.clear();
+  // Persisted, or the next launch's standing opt-in (resume) would undo this.
+  await setBooleanSetting(SYNC_DISABLED_KEY, true);
 }
 
 export function currentStatus(): SyncStatus {
