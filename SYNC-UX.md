@@ -39,13 +39,13 @@ no state conflates the two.
 
 ```
 ┌───────────────────────────────┐
-│ Sync             Local Only  ›│      ← red when nothing backs the flights up
+│ Sync                  ⊗ Off  ›│      ← red when nothing backs the flights up
 └───────────────────────────────┘
 ```
 
 One row, one question: are the flights backed up? The note is the sync state
-(`On` / `Paused` / `Not subscribed` / `Problem`), and a red `Local Only` when
-sync is off — off is never a neutral dash. Payment facts
+(`On` / `Paused` / `Not subscribed` / `Problem`), and a red `⊗ Off`
+(close-circle icon) when sync is off — off is never a neutral dash. Payment facts
 (Active/Expired, price) live inside the sheet. The two rails stay real in the
 architecture and on the server; they stopped being Settings geography after
 both two-rows and a transforming label shipped and got reverted — pilots

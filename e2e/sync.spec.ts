@@ -235,9 +235,9 @@ test("one sheet: pitch when nothing, self-host connects, status when on", async 
   await page.goto("/settings?map-style=blank");
 
   // One row, one question (SYNC-UX.md): are the flights backed up? Off is
-  // never a neutral dash — it reads "Local Only", in red, without the pilot
-  // opening anything.
-  await expect(page.getByTestId("settings-sync")).toContainText("Local Only");
+  // never a neutral dash — it reads red "⊗ Off" without the pilot opening
+  // anything.
+  await expect(page.getByTestId("settings-sync")).toContainText("Off");
 
   // Nothing yet → the pitch. On the web the hosted door is Sign in with
   // Apple (step one of subscribing, once web checkout exists); no status

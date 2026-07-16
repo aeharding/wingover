@@ -194,3 +194,10 @@
 .sync-fine-print a {
   color: inherit;
 }
+
+/* The Settings row's "⊗ Off" note: icon and word on one optical line. */
+.settings-sync-note {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.3em;
+}
