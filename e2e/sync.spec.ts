@@ -59,6 +59,27 @@ async function openOwnServerForm(page: import("@playwright/test").Page) {
   await page.getByTestId("sync-goto-login").click();
 }
 
+/**
+ * page.reload(), resilient to this machine's network-interface flaps:
+ * Chromium aborts in-flight module loads with ERR_NETWORK_CHANGED when an
+ * interface churns mid-reload (captured in traces; ~1 run in 3), leaving a
+ * half-booted page and a test that hangs on the next click. A real pilot
+ * hits refresh; so does this.
+ */
+async function reloadUntilReady(page: import("@playwright/test").Page) {
+  for (let attempt = 0; ; attempt++) {
+    await page.reload();
+    try {
+      await expect(page.getByTestId("settings-sync")).toBeVisible({
+        timeout: 5_000,
+      });
+      return;
+    } catch (error) {
+      if (attempt >= 2) throw error;
+    }
+  }
+}
+
 test("a flight recorded on one device appears on another", async ({
   browser,
 }) => {
@@ -335,7 +356,7 @@ test("sync survives a relaunch", async ({ browser, request }) => {
   // one page session, which is how sync shipped for a while working exactly
   // once per install: the credential was written to the store and never read
   // back, so a relaunch showed "Off" and quietly stopped backing anything up.
-  await page.reload();
+  await reloadUntilReady(page);
 
   await expect(page.getByTestId("settings-sync")).toContainText("On", {
     timeout: 15_000,
@@ -454,18 +475,23 @@ test("a credential that goes stale is explained, not dumped raw", async ({
     },
   );
 
-  await page.reload();
+  await reloadUntilReady(page);
 
   // PouchDB stops on its own here, so this is not about a retry storm. The
   // thing that must not happen is the pilot being shown a raw PouchDB error
-  // object and left to guess. The sentence IS the fix, so the sentence is what
-  // is asserted.
+  // object and left to guess. The sentence IS the fix, so a sentence is what
+  // is asserted — EITHER of them: the stale-credential handshake fires ~7
+  // parallel auth failures, and whether the first 401 reaches the screen
+  // before CouchDB's lockout trips at failure five is a genuine server-side
+  // race. Both messages are the designed copy for this situation.
   await page.getByTestId("settings-sync").click();
   await expect(page.getByTestId("sync-state")).toHaveText("Problem", {
     timeout: 20_000,
   });
   await expect(
-    page.getByText("The server rejected this device's password."),
+    page.getByText(
+      /rejected this device's password|locked this account/,
+    ),
   ).toBeVisible();
 
   await context.close();
