@@ -77,6 +77,8 @@ The client speaks basic auth to a stock CouchDB and knows how to do nothing else
 
 The billing service is closed-source and lives outside this repo; it is a payment gate for the hosted instance and has no part in self-hosting, which needs only CouchDB itself.
 
+_The user-facing shape of all this — the Subscription / Log In split, settings rows, onboarding flows, and copy rules — lives in [SYNC-UX.md](SYNC-UX.md)._
+
 ## Reliability Doctrine
 
 The invariants, in priority order:
