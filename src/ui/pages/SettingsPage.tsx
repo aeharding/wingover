@@ -100,15 +100,15 @@ export default function SettingsPage() {
               {subscriptionNote}
             </IonNote>
           </IonItem>
-          {/* Transforms like iOS Settings' Apple ID row: "Log In" is a thing
-              you do, "Sync" is a thing you have. */}
+          {/* The label never changes — a row that renames itself after a
+              purchase reads as the row disappearing. State lives in the note. */}
           <IonItem
             button
             detail
             onClick={openLogin}
             data-testid="settings-login"
           >
-            <IonLabel>{loggedIn ? "Sync" : "Log In"}</IonLabel>
+            <IonLabel>Log In</IonLabel>
             {loggedIn && (
               <IonNote slot="end">{describeSync(syncStatus).label}</IonNote>
             )}

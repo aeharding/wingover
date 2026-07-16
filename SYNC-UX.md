@@ -39,23 +39,25 @@ shows a price.
 ```
 Logged out:                          Logged in:
 ┌───────────────────────────────┐    ┌───────────────────────────────┐
-│ Subscription              —  ›│    │ Subscription         Active  ›│
-│ Log In                       ›│    │ Sync                     On  ›│
+│ Subscription     Local Only  ›│    │ Subscription         Active  ›│
+│ Log In                       ›│    │ Log In                   On  ›│
 └───────────────────────────────┘    └───────────────────────────────┘
 ```
 
-- **Subscription** — note reads `—` / `Active` / `Expired`. Opens the
-  Subscription dialog. Present on **all platforms**. On the PWA the pitch
+- **Subscription** — note reads `Active` / `Expired` / red `Local Only` when
+  nothing is backing the flights up / `—` when a self-host login is. Opens
+  the Subscription dialog. Present on **all platforms**. On the PWA the pitch
   itself leads with identity: **Sign in with Apple sits directly on the
   landing page** (with the self-host link beneath). Sign in holding a valid
   subscription and the sheet lands on the status view — done, the common
   case, one tap. Signed in without one, the pilot is prompted to subscribe
   (web checkout when it exists; until then the prompt points at the iOS app).
   A web purchase never happens before an account exists to attach it to.
-- **Log In** — the row **transforms**, like iOS Settings' Apple ID row: it
-  reads "Log In" while disconnected, and once connected becomes **Sync** with
-  the status as its note (`On` / `Read-only` / `Paused` / `Problem`). Both
-  states open the same page.
+- **Log In** — the label NEVER changes (a row that renames itself after a
+  purchase reads as the row disappearing — tried, disliked, reverted); the
+  connection state is its note (`On` / `Not subscribed` / `Read-only` /
+  `Paused` / `Problem`), absent while logged out. Both states open the same
+  page, also titled Log In, always.
 
 No third row, ever. Sync earns two lines of Settings and no more (STEERING:
 the app is whole without it).

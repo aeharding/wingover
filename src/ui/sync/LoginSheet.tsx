@@ -80,9 +80,9 @@ function LoginHome({
     <>
       <IonHeader>
         <IonToolbar>
-          {/* The title transforms with the row: "Log In" is a thing you do,
-              "Sync" is a thing you have. */}
-          <IonTitle>{on ? "Sync" : "Log In"}</IonTitle>
+          {/* Static, like the Settings row that opens it: a page that renames
+              itself after connecting reads as having landed somewhere else. */}
+          <IonTitle>Log In</IonTitle>
         </IonToolbar>
       </IonHeader>
       <IonContent>
