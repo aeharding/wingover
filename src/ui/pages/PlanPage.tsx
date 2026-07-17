@@ -32,6 +32,7 @@ import {
 } from "../map/types";
 import ViewToggle from "../map/ViewToggle";
 import { useSettings } from "../settings/SettingsContext";
+import { useIsDesktop } from "../useIsDesktop";
 
 import "./PlanPage.css";
 
@@ -68,6 +69,7 @@ function routeCoords(pins: Pin[]): LngLat[] {
 
 export default function PlanPage() {
   const { units } = useSettings();
+  const isDesktop = useIsDesktop();
   const [view, setView] = useState<MapViewKind>("street");
   const [pins, setPins] = useState<Pin[]>([]);
   const [map, setMap] = useState<MapView | null>(null);
@@ -288,24 +290,67 @@ export default function PlanPage() {
   return (
     <IonPage>
       <IonContent scrollY={false}>
-        <MapCanvas base={view} onReady={handleReady} />
-        <div className="map-overlay">
-          <button
-            className="map-button"
-            aria-label="Center on me"
-            onClick={locate}
-          >
-            <IonIcon icon={locateOutline} />
-          </button>
-          {map?.supportsSatellite && (
-            <ViewToggle view={view} onChange={changeView} />
+        <div className="plan-split">
+          {isDesktop && (
+            <aside className="plan-pane" data-testid="plan-pane">
+              <div className="plan-pane-rows">
+                {pins.length === 0 ? (
+                  <div className="plan-pane-empty">
+                    Long-press the map to drop a pin: launches, LZs, fuel
+                    stops, hazards.
+                  </div>
+                ) : (
+                  pins.map((pin, index) => (
+                    <button
+                      key={pin.id}
+                      className="plan-pane-row"
+                      onClick={() =>
+                        map?.moveTo(
+                          {
+                            center: [pin.longitude, pin.latitude],
+                            zoom: 13,
+                          },
+                          { animate: true },
+                        )
+                      }
+                    >
+                      <span className="dot">{index + 1}</span>
+                      <span>
+                        <h3>{pin.name || `Pin ${index + 1}`}</h3>
+                        {pin.notes && <p>{pin.notes}</p>}
+                      </span>
+                    </button>
+                  ))
+                )}
+              </div>
+              {routeMeters > 0 && (
+                <div className="plan-pane-route">
+                  Route: {formatDistance(routeMeters, units)}
+                </div>
+              )}
+            </aside>
           )}
-        </div>
-        {routeMeters > 0 && (
-          <div className="plan-distance" data-testid="plan-distance">
-            Route: {formatDistance(routeMeters, units)}
+          <div className="plan-map">
+            <MapCanvas base={view} onReady={handleReady} />
+            <div className="map-overlay">
+              <button
+                className="map-button"
+                aria-label="Center on me"
+                onClick={locate}
+              >
+                <IonIcon icon={locateOutline} />
+              </button>
+              {map?.supportsSatellite && (
+                <ViewToggle view={view} onChange={changeView} />
+              )}
+            </div>
+            {routeMeters > 0 && (
+              <div className="plan-distance" data-testid="plan-distance">
+                Route: {formatDistance(routeMeters, units)}
+              </div>
+            )}
           </div>
-        )}
+        </div>
       </IonContent>
     </IonPage>
   );

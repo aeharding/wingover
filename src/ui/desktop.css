@@ -1,0 +1,246 @@
+/* Desktop (≥992px, matching useIsDesktop.ts): the tab bar becomes a left
+   rail and Logbook/Plan gain split panes. Below the breakpoint every rule
+   here is inert and the app is exactly the phone app. Plain CSS on Ionic
+   structure (STEERING). */
+
+@media (min-width: 992px) {
+  /* ── the rail: the tab bar, re-seated ─────────────────────────────── */
+  ion-tabs {
+    flex-direction: row-reverse;
+  }
+
+  ion-tab-bar {
+    width: 76px;
+    height: auto;
+    flex-direction: column;
+    justify-content: flex-start;
+    gap: 4px;
+    padding-top: 10px;
+    border-top: 0;
+    border-right: 1px solid rgba(255, 255, 255, 0.09);
+  }
+
+  ion-tab-button {
+    flex: 0 0 64px;
+    width: 100%;
+  }
+
+  /* ── logbook split: list pane + seat ──────────────────────────────── */
+  .logbook-split {
+    display: flex;
+    height: 100%;
+  }
+
+  .logbook-pane {
+    width: 340px;
+    flex-shrink: 0;
+    overflow-y: auto;
+    border-right: 1px solid rgba(255, 255, 255, 0.09);
+  }
+
+  .logbook-seat {
+    flex: 1;
+    min-width: 0;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    color: var(--ion-color-medium);
+  }
+
+  /* The detail page's own split: same pane, detail content scrolls in
+     place of the page. */
+  .detail-split {
+    display: flex;
+    height: 100%;
+  }
+
+  .detail-main {
+    position: relative;
+    flex: 1;
+    min-width: 0;
+    overflow-y: auto;
+    display: flex;
+    flex-direction: column;
+  }
+
+  /* The map is a flex item here; without this the fields below quietly
+     shrink it (60vh became ~360px at 1280x800). */
+  .detail-main .flight-detail-map {
+    flex-shrink: 0;
+  }
+
+  /* Full-screen map: the pane bows out, and the map overlays the whole
+     seat — height:100% of a scrolling flex column is not full screen. */
+  .detail-split.no-pane .logbook-pane {
+    display: none;
+  }
+
+  .detail-split.no-pane .detail-main {
+    overflow: hidden;
+  }
+
+  .detail-split.no-pane .flight-detail-map.map-full {
+    position: absolute;
+    inset: 0;
+    height: auto;
+    min-height: 0;
+  }
+}
+
+/* On the phone the split wrappers are transparent to layout: the page is
+   exactly the phone app. */
+.detail-plain {
+  display: contents;
+}
+
+@media (min-width: 992px) {
+
+  /* ── settings: a centered column, not a stretched phone ───────────── */
+  .settings-content ion-list.list-inset,
+  .settings-content .settings-list-header,
+  .settings-content .settings-helper-text {
+    max-width: 640px;
+    margin-inline: auto;
+  }
+
+  .settings-content .settings-list-header {
+    padding-left: 32px;
+  }
+}
+
+/* ── the totals strip (desktop pane header) ─────────────────────────── */
+.flightlist-totals {
+  display: grid;
+  grid-template-columns: 1fr 1fr 1fr;
+  gap: 0.5rem;
+  padding: 0.7rem 1.1rem;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.09);
+}
+
+.flightlist-totals b {
+  display: block;
+  font-size: 1.02rem;
+  font-weight: 700;
+  font-variant-numeric: tabular-nums;
+}
+
+.flightlist-totals span {
+  font-size: 0.62rem;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--ion-color-medium);
+}
+
+/* The plan wrapper exists at every width; the pane only joins on desktop.
+   .plan-map is the positioned parent the absolute map container fills. */
+.plan-split {
+  display: flex;
+  height: 100%;
+}
+
+.plan-map {
+  position: relative;
+  flex: 1;
+  min-width: 0;
+}
+
+/* ── plan pin pane ──────────────────────────────────────────────────── */
+.plan-pane {
+  width: 300px;
+  flex-shrink: 0;
+  overflow-y: auto;
+  border-right: 1px solid rgba(255, 255, 255, 0.09);
+  display: flex;
+  flex-direction: column;
+}
+
+.plan-pane-rows {
+  flex: 1;
+}
+
+.plan-pane-row {
+  display: flex;
+  gap: 0.7rem;
+  align-items: flex-start;
+  width: 100%;
+  text-align: left;
+  background: none;
+  border: 0;
+  color: var(--ion-text-color);
+  padding: 0.72rem 1.1rem;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.09);
+}
+
+.plan-pane-row .dot {
+  flex-shrink: 0;
+  width: 22px;
+  height: 22px;
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 0.7rem;
+  font-weight: 700;
+  color: #000;
+  background: var(--wingover-green);
+  margin-top: 2px;
+}
+
+.plan-pane-row h3 {
+  margin: 0 0 1px;
+  font-size: 0.92rem;
+  font-weight: 600;
+}
+
+.plan-pane-row p {
+  margin: 0;
+  font-size: 0.78rem;
+  color: var(--ion-color-medium);
+}
+
+.plan-pane-empty {
+  padding: 1.2rem 1.1rem;
+  color: var(--ion-color-medium);
+  font-size: 0.9rem;
+}
+
+.plan-pane-route {
+  border-top: 1px solid rgba(255, 255, 255, 0.09);
+  padding: 0.8rem 1.1rem;
+  font-size: 0.9rem;
+  font-variant-numeric: tabular-nums;
+}
+
+/* ── the connect funnel (fresh browser, empty logbook) ──────────────── */
+.connect-funnel {
+  max-width: 22rem;
+  margin: 0 auto;
+  display: flex;
+  flex-direction: column;
+  gap: 0.3rem;
+  text-align: center;
+}
+
+.connect-funnel h2 {
+  font-size: 1.15rem;
+  font-weight: 700;
+  margin: 0 0 0.2rem;
+}
+
+.connect-funnel .funnel-sub {
+  color: var(--ion-color-medium);
+  font-size: 0.9rem;
+  margin: 0 0 1rem;
+}
+
+.connect-funnel .funnel-problem {
+  color: var(--ion-color-danger);
+  font-size: 0.85rem;
+  margin: 0.4rem 0 0;
+}
+
+.connect-funnel .funnel-status {
+  color: var(--ion-color-medium);
+  font-size: 0.9rem;
+  margin: 0.4rem 0 0;
+}

@@ -5,12 +5,6 @@ import {
   IonContent,
   IonHeader,
   IonIcon,
-  IonItem,
-  IonItemOption,
-  IonItemOptions,
-  IonItemSliding,
-  IonLabel,
-  IonList,
   IonLoading,
   IonNote,
   IonPage,
@@ -18,24 +12,26 @@ import {
   IonToast,
   IonToolbar,
   useIonRouter,
-  useIonViewWillEnter,
 } from "@ionic/react";
-import { ellipsisHorizontal, shareOutline, trashOutline } from "ionicons/icons";
+import { ellipsisHorizontal } from "ionicons/icons";
 import { useEffect, useRef, useState } from "react";
-import { Virtualizer } from "virtua";
 
+import { isTauri } from "../../engine/platform";
 import { formatDistance, formatDuration } from "../../flight/format";
-import { type Flight, listFlights, onDocsChanged } from "../../storage/db";
 import { importGpxFiles } from "../../storage/importGpx";
+import ConnectFunnel from "../logbook/ConnectFunnel";
+import FlightList from "../logbook/FlightList";
+import { useFlights } from "../logbook/useFlights";
 import { useSettings } from "../settings/SettingsContext";
-import { useFlightActions } from "../useFlightActions";
+import { useIsDesktop } from "../useIsDesktop";
 
 import "./LogbookPage.css";
 
 export default function LogbookPage() {
   const { units } = useSettings();
   const router = useIonRouter();
-  const [flights, setFlights] = useState<Flight[]>([]);
+  const isDesktop = useIsDesktop();
+  const { flights, refresh } = useFlights();
   const [menuOpen, setMenuOpen] = useState(false);
   const [toastMessage, setToastMessage] = useState<string | null>(null);
   const [importProgress, setImportProgress] = useState<{
@@ -45,6 +41,7 @@ export default function LogbookPage() {
   const fileInputRef = useRef<HTMLInputElement>(null);
   const contentRef = useRef<HTMLIonContentElement>(null);
   const scrollParentRef = useRef<HTMLElement | null>(null);
+  const paneRef = useRef<HTMLDivElement>(null);
   const [scrollReady, setScrollReady] = useState(false);
 
   useEffect(() => {
@@ -54,20 +51,6 @@ export default function LogbookPage() {
     });
   }, []);
 
-  async function refresh() {
-    setFlights(await listFlights());
-  }
-
-  useIonViewWillEnter(() => {
-    refresh();
-  });
-
-  // A flight replicated in from another device appears without a refresh —
-  // the feed fires for pulls and local writes alike.
-  useEffect(() => onDocsChanged("flight", () => void refresh()), []);
-
-  const { exportFlight, confirmDeleteFlight } = useFlightActions();
-
   const totalDistance = flights.reduce(
     (sum, flight) => sum + flight.stats.distanceMeters,
     0,
@@ -76,6 +59,8 @@ export default function LogbookPage() {
     (sum, flight) => sum + flight.stats.durationSeconds,
     0,
   );
+
+  const empty = flights.length === 0;
 
   return (
     <IonPage>
@@ -93,7 +78,7 @@ export default function LogbookPage() {
           </IonButtons>
         </IonToolbar>
       </IonHeader>
-      <IonContent ref={contentRef}>
+      <IonContent ref={contentRef} scrollY={!isDesktop}>
         <IonActionSheet
           isOpen={menuOpen}
           onDidDismiss={() => setMenuOpen(false)}
@@ -168,49 +153,47 @@ export default function LogbookPage() {
               : undefined
           }
         />
-        {flights.length === 0 ? (
-          <div className="logbook-empty">No flights yet.</div>
+        {empty ? (
+          <div className="logbook-empty">
+            {isTauri() ? (
+              "No flights yet."
+            ) : (
+              // A fresh browser is a front door: the pilot's flights are on
+              // their phone, and this is where they connect (SYNC-UX).
+              <ConnectFunnel
+                onImport={() => fileInputRef.current?.click()}
+              />
+            )}
+          </div>
+        ) : isDesktop ? (
+          <div className="logbook-split">
+            <aside className="logbook-pane" ref={paneRef}>
+              <FlightList
+                key="pane"
+                flights={flights}
+                units={units}
+                scrollRef={paneRef}
+                desktop
+                totalsStrip
+                onDeleted={refresh}
+              />
+            </aside>
+            <div className="logbook-seat" data-testid="logbook-seat">
+              Select a flight
+            </div>
+          </div>
         ) : (
           scrollReady && (
-            <IonList>
-              <Virtualizer
-                scrollRef={scrollParentRef as React.RefObject<HTMLElement>}
-              >
-                {flights.map((flight) => (
-                  <IonItemSliding key={flight.id}>
-                    <IonItem routerLink={`/logbook/${flight.id}`} detail>
-                      <IonLabel>
-                        <h2>{flight.name}</h2>
-                        <p>
-                          {flight.launchName && `${flight.launchName} · `}
-                          {new Date(flight.startedAt).toLocaleString()} ·{" "}
-                          {formatDuration(flight.stats.durationSeconds)} ·{" "}
-                          {formatDistance(flight.stats.distanceMeters, units)}
-                        </p>
-                      </IonLabel>
-                    </IonItem>
-                    <IonItemOptions side="end">
-                      <IonItemOption
-                        aria-label="Export"
-                        onClick={() => exportFlight(flight)}
-                      >
-                        <IonIcon slot="icon-only" icon={shareOutline} />
-                      </IonItemOption>
-                      <IonItemOption
-                        color="danger"
-                        aria-label="Delete"
-                        onClick={() => confirmDeleteFlight(flight, refresh)}
-                      >
-                        <IonIcon slot="icon-only" icon={trashOutline} />
-                      </IonItemOption>
-                    </IonItemOptions>
-                  </IonItemSliding>
-                ))}
-              </Virtualizer>
-            </IonList>
+            <FlightList
+              key="page"
+              flights={flights}
+              units={units}
+              scrollRef={scrollParentRef}
+              onDeleted={refresh}
+            />
           )
         )}
-        {flights.length > 0 && (
+        {!isDesktop && flights.length > 0 && (
           <div className="logbook-totals">
             <IonNote>
               {flights.length} flights · {formatDuration(totalDuration)} ·{" "}
