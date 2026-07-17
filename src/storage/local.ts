@@ -57,24 +57,14 @@ export async function getSetting(key: string): Promise<string | null> {
   }
 }
 
-export async function setSetting(key: string, value: string) {
+async function writeSetting(key: string, value: string) {
   const _id = settingId(key);
-  // Two rapid writes to the same key must both land — the loser of a 409
-  // re-reads the winner's rev and retries. An unchanged value is a no-op:
-  // not a write, and not a reason for listeners to tear down every mounted
-  // map.
-  for (let attempt = 0; ; attempt++) {
-    const existing = await localDb.get<SettingDoc>(_id).catch(() => null);
-    if (existing?.value === value) return;
-    try {
-      await localDb.put(existing ? { ...existing, value } : { _id, value });
-      break;
-    } catch (error) {
-      if ((error as { status?: number }).status !== 409 || attempt >= 3) {
-        throw error;
-      }
-    }
-  }
+  const existing = await localDb.get<SettingDoc>(_id).catch(() => null);
+  // Serialized writes (below) make this read fresh, so unchanged means
+  // truly unchanged: no write, and no listeners tearing down every mounted
+  // map for a value that didn't move.
+  if (existing?.value === value) return;
+  await localDb.put(existing ? { ...existing, value } : { _id, value });
   for (const listener of settingListeners.get(key) ?? []) {
     try {
       listener(value);
@@ -82,6 +72,30 @@ export async function setSetting(key: string, value: string) {
       // A broken listener must not break the write, or its siblings.
     }
   }
+}
+
+interface PendingWrite {
+  chain: Promise<void>;
+  queued: string;
+}
+const settingWrites = new Map<string, PendingWrite>();
+
+/**
+ * Writes to one key are strictly serialized. Per-keystroke callers (the
+ * MapTiler key field) otherwise race: an equality check against a stale
+ * in-flight read silently drops the newest value, and concurrent puts
+ * 409 until a retry budget throws. One writer per key makes conflicts
+ * impossible and guarantees the freshest value lands last. Back-to-back
+ * identical queued values collapse into the pending write.
+ */
+export function setSetting(key: string, value: string): Promise<void> {
+  const prior = settingWrites.get(key);
+  if (prior && prior.queued === value) return prior.chain;
+  const run = () => writeSetting(key, value);
+  // A failed predecessor must not poison the chain — still run this write.
+  const chain = (prior?.chain ?? Promise.resolve()).then(run, run);
+  settingWrites.set(key, { chain, queued: value });
+  return chain;
 }
 
 /**

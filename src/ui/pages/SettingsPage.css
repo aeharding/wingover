@@ -1,0 +1,26 @@
+/* Voyager's settings idiom (aeharding/voyager, features/settings/shared/
+   formatting): uppercase muted section headers above inset lists, muted
+   helper notes below them. Values match Voyager's so the two apps read as
+   siblings. */
+.settings-list-header {
+  font-size: 0.8em;
+  margin: 32px 0 -8px 32px;
+  text-transform: uppercase;
+  color: var(--ion-color-medium);
+}
+
+.settings-helper-text {
+  margin: 0 32px;
+  font-size: 0.875em;
+  color: var(--ion-color-medium);
+}
+
+/* iOS dark grouped-table look: the always-dark palette leaves
+   --ion-item-background at pure black, which makes inset cards invisible on
+   the black page. The cell color is the app's own tile shade — Apple's
+   systemGray6 (#1c1c1e) reads too bright against Wingover's near-black
+   surfaces. `.list-inset` (the class Ionic stamps), NOT `[inset]`: React
+   sets the prop as a DOM property, so an attribute selector never matches. */
+.settings-content ion-list.list-inset {
+  --ion-item-background: var(--wingover-tile);
+}

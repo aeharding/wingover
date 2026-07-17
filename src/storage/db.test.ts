@@ -169,4 +169,20 @@ describe("storage", () => {
     await setSetting("units", "imperial");
     expect(await getSetting("units")).toBe("imperial");
   });
+
+  it("keystroke-burst setSetting writes land in order, newest last", async () => {
+    // Un-awaited per-keystroke saves used to race: an equality check against
+    // a stale in-flight read could silently drop the newest value ("abc123"
+    // typed, "abc12" stored), and bursts exhausted the conflict retries.
+    const burst = ["abc12", "abc123", "abc1", "abc", "abc123x"];
+    await Promise.all(burst.map((v) => setSetting("maptilerKey", v)));
+    expect(await getSetting("maptilerKey")).toBe("abc123x");
+
+    // The backspace-then-retype shape from the review, explicitly.
+    await setSetting("maptilerKey", "abc123");
+    const a = setSetting("maptilerKey", "abc12");
+    const b = setSetting("maptilerKey", "abc123");
+    await Promise.all([a, b]);
+    expect(await getSetting("maptilerKey")).toBe("abc123");
+  });
 });
