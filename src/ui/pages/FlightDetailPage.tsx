@@ -375,6 +375,7 @@ export default function FlightDetailPage() {
               <IonItem>
                 <IonInput
                   label="Name"
+                  clearInput
                   value={draftName}
                   aria-label="Flight name"
                   onIonInput={(event) => setDraftName(event.detail.value ?? "")}
@@ -384,6 +385,7 @@ export default function FlightDetailPage() {
               <IonItem>
                 <IonInput
                   label="Launch"
+                  clearInput
                   placeholder="Add location"
                   value={draftLaunch}
                   aria-label="Launch location"
