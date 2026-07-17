@@ -6,6 +6,7 @@ import Security
 import StoreKit
 import Tauri
 import UIKit
+import WebKit
 
 // Holds the in-flight Sign in with Apple request. ASAuthorizationController
 // keeps only weak references to its delegate, so the plugin retains this until
