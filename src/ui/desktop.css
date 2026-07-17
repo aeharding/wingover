@@ -55,6 +55,7 @@
   }
 
   .detail-main {
+    position: relative;
     flex: 1;
     min-width: 0;
     overflow-y: auto;
@@ -62,9 +63,27 @@
     flex-direction: column;
   }
 
-  /* Full-screen map: the pane bows out, the seat takes everything. */
+  /* The map is a flex item here; without this the fields below quietly
+     shrink it (60vh became ~360px at 1280x800). */
+  .detail-main .flight-detail-map {
+    flex-shrink: 0;
+  }
+
+  /* Full-screen map: the pane bows out, and the map overlays the whole
+     seat — height:100% of a scrolling flex column is not full screen. */
   .detail-split.no-pane .logbook-pane {
     display: none;
+  }
+
+  .detail-split.no-pane .detail-main {
+    overflow: hidden;
+  }
+
+  .detail-split.no-pane .flight-detail-map.map-full {
+    position: absolute;
+    inset: 0;
+    height: auto;
+    min-height: 0;
   }
 }
 

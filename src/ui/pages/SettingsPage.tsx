@@ -43,6 +43,10 @@ export default function SettingsPage() {
   const [autoEnd, setAutoEnd] = useState(true);
   const [recordHere, setRecordHere] = useState(false);
   const [confirmRecordHere, setConfirmRecordHere] = useState(false);
+  // Bumped when the warning alert is dismissed: ion-toggle keeps its own
+  // internal checked state, so a cancelled enable leaves it visually ON
+  // (and the next tap a silent no-op) unless the element is remounted.
+  const [toggleReset, setToggleReset] = useState(0);
 
   // Re-read on every entry, not once on mount: the provider subpage edits
   // the same settings, and this page stays mounted behind it.
@@ -57,6 +61,20 @@ export default function SettingsPage() {
   function saveAutoEnd(value: boolean) {
     setAutoEnd(value);
     void setBooleanSetting("autoEndFlight", value);
+  }
+
+  function saveRecordHere(value: boolean) {
+    setRecordHere(value);
+    void setBooleanSetting("recordInBrowser", value);
+    // Mirrored synchronously for boot: the "/" redirect and the /fly route
+    // gate commit on first render, long before an IndexedDB read resolves.
+    // PouchDB stays the source of truth; this is a cache of it.
+    try {
+      if (value) localStorage.setItem("wingover.record", "1");
+      else localStorage.removeItem("wingover.record");
+    } catch {
+      // No storage, no mirror; the async setting still applies in-session.
+    }
   }
 
   return (
@@ -124,13 +142,11 @@ export default function SettingsPage() {
           {!isTauri() && (
             <IonItem>
               <IonToggle
+                key={`record-${toggleReset}-${recordHere}`}
                 checked={recordHere}
                 onIonChange={(event) => {
                   if (event.detail.checked) setConfirmRecordHere(true);
-                  else {
-                    setRecordHere(false);
-                    void setBooleanSetting("recordInBrowser", false);
-                  }
+                  else saveRecordHere(false);
                 }}
               >
                 Record in this browser
@@ -146,17 +162,19 @@ export default function SettingsPage() {
         )}
         <IonAlert
           isOpen={confirmRecordHere}
-          onDidDismiss={() => setConfirmRecordHere(false)}
+          onDidDismiss={() => {
+            setConfirmRecordHere(false);
+            // Snap the toggle back to reality however the alert closed
+            // (confirm changes recordHere, which changes the key anyway).
+            setToggleReset((n) => n + 1);
+          }}
           header="Record in this browser?"
           message="Browsers can stop background recording at any time, and a stopped recording ends the flight. Use this only when the phone app is not an option."
           buttons={[
             { text: "Cancel", role: "cancel" },
             {
               text: "Turn on",
-              handler: () => {
-                setRecordHere(true);
-                void setBooleanSetting("recordInBrowser", true);
-              },
+              handler: () => saveRecordHere(true),
             },
           ]}
         />

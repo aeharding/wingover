@@ -117,7 +117,17 @@ function TabShell() {
     <IonReactRouter>
       <IonTabs>
         <IonRouterOutlet>
-          <Route exact path="/fly" component={FlyPage} />
+          {/* Gated as a ROUTE, not just a tab: a bookmarked /fly in a plain
+              browser is the same broken promise as a visible tab. Safe to
+              gate because the opt-in is mirrored to localStorage, so
+              canRecord is correct synchronously at first render. */}
+          {canRecord ? (
+            <Route exact path="/fly" component={FlyPage} />
+          ) : (
+            <Route exact path="/fly">
+              <Redirect to="/logbook" />
+            </Route>
+          )}
           <Route exact path="/logbook" component={LogbookPage} />
           <Route exact path="/logbook/map" component={AllFlightsMapPage} />
           <Route

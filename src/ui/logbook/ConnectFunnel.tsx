@@ -33,7 +33,9 @@ export default function ConnectFunnel({ onImport }: { onImport: () => void }) {
     }
   }
 
-  const connected = status.state !== "off";
+  // "error" keeps the doors open: a stale self-host credential must not
+  // turn the front door into a dead end of one problem line.
+  const connected = status.state !== "off" && status.state !== "error";
 
   return (
     <div className="connect-funnel">
@@ -67,9 +69,10 @@ export default function ConnectFunnel({ onImport }: { onImport: () => void }) {
       <IonButton fill="clear" onClick={onImport} data-testid="funnel-import">
         Import GPX files
       </IonButton>
-      {connected && (
+      {status.state !== "off" && (
         <p className="funnel-status" data-testid="funnel-status">
-          {describe(status).label}. {describe(status).detail}
+          {describe(status).label}
+          {describe(status).detail ? `. ${describe(status).detail}` : ""}
         </p>
       )}
       {problem && <p className="funnel-problem">{problem}</p>}

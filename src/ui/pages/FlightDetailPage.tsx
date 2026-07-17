@@ -354,7 +354,11 @@ export default function FlightDetailPage() {
                 // The map is the first child of the scroll area, so top is
                 // where full screen is — without this, expanding while
                 // scrolled down shows the middle of the details instead.
-                if (!mapFull) void contentRef.current?.scrollToTop();
+                // Desktop needs no scroll: full screen is an overlay there,
+                // and ion-content isn't the scroller anyway.
+                if (!mapFull && !isDesktop) {
+                  void contentRef.current?.scrollToTop();
+                }
                 setMapFull(!mapFull);
               }}
             >
