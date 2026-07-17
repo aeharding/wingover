@@ -147,6 +147,15 @@ class WingoverPlugin: Plugin, CLLocationManagerDelegate {
     _ = Self.allowProgrammaticKeyboard
   }
 
+  // wry hard-disables the scroll view's rubber band (setBounces(false) in
+  // its WKWebView setup) and exposes no config for it. The app shell is
+  // fixed layout so the main frame never scrolls anyway; re-enabling costs
+  // nothing and restores the native overscroll bounce Ionic's scrollers
+  // are designed around.
+  @objc public override func load(webview: WKWebView) {
+    webview.scrollView.bounces = true
+  }
+
   //
   // Commands
   //
