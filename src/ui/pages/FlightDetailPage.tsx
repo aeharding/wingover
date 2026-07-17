@@ -23,7 +23,7 @@ import {
   ellipsisHorizontal,
   expandOutline,
 } from "ionicons/icons";
-import { useEffect, useEffectEvent, useRef, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { useParams } from "react-router";
 
 import { isTauri } from "../../engine/platform";
@@ -97,7 +97,7 @@ export default function FlightDetailPage() {
   const planLineRef = useRef<Line | null>(null);
   const markersRef = useRef<MarkerLayer | null>(null);
 
-  const load = useEffectEvent(() => {
+  const load = useCallback(() => {
     getFlight(id).then((found) => {
       setFlight(found);
       setDraftName(found?.name ?? "");
@@ -108,18 +108,18 @@ export default function FlightDetailPage() {
     getSetting("mapView").then((value) => {
       if (value === "street" || value === "satellite") setView(value);
     });
-  });
+  }, [id]);
 
   useIonViewWillEnter(() => {
     load();
-  }, [id]);
+  }, [load]);
 
   // Desktop pane navigation can swap the id without an Ionic page
   // transition; the loads are idempotent gets, so double-firing on a
   // normal entry costs nothing.
   useEffect(() => {
     load();
-  }, [id]);
+  }, [load]);
 
   function changeView(value: MapViewKind) {
     setView(value);
