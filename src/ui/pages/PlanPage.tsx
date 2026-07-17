@@ -181,7 +181,14 @@ export default function PlanPage() {
     });
   });
 
-  function handleReady(next: MapView) {
+  function handleReady(next: MapView | null) {
+    if (!next) {
+      // Provider re-create destroyed the view; drop it and every handle.
+      lineRef.current = null;
+      markersRef.current = null;
+      setMap(null);
+      return;
+    }
     lineRef.current = next.line({
       color: ROUTE_COLOR,
       width: 3,
@@ -290,7 +297,9 @@ export default function PlanPage() {
           >
             <IonIcon icon={locateOutline} />
           </button>
-          <ViewToggle view={view} onChange={changeView} />
+          {map?.supportsSatellite && (
+            <ViewToggle view={view} onChange={changeView} />
+          )}
         </div>
         {routeMeters > 0 && (
           <div className="plan-distance" data-testid="plan-distance">

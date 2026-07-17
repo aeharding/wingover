@@ -25,9 +25,18 @@ let ready: Promise<typeof mapkit> | null = null;
 // (the pins + midpoint handles), and `overlays` (the flight/route polylines +
 // their Style/LineGradient).
 export function loadMapKit(): Promise<typeof mapkit> {
+  // A rejected load is NOT cached: with the provider switchable at runtime,
+  // one offline moment must not pin the session to the MapLibre fallback
+  // after the network returns.
   ready ??= load({
     token: mapKitToken(),
     libraries: ["map", "annotations", "overlays"],
-  }).then(() => mapkit);
+  }).then(
+    () => mapkit,
+    (error: unknown) => {
+      ready = null;
+      throw error;
+    },
+  );
   return ready;
 }

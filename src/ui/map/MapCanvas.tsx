@@ -1,5 +1,6 @@
 import { useEffect, useEffectEvent, useRef, useState } from "react";
 
+import { onSettingChanged } from "../../storage/local";
 import { type MapViewKind, resolveBackend } from "./config";
 import type { MapView } from "./types";
 
@@ -12,7 +13,11 @@ import "./MapView.css";
 
 interface MapCanvasProps {
   base: MapViewKind;
-  onReady?: (view: MapView) => void;
+  // null = the previous view was just destroyed (provider re-create,
+  // unmount). Parents MUST drop their MapView and every handle minted from
+  // it — a 1 Hz fix calling line.set() on a removed map throws, and with no
+  // error boundary that unmounts the whole app mid-flight.
+  onReady?: (view: MapView | null) => void;
 }
 
 // Instantiate the resolved backend, each in its own lazy chunk. MapKit is the
@@ -23,7 +28,7 @@ async function createBackend(
   container: HTMLElement,
   base: MapViewKind,
 ): Promise<MapView> {
-  const backend = resolveBackend();
+  const backend = await resolveBackend();
   if (backend === "fake") {
     const { createFakeMapView } = await import("./fake/adapter");
     return createFakeMapView(container);
@@ -49,15 +54,44 @@ export default function MapCanvas({ base, onReady }: MapCanvasProps) {
   const containerRef = useRef<HTMLDivElement>(null);
   const viewRef = useRef<MapView | null>(null);
   const [revealed, setRevealed] = useState(false);
-  const notifyReady = useEffectEvent((view: MapView) => onReady?.(view));
-  const initialBaseRef = useRef(base);
+  // Bumped when the pilot changes the map provider in Settings: the whole
+  // backend is torn down and re-created in place, so the choice applies
+  // immediately — tab pages stay mounted forever and would otherwise show
+  // the old provider until relaunch. Consumers already rebuild their
+  // content on every onReady, so a new view flows through like the first.
+  const [epoch, setEpoch] = useState(0);
+  const notifyReady = useEffectEvent((view: MapView | null) => onReady?.(view));
+  const baseRef = useRef(base);
+
+  // The key gates MapLibre satellite (supportsSatellite is decided at
+  // creation), so key changes re-create too — debounced, because the key is
+  // typed keystroke by keystroke in Settings.
+  useEffect(() => {
+    // Re-create = a fresh reveal: the loading veil covers the swap instead
+    // of the old map vanishing to a naked container.
+    const recreate = () => {
+      setRevealed(false);
+      setEpoch((n) => n + 1);
+    };
+    const offBackend = onSettingChanged("mapBackend", recreate);
+    let timer: ReturnType<typeof setTimeout> | null = null;
+    const offKey = onSettingChanged("maptilerKey", () => {
+      if (timer) clearTimeout(timer);
+      timer = setTimeout(recreate, 800);
+    });
+    return () => {
+      offBackend();
+      offKey();
+      if (timer) clearTimeout(timer);
+    };
+  }, []);
 
   useEffect(() => {
     let cancelled = false;
     let view: MapView | undefined;
     (async () => {
       if (!containerRef.current) return;
-      view = await createBackend(containerRef.current, initialBaseRef.current);
+      view = await createBackend(containerRef.current, baseRef.current);
       if (cancelled) {
         view.destroy();
         return;
@@ -73,10 +107,13 @@ export default function MapCanvas({ base, onReady }: MapCanvasProps) {
       cancelled = true;
       view?.destroy();
       viewRef.current = null;
+      // The parent's copy is now a landmine; take it away (see props).
+      notifyReady(null);
     };
-  }, []);
+  }, [epoch]);
 
   useEffect(() => {
+    baseRef.current = base;
     viewRef.current?.setBaseMap(base);
   }, [base]);
 
