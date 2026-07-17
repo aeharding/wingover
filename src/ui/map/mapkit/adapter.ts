@@ -1,7 +1,7 @@
 import type { Annotation, Coordinate, PolylineOverlay } from "apple-mapkit";
 import type { Feature } from "geojson";
 
-import type { MapViewKind } from "../config";
+import type { MapAppearance, MapViewKind } from "../config";
 import type {
   Aircraft,
   AircraftState,
@@ -80,6 +80,7 @@ const toCoord = (p: LngLat) => new mapkit.Coordinate(p[1], p[0]);
 export async function createMapKitMapView(
   container: HTMLElement,
   initialBase: MapViewKind,
+  appearance: MapAppearance,
 ): Promise<MapView> {
   await loadMapKit();
 
@@ -92,7 +93,12 @@ export async function createMapKitMapView(
     mapType: baseToMapType(initialBase),
     center: new mapkit.Coordinate(39.8, -98.5),
   });
-  map.colorScheme = mapkit.ColorScheme.Light;
+  // Ground screens ride dark like the rest of the app; the live flight
+  // map is always light (sunlight-readable, STEERING).
+  map.colorScheme =
+    appearance === "light"
+      ? mapkit.ColorScheme.Light
+      : mapkit.ColorScheme.Dark;
 
   // The bearing the app last asked for. The glyph is oriented against this
   // (heading − lastBearing → 0 in track-up), so it holds pointing up.

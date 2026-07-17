@@ -7,18 +7,29 @@ import { getSetting } from "../../storage/local";
 
 export type MapViewKind = "street" | "satellite";
 
-// The keyless street fallback: OpenFreeMap's hosted dark style — free,
-// no account, no quota to bill anyone. MapLibre is the FALLBACK backend
+// Which world the basemap lives in. Ground screens (logbook, plan, detail,
+// desktop PWA) are dark like the rest of the app; the LIVE flight map is
+// always light — full sun on a leg-mounted phone is the one place the dark
+// map loses. A fixed per-context rule, deliberately not a setting.
+export type MapAppearance = "light" | "dark";
+
+// The keyless street fallbacks: OpenFreeMap's hosted styles — free, no
+// account, no quota to bill anyone. MapLibre is the FALLBACK backend
 // (MapKit is the default everywhere) and is allowed to be plainer; nothing
 // first-party may cost money here.
-const OPENFREEMAP_DARK_STYLE = "https://tiles.openfreemap.org/styles/dark";
+const OPENFREEMAP_STYLES: Record<MapAppearance, string> = {
+  dark: "https://tiles.openfreemap.org/styles/dark",
+  light: "https://tiles.openfreemap.org/styles/liberty",
+};
 
-// Street view: MapTiler Streets v4 dark for pilots who brought their own
-// key (vector, labels stay upright in track-up), OpenFreeMap otherwise.
-function streetStyleUrl(key: string | null): string {
+// Street view: MapTiler Streets v4 for pilots who brought their own key
+// (vector, labels stay upright in track-up), OpenFreeMap otherwise.
+function streetStyleUrl(key: string | null, appearance: MapAppearance): string {
   return key
-    ? `https://api.maptiler.com/maps/streets-v4-dark/style.json?key=${key}`
-    : OPENFREEMAP_DARK_STYLE;
+    ? `https://api.maptiler.com/maps/${
+        appearance === "dark" ? "streets-v4-dark" : "streets-v4"
+      }/style.json?key=${key}`
+    : OPENFREEMAP_STYLES[appearance];
 }
 
 // Launch-only URL flags (e.g. ?map-style=blank) must be read at app entry,
@@ -98,6 +109,7 @@ export async function resolveMaptilerKey(): Promise<string | null> {
 // difference) up to maxzoom 22. @3x/@4x are not offered (HTTP 400).
 async function satelliteStyle(
   key: string,
+  appearance: MapAppearance,
 ): Promise<StyleSpecification | string> {
   const style = await fetch(
     `https://api.maptiler.com/maps/hybrid-v4/style.json?key=${key}`,
@@ -110,7 +122,7 @@ async function satelliteStyle(
     console.warn(
       "Satellite unavailable (MapTiler hybrid style — key not valid for this origin); showing street view",
     );
-    return streetStyleUrl(key);
+    return streetStyleUrl(key, appearance);
   }
 
   const base = style.sources.satellite;
@@ -131,12 +143,13 @@ async function satelliteStyle(
 
 export async function resolveMapStyle(
   view: MapViewKind,
+  appearance: MapAppearance = "dark",
 ): Promise<StyleSpecification | string> {
   if (blankStyleRequested()) return BLANK_STYLE;
   const key = await resolveMaptilerKey();
   // No key, no satellite (a stored "satellite" preference degrades to
   // street rather than erroring) — the toggle is hidden in that state via
   // MapView.supportsSatellite.
-  if (view === "street" || !key) return streetStyleUrl(key);
-  return satelliteStyle(key);
+  if (view === "street" || !key) return streetStyleUrl(key, appearance);
+  return satelliteStyle(key, appearance);
 }

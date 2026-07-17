@@ -1,7 +1,11 @@
 import { useEffect, useEffectEvent, useRef, useState } from "react";
 
 import { onSettingChanged } from "../../storage/local";
-import { type MapViewKind, resolveBackend } from "./config";
+import {
+  type MapAppearance,
+  type MapViewKind,
+  resolveBackend,
+} from "./config";
 import type { MapView } from "./types";
 
 // maplibre-gl.css must load before MapView.css: both style the shared
@@ -13,6 +17,9 @@ import "./MapView.css";
 
 interface MapCanvasProps {
   base: MapViewKind;
+  // Dark is the default world (matches the app); the live flight map passes
+  // "light" — full sun is where the dark basemap loses (STEERING).
+  appearance?: MapAppearance;
   // null = the previous view was just destroyed (provider re-create,
   // unmount). Parents MUST drop their MapView and every handle minted from
   // it — a 1 Hz fix calling line.set() on a removed map throws, and with no
@@ -27,6 +34,7 @@ interface MapCanvasProps {
 async function createBackend(
   container: HTMLElement,
   base: MapViewKind,
+  appearance: MapAppearance,
 ): Promise<MapView> {
   const backend = await resolveBackend();
   if (backend === "fake") {
@@ -36,13 +44,13 @@ async function createBackend(
   if (backend === "mapkit") {
     try {
       const { createMapKitMapView } = await import("./mapkit/adapter");
-      return await createMapKitMapView(container, base);
+      return await createMapKitMapView(container, base, appearance);
     } catch (error) {
       console.warn("MapKit unavailable; falling back to MapLibre", error);
     }
   }
   const { createMapLibreMapView } = await import("./maplibre/adapter");
-  return createMapLibreMapView(container, base);
+  return createMapLibreMapView(container, base, appearance);
 }
 
 // The React host for a map. It owns the `.map-container` div and the backend
@@ -50,7 +58,11 @@ async function createBackend(
 // place any concrete backend (maplibre/adapter, later a mapkit one) is named.
 // The maplibre adapter is dynamically imported so maplibre-gl stays in a lazy
 // chunk that loads only when a map is first shown.
-export default function MapCanvas({ base, onReady }: MapCanvasProps) {
+export default function MapCanvas({
+  base,
+  appearance = "dark",
+  onReady,
+}: MapCanvasProps) {
   const containerRef = useRef<HTMLDivElement>(null);
   const viewRef = useRef<MapView | null>(null);
   const [revealed, setRevealed] = useState(false);
@@ -91,7 +103,11 @@ export default function MapCanvas({ base, onReady }: MapCanvasProps) {
     let view: MapView | undefined;
     (async () => {
       if (!containerRef.current) return;
-      view = await createBackend(containerRef.current, baseRef.current);
+      view = await createBackend(
+        containerRef.current,
+        baseRef.current,
+        appearance,
+      );
       if (cancelled) {
         view.destroy();
         return;
@@ -124,7 +140,10 @@ export default function MapCanvas({ base, onReady }: MapCanvasProps) {
     if (!container) return;
     container.classList.toggle("satellite", base === "satellite");
     container.classList.toggle("map-loading", !revealed);
-  }, [base, revealed]);
+    // The attribution (an OSM license obligation) is styled per appearance:
+    // its dark-map colors are white-on-white over a light basemap.
+    container.classList.toggle("map-light", appearance === "light");
+  }, [base, revealed, appearance]);
 
   // A drag that starts on the map belongs to the map: without this, a pan
   // beginning near the left edge doubles as Ionic's swipe-back and navigates

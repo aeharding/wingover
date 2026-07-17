@@ -12,10 +12,10 @@ test("live map survives a slow-loading style", async ({ page }) => {
   page.on("pageerror", (error) => pageErrors.push(String(error)));
 
   // Abort all MapTiler first, then win specifically for the street style
-  // (keyless OpenFreeMap dark) with a slow, minimal style.
+  // (keyless OpenFreeMap liberty; the live map is light) with a slow, minimal style.
   await page.route("**/api.maptiler.com/**", (route) => route.abort());
   await page.route(
-    "**/styles/dark",
+    "**/styles/liberty",
     async (route) => {
       await new Promise((resolve) => setTimeout(resolve, 800));
       await route.fulfill({
@@ -59,9 +59,9 @@ test("live map layers appear despite a slow sprite holding the style", async ({
     "base64",
   );
   // Abort MapTiler first; the specific routes below win for the street
-  // style (keyless OpenFreeMap dark) and the fake slow sprite.
+  // style (keyless OpenFreeMap liberty; the live map is light) and the fake slow sprite.
   await page.route("**/api.maptiler.com/**", (route) => route.abort());
-  await page.route("**/styles/dark", (route) =>
+  await page.route("**/styles/liberty", (route) =>
     route.fulfill({
       contentType: "application/json",
       body: JSON.stringify({
@@ -172,6 +172,25 @@ test("flight detail draws the track even when the map style loads slowly", async
   page.on("pageerror", (error) => pageErrors.push(String(error)));
 
   await page.route("**/api.maptiler.com/**", (route) => route.abort());
+  // The live map (light) fetches the liberty style on the way to this
+  // test's target page; keep it hermetic too.
+  await page.route("**/styles/liberty", (route) =>
+    route.fulfill({
+      contentType: "application/json",
+      body: JSON.stringify({
+        version: 8,
+        sources: {},
+        layers: [
+          {
+            id: "background",
+            type: "background",
+            paint: { "background-color": "#f8f4f0" },
+          },
+        ],
+      }),
+    }),
+  );
+
   await page.route(
     "**/styles/dark",
     async (route) => {
@@ -223,6 +242,25 @@ test("composite map draws all flights even with a slow style", async ({
   page.on("pageerror", (error) => pageErrors.push(String(error)));
 
   await page.route("**/api.maptiler.com/**", (route) => route.abort());
+  // The live map (light) fetches the liberty style on the way to this
+  // test's target page; keep it hermetic too.
+  await page.route("**/styles/liberty", (route) =>
+    route.fulfill({
+      contentType: "application/json",
+      body: JSON.stringify({
+        version: 8,
+        sources: {},
+        layers: [
+          {
+            id: "background",
+            type: "background",
+            paint: { "background-color": "#f8f4f0" },
+          },
+        ],
+      }),
+    }),
+  );
+
   await page.route(
     "**/styles/dark",
     async (route) => {
