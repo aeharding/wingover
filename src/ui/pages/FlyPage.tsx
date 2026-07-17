@@ -142,6 +142,12 @@ export default function FlyPage() {
       w.latitude,
     ]);
     const launchAt: LngLat = [flown[0].longitude, flown[0].latitude];
+    // The label is decorative; the save is sacred. A failed logbook read
+    // must never block persisting the flight (STEERING: no recoverable
+    // failure loses track data) — an error here just means no name today.
+    const launchName = await inheritedLaunchName(launchAt).catch(
+      () => undefined,
+    );
     try {
       await saveFlight(
         {
@@ -154,7 +160,7 @@ export default function FlyPage() {
           stats: computeStats(flown),
           updatedAt: Date.now(),
           launchAt,
-          launchName: await inheritedLaunchName(launchAt),
+          launchName,
           ...(plannedRoute.length > 0 ? { plannedRoute } : {}),
         },
         flown,

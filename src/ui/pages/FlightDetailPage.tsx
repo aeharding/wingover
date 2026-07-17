@@ -76,6 +76,10 @@ export default function FlightDetailPage() {
   const [view, setView] = useState<MapViewKind>("street");
   const [map, setMap] = useState<MapView | null>(null);
   const [mapFull, setMapFull] = useState(false);
+  // Mirrors mapFull for the async fullscreen grant below: two quick taps
+  // can fold the map before the browser grants fullscreen, and the grant
+  // callback must see the CURRENT intent, not the one it closed over.
+  const mapFullRef = useRef(false);
   const contentRef = useRef<HTMLIonContentElement>(null);
   const [draftName, setDraftName] = useState("");
   const [draftLaunch, setDraftLaunch] = useState("");
@@ -109,10 +113,20 @@ export default function FlightDetailPage() {
   // Everything reverses in the cleanup, so navigating away while expanded
   // can't strand a hidden tab bar or a fullscreened document.
   useEffect(() => {
+    mapFullRef.current = mapFull;
     if (!mapFull) return;
     document.body.classList.add("flight-map-full");
     if (!isTauri()) {
-      void document.documentElement.requestFullscreen?.().catch(() => {});
+      void document.documentElement
+        .requestFullscreen?.()
+        .then(() => {
+          // Folded again before the grant landed: leave immediately, or the
+          // browser stays fullscreen with no listener left to notice.
+          if (!mapFullRef.current && document.fullscreenElement) {
+            void document.exitFullscreen().catch(() => {});
+          }
+        })
+        .catch(() => {});
     }
     // Esc / the system gesture exits browser fullscreen without touching our
     // button — fold the map back down so the two never disagree.

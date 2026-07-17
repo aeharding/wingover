@@ -266,27 +266,49 @@ export async function updateFlight(
  */
 const SAME_LAUNCH_METERS = 300;
 
+export interface NamedLaunch {
+  at: LngLat;
+  name: string;
+}
+
+/**
+ * Every named launch in the logbook, newest flight first (listFlights
+ * order). Loaded once and matched many times by batch import — per-file
+ * loads made a 1000-file import spend more time naming flights than
+ * saving them.
+ */
+export async function namedLaunches(): Promise<NamedLaunch[]> {
+  return (await listFlights()).flatMap((flight) =>
+    flight.launchAt && flight.launchName
+      ? [{ at: flight.launchAt, name: flight.launchName }]
+      : [],
+  );
+}
+
+/** Newest-first input makes this most-recent-wins, so renaming a flight's
+ * launch propagates forward to future flights without rewriting past ones. */
+export function nearestLaunchName(
+  launches: NamedLaunch[],
+  launchAt: LngLat,
+): string | undefined {
+  const here = { longitude: launchAt[0], latitude: launchAt[1] };
+  return launches.find(
+    (launch) =>
+      haversineMeters(here, {
+        longitude: launch.at[0],
+        latitude: launch.at[1],
+      }) <= SAME_LAUNCH_METERS,
+  )?.name;
+}
+
 /**
  * The launch name a new flight at this point should carry, from the pilot's
- * own history: the most recent named launch within SAME_LAUNCH_METERS wins,
- * so renaming a flight's launch propagates forward to future flights without
- * rewriting past ones.
+ * own history.
  */
 export async function inheritedLaunchName(
   launchAt: LngLat,
 ): Promise<string | undefined> {
-  const here = { longitude: launchAt[0], latitude: launchAt[1] };
-  // listFlights sorts newest first, so find() is most-recent-wins.
-  const flights = await listFlights();
-  return flights.find(
-    (flight) =>
-      flight.launchName &&
-      flight.launchAt &&
-      haversineMeters(here, {
-        longitude: flight.launchAt[0],
-        latitude: flight.launchAt[1],
-      }) <= SAME_LAUNCH_METERS,
-  )?.launchName;
+  return nearestLaunchName(await namedLaunches(), launchAt);
 }
 
 export async function deleteFlight(flightId: string) {
