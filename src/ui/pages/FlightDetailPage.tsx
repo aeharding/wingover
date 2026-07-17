@@ -373,9 +373,12 @@ export default function FlightDetailPage() {
           <>
             <IonList>
               <IonItem>
+                {/* Ionic defaults autocapitalize to "off" (unlike bare HTML
+                    inputs), so the iOS keyboard never shifts without these. */}
                 <IonInput
                   label="Name"
                   clearInput
+                  autocapitalize="words"
                   value={draftName}
                   aria-label="Flight name"
                   onIonInput={(event) => setDraftName(event.detail.value ?? "")}
@@ -386,6 +389,7 @@ export default function FlightDetailPage() {
                 <IonInput
                   label="Launch"
                   clearInput
+                  autocapitalize="words"
                   placeholder="Add location"
                   value={draftLaunch}
                   aria-label="Launch location"
@@ -400,6 +404,7 @@ export default function FlightDetailPage() {
                     two), growing with content. */}
                 <IonTextarea
                   label="Notes"
+                  autocapitalize="sentences"
                   placeholder="Wing, motor, conditions…"
                   rows={1}
                   autoGrow
