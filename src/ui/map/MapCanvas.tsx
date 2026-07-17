@@ -103,16 +103,19 @@ export default function MapCanvas({
     let view: MapView | undefined;
     (async () => {
       if (!containerRef.current) return;
-      view = await createBackend(
-        containerRef.current,
-        baseRef.current,
-        appearance,
-      );
+      const createdWith = baseRef.current;
+      view = await createBackend(containerRef.current, createdWith, appearance);
       if (cancelled) {
         view.destroy();
         return;
       }
       viewRef.current = view;
+      // The base can move while createBackend is in flight (pages load the
+      // persisted view async, and the base effect no-ops on a null
+      // viewRef): a satellite pilot refreshing the page got a street map
+      // under a satellite toggle. Apply the latest base the effect
+      // recorded, only when it actually moved.
+      if (baseRef.current !== createdWith) view.setBaseMap(baseRef.current);
       notifyReady(view);
       void view.ready.then(() => {
         if (!cancelled) setRevealed(true);

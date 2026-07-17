@@ -96,6 +96,39 @@ export async function createMapLibreMapView(
   setupAttribution(container);
 
   // ── content registry (survives setBaseMap) ───────────────────────────
+
+  /**
+   * maplibre's style parser predates CSS Color 4: hex/rgb/hsl only. A
+   * color() function is rejected as an error EVENT, not a throw, so the
+   * layer silently never appears — measured: the track line was invisible
+   * on every maplibre map while MapKit, whose overlays are CSS, drew the
+   * same constant fine (and the readiness attribute still got set, so the
+   * e2e attribute check passed over the missing line). Colors stay
+   * authored in display-p3 (STEERING); this maps them into sRGB at the
+   * one boundary that cannot go wider, through the real linear-light
+   * matrix, so the hue survives even where the gamut clamps.
+   */
+  function toSrgb(
+    color: string | ["get", string],
+  ): string | ["get", string] {
+    if (typeof color !== "string") return color;
+    const m =
+      /^color\(display-p3\s+([\d.]+)\s+([\d.]+)\s+([\d.]+)\s*(?:\/\s*([\d.]+))?\)$/.exec(
+        color,
+      );
+    if (!m) return color;
+    const linear = (c: number) =>
+      c <= 0.04045 ? c / 12.92 : ((c + 0.055) / 1.055) ** 2.4;
+    const delinear = (c: number) =>
+      c <= 0.0031308 ? 12.92 * c : 1.055 * c ** (1 / 2.4) - 0.055;
+    const [r, g, b] = [+m[1]!, +m[2]!, +m[3]!].map(linear);
+    const channel = (v: number) =>
+      Math.round(Math.min(1, Math.max(0, delinear(v))) * 255);
+    const rs = channel(1.2249402 * r - 0.2249402 * g);
+    const gs = channel(-0.0420569 * r + 1.0420569 * g);
+    const bs = channel(-0.0196376 * r - 0.0786361 * g + 1.0982735 * b);
+    return `rgba(${rs}, ${gs}, ${bs}, ${m[4] ?? 1})`;
+  }
   const lines: LineRecord[] = [];
   let aircraftState: AircraftState | null = null;
   let aircraftRegistered = false;
@@ -118,7 +151,7 @@ export async function createMapLibreMapView(
           source: rec.sourceId,
           layout: { "line-cap": "round", "line-join": "round" },
           paint: {
-            "line-color": rec.style.color,
+            "line-color": toSrgb(rec.style.color),
             "line-width": rec.style.width,
             ...(rec.style.dash ? { "line-dasharray": rec.style.dash } : {}),
             ...(rec.style.opacity !== undefined

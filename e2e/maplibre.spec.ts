@@ -232,6 +232,21 @@ test("flight detail draws the track even when the map style loads slowly", async
   await expect(page.locator("[data-track-layer='true']")).toBeVisible({
     timeout: 10_000,
   });
+  // The attribute alone lied once: maplibre rejects invalid paint as an
+  // error EVENT, not a throw, so a refused layer left the attribute
+  // standing over a missing line. Ask the style itself.
+  await expect
+    .poll(() =>
+      page.evaluate(
+        () =>
+          !!(
+            document.querySelector(".map-container") as HTMLElement & {
+              __map?: { getLayer(id: string): unknown };
+            }
+          ).__map?.getLayer("track"),
+      ),
+    )
+    .toBe(true);
   expect(pageErrors).toEqual([]);
 });
 
