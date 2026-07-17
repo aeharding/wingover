@@ -19,7 +19,7 @@ import { useEffect, useSyncExternalStore } from "react";
 import { Redirect, Route } from "react-router-dom";
 
 import { engine } from "../engine";
-import { isTauri } from "../engine/platform";
+import DesktopShell from "./desktop/DesktopShell";
 import AllFlightsMapPage from "./pages/AllFlightsMapPage";
 import FlightDetailPage from "./pages/FlightDetailPage";
 import FlyPage from "./pages/FlyPage";
@@ -72,13 +72,16 @@ function AppBody() {
     engine.subscribe,
     () => engine.snapshotSync().status !== "idle",
   );
+  const isDesktop = useIsDesktop();
   if (inFlight) return <FlyPage />;
+  // Desktop gets its own shell: plain react-router, no Ionic outlet (see
+  // DesktopShell). Phones keep the Ionic tab shell untouched.
+  if (isDesktop) return <DesktopShell />;
   return <TabShell />;
 }
 
 function TabShell() {
   const canRecord = useCanRecord();
-  const isDesktop = useIsDesktop();
   return (
     <IonReactRouter>
       <IonTabs>
@@ -110,15 +113,6 @@ function TabShell() {
           </Route>
         </IonRouterOutlet>
         <IonTabBar slot="bottom">
-          {isDesktop && !isTauri() && (
-            /* The way back out the front door: the app icon tops the rail
-               and opens the landing page. Same-origin, and the landing's
-               script shows app-referred visits the pitch instead of
-               bouncing them straight back here. */
-            <a className="rail-brand" href="/" aria-label="About Wingover">
-              <img src="/icon-192.png" alt="" width="36" height="36" />
-            </a>
-          )}
           {canRecord && (
             <IonTabButton tab="fly" href="/fly">
               <IonIcon icon={navigateOutline} />

@@ -83,12 +83,23 @@ export default function PlanPage() {
     0,
   );
 
-  useIonViewWillEnter(() => {
+  function loadPlan() {
     listPins().then(setPins);
     getSetting("mapView").then((value) => {
       if (value === "street" || value === "satellite") setView(value);
     });
+  }
+
+  // Will-enter for the phone shell; a mount effect for the desktop shell
+  // (no Ionic lifecycle there). Idempotent gets, so double-firing is free.
+  useIonViewWillEnter(() => {
+    loadPlan();
   });
+
+  useEffect(() => {
+    loadPlan();
+    // eslint-safe: loadPlan reads no reactive values.
+  }, []);
 
   // Pins placed on another device appear without a refresh — the feed fires
   // for replicated pulls and local writes alike.

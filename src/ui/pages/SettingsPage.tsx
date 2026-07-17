@@ -14,7 +14,8 @@ import {
   useIonViewWillEnter,
 } from "@ionic/react";
 import { checkmarkOutline, closeCircle } from "ionicons/icons";
-import { useState, useSyncExternalStore } from "react";
+import { useEffect, useState, useSyncExternalStore } from "react";
+import { useHistory } from "react-router-dom";
 
 import { isTauri } from "../../engine/platform";
 import {
@@ -34,6 +35,7 @@ import "./SettingsPage.css";
 export default function SettingsPage() {
   const { units } = useSettings();
   const openSync = useSyncSheet();
+  const history = useHistory();
   const canRecord = useCanRecord();
   const syncStatus = useSyncExternalStore(sync.subscribe, sync.currentStatus);
 
@@ -51,14 +53,25 @@ export default function SettingsPage() {
   // (and the next tap a silent no-op) unless the element is remounted.
   const [toggleReset, setToggleReset] = useState(0);
 
-  // Re-read on every entry, not once on mount: the provider subpage edits
-  // the same settings, and this page stays mounted behind it.
-  useIonViewWillEnter(() => {
+  function loadSettings() {
     getSetting("mapBackend").then((value) => {
       if (value === "mapkit" || value === "maplibre") setMapBackend(value);
     });
     getBooleanSetting("autoEndFlight", true).then(setAutoEnd);
     getBooleanSetting("recordInBrowser", false).then(setRecordHere);
+  }
+
+  // Phone: re-read on every Ionic view entry (the provider subpage edits
+  // the same settings and this page stays mounted behind it). Desktop: no
+  // Ionic lifecycle exists, but SettingsRoutes remounts this page per
+  // subpage hop, so a mount effect covers the same ground.
+  useIonViewWillEnter(() => {
+    loadSettings();
+  }, []);
+
+  useEffect(() => {
+    loadSettings();
+    // Loads are idempotent gets; double-firing on phone entry is free.
   }, []);
 
   function saveAutoEnd(value: boolean) {
@@ -130,7 +143,7 @@ export default function SettingsPage() {
 
         <div className="settings-list-header">General</div>
         <IonList inset>
-          <IonItem button detail routerLink="/settings/units">
+          <IonItem button detail onClick={() => history.push("/settings/units")}>
             <IonLabel>Units</IonLabel>
             <IonNote slot="end">
               {units === "metric" ? "Metric" : "Imperial"}
@@ -156,7 +169,7 @@ export default function SettingsPage() {
         <IonList inset>
           {/* Apple's pick-one idiom: the row shows the current value and
               pushes a checkmark list. */}
-          <IonItem button detail routerLink="/settings/map">
+          <IonItem button detail onClick={() => history.push("/settings/map")}>
             <IonLabel>Map Provider</IonLabel>
             <IonNote slot="end">
               {mapBackend === "maplibre" ? "MapLibre" : "MapKit"}

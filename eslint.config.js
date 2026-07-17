@@ -9,11 +9,22 @@ import { defineConfig } from "eslint/config";
 import globals from "globals";
 import tseslint from "typescript-eslint";
 
+import maxUseState from "./eslint-rules/max-usestate.js";
+
 export default defineConfig(
   eslint.configs.recommended,
   tseslint.configs.recommended,
   eslintConfigPrettier,
   reactHooks.configs.flat["recommended-latest"],
+  {
+    plugins: {
+      wingover: { rules: { "max-usestate": maxUseState } },
+    },
+    rules: {
+      // >5 useState in one component = state that wants a hook/object.
+      "wingover/max-usestate": "error",
+    },
+  },
   {
     // Disabling lint rules inline is banned — fix the code instead.
     plugins: {

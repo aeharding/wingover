@@ -23,14 +23,12 @@ import ConnectFunnel from "../logbook/ConnectFunnel";
 import FlightList from "../logbook/FlightList";
 import { useFlights } from "../logbook/useFlights";
 import { useSettings } from "../settings/SettingsContext";
-import { useIsDesktop } from "../useIsDesktop";
 
 import "./LogbookPage.css";
 
 export default function LogbookPage() {
   const { units } = useSettings();
   const router = useIonRouter();
-  const isDesktop = useIsDesktop();
   const { flights, refresh } = useFlights();
   const [menuOpen, setMenuOpen] = useState(false);
   const [toastMessage, setToastMessage] = useState<string | null>(null);
@@ -41,7 +39,6 @@ export default function LogbookPage() {
   const fileInputRef = useRef<HTMLInputElement>(null);
   const contentRef = useRef<HTMLIonContentElement>(null);
   const scrollParentRef = useRef<HTMLElement | null>(null);
-  const paneRef = useRef<HTMLDivElement>(null);
   const [scrollReady, setScrollReady] = useState(false);
 
   useEffect(() => {
@@ -78,7 +75,7 @@ export default function LogbookPage() {
           </IonButtons>
         </IonToolbar>
       </IonHeader>
-      <IonContent ref={contentRef} scrollY={!isDesktop}>
+      <IonContent ref={contentRef}>
         <IonActionSheet
           isOpen={menuOpen}
           onDidDismiss={() => setMenuOpen(false)}
@@ -165,27 +162,9 @@ export default function LogbookPage() {
               />
             )}
           </div>
-        ) : isDesktop ? (
-          <div className="logbook-split">
-            <aside className="logbook-pane" ref={paneRef}>
-              <FlightList
-                key="pane"
-                flights={flights}
-                units={units}
-                scrollRef={paneRef}
-                desktop
-                totalsStrip
-                onDeleted={refresh}
-              />
-            </aside>
-            <div className="logbook-seat" data-testid="logbook-seat">
-              Select a flight
-            </div>
-          </div>
         ) : (
           scrollReady && (
             <FlightList
-              key="page"
               flights={flights}
               units={units}
               scrollRef={scrollParentRef}
@@ -193,7 +172,7 @@ export default function LogbookPage() {
             />
           )
         )}
-        {!isDesktop && flights.length > 0 && (
+        {flights.length > 0 && (
           <div className="logbook-totals">
             <IonNote>
               {flights.length} flights · {formatDuration(totalDuration)} ·{" "}

@@ -49,18 +49,16 @@ import {
   type Pin,
   saveFlight,
 } from "../../storage/db";
-import { getSetting, setSetting } from "../../storage/local";
 import Tile from "../components/Tile";
 import type { MapViewKind } from "../map/config";
 import LiveTrackMap from "../map/LiveTrackMap";
-import { readLiveViewState, writeLiveViewState } from "../map/liveViewState";
 import type { MapView } from "../map/types";
+import { useLiveViewPrefs } from "../map/useLiveViewPrefs";
 import ViewToggle from "../map/ViewToggle";
 import { useSettings } from "../settings/SettingsContext";
 
 import "./FlyPage.css";
 
-const savedLiveView = readLiveViewState();
 
 // WAL hydration happens once per app launch. The App swaps the whole nav shell
 // for a bare <FlyPage> when a flight is active, so FlyPage remounts mid-session
@@ -91,12 +89,8 @@ export default function FlyPage() {
   const [ready, setReady] = useState(hydratedOnce);
   const [presentAlert] = useIonAlert();
   const [presentToast] = useIonToast();
-  const [mapView, setMapView] = useState<MapViewKind>(
-    savedLiveView.mapView ?? "street",
-  );
-  const [follow, setFollow] = useState(savedLiveView.follow ?? true);
+  const { mapView, follow, trackUp, update: updateLiveView } = useLiveViewPrefs();
   const [liveMap, setLiveMap] = useState<MapView | null>(null);
-  const [trackUp, setTrackUp] = useState(savedLiveView.trackUp ?? false);
   const [mapTopInset, setMapTopInset] = useState(0);
   // The planned route, for the idle-screen distance. Reloaded on every entry
   // to the Fly tab so edits made on the Plan tab are reflected.
@@ -104,6 +98,10 @@ export default function FlyPage() {
   useIonViewWillEnter(() => {
     listPins().then(setPlannedPins);
   });
+  // Desktop shell has no Ionic lifecycle; load on mount there too.
+  useEffect(() => {
+    listPins().then(setPlannedPins);
+  }, []);
   // The waypoint the pilot tapped on the map — gates the "clear checkpoint"
   // control. Held as an id; the live active set decides whether it still exists.
   const [selectedWaypointId, setSelectedWaypointId] = useState<string | null>(
@@ -119,19 +117,15 @@ export default function FlyPage() {
   const status: EngineStatus | "loading" = ready ? snapshot.status : "loading";
 
   function changeMapView(value: MapViewKind) {
-    setMapView(value);
-    setSetting("mapView", value);
-    writeLiveViewState({ mapView: value });
+    updateLiveView({ mapView: value });
   }
 
   function changeFollow(value: boolean) {
-    setFollow(value);
-    writeLiveViewState({ follow: value });
+    updateLiveView({ follow: value });
   }
 
   function changeTrackUp(value: boolean) {
-    setTrackUp(value);
-    writeLiveViewState({ trackUp: value });
+    updateLiveView({ trackUp: value });
   }
 
   async function persistFlight(flown: Fix[], plannedWaypoints: Waypoint[]) {
@@ -193,9 +187,6 @@ export default function FlyPage() {
   });
 
   useEffect(() => {
-    getSetting("mapView").then((value) => {
-      if (value === "street" || value === "satellite") setMapView(value);
-    });
     // Kick the one-time WAL hydration; the subscription picks up the
     // resulting state change like any other.
     void engine.getSnapshot().then(() => {

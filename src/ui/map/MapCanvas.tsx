@@ -126,7 +126,7 @@ export default function MapCanvas({
       // The parent's copy is now a landmine; take it away (see props).
       notifyReady(null);
     };
-  }, [epoch]);
+  }, [epoch, appearance]);
 
   useEffect(() => {
     baseRef.current = base;

@@ -26,10 +26,10 @@ interface FlightListProps {
   scrollRef: React.RefObject<HTMLElement | null>;
   // Highlighted row (the flight open in the desktop split's detail seat).
   selectedId?: string;
-  // Desktop rows replace the navigation stack instead of pushing onto it:
-  // flipping through a logbook must not stack up a map-holding detail page
-  // per click.
-  desktop?: boolean;
+  // Desktop split rows select in place (no router navigation, so the list
+  // and the seat's map never remount); without it rows are phone router
+  // links.
+  onSelect?: (flight: Flight) => void;
   // Cumulative totals as a strip above the rows (the desktop pane header).
   totalsStrip?: boolean;
   onDeleted: (deleted: Flight) => void;
@@ -40,7 +40,7 @@ export default function FlightList({
   units,
   scrollRef,
   selectedId,
-  desktop,
+  onSelect,
   totalsStrip,
   onDeleted,
 }: FlightListProps) {
@@ -78,9 +78,10 @@ export default function FlightList({
           {flights.map((flight) => (
             <IonItemSliding key={flight.id}>
               <IonItem
-                routerLink={`/logbook/${flight.id}`}
-                routerDirection={desktop ? "root" : "forward"}
-                detail={!desktop}
+                {...(onSelect
+                  ? { button: true, onClick: () => onSelect(flight) }
+                  : { routerLink: `/logbook/${flight.id}` })}
+                detail={!onSelect}
                 color={selectedId === flight.id ? "light" : undefined}
               >
                 <IonLabel>
