@@ -1,0 +1,938 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <!-- Returning pilots skip the pitch: the app stamps wingover.used on its
+         first real load, and this forwards before paint. -->
+    <script>
+      try {
+        if (localStorage.getItem("wingover.used")) location.replace("/logbook");
+      } catch {}
+    </script>
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <meta name="color-scheme" content="dark" />
+    <meta
+      name="description"
+      content="Wingover is a free, open source flight recorder and planner for paramotor pilots. No account, no telemetry; your flights live on your devices, in open formats."
+    />
+    <title>Wingover - paramotor flight recorder</title>
+    <link rel="icon" href="/icon-192.png" />
+    <style>
+      /* Themed from the app icon: its sunset sky, dusk-dimmed, with the
+         icon's stars and clouds up top and its sun setting bottom-right.
+         The screenshots are the pitch and they are shown BIG. */
+      :root {
+        --ink: #fdf5e2;
+        --muted: rgba(253, 240, 220, 0.78);
+        --gold: #ffd489;
+        --tile: #10161c;
+        --hair-warm: rgba(253, 240, 220, 0.32);
+        --hair-dark: rgba(255, 255, 255, 0.1);
+        --app-faint: #6b7883;
+        --app-muted: #99a5b0;
+      }
+      * {
+        box-sizing: border-box;
+      }
+      html {
+        /* The overscroll canvas, two-toned: bouncing above the page reveals
+           the sky's top purple, bouncing past the footer its bottom orange.
+           A viewport-fixed 50/50 gradient does it; the body's own gradient
+           covers everything in between, so the hard split is never seen. */
+        background: linear-gradient(to bottom, #241a3d 50%, #92582f 50%) fixed;
+      }
+      body {
+        margin: 0;
+        background: linear-gradient(
+          to bottom,
+          #241a3d 0%,
+          #3a2344 30%,
+          #5c3145 60%,
+          #713a38 80%,
+          #92582f 100%
+        );
+        color: var(--ink);
+        font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", sans-serif;
+        line-height: 1.55;
+        /* The hero's stars/clouds intentionally hang outside their column;
+           clip so they can never cause sideways scroll on small screens. */
+        overflow-x: clip;
+      }
+
+      .sun {
+        position: fixed;
+        right: 6vw;
+        bottom: -13rem;
+        width: 20rem;
+        height: 20rem;
+        border-radius: 50%;
+        background: #ffc66b;
+        opacity: 0.38;
+        box-shadow: 0 0 130px 60px rgba(255, 198, 107, 0.26);
+        pointer-events: none;
+      }
+      /* The sun rises as you scroll: a CSS scroll-driven animation, no JS.
+         Browsers without animation-timeline (or with reduced motion) keep
+         the static half-set sun. */
+      @media (prefers-reduced-motion: no-preference) {
+        @supports (animation-timeline: scroll()) {
+          @keyframes sunrise {
+            to {
+              transform: translateY(-22rem);
+              opacity: 0.5;
+            }
+          }
+          .sun {
+            animation: sunrise linear both;
+            animation-timeline: scroll(root);
+          }
+        }
+      }
+      nav,
+      main,
+      footer {
+        position: relative;
+        z-index: 1;
+      }
+
+      nav {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        max-width: 60rem;
+        margin: 0 auto;
+        padding: 1.1rem 1.5rem;
+      }
+      .wordmark {
+        display: inline-flex;
+        align-items: center;
+        gap: 0.6rem;
+        font-weight: 800;
+        letter-spacing: -0.02em;
+        font-size: 1.1rem;
+        color: var(--ink);
+        text-decoration: none;
+      }
+      .wordmark img {
+        width: 38px;
+        height: 38px;
+        border-radius: 10px;
+        display: block;
+      }
+      .wordmark span {
+        display: flex;
+        flex-direction: column;
+        line-height: 1.25;
+      }
+      .wordmark small {
+        font-size: 0.72rem;
+        font-weight: 500;
+        letter-spacing: 0;
+        color: var(--muted);
+      }
+      .nav-open {
+        font-size: 0.85rem;
+        color: var(--ink);
+        text-decoration: none;
+        border: 1px solid var(--hair-warm);
+        border-radius: 8px;
+        padding: 0.42rem 0.95rem;
+      }
+      .nav-open:hover,
+      .nav-open:focus-visible {
+        border-color: var(--ink);
+        outline: none;
+      }
+
+      /* ── hero: short and straight ─────────────────────── */
+      .hero {
+        position: relative;
+        max-width: 44rem;
+        margin: 0 auto;
+        padding: 4.5rem 1.5rem 4rem;
+        text-align: center;
+      }
+      .hero .art {
+        position: absolute;
+        inset: 0;
+        pointer-events: none;
+      }
+      .art i {
+        position: absolute;
+        background: #f2dcb3;
+        border-radius: 999px;
+      }
+      .art .s1 {
+        width: 11px;
+        height: 11px;
+        left: -14%;
+        top: 20%;
+        opacity: 0.55;
+      }
+      .art .s2 {
+        width: 7px;
+        height: 7px;
+        left: -6%;
+        top: 9%;
+        opacity: 0.45;
+      }
+      .art .c1 {
+        width: 120px;
+        height: 18px;
+        right: -18%;
+        top: 13%;
+        opacity: 0.18;
+      }
+      .art .c2 {
+        width: 72px;
+        height: 14px;
+        right: -10%;
+        top: 22%;
+        opacity: 0.14;
+      }
+      h1 {
+        font-size: clamp(2.1rem, 5.5vw, 3.2rem);
+        font-weight: 800;
+        letter-spacing: -0.025em;
+        line-height: 1.1;
+        margin: 0 0 1rem;
+        text-wrap: balance;
+      }
+      .hero p {
+        color: var(--muted);
+        font-size: 1.05rem;
+        max-width: 34rem;
+        margin: 0 auto 2rem;
+      }
+      .store {
+        display: inline-flex;
+        align-items: center;
+        gap: 0.65rem;
+        background: #000;
+        color: #fff;
+        text-decoration: none;
+        border: 1px solid #a6a6a6;
+        border-radius: 10px;
+        padding: 0.55rem 1.15rem 0.6rem;
+        box-shadow: 0 10px 28px rgba(20, 10, 30, 0.45);
+      }
+      .store svg {
+        width: 26px;
+        height: 26px;
+        fill: #fff;
+        flex-shrink: 0;
+      }
+      .store-text {
+        display: flex;
+        flex-direction: column;
+        line-height: 1.15;
+        text-align: left;
+      }
+      .store-text small {
+        font-size: 0.62rem;
+        font-weight: 400;
+      }
+      .store-text strong {
+        font-size: 1.15rem;
+        font-weight: 600;
+        letter-spacing: -0.01em;
+      }
+      .store:focus-visible {
+        outline: 2px solid var(--ink);
+        outline-offset: 2px;
+      }
+      .also {
+        margin-top: 1.2rem;
+        font-size: 0.9rem;
+        color: var(--muted);
+      }
+      .also a {
+        color: var(--gold);
+        font-weight: 600;
+        text-decoration: none;
+      }
+      .also a:hover,
+      .also a:focus-visible {
+        text-decoration: underline;
+        outline: none;
+      }
+
+      /* ── feature sections: one BIG screen each ────────── */
+      .feat {
+        display: flex;
+        align-items: center;
+        gap: clamp(2rem, 6vw, 5rem);
+        max-width: 60rem;
+        margin: 0 auto;
+        padding: 3.5rem 1.5rem;
+      }
+      .feat.rev {
+        flex-direction: row-reverse;
+      }
+      .feat-text {
+        flex: 1;
+        max-width: 24rem;
+      }
+      .feat-text h2 {
+        font-size: clamp(1.5rem, 3vw, 1.9rem);
+        font-weight: 800;
+        letter-spacing: -0.02em;
+        line-height: 1.15;
+        margin: 0 0 0.7rem;
+        text-wrap: balance;
+      }
+      .feat-text p {
+        color: var(--muted);
+        margin: 0;
+        font-size: 1rem;
+      }
+
+      /* The phone: big, readable, unafraid. */
+      .ph {
+        width: min(320px, 86vw);
+        aspect-ratio: 320 / 648;
+        border: 1px solid rgba(70, 49, 92, 0.9);
+        border-radius: 42px;
+        background: #000;
+        overflow: hidden;
+        box-shadow: 0 30px 60px rgba(40, 20, 50, 0.55);
+        display: flex;
+        flex-direction: column;
+        flex-shrink: 0;
+        color: #f2f4f6;
+      }
+
+      /* deck */
+      .deck {
+        flex: 1;
+        display: flex;
+        flex-direction: column;
+        gap: 12px;
+        padding: 24px 18px 0;
+      }
+      .dstat {
+        background: var(--tile);
+        border-radius: 14px;
+        padding: 12px 16px 14px;
+      }
+      .dstat span {
+        display: block;
+        font-size: 0.72rem;
+        letter-spacing: 0.1em;
+        text-transform: uppercase;
+        color: var(--app-faint);
+      }
+      .dstat b {
+        font-size: 2.3rem;
+        font-weight: 800;
+        font-variant-numeric: tabular-nums;
+        line-height: 1.1;
+        color: #fff;
+      }
+      .dstat small {
+        font-size: 0.95rem;
+        color: var(--app-muted);
+        font-weight: 600;
+        margin-left: 4px;
+      }
+      .dstat.cyan b {
+        color: color(display-p3 0 0.7 1);
+      }
+      .dstat.grn b {
+        color: color(display-p3 0 1 0);
+      }
+      .dstat.yel b {
+        color: color(display-p3 1 0.95 0);
+      }
+      .mapfill {
+        flex: 1;
+        margin: 8px -18px 0;
+        position: relative;
+        background: #101215;
+        min-height: 120px;
+      }
+      .mapfill.tall {
+        margin: 0;
+        min-height: 300px;
+      }
+      .mapfill svg {
+        position: absolute;
+        inset: 0;
+        width: 100%;
+        height: 100%;
+      }
+
+      /* list screens */
+      .screen {
+        flex: 1;
+        display: flex;
+        flex-direction: column;
+      }
+      .tt {
+        font-weight: 800;
+        font-size: 1.35rem;
+        padding: 26px 20px 12px;
+      }
+      .totals {
+        display: flex;
+        gap: 18px;
+        padding: 0 20px 14px;
+        border-bottom: 1px solid var(--hair-dark);
+      }
+      .totals div b {
+        display: block;
+        font-size: 1.05rem;
+        font-variant-numeric: tabular-nums;
+      }
+      .totals div span {
+        font-size: 0.6rem;
+        letter-spacing: 0.08em;
+        text-transform: uppercase;
+        color: var(--app-faint);
+      }
+      .phrow {
+        padding: 13px 20px;
+        border-bottom: 1px solid var(--hair-dark);
+      }
+      .phrow h3 {
+        margin: 0 0 2px;
+        font-size: 1rem;
+        font-weight: 600;
+      }
+      .phrow p {
+        margin: 0;
+        font-size: 0.82rem;
+        color: var(--app-muted);
+        white-space: nowrap;
+        overflow: hidden;
+        text-overflow: ellipsis;
+        font-variant-numeric: tabular-nums;
+      }
+      .statrows {
+        margin: 10px 20px 0;
+        background: var(--tile);
+        border-radius: 14px;
+        padding: 2px 16px;
+      }
+      .stat {
+        display: flex;
+        justify-content: space-between;
+        align-items: baseline;
+        padding: 10px 0;
+        border-bottom: 1px solid var(--hair-dark);
+        font-size: 0.92rem;
+      }
+      .stat:last-child {
+        border-bottom: 0;
+      }
+      .stat span {
+        color: var(--app-muted);
+      }
+      .stat b {
+        font-variant-numeric: tabular-nums;
+        font-weight: 650;
+      }
+      .launchline {
+        display: flex;
+        align-items: center;
+        gap: 8px;
+        color: var(--app-muted);
+        font-size: 0.92rem;
+        padding: 2px 20px 10px;
+      }
+
+      /* sync sheet */
+      .syncstate {
+        text-align: center;
+        padding: 34px 20px 10px;
+      }
+      .syncstate b {
+        font-size: 2.4rem;
+        font-weight: 800;
+        color: color(display-p3 0 1 0);
+      }
+      .syncstate p {
+        margin: 4px 0 0;
+        color: var(--app-muted);
+        font-size: 0.92rem;
+      }
+      .syncbtn {
+        margin: 12px 20px 0;
+        border: 1px solid var(--hair-dark);
+        background: var(--tile);
+        border-radius: 14px;
+        padding: 15px;
+        text-align: center;
+        font-weight: 600;
+        font-size: 0.98rem;
+      }
+      .syncbtn.quiet {
+        background: none;
+        border: 0;
+        color: var(--app-muted);
+        font-weight: 500;
+        padding: 10px;
+      }
+
+      /* sync duo: the desktop browser behind, the phone overlapping in
+         front. One picture that says "your flights, on both". */
+      .duo {
+        position: relative;
+        margin: 0 0 3rem;
+        flex-shrink: 0;
+      }
+      .browser {
+        width: min(520px, 92vw);
+        border: 1px solid rgba(70, 49, 92, 0.9);
+        border-radius: 12px;
+        overflow: hidden;
+        background: #000;
+        box-shadow: 0 30px 60px rgba(40, 20, 50, 0.55);
+      }
+      .bwbar {
+        display: flex;
+        align-items: center;
+        gap: 0.7rem;
+        background: #0d0f11;
+        border-bottom: 1px solid var(--hair-dark);
+        padding: 0.45rem 0.8rem;
+      }
+      .bwbar i {
+        width: 9px;
+        height: 9px;
+        border-radius: 50%;
+        background: #2b2f34;
+      }
+      .bwurl {
+        font-size: 0.62rem;
+        color: var(--app-faint);
+        background: #101215;
+        border: 1px solid var(--hair-dark);
+        border-radius: 5px;
+        padding: 0.12rem 0.7rem;
+      }
+      .bapp {
+        display: flex;
+        height: 300px;
+        color: #f2f4f6;
+      }
+      .brail {
+        width: 44px;
+        border-right: 1px solid var(--hair-dark);
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        gap: 14px;
+        padding-top: 14px;
+      }
+      .brail svg {
+        width: 17px;
+        height: 17px;
+        color: var(--app-faint);
+      }
+      .brail svg.on {
+        color: color(display-p3 0 0.7 1);
+      }
+      .blist {
+        width: 168px;
+        border-right: 1px solid var(--hair-dark);
+        overflow: hidden;
+      }
+      .blist .bt {
+        font-weight: 800;
+        font-size: 0.85rem;
+        padding: 12px 12px 8px;
+        border-bottom: 1px solid var(--hair-dark);
+      }
+      .brow {
+        padding: 8px 12px;
+        border-bottom: 1px solid var(--hair-dark);
+      }
+      .brow.sel {
+        background: #14161a;
+        box-shadow: inset 2px 0 0 color(display-p3 0 0.7 1);
+      }
+      .brow h4 {
+        margin: 0 0 1px;
+        font-size: 0.66rem;
+        font-weight: 600;
+      }
+      .brow p {
+        margin: 0;
+        font-size: 0.56rem;
+        color: var(--app-muted);
+        white-space: nowrap;
+        overflow: hidden;
+        text-overflow: ellipsis;
+      }
+      .bdetail {
+        flex: 1;
+        position: relative;
+        background: #101215;
+      }
+      .bdetail svg {
+        position: absolute;
+        inset: 0;
+        width: 100%;
+        height: 100%;
+      }
+      .ph.mini {
+        position: absolute;
+        width: 178px;
+        right: -1.4rem;
+        bottom: -2.6rem;
+        border-radius: 28px;
+        box-shadow: 0 26px 52px rgba(30, 15, 40, 0.65);
+      }
+      .ph.mini .tt {
+        font-size: 0.95rem;
+        padding: 16px 14px 6px;
+      }
+      .ph.mini .syncstate {
+        padding: 16px 14px 4px;
+      }
+      .ph.mini .syncstate b {
+        font-size: 1.6rem;
+      }
+      .ph.mini .syncstate p {
+        font-size: 0.68rem;
+      }
+      .ph.mini .syncbtn {
+        margin: 8px 12px 0;
+        padding: 9px;
+        font-size: 0.72rem;
+        border-radius: 10px;
+      }
+      .ph.mini .syncbtn.quiet {
+        padding: 7px;
+      }
+
+      /* map markers */
+      .mk {
+        position: absolute;
+        width: 30px;
+        height: 30px;
+        border-radius: 50%;
+        border: 3px solid #fff;
+        box-shadow: 0 2px 7px rgba(0, 0, 0, 0.6);
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        font-size: 0.82rem;
+        color: #000;
+        transform: translate(-50%, -50%);
+        font-weight: 700;
+      }
+      .mk.wp {
+        background: #35e06a;
+      }
+      .mk.adhoc {
+        background: color(display-p3 0 0.7 1);
+      }
+      .chip {
+        position: absolute;
+        left: 14px;
+        bottom: 14px;
+        background: rgba(24, 26, 29, 0.92);
+        border: 1px solid var(--hair-dark);
+        border-radius: 9px;
+        padding: 6px 12px;
+        font-size: 0.88rem;
+        font-variant-numeric: tabular-nums;
+      }
+
+      /* the closer: why it stays small */
+      .manifesto {
+        max-width: 40rem;
+        margin: 0 auto;
+        padding: 4rem 1.5rem 3.5rem;
+        text-align: center;
+      }
+      .manifesto h2 {
+        font-size: clamp(1.5rem, 3vw, 1.9rem);
+        font-weight: 800;
+        letter-spacing: -0.02em;
+        margin: 0 0 0.8rem;
+        text-wrap: balance;
+      }
+      .manifesto p {
+        color: var(--muted);
+        margin: 0 0 1rem;
+        font-size: 1rem;
+      }
+      .manifesto .store {
+        margin-top: 1.4rem;
+      }
+
+      footer {
+        max-width: 60rem;
+        margin: 0 auto;
+        padding: 2.5rem 1.5rem 1.6rem;
+        font-size: 0.8rem;
+        color: rgba(253, 240, 220, 0.55);
+      }
+      footer a {
+        color: inherit;
+        font-weight: 600;
+      }
+
+      @media (max-width: 720px) {
+        .feat,
+        .feat.rev {
+          flex-direction: column;
+          padding: 2.6rem 1.5rem;
+          text-align: center;
+        }
+        .feat-text {
+          max-width: 30rem;
+        }
+      }
+    </style>
+  </head>
+  <body>
+    <div class="sun" aria-hidden="true"></div>
+
+    <nav>
+      <a class="wordmark" href="/">
+        <img src="/icon-192.png" alt="" width="38" height="38" />
+        <span>
+          wingover.app
+          <small>Paramotor flight recorder</small>
+        </span>
+      </a>
+      <a class="nav-open" href="/logbook">Open app</a>
+    </nav>
+
+    <main>
+      <header class="hero">
+        <div class="art" aria-hidden="true">
+          <i class="s1"></i><i class="s2"></i><i class="c1"></i><i class="c2"></i>
+        </div>
+        <h1>Every flight, recorded. Yours forever.</h1>
+        <p>
+          The simple, reliable flight recorder and planner for paramotor
+          pilots. Free and open source. No account, no telemetry; your
+          flights live on your devices, in open formats.
+        </p>
+        <span class="store">
+          <svg viewBox="0 0 384 512" aria-hidden="true">
+            <path d="M318.7 268.7c-.2-36.7 16.4-64.4 50-84.8-18.8-26.9-47.2-41.7-84.7-44.6-35.5-2.7-74.3 20.7-88.5 20.7-15 0-49.4-19.7-76.4-19.7C63.3 141.2 4 184.8 4 273.5q0 39.3 14.4 81.2c12.8 36.7 59 126.7 107.2 125.2 25.2-.6 43-17.9 75.8-17.9 31.8 0 48.3 17.9 76.4 17.9 48.6-.7 90.4-82.5 102.6-119.3-65.2-30.7-61.7-90-61.7-91.9zm-56.6-164.2c27.3-32.4 24.8-61.9 24-72.5-24.1 1.4-52 16.4-67.9 34.9-17.5 19.8-27.8 44.3-25.6 71.9 26.1 2 49.9-11.4 69.5-34.3z" />
+          </svg>
+          <span class="store-text">
+            <small>Coming soon to the</small>
+            <strong>App Store</strong>
+          </span>
+        </span>
+        <div class="also">
+          Already flying?
+          <a href="/logbook">Open your logbook in the browser</a>
+        </div>
+      </header>
+
+      <!-- 1 · Fly -->
+      <section class="feat">
+        <div class="ph" aria-hidden="true">
+          <div class="deck">
+            <div class="dstat cyan"><span>Groundspeed</span><b>24<small>mph</small></b></div>
+            <div class="dstat"><span>Altitude</span><b>1,180<small>ft</small></b></div>
+            <div class="dstat grn"><span>Climb</span><b>+320<small>fpm</small></b></div>
+            <div class="dstat yel"><span>Flight time</span><b>0:42:18</b></div>
+            <div class="mapfill">
+              <svg viewBox="0 0 320 220" preserveAspectRatio="xMidYMid slice" role="presentation">
+                <rect width="320" height="220" fill="#101215" />
+                <polyline points="36,190 82,120 138,132 186,66 244,92 288,40" fill="none" stroke="#00b3ff" stroke-width="4" stroke-linejoin="round" />
+                <polygon points="0,-11 8,9 0,5 -8,9" fill="#00b3ff" transform="translate(288 40) rotate(40)" />
+              </svg>
+            </div>
+          </div>
+        </div>
+        <div class="feat-text">
+          <h2>A flight deck built for the air</h2>
+          <p>
+            Numerals you can read in full sun, controls sized for gloves.
+            Recording survives backgrounding, a locked screen, even an app
+            crash: a started flight ends only when you land.
+          </p>
+        </div>
+      </section>
+
+      <!-- 2 · Logbook -->
+      <section class="feat rev">
+        <div class="ph" aria-hidden="true">
+          <div class="screen">
+            <div class="tt">Logbook</div>
+            <div class="totals">
+              <div><b>87</b><span>Flights</span></div>
+              <div><b>64:12</b><span>Airtime</span></div>
+              <div><b>743 mi</b><span>Distance</span></div>
+            </div>
+            <div class="phrow"><h3>Evening cruise</h3><p>Miller's Field · 42 min · 12.4 mi</p></div>
+            <div class="phrow"><h3>Sandbar out-and-back</h3><p>Sandbar East · 1 h 04 · 21.7 mi</p></div>
+            <div class="phrow"><h3>Fairgrounds demo</h3><p>Fairgrounds LZ · 51 min · 14.9 mi</p></div>
+            <div class="phrow"><h3>Morning flight</h3><p>Miller's Field · 44 min · 13.1 mi</p></div>
+            <div class="phrow"><h3>First light</h3><p>Miller's Field · 38 min · 9.8 mi</p></div>
+          </div>
+        </div>
+        <div class="feat-text">
+          <h2>A logbook that keeps itself</h2>
+          <p>
+            Land, and the flight is already filed: airtime, distance, and the
+            launch it flew from. Name a field once and every future flight
+            from it names itself. View your logbook on any device.
+          </p>
+        </div>
+      </section>
+
+      <!-- 3 · Flight detail -->
+      <section class="feat">
+        <div class="ph" aria-hidden="true">
+          <div class="screen">
+            <div class="mapfill tall">
+              <svg viewBox="0 0 320 300" preserveAspectRatio="xMidYMid slice" role="presentation">
+                <rect width="320" height="300" fill="#101215" />
+                <path d="M0 250 C 90 220, 160 270, 320 235 L 320 300 L 0 300 Z" fill="#0e1418" />
+                <path d="M-10 90 L 330 50" stroke="#1b1e22" stroke-width="8" />
+                <path d="M96 -10 L 130 310" stroke="#1b1e22" stroke-width="6" />
+                <polyline
+                  points="48,252 70,210 102,204 134,166 172,180 206,140 244,152 266,112 242,92 202,106 170,80 134,96 100,86 76,120 64,168 60,224 66,238"
+                  fill="none" stroke="#00b3ff" stroke-width="3.5" stroke-linejoin="round" stroke-linecap="round" />
+                <circle cx="48" cy="252" r="8" fill="#22a04a" stroke="#fff" stroke-width="2.5" />
+                <circle cx="66" cy="238" r="8" fill="#e0483a" stroke="#fff" stroke-width="2.5" />
+              </svg>
+            </div>
+            <div class="tt" style="padding-top: 16px">Evening cruise</div>
+            <div class="launchline">Miller's Field</div>
+            <div class="statrows">
+              <div class="stat"><span>Duration</span><b>42:18</b></div>
+              <div class="stat"><span>Distance</span><b>12.4 mi</b></div>
+              <div class="stat"><span>Max speed</span><b>38 mph</b></div>
+              <div class="stat"><span>Max above launch</span><b>1,180 ft</b></div>
+            </div>
+          </div>
+        </div>
+        <div class="feat-text">
+          <h2>Every flight, mapped</h2>
+          <p>
+            The full track on streets or satellite, launch to landing, with
+            the numbers that matter underneath. Export any flight as GPX, any
+            time.
+          </p>
+        </div>
+      </section>
+
+      <!-- 4 · Plan -->
+      <section class="feat rev">
+        <div class="ph" aria-hidden="true">
+          <div class="screen">
+            <div class="mapfill tall" style="min-height: 100%">
+              <svg viewBox="0 0 320 648" preserveAspectRatio="xMidYMid slice" role="presentation">
+                <rect width="320" height="648" fill="#101215" />
+                <path d="M0 500 C 90 460, 200 560, 320 470 L 320 648 L 0 648 Z" fill="#0e1418" />
+                <path d="M-10 220 L 330 160" stroke="#1b1e22" stroke-width="9" />
+                <path d="M120 -10 L 170 660" stroke="#1b1e22" stroke-width="6" />
+                <polyline points="70,500 160,230 260,340" fill="none" stroke="#5a6068" stroke-width="4" stroke-dasharray="9 9" opacity="0.8" />
+              </svg>
+              <div class="mk wp" style="left: 22%; top: 77%">1</div>
+              <div class="mk wp" style="left: 50%; top: 35.5%">2</div>
+              <div class="mk adhoc" style="left: 81%; top: 52.5%">3</div>
+              <div class="chip">Route: 8.2 mi</div>
+            </div>
+          </div>
+        </div>
+        <div class="feat-text">
+          <h2>Plan the next one</h2>
+          <p>
+            Drop pins for LZs, fuel stops and hazards. Start a flight and the
+            plan comes along: numbered checkpoints, distance as you go.
+          </p>
+        </div>
+      </section>
+
+      <!-- 5 · Sync -->
+      <section class="feat">
+        <div class="duo" aria-hidden="true">
+          <div class="browser">
+            <div class="bwbar">
+              <i></i><i></i><i></i>
+              <span class="bwurl">wingover.app/logbook</span>
+            </div>
+            <div class="bapp">
+              <div class="brail">
+                <svg class="on" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><rect x="4" y="3" width="16" height="18" rx="2"/><path d="M8 8h8M8 12h8M8 16h5"/></svg>
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M12 21s-7-6.1-7-11a7 7 0 0 1 14 0c0 4.9-7 11-7 11z"/><circle cx="12" cy="10" r="2.4"/></svg>
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><circle cx="12" cy="12" r="3.2"/><path d="M12 4v2.4M12 17.6V20M4 12h2.4M17.6 12H20M6.3 6.3l1.7 1.7M16 16l1.7 1.7M17.7 6.3 16 8M8 16l-1.7 1.7"/></svg>
+              </div>
+              <div class="blist">
+                <div class="bt">Logbook</div>
+                <div class="brow sel"><h4>Evening cruise</h4><p>Miller's Field · 42 min</p></div>
+                <div class="brow"><h4>Sandbar out-and-back</h4><p>Sandbar East · 1 h 04</p></div>
+                <div class="brow"><h4>Fairgrounds demo</h4><p>Fairgrounds LZ · 51 min</p></div>
+                <div class="brow"><h4>Morning flight</h4><p>Miller's Field · 44 min</p></div>
+                <div class="brow"><h4>First light</h4><p>Miller's Field · 38 min</p></div>
+              </div>
+              <div class="bdetail">
+                <svg viewBox="0 0 300 300" preserveAspectRatio="xMidYMid slice" role="presentation">
+                  <rect width="300" height="300" fill="#101215" />
+                  <path d="M0 250 C 90 220, 160 270, 300 235 L 300 300 L 0 300 Z" fill="#0e1418" />
+                  <path d="M-10 90 L 310 50" stroke="#1b1e22" stroke-width="7" />
+                  <polyline
+                    points="44,240 66,200 96,194 126,158 162,172 194,134 230,146 250,108 228,90 190,102 160,78 126,92 94,82 72,114 60,160 56,214 62,228"
+                    fill="none" stroke="#00b3ff" stroke-width="3" stroke-linejoin="round" stroke-linecap="round" />
+                  <circle cx="44" cy="240" r="7" fill="#22a04a" stroke="#fff" stroke-width="2" />
+                  <circle cx="62" cy="228" r="7" fill="#e0483a" stroke="#fff" stroke-width="2" />
+                </svg>
+              </div>
+            </div>
+          </div>
+          <div class="ph mini">
+            <div class="screen">
+              <div class="tt">Sync</div>
+              <div class="syncstate">
+                <b>On</b>
+                <p>Everything is backed up.</p>
+              </div>
+              <div class="syncbtn">Use on your computer</div>
+              <div class="syncbtn">Manage subscription</div>
+              <div class="syncbtn quiet">Turn off sync</div>
+            </div>
+          </div>
+        </div>
+        <div class="feat-text">
+          <h2>Sync, if you want it</h2>
+          <p>
+            Off by default: your location never leaves your phone unless you
+            turn sync on, and then only to the server you chose. Subscribe to
+            back up flights and open them anywhere, or point Wingover at your
+            own server for free.
+          </p>
+        </div>
+      </section>
+
+      <!-- 6 · the closer -->
+      <section class="manifesto">
+        <h2>Simple on purpose</h2>
+        <p>
+          No feeds, no leaderboards, no locked features, no forty-page
+          settings. Wingover records, logs, and plans, and refuses to do
+          more. No account, nothing to configure, one tap to fly. Open
+          source, so it stays that way.
+        </p>
+        <span class="store">
+          <svg viewBox="0 0 384 512" aria-hidden="true">
+            <path d="M318.7 268.7c-.2-36.7 16.4-64.4 50-84.8-18.8-26.9-47.2-41.7-84.7-44.6-35.5-2.7-74.3 20.7-88.5 20.7-15 0-49.4-19.7-76.4-19.7C63.3 141.2 4 184.8 4 273.5q0 39.3 14.4 81.2c12.8 36.7 59 126.7 107.2 125.2 25.2-.6 43-17.9 75.8-17.9 31.8 0 48.3 17.9 76.4 17.9 48.6-.7 90.4-82.5 102.6-119.3-65.2-30.7-61.7-90-61.7-91.9zm-56.6-164.2c27.3-32.4 24.8-61.9 24-72.5-24.1 1.4-52 16.4-67.9 34.9-17.5 19.8-27.8 44.3-25.6 71.9 26.1 2 49.9-11.4 69.5-34.3z" />
+          </svg>
+          <span class="store-text">
+            <small>Coming soon to the</small>
+            <strong>App Store</strong>
+          </span>
+        </span>
+      </section>
+    </main>
+
+    <footer>
+      <a href="/privacy">Privacy</a> ·
+      <a href="https://github.com/aeharding/wingover">Source (AGPL-3.0)</a> ·
+      <a href="mailto:hello@wingover.app">hello@wingover.app</a>
+    </footer>
+  </body>
+</html>
