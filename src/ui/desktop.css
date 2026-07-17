@@ -128,10 +128,38 @@
 }
 
 .logbook-pane {
+  /* Default width; the inline style (drag-resized, persisted) wins. */
   width: 340px;
   flex-shrink: 0;
-  overflow-y: auto;
+  display: flex;
+  flex-direction: column;
+  position: relative;
   border-right: 1px solid rgba(255, 255, 255, 0.09);
+}
+
+/* The grab strip straddling the pane's edge. Invisible until engaged so
+   the border stays a hairline; lights up under the pointer and on
+   keyboard focus (arrows resize, double-click resets). */
+.pane-resizer {
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  right: -3px;
+  width: 6px;
+  cursor: col-resize;
+  z-index: 4;
+}
+
+.pane-resizer:hover,
+.pane-resizer:focus-visible {
+  background: rgba(255, 255, 255, 0.18);
+  outline: none;
+}
+
+.logbook-pane-scroll {
+  flex: 1;
+  min-height: 0;
+  overflow-y: auto;
 }
 
 .pane-header {
@@ -140,10 +168,6 @@
   justify-content: space-between;
   padding: 0.6rem 0.5rem 0.5rem 1.1rem;
   border-bottom: 1px solid rgba(255, 255, 255, 0.09);
-  position: sticky;
-  top: 0;
-  background: var(--ion-background-color);
-  z-index: 2;
 }
 
 .pane-header h1 {
@@ -200,10 +224,12 @@
 
 /* Map chrome sits bottom-LEFT in the seat: the card owns the right
    column, and a grown Notes field must never sit under the expand
-   button's hitbox. */
+   button's hitbox. Raised above MapKit's Apple logo + Legal strip, which
+   is a license surface, not decoration. */
 .seat-map .map-overlay {
   right: auto;
   left: 0.9rem;
+  bottom: 2.6rem;
 }
 
 /* The floating details card: right side, collapsible, gestures land on
@@ -275,18 +301,21 @@ body.flight-map-full .seat-card {
 
 /* ── the totals strip (list pane header) ──────────────────────────────── */
 .flightlist-totals {
-  display: grid;
-  grid-template-columns: 1fr 1fr 1fr;
-  gap: 0.5rem;
+  /* Content-sized columns, spread apart: equal thirds overflowed the
+     moment a season's distance grew to "11,623.51 mi". */
+  display: flex;
+  justify-content: space-between;
+  gap: 0.75rem;
   padding: 0.7rem 1.1rem;
   border-bottom: 1px solid rgba(255, 255, 255, 0.09);
 }
 
 .flightlist-totals b {
   display: block;
-  font-size: 1.02rem;
+  font-size: 1rem;
   font-weight: 700;
   font-variant-numeric: tabular-nums;
+  white-space: nowrap;
 }
 
 .flightlist-totals span {

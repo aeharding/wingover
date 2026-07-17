@@ -35,7 +35,7 @@ test("the logbook splits: list stays while the flight shows", async ({
   // The pane's totals strip.
   await expect(page.getByText("Airtime")).toBeVisible();
 
-  await page.getByRole("heading", { name: /^Flight / }).first().click();
+  await page.locator(".flight-row").first().click();
   await expect(page).toHaveURL(/\/logbook\/recorded-/);
   // Split: the list (totals strip) and the detail (stats) share the screen.
   await expect(page.getByText("Airtime")).toBeVisible();
@@ -63,22 +63,55 @@ test("selection swaps the seat without remounting the list or the map", async ({
   }
 
   await page.getByTestId("rail-logbook").click();
-  const rows = page.getByRole("heading", { name: /^Flight / });
+  const rows = page.locator(".flight-row");
   await rows.first().click();
   await expect(page).toHaveURL(/\/logbook\/recorded-/);
   const firstUrl = page.url();
 
-  // Tag the live map element; if the seat remounts, the tag dies with it.
+  // Tag the live map AND the stats card; if either remounts on selection,
+  // its tag dies with it.
   await page
     .locator(".seat-map .map-container")
+    .evaluate((el) => el.setAttribute("data-alive", "1"));
+  await page
+    .locator(".seat-card")
     .evaluate((el) => el.setAttribute("data-alive", "1"));
 
   await rows.nth(1).click();
   await expect(page).not.toHaveURL(firstUrl);
-  // Same map element, still tagged: the seat swapped data, not DOM.
+  // Arrow keys walk the list too: up returns to the first flight.
+  await page.keyboard.press("ArrowUp");
+  await expect(page).toHaveURL(firstUrl);
+  await page.keyboard.press("ArrowDown");
+  await expect(page).not.toHaveURL(firstUrl);
+  // Same elements, still tagged: the seat swapped data, not DOM.
   await expect(
     page.locator('.seat-map .map-container[data-alive="1"]'),
   ).toBeVisible();
+  await expect(page.locator('.seat-card[data-alive="1"]')).toBeVisible();
+});
+
+test("the list pane resizes by its edge and remembers the width", async ({
+  page,
+}) => {
+  await page.goto("/?map-style=blank");
+  const pane = page.locator(".logbook-pane");
+  await expect(pane).toBeVisible();
+  const before = (await pane.boundingBox())!.width;
+
+  const handle = page.getByTestId("pane-resizer");
+  const box = (await handle.boundingBox())!;
+  await page.mouse.move(box.x + 3, box.y + 300);
+  await page.mouse.down();
+  await page.mouse.move(box.x + 103, box.y + 300, { steps: 5 });
+  await page.mouse.up();
+  const after = (await pane.boundingBox())!.width;
+  expect(Math.round(after - before)).toBe(100);
+
+  // Persisted per device: a fresh load keeps the chosen width.
+  await page.reload();
+  await expect(pane).toBeVisible();
+  expect((await pane.boundingBox())!.width).toBe(after);
 });
 
 test("the rail sync chip opens a menu, and the sheet sits behind it", async ({

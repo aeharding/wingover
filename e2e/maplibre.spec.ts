@@ -223,7 +223,7 @@ test("flight detail draws the track even when the map style loads slowly", async
   ).toBeVisible();
 
   await page.getByText("Logbook", { exact: true }).click();
-  await page.getByRole("heading", { name: /^Flight / }).click();
+  await page.locator(".flight-row").click();
 
   await expect(page.getByTestId("launch-marker")).toBeVisible({
     timeout: 10_000,
