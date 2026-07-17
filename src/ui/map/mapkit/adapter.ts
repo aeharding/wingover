@@ -141,6 +141,7 @@ export async function createMapKitMapView(
       });
       setTimeout(resolve, REVEAL_FALLBACK_MS);
     }),
+    supportsSatellite: true,
 
     setBaseMap(base) {
       map.mapType = baseToMapType(base);

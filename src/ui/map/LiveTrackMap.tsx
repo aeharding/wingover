@@ -62,6 +62,9 @@ interface LiveTrackMapProps {
   // "clear this checkpoint" control.
   onSelectWaypoint?: (id: string | null) => void;
   onFollowChange: (follow: boolean) => void;
+  // The abstract map, once created — FlyPage gates the satellite toggle on
+  // its supportsSatellite.
+  onMapReady?: (map: MapView) => void;
 }
 
 export default function LiveTrackMap({
@@ -76,6 +79,7 @@ export default function LiveTrackMap({
   onAddWaypoint,
   onSelectWaypoint,
   onFollowChange,
+  onMapReady,
 }: LiveTrackMapProps) {
   const [map, setMap] = useState<MapView | null>(null);
   // Content handles into the abstract map. The committed flown line is a
@@ -330,7 +334,13 @@ export default function LiveTrackMap({
 
   return (
     <div className="live-map">
-      <MapCanvas base={view} onReady={setMap} />
+      <MapCanvas
+        base={view}
+        onReady={(next) => {
+          setMap(next);
+          onMapReady?.(next);
+        }}
+      />
       {map && <ZoomControl map={map} onInput={applyZoom} />}
       {/* Inert guard along the bottom edge — the iOS app-switch swipe
           (home indicator). A touch that starts here targets the guard,

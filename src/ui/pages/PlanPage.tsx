@@ -290,7 +290,9 @@ export default function PlanPage() {
           >
             <IonIcon icon={locateOutline} />
           </button>
-          <ViewToggle view={view} onChange={changeView} />
+          {map?.supportsSatellite && (
+            <ViewToggle view={view} onChange={changeView} />
+          )}
         </div>
         {routeMeters > 0 && (
           <div className="plan-distance" data-testid="plan-distance">

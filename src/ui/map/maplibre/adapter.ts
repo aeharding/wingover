@@ -6,7 +6,11 @@ import {
 } from "maplibre-gl";
 import type { GeoJSONSource, MapMouseEvent } from "maplibre-gl";
 
-import { type MapViewKind, resolveMapStyle } from "../config";
+import {
+  type MapViewKind,
+  resolveMapStyle,
+  resolveMaptilerKey,
+} from "../config";
 import type {
   Aircraft,
   AircraftState,
@@ -72,6 +76,10 @@ export async function createMapLibreMapView(
   initialBase: MapViewKind,
 ): Promise<MapView> {
   const style = await resolveMapStyle(initialBase);
+  // Decided once at creation: satellite here costs MapTiler quota, so it
+  // exists only on the pilot's own key. A key added in Settings takes
+  // effect on the next map, which is fine — Settings has no map.
+  const supportsSatellite = !!(await resolveMaptilerKey());
   const map = new MapLibreMap({
     container,
     style,
@@ -159,6 +167,7 @@ export async function createMapLibreMapView(
       map.once("load", () => resolve());
       setTimeout(resolve, REVEAL_FALLBACK_MS);
     }),
+    supportsSatellite,
 
     setBaseMap(base) {
       void resolveMapStyle(base).then((next) => map.setStyle(next));

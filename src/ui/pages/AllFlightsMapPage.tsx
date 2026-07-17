@@ -113,7 +113,9 @@ export default function AllFlightsMapPage() {
             <div className="legend-bar" />
           </div>
           <div className="map-overlay">
-            <ViewToggle view={view} onChange={changeView} />
+            {map?.supportsSatellite && (
+              <ViewToggle view={view} onChange={changeView} />
+            )}
           </div>
         </div>
       </IonContent>

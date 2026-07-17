@@ -65,6 +65,32 @@ export async function setSetting(key: string, value: string) {
   } catch {
     await localDb.put({ _id, value });
   }
+  settingListeners.get(key)?.forEach((listener) => listener(value));
+}
+
+/**
+ * Same-session reactivity for settings, so a change applies immediately
+ * instead of on relaunch (the map provider is the first customer: tab pages
+ * stay mounted, so nothing else would ever tell their maps). Local-only by
+ * construction — this store never replicates, so setSetting here is the
+ * only writer there is.
+ */
+const settingListeners = new Map<string, Set<(value: string) => void>>();
+
+export function onSettingChanged(
+  key: string,
+  listener: (value: string) => void,
+): () => void {
+  let listeners = settingListeners.get(key);
+  if (!listeners) {
+    listeners = new Set();
+    settingListeners.set(key, listeners);
+  }
+  listeners.add(listener);
+  const set = listeners;
+  return () => {
+    set.delete(listener);
+  };
 }
 
 // The settings store is string-valued; booleans cross that edge HERE and

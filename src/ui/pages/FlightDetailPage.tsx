@@ -302,7 +302,9 @@ export default function FlightDetailPage() {
             >
               <IonIcon icon={mapFull ? contractOutline : expandOutline} />
             </button>
-            <ViewToggle view={view} onChange={changeView} />
+            {map?.supportsSatellite && (
+              <ViewToggle view={view} onChange={changeView} />
+            )}
           </div>
         </div>
         {flight && stats && (

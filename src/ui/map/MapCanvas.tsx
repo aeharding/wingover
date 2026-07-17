@@ -1,5 +1,6 @@
 import { useEffect, useEffectEvent, useRef, useState } from "react";
 
+import { onSettingChanged } from "../../storage/local";
 import { type MapViewKind, resolveBackend } from "./config";
 import type { MapView } from "./types";
 
@@ -23,7 +24,7 @@ async function createBackend(
   container: HTMLElement,
   base: MapViewKind,
 ): Promise<MapView> {
-  const backend = resolveBackend();
+  const backend = await resolveBackend();
   if (backend === "fake") {
     const { createFakeMapView } = await import("./fake/adapter");
     return createFakeMapView(container);
@@ -49,15 +50,23 @@ export default function MapCanvas({ base, onReady }: MapCanvasProps) {
   const containerRef = useRef<HTMLDivElement>(null);
   const viewRef = useRef<MapView | null>(null);
   const [revealed, setRevealed] = useState(false);
+  // Bumped when the pilot changes the map provider in Settings: the whole
+  // backend is torn down and re-created in place, so the choice applies
+  // immediately — tab pages stay mounted forever and would otherwise show
+  // the old provider until relaunch. Consumers already rebuild their
+  // content on every onReady, so a new view flows through like the first.
+  const [epoch, setEpoch] = useState(0);
   const notifyReady = useEffectEvent((view: MapView) => onReady?.(view));
-  const initialBaseRef = useRef(base);
+  const baseRef = useRef(base);
+
+  useEffect(() => onSettingChanged("mapBackend", () => setEpoch((n) => n + 1)), []);
 
   useEffect(() => {
     let cancelled = false;
     let view: MapView | undefined;
     (async () => {
       if (!containerRef.current) return;
-      view = await createBackend(containerRef.current, initialBaseRef.current);
+      view = await createBackend(containerRef.current, baseRef.current);
       if (cancelled) {
         view.destroy();
         return;
@@ -74,9 +83,10 @@ export default function MapCanvas({ base, onReady }: MapCanvasProps) {
       view?.destroy();
       viewRef.current = null;
     };
-  }, []);
+  }, [epoch]);
 
   useEffect(() => {
+    baseRef.current = base;
     viewRef.current?.setBaseMap(base);
   }, [base]);
 

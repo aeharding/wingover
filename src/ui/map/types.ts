@@ -164,6 +164,10 @@ export interface MapView {
   readonly el: HTMLElement;
   // Resolves once the first base map has painted.
   readonly ready: Promise<void>;
+  // Whether this backend can show satellite imagery: MapKit always (Apple
+  // imagery is free on the developer account), MapLibre only when the pilot
+  // supplied their own MapTiler key. Pages hide the view toggle when false.
+  readonly supportsSatellite: boolean;
   setBaseMap(base: MapViewKind): void;
   destroy(): void;
 

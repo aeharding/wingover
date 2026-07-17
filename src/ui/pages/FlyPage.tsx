@@ -54,6 +54,7 @@ import Tile from "../components/Tile";
 import type { MapViewKind } from "../map/config";
 import LiveTrackMap from "../map/LiveTrackMap";
 import { readLiveViewState, writeLiveViewState } from "../map/liveViewState";
+import type { MapView } from "../map/types";
 import ViewToggle from "../map/ViewToggle";
 import { useSettings } from "../settings/SettingsContext";
 
@@ -94,6 +95,7 @@ export default function FlyPage() {
     savedLiveView.mapView ?? "street",
   );
   const [follow, setFollow] = useState(savedLiveView.follow ?? true);
+  const [liveMap, setLiveMap] = useState<MapView | null>(null);
   const [trackUp, setTrackUp] = useState(savedLiveView.trackUp ?? false);
   const [mapTopInset, setMapTopInset] = useState(0);
   // The planned route, for the idle-screen distance. Reloaded on every entry
@@ -441,6 +443,7 @@ export default function FlyPage() {
               topInset={mapTopInset}
               plannedWaypoints={snapshot.waypoints}
               navWaypoints={snapshot.activeWaypoints}
+              onMapReady={setLiveMap}
               onAddWaypoint={(at) => {
                 // Long-press: the new ad-hoc point becomes the next target;
                 // tap it then clear if it was a mistap.
@@ -501,7 +504,9 @@ export default function FlyPage() {
                 >
                   <IonIcon icon={locateOutline} />
                 </button>
-                <ViewToggle view={mapView} onChange={changeMapView} />
+                {liveMap?.supportsSatellite && (
+                  <ViewToggle view={mapView} onChange={changeMapView} />
+                )}
                 <button
                   className="map-button stop-button"
                   aria-label="Stop flight"

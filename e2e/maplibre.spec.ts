@@ -12,10 +12,10 @@ test("live map survives a slow-loading style", async ({ page }) => {
   page.on("pageerror", (error) => pageErrors.push(String(error)));
 
   // Abort all MapTiler first, then win specifically for the street style
-  // (now MapTiler streets-v4-dark) with a slow, minimal style.
+  // (keyless OpenFreeMap dark) with a slow, minimal style.
   await page.route("**/api.maptiler.com/**", (route) => route.abort());
   await page.route(
-    "**/maps/streets-v4-dark/style.json**",
+    "**/styles/dark",
     async (route) => {
       await new Promise((resolve) => setTimeout(resolve, 800));
       await route.fulfill({
@@ -59,9 +59,9 @@ test("live map layers appear despite a slow sprite holding the style", async ({
     "base64",
   );
   // Abort MapTiler first; the specific routes below win for the street
-  // style (now MapTiler streets-v4-dark) and the fake slow sprite.
+  // style (keyless OpenFreeMap dark) and the fake slow sprite.
   await page.route("**/api.maptiler.com/**", (route) => route.abort());
-  await page.route("**/maps/streets-v4-dark/style.json**", (route) =>
+  await page.route("**/styles/dark", (route) =>
     route.fulfill({
       contentType: "application/json",
       body: JSON.stringify({
@@ -173,7 +173,7 @@ test("flight detail draws the track even when the map style loads slowly", async
 
   await page.route("**/api.maptiler.com/**", (route) => route.abort());
   await page.route(
-    "**/maps/streets-v4-dark/style.json**",
+    "**/styles/dark",
     async (route) => {
       await new Promise((resolve) => setTimeout(resolve, 800));
       await route.fulfill({
@@ -224,7 +224,7 @@ test("composite map draws all flights even with a slow style", async ({
 
   await page.route("**/api.maptiler.com/**", (route) => route.abort());
   await page.route(
-    "**/maps/streets-v4-dark/style.json**",
+    "**/styles/dark",
     async (route) => {
       await new Promise((resolve) => setTimeout(resolve, 800));
       await route.fulfill({

@@ -7,14 +7,18 @@ import { getSetting } from "../../storage/local";
 
 export type MapViewKind = "street" | "satellite";
 
-const DEFAULT_MAPTILER_KEY = "o4oQEM4UgYvcVV6NYfpr";
+// The keyless street fallback: OpenFreeMap's hosted dark style — free,
+// no account, no quota to bill anyone. MapLibre is the FALLBACK backend
+// (MapKit is the default everywhere) and is allowed to be plainer; nothing
+// first-party may cost money here.
+const OPENFREEMAP_DARK_STYLE = "https://tiles.openfreemap.org/styles/dark";
 
-// Street view is MapTiler Streets v4 (vector, so labels stay upright when
-// the map rotates in track-up). maplibre loads the style.json URL
-// directly; no fetch/merge needed (unlike satellite). streets-v4 is the
-// light variant, streets-v4-dark the dark one.
-function streetStyleUrl(key: string): string {
-  return `https://api.maptiler.com/maps/streets-v4-dark/style.json?key=${key}`;
+// Street view: MapTiler Streets v4 dark for pilots who brought their own
+// key (vector, labels stay upright in track-up), OpenFreeMap otherwise.
+function streetStyleUrl(key: string | null): string {
+  return key
+    ? `https://api.maptiler.com/maps/streets-v4-dark/style.json?key=${key}`
+    : OPENFREEMAP_DARK_STYLE;
 }
 
 // Launch-only URL flags (e.g. ?map-style=blank) must be read at app entry,
@@ -40,14 +44,17 @@ export type MapBackend = "mapkit" | "maplibre" | "fake";
 // MapKit JS is the default map backend everywhere — its token authorizes on
 // localhost, so plain `vite` and the Tauri dev webview get it too. Overrides
 // (highest first): ?map= in the URL, then a "wingover.map" localStorage flag
-// (how e2e forces the fake, deterministic, network-free backend). The blank
-// debug style still implies MapLibre for offline manual debugging.
-export function resolveBackend(): MapBackend {
+// (how e2e forces the fake, deterministic, network-free backend), then the
+// blank debug style (implies MapLibre for offline manual debugging), then
+// the pilot's Settings choice.
+export async function resolveBackend(): Promise<MapBackend> {
   const override = backendOverride();
   if (override === "mapkit" || override === "maplibre" || override === "fake") {
     return override;
   }
   if (blankStyleRequested()) return "maplibre";
+  const chosen = await getSetting("mapBackend");
+  if (chosen === "mapkit" || chosen === "maplibre") return chosen;
   return "mapkit";
 }
 
@@ -73,12 +80,12 @@ const BLANK_STYLE: StyleSpecification = {
   ],
 };
 
-export async function resolveMaptilerKey(): Promise<string> {
-  return (
-    (await getSetting("maptilerKey")) ||
-    import.meta.env.VITE_MAPTILER_KEY ||
-    DEFAULT_MAPTILER_KEY
-  );
+// The pilot's own MapTiler key, or null. There is deliberately no built-in
+// key and no build-time env fallback: satellite is MapKit's job (free on the
+// Apple developer account), and MapLibre satellite exists only for pilots
+// who bring their own key. First-party map costs are zero by construction.
+export async function resolveMaptilerKey(): Promise<string | null> {
+  return (await getSetting("maptilerKey")) || null;
 }
 
 // Satellite view is MapTiler's Hybrid style: satellite imagery under the
@@ -89,8 +96,9 @@ export async function resolveMaptilerKey(): Promise<string> {
 // satellite-v2 source for @2x maps/satellite tiles: 1024px per tile (~2x
 // the source pixels per screen pixel, the Apple-Maps sharpness
 // difference) up to maxzoom 22. @3x/@4x are not offered (HTTP 400).
-async function satelliteStyle(): Promise<StyleSpecification | string> {
-  const key = await resolveMaptilerKey();
+async function satelliteStyle(
+  key: string,
+): Promise<StyleSpecification | string> {
   const style = await fetch(
     `https://api.maptiler.com/maps/hybrid-v4/style.json?key=${key}`,
   )
@@ -125,6 +133,10 @@ export async function resolveMapStyle(
   view: MapViewKind,
 ): Promise<StyleSpecification | string> {
   if (blankStyleRequested()) return BLANK_STYLE;
-  if (view === "street") return streetStyleUrl(await resolveMaptilerKey());
-  return satelliteStyle();
+  const key = await resolveMaptilerKey();
+  // No key, no satellite (a stored "satellite" preference degrades to
+  // street rather than erroring) — the toggle is hidden in that state via
+  // MapView.supportsSatellite.
+  if (view === "street" || !key) return streetStyleUrl(key);
+  return satelliteStyle(key);
 }
