@@ -89,5 +89,29 @@ export default function MapCanvas({ base, onReady }: MapCanvasProps) {
     container.classList.toggle("map-loading", !revealed);
   }, [base, revealed]);
 
+  // A drag that starts on the map belongs to the map: without this, a pan
+  // beginning near the left edge doubles as Ionic's swipe-back and navigates
+  // away mid-gesture. The swipe-back gesture listens natively on the router
+  // outlet, so it must be cut off natively here — React's delegated handlers
+  // run long after the event has already bubbled through the outlet.
+  // Scoped to the edge strip where swipe-back can start (canStart: x <= 50),
+  // so document-level listeners (Ionic's focus-visible reset among them)
+  // keep hearing everything else the map is touched with.
+  useEffect(() => {
+    const container = containerRef.current;
+    if (!container) return;
+    const stop = (event: TouchEvent | MouseEvent) => {
+      const x =
+        "touches" in event ? event.touches[0]?.clientX : event.clientX;
+      if (x !== undefined && x <= 60) event.stopPropagation();
+    };
+    container.addEventListener("touchstart", stop);
+    container.addEventListener("mousedown", stop);
+    return () => {
+      container.removeEventListener("touchstart", stop);
+      container.removeEventListener("mousedown", stop);
+    };
+  }, []);
+
   return <div ref={containerRef} className="map-container" />;
 }
