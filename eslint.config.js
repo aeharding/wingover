@@ -102,6 +102,26 @@ export default defineConfig(
     },
   },
   {
+    // The flight surface is Ionic-free (STEERING: ultra reliable, battery
+    // sensitive; it will one day run with Ionic fully disabled). The one
+    // Ionic frame around it lives in src/ui/pages/FlyPage.tsx.
+    files: ["src/ui/flight/**"],
+    rules: {
+      "no-restricted-imports": [
+        "error",
+        {
+          patterns: [
+            {
+              group: ["@ionic/*"],
+              message:
+                "Flight UI never imports Ionic; wrap at the shell seam (src/ui/pages/FlyPage.tsx).",
+            },
+          ],
+        },
+      ],
+    },
+  },
+  {
     ignores: [
       "dist/",
       "node_modules/",

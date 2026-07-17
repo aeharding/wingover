@@ -163,3 +163,23 @@ test("the plan page grows a pin pane at desktop width", async ({ page }) => {
   await expect(page.getByTestId("plan-pane")).toBeVisible();
   await expect(page.getByText("Long-press the map")).toBeVisible();
 });
+
+test("the record opt-in shows Fly live, and turning it off hides it", async ({
+  page,
+}) => {
+  await page.goto("/settings?map-style=blank");
+  await expect(page.getByTestId("rail-fly")).toHaveCount(0);
+
+  const toggle = page.locator("ion-toggle", {
+    hasText: "Record in this browser",
+  });
+  await toggle.click();
+  await page
+    .locator("ion-alert")
+    .getByRole("button", { name: "Turn on" })
+    .click();
+  await expect(page.getByTestId("rail-fly")).toBeVisible();
+
+  await toggle.click();
+  await expect(page.getByTestId("rail-fly")).toHaveCount(0);
+});

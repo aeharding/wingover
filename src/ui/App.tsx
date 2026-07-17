@@ -20,6 +20,7 @@ import { Redirect, Route } from "react-router-dom";
 
 import { engine } from "../engine";
 import DesktopShell from "./desktop/DesktopShell";
+import FlightSurface from "./flight/FlyPage";
 import AllFlightsMapPage from "./pages/AllFlightsMapPage";
 import FlightDetailPage from "./pages/FlightDetailPage";
 import FlyPage from "./pages/FlyPage";
@@ -44,16 +45,9 @@ export default function App() {
   }, []);
 
   return (
-    <IonApp>
-      <SettingsProvider>
-        {/* Mounted above AppBody, which sheds the whole nav shell during a
-            flight — the sheets outlive that, so either can be raised from
-            anywhere without each page owning a modal. */}
-        <SyncSheetsProvider>
-          <AppBody />
-        </SyncSheetsProvider>
-      </SettingsProvider>
-    </IonApp>
+    <SettingsProvider>
+      <AppBody />
+    </SettingsProvider>
   );
 }
 
@@ -62,22 +56,35 @@ export default function App() {
 // keeps each visited page mounted, and the map-bearing ones (Plan, Logbook,
 // flight detail) each hold a live map + tile cache the whole time — the
 // WKWebView ballooning to 500–850 MB is what gets the app jetsammed mid-flight.
-// Rendering only <FlyPage> in flight makes the footprint the single live map
-// and nothing else. The tab bar is unreachable during a flight anyway, so this
-// is invisible to the pilot, and the full shell returns the instant the flight
-// ends. "idle" is the only non-flight state; pre-hydration the engine reports
-// it, so the shell shows during load.
+// Rendering only the flight surface in flight makes the footprint the single
+// live map and nothing else. The tab bar is unreachable during a flight
+// anyway, so this is invisible to the pilot, and the full shell returns the
+// instant the flight ends. "idle" is the only non-flight state;
+// pre-hydration the engine reports it, so the shell shows during load.
+//
+// Shed means SHED: ion-app itself goes too. The flight surface is a plain
+// div tree (src/ui/flight, Ionic-free by lint), so while recording, Ionic
+// simply does not exist in the DOM. IonApp and the sheets remount with the
+// shell when the flight ends.
 function AppBody() {
   const inFlight = useSyncExternalStore(
     engine.subscribe,
     () => engine.snapshotSync().status !== "idle",
   );
   const isDesktop = useIsDesktop();
-  if (inFlight) return <FlyPage />;
+  if (inFlight) return <FlightSurface />;
   // Desktop gets its own shell: plain react-router, no Ionic outlet (see
   // DesktopShell). Phones keep the Ionic tab shell untouched.
-  if (isDesktop) return <DesktopShell />;
-  return <TabShell />;
+  return (
+    <IonApp>
+      {/* Above the shells, so a sheet can be raised from anywhere without
+          each page owning a modal; inside IonApp, because IonModal
+          presents against it. */}
+      <SyncSheetsProvider>
+        {isDesktop ? <DesktopShell /> : <TabShell />}
+      </SyncSheetsProvider>
+    </IonApp>
+  );
 }
 
 function TabShell() {

@@ -1,6 +1,6 @@
-import { IonIcon } from "@ionic/react";
 import { globeOutline, mapOutline } from "ionicons/icons";
 
+import NativeIcon from "../components/NativeIcon";
 import type { MapViewKind } from "./config";
 
 interface ViewToggleProps {
@@ -16,7 +16,7 @@ export default function ViewToggle({ view, onChange }: ViewToggleProps) {
       aria-label={next === "satellite" ? "Satellite view" : "Street view"}
       onClick={() => onChange(next)}
     >
-      <IonIcon icon={next === "satellite" ? globeOutline : mapOutline} />
+      <NativeIcon icon={next === "satellite" ? globeOutline : mapOutline} />
     </button>
   );
 }

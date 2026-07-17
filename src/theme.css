@@ -1,8 +1,10 @@
 :root {
-  /* The one app cyan (buttons, launch arrow) — wide-gamut display-p3, the same
-     value as the map's ACCENT_CYAN (types.ts) and the stat cyan below, so the
-     flown track, aircraft, markers, buttons and stats read as ONE cyan. */
-  --wingover-accent: color(display-p3 0 0.7 1);
+  /* The one app cyan (buttons, stats, flown track) — wide-gamut
+     display-p3, the same value as the map's ACCENT_CYAN (types.ts), so
+     the track, aircraft, markers, buttons and readouts read as ONE cyan.
+     Lightened from 0 0.7 1 for daylight contrast on the flight tiles;
+     everything moved together, because two near-cyans read as a bug. */
+  --wingover-accent: color(display-p3 0.32 0.8 1);
   --wingover-green: #35e06a;
   --wingover-tile: #111214;
 

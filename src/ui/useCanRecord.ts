@@ -4,13 +4,17 @@ import { isTauri } from "../engine/platform";
 import { getBooleanSetting, onSettingChanged } from "../storage/local";
 import { launchParam } from "./map/config";
 
-function recordOverride(): boolean {
-  if (isTauri() || launchParam("mock-speed") !== null) return true;
-  // e2e drives the REAL web engine with stubbed geolocation and needs the
-  // Fly tab without the Advanced opt-in dance — same pattern as the
-  // "wingover.map" backend override. Doubles as the synchronous mirror of
-  // the recordInBrowser setting (written by Settings), so the "/" redirect
-  // and the /fly route gate are correct at first render.
+// Truly static: never changes within a session.
+function staticOverride(): boolean {
+  return isTauri() || launchParam("mock-speed") !== null;
+}
+
+// The synchronous mirror of the recordInBrowser setting (written by
+// Settings; also the e2e override, same pattern as "wingover.map"). It
+// makes the "/" redirect and the /fly route gate correct at FIRST render,
+// but it is dynamic state, not an override: the live subscription below
+// must still run, or turning the toggle OFF never hides Fly.
+function mirrored(): boolean {
   try {
     return localStorage.getItem("wingover.record") === "1";
   } catch {
@@ -28,14 +32,18 @@ function recordOverride(): boolean {
  * browsers before the native app exists.
  */
 export function useCanRecord(): boolean {
-  const [canRecord, setCanRecord] = useState(recordOverride);
+  const [canRecord, setCanRecord] = useState(
+    () => staticOverride() || mirrored(),
+  );
   useEffect(() => {
-    if (recordOverride()) return;
-    void getBooleanSetting("recordInBrowser", false).then(
-      (on) => on && setCanRecord(true),
+    if (staticOverride()) return;
+    // OR the mirror: e2e sets only the localStorage flag (no PouchDB
+    // setting), and Settings clears both together on turn-off.
+    void getBooleanSetting("recordInBrowser", false).then((on) =>
+      setCanRecord(on || mirrored()),
     );
     return onSettingChanged("recordInBrowser", (value) =>
-      setCanRecord(value === "true"),
+      setCanRecord(value === "true" || mirrored()),
     );
   }, []);
   return canRecord;

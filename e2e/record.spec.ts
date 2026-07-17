@@ -17,19 +17,24 @@ test("arm, auto-takeoff, reload kill drill, stop, logbook", async ({
   // The direction-to-launch arrow renders as the blue location chevron.
   await expect(page.locator(".launch-arrow-svg")).toBeVisible();
 
-  // Style regression guard: the fly page must not scroll — the scrollbar
-  // lives in ion-content's shadow DOM inner-scroll, which document-level
-  // overflow checks cannot see. (Attribution styling is a MapLibre-render
-  // concern, verified in maplibre.spec.ts.)
-  const innerScrollOverflowY = await page.evaluate(
-    () =>
-      getComputedStyle(
-        document
-          .querySelector("ion-content.fly-content")!
-          .shadowRoot!.querySelector(".inner-scroll")!,
-      ).overflowY,
+  // Shed means SHED: while recording, Ionic does not exist in the DOM —
+  // no ion-app, no ion-page, no ion-anything (src/ui/flight is Ionic-free
+  // by lint; this asserts the runtime half).
+  const ionicTags = await page.evaluate(() =>
+    [...document.querySelectorAll("*")]
+      .filter((el) => el.tagName.startsWith("ION-"))
+      .map((el) => el.tagName),
   );
-  expect(innerScrollOverflowY).toBe("hidden");
+  expect(ionicTags).toEqual([]);
+
+  // Style regression guard: the fly page must not scroll. The flight
+  // surface is Ionic-free (a plain div), so its own computed overflow is
+  // the whole story — no shadow DOM to reach into anymore.
+  const overflowY = await page.evaluate(
+    () =>
+      getComputedStyle(document.querySelector("div.fly-content")!).overflowY,
+  );
+  expect(overflowY).toBe("hidden");
 
   await page.getByRole("button", { name: "Track up" }).click();
   await expect(page.getByRole("button", { name: "Track up" })).toHaveAttribute(
@@ -59,7 +64,7 @@ test("arm, auto-takeoff, reload kill drill, stop, logbook", async ({
   await expect(page.locator("ion-tab-bar")).toBeVisible();
 
   await page.getByText("Logbook", { exact: true }).click();
-  await expect(page.getByRole("heading", { name: /^Flight / })).toBeVisible();
+  await expect(page.locator(".flight-row")).toBeVisible();
   await expect(page.getByText(/1 flights/)).toBeVisible();
   expect(pageErrors).toEqual([]);
 });
@@ -88,7 +93,7 @@ test("canceling while acquiring GPS discards the session", async ({ page }) => {
   // discard needs the explicit second tap, so a missed launch can't
   // happen by accident.
   await page
-    .locator("ion-alert")
+    .locator(".big-confirm")
     .getByRole("button", { name: "Stop" })
     .click();
 
@@ -111,7 +116,7 @@ test("dismissing the cancel confirmation keeps waiting for takeoff", async ({
   // Dismiss the confirm — scope to the alert, since the acquiring screen's
   // own button carries the same "Cancel" label.
   await page
-    .locator("ion-alert")
+    .locator(".big-confirm")
     .getByRole("button", { name: "Cancel" })
     .click();
 
@@ -218,6 +223,50 @@ test("zoom control zooms one-fingered from anywhere without unpinning follow", a
   await page.mouse.move(upX, box.y + box.height - 140, { steps: 8 });
   await page.mouse.up();
   await expect.poll(valuenow).toBeLessThan(zoomedIn);
+});
+
+test("follow and track-up: two modes, deliberate resumes", async ({
+  page,
+}) => {
+  await page.goto("/?mock-speed=40&map-style=blank");
+  await page.getByRole("button", { name: "Start Flight" }).click();
+  await expect(page.getByTestId("recording")).toBeVisible({ timeout: 10_000 });
+
+  const follow = page.getByRole("button", { name: "Follow aircraft" });
+  const compass = page.getByRole("button", { name: "Track up" });
+  // Unsnapped, the same button is a north reset and reads accordingly.
+  const northReset = page.getByRole("button", { name: "Align north" });
+  await expect(follow).toHaveAttribute("data-active", "true");
+  await expect(compass).toHaveAttribute("data-active", "false");
+
+  await compass.click();
+  await expect(compass).toHaveAttribute("data-active", "true");
+
+  // Dragging the map unsnaps BOTH modes: the camera is neither following
+  // nor rotating, whatever it was doing before.
+  const map = (await page.locator(".live-map").boundingBox())!;
+  await page.mouse.move(map.x + map.width / 2, map.y + map.height / 2);
+  await page.mouse.down();
+  await page.mouse.move(map.x + map.width / 2 - 140, map.y + map.height / 2, {
+    steps: 8,
+  });
+  await page.mouse.up();
+  await expect(follow).toHaveAttribute("data-active", "false");
+  await expect(northReset).toHaveAttribute("data-active", "false");
+
+  // Resuming takes BOTH presses: snapping must not silently re-enable
+  // track-up.
+  await follow.click();
+  await expect(follow).toHaveAttribute("data-active", "true");
+  await expect(compass).toHaveAttribute("data-active", "false");
+  await compass.click();
+  await expect(compass).toHaveAttribute("data-active", "true");
+
+  // The follow button is a toggle, and unsnapping it clears track-up the
+  // same as a drag.
+  await follow.click();
+  await expect(follow).toHaveAttribute("data-active", "false");
+  await expect(northReset).toHaveAttribute("data-active", "false");
 });
 
 test("edge guards stop an edge swipe from panning, inland drag still pans", async ({

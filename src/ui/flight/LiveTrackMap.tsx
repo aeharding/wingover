@@ -1,9 +1,9 @@
 import { useEffect, useEffectEvent, useRef, useState } from "react";
 
 import type { Fix, Waypoint } from "../../engine/types";
-import type { MapViewKind } from "./config";
-import { readLiveViewState, writeLiveViewState } from "./liveViewState";
-import MapCanvas from "./MapCanvas";
+import type { MapViewKind } from "../map/config";
+import { readLiveViewState, writeLiveViewState } from "../map/liveViewState";
+import MapCanvas from "../map/MapCanvas";
 import {
   ACCENT_CYAN,
   ADHOC_COLOR,
@@ -17,7 +17,7 @@ import {
   type MarkerSpec,
   PLANNED_COLOR,
   TRACK_LINE_WIDTH_PX,
-} from "./types";
+} from "../map/types";
 import ZoomControl from "./ZoomControl";
 
 import "./LiveTrackMap.css";
@@ -323,15 +323,12 @@ export default function LiveTrackMap({
 
   const applyTrackUpChange = useEffectEvent(() => {
     if (!map) return;
-    if (follow) {
-      // Re-render at the current fix: the camera snaps to the new orientation
-      // and the glyph follows.
-      renderNow();
-      return;
-    }
-    const newest = track[track.length - 1];
-    const bearing = trackUp ? (newest?.course ?? 0) : 0;
-    map.moveTo({ bearing }, { animate: true });
+    // Only a SNAPPED camera re-orients on mode change: free-browsing keeps
+    // the pilot's bearing (the compass button realigns north imperatively
+    // from FlyPage instead), and nothing in flight ever animates — an
+    // animated rotation tweens the basemap while the flown-line overlay
+    // re-renders a beat behind it, so the path visibly wiggles.
+    if (follow) renderNow();
   });
 
   useEffect(() => {

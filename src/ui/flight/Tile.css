@@ -11,7 +11,6 @@
   gap: 1px;
   background: rgba(255, 255, 255, 0.22);
   padding-top: env(safe-area-inset-top);
-  pointer-events: none;
 }
 
 @media (min-width: 768px) {
@@ -43,7 +42,7 @@
 }
 
 .tile .value {
-  font-size: clamp(1.4rem, 7vw, 1.95rem);
+  font-size: clamp(1.4rem, 7.3vw, 1.95rem);
   font-weight: 800;
   color: #fff;
   font-variant-numeric: tabular-nums;
