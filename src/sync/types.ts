@@ -16,6 +16,12 @@ export interface Credentials {
    * self-hoster pay a failed StoreKit round-trip on every launch.
    */
   kind: CredentialKind;
+  /**
+   * THE login method on this hosted account (server-reported; "apple"
+   * today, one per account ever). Gates the phone's "Use on your
+   * computer" link step: once set, the door becomes a note.
+   */
+  login?: string | null;
   /** CouchDB origin, e.g. https://db.wingover.app */
   url: string;
   dbName: string;
@@ -65,12 +71,20 @@ export interface CredentialProvider {
 export interface SyncAccount {
   kind: CredentialKind;
   entitled: boolean;
+  login?: string | null;
 }
 
 export type SyncStatus =
   | { state: "off" }
   | { state: "connecting" }
-  | { state: "syncing"; lastSyncedAt: number | null; readOnly: boolean }
+  | {
+      state: "syncing";
+      lastSyncedAt: number | null;
+      readOnly: boolean;
+      /** Docs are moving right now. The UI spins instead of resting on
+       *  the checkmark; `paused` (idle) drops it back. */
+      active: boolean;
+    }
   /** A flight is in progress. Recording outranks sync, always. */
   | { state: "paused" }
   /**

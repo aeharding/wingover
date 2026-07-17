@@ -3,7 +3,6 @@ import { describe, expect, it } from "vitest";
 import { FlightSimulator } from "../engine/simulator";
 import { computeStats } from "../flight/stats";
 import {
-  db,
   deleteFlight,
   deletePin,
   type Flight,
@@ -14,6 +13,7 @@ import {
   listPins,
   saveFlight,
   savePin,
+  syncedDb,
   updateFlight,
   updatePin,
 } from "./db";
@@ -81,7 +81,7 @@ describe("storage", () => {
     const fixes = new FlightSimulator(7, 0).fixesUpTo(60);
     const flight = makeFlight(fixes);
     await saveFlight(flight, fixes);
-    const trackBefore = await db.get(`track:${flight.id}`);
+    const trackBefore = await syncedDb().get(`track:${flight.id}`);
 
     await updateFlight(flight.id, { name: "Renamed", notes: "Great air" });
 
@@ -98,12 +98,12 @@ describe("storage", () => {
     // The flight doc carrying NO attachment is the load-bearing one — watching
     // only the track doc's _rev would miss the track being re-attached here,
     // which is exactly how this regresses.
-    const renamed = await db.get<{ _attachments?: unknown }>(
+    const renamed = await syncedDb().get<{ _attachments?: unknown }>(
       `flight:${flight.id}`,
       { attachments: false },
     );
     expect(renamed._attachments).toBeUndefined();
-    expect((await db.get(`track:${flight.id}`))._rev).toBe(trackBefore._rev);
+    expect((await syncedDb().get(`track:${flight.id}`))._rev).toBe(trackBefore._rev);
   });
 
   it("deletes a flight and its track", async () => {
@@ -186,3 +186,4 @@ describe("storage", () => {
     expect(await getSetting("maptilerKey")).toBe("abc123");
   });
 });
+

@@ -62,10 +62,25 @@ interface FlightDoc {
  * Everything in here replicates to a pilot's other devices once sync is on, so
  * anything device-local belongs in storage/local.ts instead.
  */
-export const db = new PouchDB("wingover", {
-  auto_compaction: true,
-  revs_limit: 25,
-});
+function open() {
+  return new PouchDB("wingover", {
+    auto_compaction: true,
+    revs_limit: 25,
+  });
+}
+
+let db = open();
+
+/**
+ * The live handle, read at call time. Consumers outside this module call
+ * this per use and never cache the result: resetSyncedData() swaps the
+ * instance under a logged-out web session, and a cached handle is a
+ * permanently dead database — the bug that used to force a full page
+ * reload on logout.
+ */
+export function syncedDb(): PouchDB.Database {
+  return db;
+}
 
 function flightDocId(flightId: string): string {
   return `flight:${flightId}`;
@@ -209,6 +224,26 @@ export function onDocsChanged(
   return () => {
     set.delete(listener);
   };
+}
+
+/**
+ * Web log-out: the local copy leaves with the pilot (shared computers).
+ *
+ * Destroy, then reopen, in that order: both handles would point at the
+ * same IndexedDB name, so opening the replacement first hands back the
+ * old data and then destroys it out from under the new handle. The feed
+ * is rebuilt on the fresh instance and every subscriber notified at the
+ * end, so lists re-read (empty) in place — logout never reloads the page.
+ */
+export async function resetSyncedData(): Promise<void> {
+  changesFeed?.cancel();
+  changesFeed = null;
+  await db.destroy();
+  db = open();
+  if (changeListeners.size > 0) ensureChangesFeed();
+  for (const listeners of changeListeners.values()) {
+    for (const listener of listeners) listener();
+  }
 }
 
 export async function listFlights(): Promise<Flight[]> {
