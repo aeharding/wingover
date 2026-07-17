@@ -6,6 +6,7 @@ import Security
 import StoreKit
 import Tauri
 import UIKit
+import WebKit
 
 // Holds the in-flight Sign in with Apple request. ASAuthorizationController
 // keeps only weak references to its delegate, so the plugin retains this until
@@ -145,6 +146,15 @@ class WingoverPlugin: Plugin, CLLocationManagerDelegate {
     super.init()
     locationManager.delegate = self
     _ = Self.allowProgrammaticKeyboard
+  }
+
+  // wry hard-disables the scroll view's rubber band (setBounces(false) in
+  // its WKWebView setup) and exposes no config for it. The app shell is
+  // fixed layout so the main frame never scrolls anyway; re-enabling costs
+  // nothing and restores the native overscroll bounce Ionic's scrollers
+  // are designed around.
+  @objc public override func load(webview: WKWebView) {
+    webview.scrollView.bounces = true
   }
 
   //
