@@ -337,6 +337,9 @@ export default function LiveTrackMap({
     <div className="live-map">
       <MapCanvas
         base={view}
+        // The live map is ALWAYS light: full sun on a leg-mounted phone is
+        // the one context where the dark basemap loses (STEERING).
+        appearance="light"
         onReady={(next) => {
           if (!next) {
             // The view these handles came from is destroyed; a 1 Hz fix
