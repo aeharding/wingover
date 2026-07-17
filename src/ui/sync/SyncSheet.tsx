@@ -13,6 +13,7 @@ import {
 } from "@ionic/react";
 import {
   bookOutline,
+  chevronBackOutline,
   cloudUploadOutline,
   desktopOutline,
   logoApple,
@@ -30,6 +31,7 @@ import * as sync from "../../sync";
 import { openExternal } from "../externalLinks";
 import { describe } from "./describe";
 import { SelfHostPage } from "./SelfHostPage";
+import { useLogOut } from "./useLogOut";
 
 /**
  * THE sync surface — one sheet, one question ("are my flights backed up?"),
@@ -59,16 +61,17 @@ function SyncHome({
   const account = useSyncExternalStore(sync.subscribe, sync.currentAccount);
   const [busy, setBusy] = useState(false);
   const [problem, setProblem] = useState<string | null>(null);
-  // null = StoreKit didn't hand us the product — a browser, the desktop dev
-  // ring, or App Store Connect not serving it yet.
-  const [product, setProduct] = useState<sync.StoreProduct | null>(null);
+  // Empty = StoreKit didn't hand us products — a browser, the desktop dev
+  // ring, or App Store Connect not serving them yet.
+  const [products, setProducts] = useState<sync.StoreProduct[]>([]);
   // The subscription rail's own state, straight from StoreKit: what makes a
   // supporter or a signed-out subscriber see the truth here.
   const [appleSub, setAppleSub] = useState<"active" | "expired" | null>(null);
   const [presentAlert] = useIonAlert();
+  const { logOut, busy: loggingOut } = useLogOut();
 
   useEffect(() => {
-    void sync.subscriptionProduct().then(setProduct);
+    void sync.subscriptionProducts().then(setProducts);
     void sync.appleSubscriptionState().then(setAppleSub);
   }, []);
 
@@ -86,11 +89,11 @@ function SyncHome({
     }
   }
 
-  async function buy() {
+  async function buy(term: sync.SubscriptionTerm) {
     setBusy(true);
     setProblem(null);
     try {
-      await sync.purchase();
+      await sync.purchase(term);
       // The thank-you/link page gets its own screen (SYNC-UX.md junction 2):
       // the inline offer was cramped and hard to read. Only when the purchase
       // actually connected this device (the supporter guard means a self-
@@ -133,7 +136,7 @@ function SyncHome({
         <div className="sync-home-body">
           {nothing ? (
             <Pitch
-              product={product}
+              products={products}
               busy={busy}
               problem={problem}
               onBuy={buy}
@@ -157,8 +160,8 @@ function SyncHome({
               account={account}
               appleSub={appleSub}
               supporter={supporter}
-              product={product}
-              busy={busy}
+              products={products}
+              busy={busy || loggingOut}
               problem={problem}
               onBuy={buy}
               onConnect={() => run(() => sync.connectWithSubscription())}
@@ -166,7 +169,11 @@ function SyncHome({
                 void nav.current?.push(() => <LinkAccountPage nav={nav} />)
               }
               onSignIn={() => run(() => sync.signIn())}
-              onTurnOff={() => run(() => sync.disable())}
+              onTurnOff={() =>
+                isTauri()
+                  ? void run(() => sync.disable())
+                  : void logOut(onClose)
+              }
               onConnected={onClose}
               onDelete={() =>
                 presentAlert({
@@ -205,7 +212,7 @@ function SyncHome({
             />
           )}
 
-          <FinePrint product={product} showTerms={nothing} />
+          <FinePrint products={products} showTerms={nothing} />
         </div>
       </IonContent>
     </>
@@ -231,8 +238,17 @@ function manageSubscription() {
  * sign-in IS the door, and (until web checkout) subscribing lives on the
  * iPhone.
  */
+function byTerm(
+  products: sync.StoreProduct[],
+  term: sync.SubscriptionTerm,
+): sync.StoreProduct | undefined {
+  return products.find(
+    (product) => product.id === sync.SUBSCRIPTION_PRODUCT_IDS[term],
+  );
+}
+
 function Pitch({
-  product,
+  products,
   busy,
   problem,
   onBuy,
@@ -240,14 +256,16 @@ function Pitch({
   onRestore,
   onConnected,
 }: {
-  product: sync.StoreProduct | null;
+  products: sync.StoreProduct[];
   busy: boolean;
   problem: string | null;
-  onBuy: () => void;
+  onBuy: (term: sync.SubscriptionTerm) => void;
   onSignIn: () => void;
   onRestore: () => void;
   onConnected: () => void;
 }) {
+  const monthly = byTerm(products, "monthly");
+  const yearly = byTerm(products, "yearly");
   return (
     <>
       <h2 className="sync-headline" data-testid="sync-headline">
@@ -271,19 +289,32 @@ function Pitch({
 
       {problem && <p className="sync-error-message">{problem}</p>}
 
-      {product ? (
-        <IonButton
-          expand="block"
-          disabled={busy}
-          onClick={onBuy}
-          data-testid="sync-subscribe"
-        >
-          {busy ? (
-            <IonSpinner name="crescent" />
-          ) : (
-            `Subscribe for ${product.displayPrice}/month`
+      {monthly ? (
+        <>
+          <IonButton
+            expand="block"
+            disabled={busy}
+            onClick={() => onBuy("monthly")}
+            data-testid="sync-subscribe"
+          >
+            {busy ? (
+              <IonSpinner name="crescent" />
+            ) : (
+              `Subscribe for ${monthly.displayPrice}/month`
+            )}
+          </IonButton>
+          {yearly && (
+            <IonButton
+              expand="block"
+              fill="outline"
+              disabled={busy}
+              onClick={() => onBuy("yearly")}
+              data-testid="sync-subscribe-yearly"
+            >
+              {`Or ${yearly.displayPrice}/year (2 months free)`}
+            </IonButton>
           )}
-        </IonButton>
+        </>
       ) : isTauri() ? (
         <IonButton expand="block" disabled data-testid="sync-subscribe">
           Subscribe (coming soon)
@@ -358,7 +389,7 @@ function Connected({
   account,
   appleSub,
   supporter,
-  product,
+  products,
   busy,
   problem,
   onBuy,
@@ -373,10 +404,10 @@ function Connected({
   account: sync.SyncAccount | null;
   appleSub: "active" | "expired" | null;
   supporter: boolean;
-  product: sync.StoreProduct | null;
+  products: sync.StoreProduct[];
   busy: boolean;
   problem: string | null;
-  onBuy: () => void;
+  onBuy: (term: sync.SubscriptionTerm) => void;
   onConnect: () => void;
   onLink: () => void;
   onSignIn: () => void;
@@ -403,7 +434,7 @@ function Connected({
             {appleSub === "expired" ? "Expired" : "Off"}
           </span>
           <span className="sync-state-detail">
-            Flights stay on this device.
+            Flights are not being backed up.
           </span>
         </div>
       ) : (
@@ -443,17 +474,17 @@ function Connected({
 
       {/* Resubscribe: the lapse is discovered here, the remedy is a purchase. */}
       {lapsed &&
-        (product ? (
+        (byTerm(products, "monthly") ? (
           <IonButton
             expand="block"
             disabled={busy}
-            onClick={onBuy}
+            onClick={() => onBuy("monthly")}
             data-testid="sync-resubscribe"
           >
             {busy ? (
               <IonSpinner name="crescent" />
             ) : (
-              `Resubscribe for ${product.displayPrice}/month`
+              `Resubscribe for ${byTerm(products, "monthly")?.displayPrice}/month`
             )}
           </IonButton>
         ) : isTauri() ? (
@@ -471,17 +502,17 @@ function Connected({
       {/* Dormant: signed in, never subscribed — prompted to subscribe
           (SYNC-UX.md). Web checkout replaces the sentence when it exists. */}
       {dormant &&
-        (product ? (
+        (byTerm(products, "monthly") ? (
           <IonButton
             expand="block"
             disabled={busy}
-            onClick={onBuy}
+            onClick={() => onBuy("monthly")}
             data-testid="sync-subscribe"
           >
             {busy ? (
               <IonSpinner name="crescent" />
             ) : (
-              `Subscribe for ${product.displayPrice}/month`
+              `Subscribe for ${byTerm(products, "monthly")?.displayPrice}/month`
             )}
           </IonButton>
         ) : (
@@ -519,7 +550,7 @@ function Connected({
           onClick={onTurnOff}
           data-testid="sync-off"
         >
-          {dormant ? "Sign out" : "Turn off sync"}
+          {!isTauri() ? "Log out" : dormant ? "Sign out" : "Turn off sync"}
         </IonButton>
       )}
 
@@ -535,10 +566,10 @@ function Connected({
         </IonButton>
       )}
 
-      {hosted && isTauri() && !dormant && (
+      {hosted && isTauri() && !dormant && account?.login !== "apple" && (
         // Junction 2 catch-up for pilots who skipped the post-purchase page —
-        // opens the same page. Idempotent server-side; harmless when already
-        // linked.
+        // opens the same page. Idempotent server-side. Once the server says
+        // the Apple Account is linked, the door becomes the note below.
         <IonButton
           fill="clear"
           size="small"
@@ -549,6 +580,12 @@ function Connected({
         >
           Use on your computer
         </IonButton>
+      )}
+
+      {hosted && isTauri() && !dormant && account?.login === "apple" && (
+        <p className="sync-fine-print" data-testid="sync-linked-note">
+          Linked. Sign in with Apple at wingover.app any time.
+        </p>
       )}
 
       {hosted && !dormant && (
@@ -569,10 +606,9 @@ function Connected({
 
       {!off && !dormant && (
         <p className="sync-fine-print">
-          Turning sync off forgets this device&apos;s connection, and it stays
-          off until you turn it back on. Nothing is deleted: every flight
-          stays on this device and on the server. If you subscribe, billing
-          is unchanged.
+          {isTauri()
+            ? "Turning sync off forgets this device's connection, and it stays off until you turn it back on. Nothing is deleted: every flight stays on this device and on the server. If you subscribe, billing is unchanged."
+            : "Logging out removes your flights from this computer. They stay on the server and your other devices. If you subscribe, billing is unchanged."}
         </p>
       )}
     </>
@@ -620,6 +656,11 @@ function LinkAccountPage({
     <>
       <IonHeader>
         <IonToolbar>
+          <IonButtons slot="start">
+            <IonButton onClick={pop} data-testid="link-page-back">
+              <IonIcon slot="icon-only" icon={chevronBackOutline} />
+            </IonButton>
+          </IonButtons>
           <IonTitle>You&apos;re synced</IonTitle>
           <IonButtons slot="end">
             <IonButton strong onClick={pop} data-testid="link-page-done">
@@ -690,16 +731,24 @@ function LinkAccountPage({
 
 /** Paywall metadata App Review checks for: price, period, terms, privacy. */
 function FinePrint({
-  product,
+  products,
   showTerms,
 }: {
-  product: sync.StoreProduct | null;
+  products: sync.StoreProduct[];
   showTerms: boolean;
 }) {
   if (!showTerms) return null;
   return (
     <p className="sync-fine-print">
-      {product ? `${product.displayPrice}/month, auto-renews` : "Auto-renews"}{" "}
+      {byTerm(products, "monthly")
+        ? [
+            `${byTerm(products, "monthly")?.displayPrice}/month`,
+            ...(byTerm(products, "yearly")
+              ? [`or ${byTerm(products, "yearly")?.displayPrice}/year`]
+              : []),
+            "auto-renews",
+          ].join(", ")
+        : "Auto-renews"}{" "}
       until cancelled in your App Store settings.{" "}
       <a href="https://www.apple.com/legal/internet-services/itunes/dev/stdeula/">
         Terms of Use

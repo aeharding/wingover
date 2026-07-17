@@ -202,6 +202,11 @@
   gap: 0.3em;
 }
 
+.settings-sync-note ion-spinner {
+  width: 1em;
+  height: 1em;
+}
+
 /* Full-saturation status colors. P3 support is baseline on every target
    device, so display-p3 colors never carry sRGB fallbacks (STEERING). */
 .settings-sync-off {

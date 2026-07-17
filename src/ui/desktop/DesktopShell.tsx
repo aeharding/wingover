@@ -1,11 +1,22 @@
-import { IonIcon } from "@ionic/react";
+import {
+  IonIcon,
+  IonItem,
+  IonLabel,
+  IonList,
+  IonPopover,
+  IonSpinner,
+  useIonAlert,
+} from "@ionic/react";
 import {
   bookOutline,
+  checkmarkOutline,
+  closeCircle,
   mapOutline,
   navigateOutline,
   settingsOutline,
+  syncOutline,
 } from "ionicons/icons";
-import { useState } from "react";
+import { useRef, useState, useSyncExternalStore } from "react";
 import {
   BrowserRouter,
   NavLink,
@@ -13,11 +24,18 @@ import {
   useLocation,
 } from "react-router-dom";
 
+import { isTauri } from "../../engine/platform";
+import { resetSyncedData } from "../../storage/db";
+import * as sync from "../../sync";
+import { useFlights } from "../logbook/useFlights";
 import FlyPage from "../pages/FlyPage";
 import MapProviderPage from "../pages/MapProviderPage";
 import PlanPage from "../pages/PlanPage";
 import SettingsPage from "../pages/SettingsPage";
 import UnitsPage from "../pages/UnitsPage";
+import { describe } from "../sync/describe";
+import { useSyncSheet } from "../sync/SyncSheets";
+import { useLogOut } from "../sync/useLogOut";
 import { useCanRecord } from "../useCanRecord";
 import LogbookSection from "./LogbookSection";
 
@@ -108,6 +126,7 @@ function DesktopFrame() {
           <IonIcon icon={settingsOutline} />
           <span>Settings</span>
         </NavLink>
+        <RailSync />
       </nav>
       <main className="desktop-main">
         {canRecord && visited.has("fly") && (
@@ -132,6 +151,126 @@ function DesktopFrame() {
         )}
       </main>
     </div>
+  );
+}
+
+/**
+ * The rail's bottom chip: one glance answers "are my flights backed up"
+ * (spinning while docs actually move), and a click opens the traditional
+ * account menu: status, Manage sync (the sheet), and Log out on the web.
+ * Settings carries no Sync row on desktop; this chip IS the row
+ * (SYNC-UX.md).
+ */
+function RailSync() {
+  const openSync = useSyncSheet();
+  const status = useSyncExternalStore(sync.subscribe, sync.currentStatus);
+  const popover = useRef<HTMLIonPopoverElement>(null);
+  const { logOut, busy } = useLogOut();
+  const { flights } = useFlights();
+  const [presentAlert] = useIonAlert();
+  const off = status.state === "off";
+  const { label, detail } = describe(status);
+  const active =
+    status.state === "connecting" ||
+    (status.state === "syncing" && status.active);
+  const tone = off ? "sync-off" : label === "On" ? "sync-on" : "sync-mid";
+  return (
+    <>
+      <button
+        id="rail-sync"
+        className={`rail-link rail-sync ${tone}`}
+        aria-label={`Sync: ${off ? "Off" : label}`}
+        data-testid="rail-sync"
+      >
+        {active ? (
+          <IonSpinner name="crescent" aria-hidden="true" />
+        ) : (
+          <IonIcon
+            icon={
+              off ? closeCircle : label === "On" ? checkmarkOutline : syncOutline
+            }
+            aria-hidden="true"
+          />
+        )}
+        <span>Sync</span>
+      </button>
+      <IonPopover
+        ref={popover}
+        trigger="rail-sync"
+        side="right"
+        alignment="end"
+        className="rail-sync-pop"
+      >
+        <IonList lines="none">
+          <IonItem className="rail-sync-state">
+            <IonLabel>
+              <h3>Sync: {label}</h3>
+              {detail && <p>{detail}</p>}
+            </IonLabel>
+          </IonItem>
+          <IonItem
+            button
+            detail={false}
+            data-testid="rail-sync-manage"
+            onClick={() => {
+              void popover.current?.dismiss();
+              openSync();
+            }}
+          >
+            <IonLabel>{off ? "Log In" : "Manage sync"}</IonLabel>
+          </IonItem>
+          {!off && !isTauri() && (
+            <IonItem
+              button
+              detail={false}
+              disabled={busy}
+              data-testid="rail-sync-logout"
+              onClick={() => {
+                void logOut(() => void popover.current?.dismiss());
+              }}
+            >
+              <IonLabel color="danger">Log out</IonLabel>
+              {busy && (
+                <IonSpinner slot="end" name="crescent" aria-hidden="true" />
+              )}
+            </IonItem>
+          )}
+          {/* Log out's dark twin: sync off, yet flights sit on this
+              computer (imports, browser recordings, a past session).
+              Always confirms, because unlike Log out there is provably
+              nothing backing them up. Hidden while connected: destroying
+              a synced copy is a lie (it pulls straight back down), and
+              the connected verbs are Log out and per-flight delete. */}
+          {off && !isTauri() && flights.length > 0 && (
+            <IonItem
+              button
+              detail={false}
+              data-testid="rail-sync-erase"
+              onClick={() => {
+                void popover.current?.dismiss();
+                presentAlert({
+                  header: "Delete local data?",
+                  message:
+                    "Sync is off, so nothing is backed up. This deletes every flight and plan pin stored on this computer, permanently.",
+                  buttons: [
+                    { text: "Cancel", role: "cancel" },
+                    {
+                      text: "Delete",
+                      role: "destructive",
+                      handler: () => {
+                        void resetSyncedData();
+                      },
+                    },
+                  ],
+                });
+              }}
+            >
+              <IonLabel color="danger">Delete local data</IonLabel>
+            </IonItem>
+          )}
+        </IonList>
+      </IonPopover>
+    </>
   );
 }
 

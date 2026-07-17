@@ -12,7 +12,8 @@ import {
   probeEntitlementJWS,
   purchaseJWS,
   siwaProvider,
-  SUBSCRIPTION_PRODUCT_ID,
+  SUBSCRIPTION_PRODUCT_IDS,
+  type SubscriptionTerm,
 } from "./providers/apple";
 import * as replicate from "./replicate";
 import { credentialStore } from "./store";
@@ -33,7 +34,9 @@ export {
   probeEntitlementJWS,
   purchaseJWS,
   siwaProvider,
-  subscriptionProduct,
+  SUBSCRIPTION_PRODUCT_IDS,
+  subscriptionProducts,
+  type SubscriptionTerm,
 } from "./providers/apple";
 export { fakeProvider } from "./providers/fake";
 export { manualProvider } from "./providers/manual";
@@ -152,8 +155,10 @@ export async function resume(override?: CredentialProvider): Promise<void> {
  * Rejects with Apple's own "cancelled" (the pilot closed the sheet) and
  * "pending" (Ask to Buy / bank approval) — the UI treats those as non-errors.
  */
-export async function purchase(): Promise<void> {
-  const purchased = await purchaseJWS(SUBSCRIPTION_PRODUCT_ID);
+export async function purchase(
+  term: SubscriptionTerm = "monthly",
+): Promise<void> {
+  const purchased = await purchaseJWS(SUBSCRIPTION_PRODUCT_IDS[term]);
   // The supporter guard (SYNC-UX.md, junction 2): a pilot already synced to
   // their own server bought support, not a migration — their login is theirs.
   if (replicate.currentAccount()?.kind === "manual") return;
@@ -229,6 +234,9 @@ export async function linkAppleAccount(token?: string): Promise<void> {
   if (!response.ok) {
     throw new Error(`link failed: ${response.status} ${await response.text()}`);
   }
+  // The phone now KNOWS: the "Use on your computer" door becomes a note,
+  // and the fact survives relaunch via the credential store.
+  replicate.patchCredentials({ login: "apple" });
 }
 
 /**

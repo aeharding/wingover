@@ -8,6 +8,7 @@ import {
   IonList,
   IonNote,
   IonPage,
+  IonSpinner,
   IonTitle,
   IonToggle,
   IonToolbar,
@@ -24,11 +25,11 @@ import {
   setBooleanSetting,
 } from "../../storage/local";
 import * as sync from "../../sync";
-import { openExternal } from "../externalLinks";
 import { useSettings } from "../settings/SettingsContext";
 import { describe as describeSync } from "../sync/describe";
 import { useSyncSheet } from "../sync/SyncSheets";
 import { useCanRecord } from "../useCanRecord";
+import { useIsDesktop } from "../useIsDesktop";
 
 import "./SettingsPage.css";
 
@@ -37,6 +38,7 @@ export default function SettingsPage() {
   const openSync = useSyncSheet();
   const history = useHistory();
   const canRecord = useCanRecord();
+  const isDesktop = useIsDesktop();
   const syncStatus = useSyncExternalStore(sync.subscribe, sync.currentStatus);
 
   // One row, one question: are the flights backed up? Off is never a neutral
@@ -44,6 +46,9 @@ export default function SettingsPage() {
   // Everything subscription-shaped lives inside the sheet.
   const off = syncStatus.state === "off";
   const syncNote = off ? "Off" : describeSync(syncStatus).label;
+  const syncBusy =
+    syncStatus.state === "connecting" ||
+    (syncStatus.state === "syncing" && syncStatus.active);
   const [mapBackend, setMapBackend] = useState("mapkit");
   const [autoEnd, setAutoEnd] = useState(true);
   const [recordHere, setRecordHere] = useState(false);
@@ -101,6 +106,9 @@ export default function SettingsPage() {
         </IonToolbar>
       </IonHeader>
       <IonContent className="settings-content">
+        {/* Desktop's rail chip IS this row (SYNC-UX.md); saying it twice
+            makes two places to glance and one of them stale. */}
+        {!isDesktop && (
         <IonList inset>
           <IonItem button detail onClick={openSync} data-testid="settings-sync">
             <IonLabel>Sync</IonLabel>
@@ -115,13 +123,17 @@ export default function SettingsPage() {
               }`}
             >
               {off && <IonIcon icon={closeCircle} aria-hidden="true" />}
-              {!off && syncNote === "On" && (
+              {!off && syncBusy && (
+                <IonSpinner name="crescent" aria-hidden="true" />
+              )}
+              {!off && !syncBusy && syncNote === "On" && (
                 <IonIcon icon={checkmarkOutline} aria-hidden="true" />
               )}
               {syncNote}
             </IonNote>
           </IonItem>
         </IonList>
+        )}
 
         {/* Recording settings only exist where recording does: on the web
             the section appears once "Record in this browser" is enabled. */}
@@ -148,20 +160,6 @@ export default function SettingsPage() {
             <IonNote slot="end">
               {units === "metric" ? "Metric" : "Imperial"}
             </IonNote>
-          </IonItem>
-          <IonItem
-            button
-            detail
-            onClick={() => {
-              // The landing page. In the app it opens in Safari (navigating
-              // the webview away from the SPA would strand it); on the web
-              // it is a same-origin hop, and its script shows the pitch to
-              // app-referred visits instead of bouncing back.
-              if (isTauri()) void openExternal("https://wingover.app/");
-              else location.assign("/");
-            }}
-          >
-            <IonLabel>About Wingover</IonLabel>
           </IonItem>
         </IonList>
 

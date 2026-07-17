@@ -81,6 +81,50 @@ test("selection swaps the seat without remounting the list or the map", async ({
   ).toBeVisible();
 });
 
+test("the rail sync chip opens a menu, and the sheet sits behind it", async ({
+  page,
+}) => {
+  await page.goto("/?map-style=blank");
+  await page.getByTestId("rail-sync").click();
+  // Off: status plus the setup door, and nothing to log out of.
+  await expect(page.getByTestId("rail-sync-manage")).toContainText("Log In");
+  await expect(page.getByTestId("rail-sync-logout")).toHaveCount(0);
+  // Nothing recorded either, so no local data to offer deleting.
+  await expect(page.getByTestId("rail-sync-erase")).toHaveCount(0);
+  await expect(page.locator("ion-popover")).toContainText("Sync: Off");
+  await page.getByTestId("rail-sync-manage").click();
+  await expect(page.getByTestId("sync-headline")).toBeVisible();
+});
+
+test("sync-off local flights can be erased from the chip menu, in place", async ({
+  page,
+}) => {
+  await page.goto("/?mock-speed=40&map-style=blank");
+  await page.getByRole("button", { name: "Start Flight" }).click();
+  await expect(page.getByTestId("recording")).toBeVisible({ timeout: 10_000 });
+  await page.waitForTimeout(400);
+  await page.getByRole("button", { name: "Stop flight" }).click();
+  await page.getByRole("button", { name: "Stop", exact: true }).click();
+  await expect(
+    page.getByRole("button", { name: "Start Flight" }),
+  ).toBeVisible();
+
+  await page.evaluate(() => document.body.setAttribute("data-no-reload", "1"));
+  await page.getByTestId("rail-sync").click();
+  await page.getByTestId("rail-sync-erase").click();
+  const alert = page.locator("ion-alert:not(.overlay-hidden)");
+  await expect(alert).toContainText("nothing is backed up");
+  await alert.getByRole("button", { name: "Delete" }).click();
+
+  // The store reset in place: the logbook empties to the funnel, the menu
+  // item retires, and the document never reloaded.
+  await page.getByTestId("rail-logbook").click();
+  await expect(page.getByTestId("funnel-import")).toBeVisible();
+  await page.getByTestId("rail-sync").click();
+  await expect(page.getByTestId("rail-sync-erase")).toHaveCount(0);
+  await expect(page.locator("body")).toHaveAttribute("data-no-reload", "1");
+});
+
 test("the plan page grows a pin pane at desktop width", async ({ page }) => {
   await page.goto("/plan?map-style=blank");
   await expect(page.getByTestId("plan-pane")).toBeVisible();
