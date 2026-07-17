@@ -705,7 +705,12 @@ function FinePrint({
         Terms of Use
       </a>{" "}
       ·{" "}
-      <a href="https://wingover.app/privacy">Privacy Policy</a>
+      {/* target=_blank: in an installed standalone PWA a same-origin
+          navigation would replace the app with a page that has no way
+          back (no browser chrome). */}
+      <a href="https://wingover.app/privacy" target="_blank" rel="noopener">
+        Privacy Policy
+      </a>
     </p>
   );
 }
