@@ -1,8 +1,9 @@
 import { expect, test } from "@playwright/test";
 
 test("imports GPX flights from the logbook menu", async ({ page }) => {
+  // A plain browser (no mock engine) lands on the logbook directly now.
   await page.goto("/?map-style=blank");
-  await page.getByText("Logbook", { exact: true }).click();
+  await page.locator("#tab-button-logbook").click();
   await page.getByTestId("logbook-options").click();
 
   const chooserPromise = page.waitForEvent("filechooser");

@@ -3,7 +3,10 @@ import { expect, type Page, test } from "@playwright/test";
 // CDP setGeolocation cannot supply altitude/speed, which the accuracy gate
 // and takeoff detection require — stub watchPosition itself so the test
 // drives the real engine's actual consumption path.
+// The Fly tab is Tauri-only in browsers; this override (same pattern as the
+// "wingover.map" backend override) shows it for the real-engine drills.
 const GEO_STUB = `(() => {
+  try { localStorage.setItem("wingover.record", "1"); } catch {}
   const watchers = new Map();
   let nextId = 1;
   window.__geo = {

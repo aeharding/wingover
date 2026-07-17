@@ -1,4 +1,5 @@
 import {
+  IonAlert,
   IonContent,
   IonHeader,
   IonIcon,
@@ -15,6 +16,7 @@ import {
 import { checkmarkOutline, closeCircle } from "ionicons/icons";
 import { useState, useSyncExternalStore } from "react";
 
+import { isTauri } from "../../engine/platform";
 import {
   getBooleanSetting,
   getSetting,
@@ -39,6 +41,8 @@ export default function SettingsPage() {
   const syncNote = off ? "Off" : describeSync(syncStatus).label;
   const [mapBackend, setMapBackend] = useState("mapkit");
   const [autoEnd, setAutoEnd] = useState(true);
+  const [recordHere, setRecordHere] = useState(false);
+  const [confirmRecordHere, setConfirmRecordHere] = useState(false);
 
   // Re-read on every entry, not once on mount: the provider subpage edits
   // the same settings, and this page stays mounted behind it.
@@ -47,6 +51,7 @@ export default function SettingsPage() {
       if (value === "mapkit" || value === "maplibre") setMapBackend(value);
     });
     getBooleanSetting("autoEndFlight", true).then(setAutoEnd);
+    getBooleanSetting("recordInBrowser", false).then(setRecordHere);
   }, []);
 
   function saveAutoEnd(value: boolean) {
@@ -116,7 +121,45 @@ export default function SettingsPage() {
               {mapBackend === "maplibre" ? "MapLibre" : "MapKit"}
             </IonNote>
           </IonItem>
+          {!isTauri() && (
+            <IonItem>
+              <IonToggle
+                checked={recordHere}
+                onIonChange={(event) => {
+                  if (event.detail.checked) setConfirmRecordHere(true);
+                  else {
+                    setRecordHere(false);
+                    void setBooleanSetting("recordInBrowser", false);
+                  }
+                }}
+              >
+                Record in this browser
+              </IonToggle>
+            </IonItem>
+          )}
         </IonList>
+        {!isTauri() && (
+          <div className="settings-helper-text">
+            Browsers can stop background recording at any time. Your phone
+            running the Wingover app is the recorder to trust.
+          </div>
+        )}
+        <IonAlert
+          isOpen={confirmRecordHere}
+          onDidDismiss={() => setConfirmRecordHere(false)}
+          header="Record in this browser?"
+          message="Browsers can stop background recording at any time, and a stopped recording ends the flight. Use this only when the phone app is not an option."
+          buttons={[
+            { text: "Cancel", role: "cancel" },
+            {
+              text: "Turn on",
+              handler: () => {
+                setRecordHere(true);
+                void setBooleanSetting("recordInBrowser", true);
+              },
+            },
+          ]}
+        />
 
         <div style={{ textAlign: "center", paddingTop: "2rem" }}>
           <IonNote>Wingover 0.1.0 · AGPL-3.0</IonNote>

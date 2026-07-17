@@ -23,7 +23,7 @@ import {
   ellipsisHorizontal,
   expandOutline,
 } from "ionicons/icons";
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useEffectEvent, useRef, useState } from "react";
 import { useParams } from "react-router";
 
 import { isTauri } from "../../engine/platform";
@@ -41,6 +41,8 @@ import {
   updateFlight,
 } from "../../storage/db";
 import { getSetting, setSetting } from "../../storage/local";
+import FlightList from "../logbook/FlightList";
+import { useFlights } from "../logbook/useFlights";
 import type { MapViewKind } from "../map/config";
 import MapCanvas from "../map/MapCanvas";
 import {
@@ -55,6 +57,7 @@ import {
 import ViewToggle from "../map/ViewToggle";
 import { useSettings } from "../settings/SettingsContext";
 import { useFlightActions } from "../useFlightActions";
+import { useIsDesktop } from "../useIsDesktop";
 
 import "./FlightDetailPage.css";
 
@@ -81,6 +84,12 @@ export default function FlightDetailPage() {
   // callback must see the CURRENT intent, not the one it closed over.
   const mapFullRef = useRef(false);
   const contentRef = useRef<HTMLIonContentElement>(null);
+  // The desktop split: the logbook list rides along in a left pane, and
+  // selecting a flight replaces this page (root direction) instead of
+  // stacking map-holding detail pages.
+  const isDesktop = useIsDesktop();
+  const { flights, refresh: refreshFlights } = useFlights();
+  const paneRef = useRef<HTMLDivElement>(null);
   const [draftName, setDraftName] = useState("");
   const [draftLaunch, setDraftLaunch] = useState("");
   const [draftNotes, setDraftNotes] = useState("");
@@ -88,7 +97,7 @@ export default function FlightDetailPage() {
   const planLineRef = useRef<Line | null>(null);
   const markersRef = useRef<MarkerLayer | null>(null);
 
-  useIonViewWillEnter(() => {
+  const load = useEffectEvent(() => {
     getFlight(id).then((found) => {
       setFlight(found);
       setDraftName(found?.name ?? "");
@@ -99,6 +108,17 @@ export default function FlightDetailPage() {
     getSetting("mapView").then((value) => {
       if (value === "street" || value === "satellite") setView(value);
     });
+  });
+
+  useIonViewWillEnter(() => {
+    load();
+  }, [id]);
+
+  // Desktop pane navigation can swap the id without an Ionic page
+  // transition; the loads are idempotent gets, so double-firing on a
+  // normal entry costs nothing.
+  useEffect(() => {
+    load();
   }, [id]);
 
   function changeView(value: MapViewKind) {
@@ -260,9 +280,11 @@ export default function FlightDetailPage() {
       {!mapFull && (
         <IonHeader>
           <IonToolbar>
-            <IonButtons slot="start">
-              <IonBackButton defaultHref="/logbook" />
-            </IonButtons>
+            {!isDesktop && (
+              <IonButtons slot="start">
+                <IonBackButton defaultHref="/logbook" />
+              </IonButtons>
+            )}
             {/* The when, not the name — the name is the editable field below,
                 and printing it twice an inch apart read as a bug. */}
             <IonTitle>
@@ -288,7 +310,35 @@ export default function FlightDetailPage() {
           </IonToolbar>
         </IonHeader>
       )}
-      <IonContent ref={contentRef} scrollY={!mapFull}>
+      <IonContent ref={contentRef} scrollY={!mapFull && !isDesktop}>
+        {/* Desktop: the logbook rides along in a left pane and this page IS
+            the split's detail seat. Phone: both wrappers are display:
+            contents, so the layout is exactly the phone app. */}
+        <div
+          className={
+            isDesktop
+              ? `detail-split${mapFull ? " no-pane" : ""}`
+              : "detail-plain"
+          }
+        >
+          {isDesktop && (
+            <aside className="logbook-pane" ref={paneRef}>
+              <FlightList
+                flights={flights}
+                units={units}
+                scrollRef={paneRef}
+                desktop
+                totalsStrip
+                selectedId={id}
+                onDeleted={(deleted) => {
+                  refreshFlights();
+                  // The open flight just died; its seat has to go too.
+                  if (deleted.id === id) router.push("/logbook", "root");
+                }}
+              />
+            </aside>
+          )}
+          <div className={isDesktop ? "detail-main" : "detail-plain"}>
         {/* Map and details split the screen instead of a card floating over
             the track — nothing overlaps the flight anymore, and the stats get
             room to breathe below. Expandable to full screen: the map is the
@@ -389,6 +439,8 @@ export default function FlightDetailPage() {
             </IonList>
           </>
         )}
+          </div>
+        </div>
         <IonActionSheet
           isOpen={optionsOpen}
           onDidDismiss={() => setOptionsOpen(false)}
