@@ -16,6 +16,14 @@
   --stat-yellow: color(display-p3 1 0.95 0);
 }
 
+/* Native iOS look: the nav bar shares the page background (Ionic's default
+   is the slightly-lighter step-50 gray, which reads as a third gray next to
+   the black page and the systemGray6 grouped cells). The hairline border
+   Ionic draws keeps the edge legible where content scrolls beneath. */
+ion-toolbar {
+  --background: var(--ion-background-color);
+}
+
 ion-tab-bar {
   height: 64px;
 }

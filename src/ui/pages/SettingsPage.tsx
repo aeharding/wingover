@@ -2,34 +2,33 @@ import {
   IonContent,
   IonHeader,
   IonIcon,
-  IonInput,
   IonItem,
   IonLabel,
   IonList,
   IonNote,
   IonPage,
-  IonSegment,
-  IonSegmentButton,
   IonTitle,
   IonToggle,
   IonToolbar,
+  useIonViewWillEnter,
 } from "@ionic/react";
 import { checkmarkOutline, closeCircle } from "ionicons/icons";
-import { useEffect, useState, useSyncExternalStore } from "react";
+import { useState, useSyncExternalStore } from "react";
 
 import {
   getBooleanSetting,
   getSetting,
   setBooleanSetting,
-  setSetting,
 } from "../../storage/local";
 import * as sync from "../../sync";
 import { useSettings } from "../settings/SettingsContext";
 import { describe as describeSync } from "../sync/describe";
 import { useSyncSheet } from "../sync/SyncSheets";
 
+import "./SettingsPage.css";
+
 export default function SettingsPage() {
-  const { units, setUnits } = useSettings();
+  const { units } = useSettings();
   const openSync = useSyncSheet();
   const syncStatus = useSyncExternalStore(sync.subscribe, sync.currentStatus);
 
@@ -38,22 +37,21 @@ export default function SettingsPage() {
   // Everything subscription-shaped lives inside the sheet.
   const off = syncStatus.state === "off";
   const syncNote = off ? "Off" : describeSync(syncStatus).label;
-  const [maptilerKey, setMaptilerKey] = useState("");
+  const [mapBackend, setMapBackend] = useState("mapkit");
   const [autoEnd, setAutoEnd] = useState(true);
 
-  useEffect(() => {
-    getSetting("maptilerKey").then((value) => setMaptilerKey(value ?? ""));
+  // Re-read on every entry, not once on mount: the provider subpage edits
+  // the same settings, and this page stays mounted behind it.
+  useIonViewWillEnter(() => {
+    getSetting("mapBackend").then((value) => {
+      if (value === "mapkit" || value === "maplibre") setMapBackend(value);
+    });
     getBooleanSetting("autoEndFlight", true).then(setAutoEnd);
   }, []);
 
   function saveAutoEnd(value: boolean) {
     setAutoEnd(value);
     void setBooleanSetting("autoEndFlight", value);
-  }
-
-  function saveMaptilerKey(value: string) {
-    setMaptilerKey(value);
-    setSetting("maptilerKey", value);
   }
 
   return (
@@ -63,8 +61,8 @@ export default function SettingsPage() {
           <IonTitle>Settings</IonTitle>
         </IonToolbar>
       </IonHeader>
-      <IonContent>
-        <IonList>
+      <IonContent className="settings-content">
+        <IonList inset>
           <IonItem button detail onClick={openSync} data-testid="settings-sync">
             <IonLabel>Sync</IonLabel>
             <IonNote
@@ -84,28 +82,10 @@ export default function SettingsPage() {
               {syncNote}
             </IonNote>
           </IonItem>
-          <IonItem>
-            <IonInput
-              label="MapTiler key"
-              placeholder="Built-in"
-              value={maptilerKey}
-              onIonChange={(event) => saveMaptilerKey(event.detail.value ?? "")}
-            />
-          </IonItem>
-          <IonItem>
-            <IonLabel>Units</IonLabel>
-            <IonSegment
-              value={units}
-              onIonChange={(event) => {
-                const value = event.detail.value;
-                if (value === "imperial" || value === "metric") setUnits(value);
-              }}
-              style={{ maxWidth: "16rem" }}
-            >
-              <IonSegmentButton value="imperial">Imperial</IonSegmentButton>
-              <IonSegmentButton value="metric">Metric</IonSegmentButton>
-            </IonSegment>
-          </IonItem>
+        </IonList>
+
+        <div className="settings-list-header">Recording</div>
+        <IonList inset>
           <IonItem>
             <IonToggle
               checked={autoEnd}
@@ -115,6 +95,29 @@ export default function SettingsPage() {
             </IonToggle>
           </IonItem>
         </IonList>
+
+        <div className="settings-list-header">General</div>
+        <IonList inset>
+          <IonItem button detail routerLink="/settings/units">
+            <IonLabel>Units</IonLabel>
+            <IonNote slot="end">
+              {units === "metric" ? "Metric" : "Imperial"}
+            </IonNote>
+          </IonItem>
+        </IonList>
+
+        <div className="settings-list-header">Advanced</div>
+        <IonList inset>
+          {/* Apple's pick-one idiom: the row shows the current value and
+              pushes a checkmark list. */}
+          <IonItem button detail routerLink="/settings/map">
+            <IonLabel>Map Provider</IonLabel>
+            <IonNote slot="end">
+              {mapBackend === "maplibre" ? "MapLibre" : "MapKit"}
+            </IonNote>
+          </IonItem>
+        </IonList>
+
         <div style={{ textAlign: "center", paddingTop: "2rem" }}>
           <IonNote>Wingover 0.1.0 · AGPL-3.0</IonNote>
         </div>

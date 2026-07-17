@@ -23,8 +23,10 @@ import AllFlightsMapPage from "./pages/AllFlightsMapPage";
 import FlightDetailPage from "./pages/FlightDetailPage";
 import FlyPage from "./pages/FlyPage";
 import LogbookPage from "./pages/LogbookPage";
+import MapProviderPage from "./pages/MapProviderPage";
 import PlanPage from "./pages/PlanPage";
 import SettingsPage from "./pages/SettingsPage";
+import UnitsPage from "./pages/UnitsPage";
 import { SettingsProvider } from "./settings/SettingsContext";
 import { SyncSheetsProvider } from "./sync/SyncSheets";
 
@@ -84,6 +86,8 @@ function TabShell() {
           />
           <Route exact path="/plan" component={PlanPage} />
           <Route exact path="/settings" component={SettingsPage} />
+          <Route exact path="/settings/map" component={MapProviderPage} />
+          <Route exact path="/settings/units" component={UnitsPage} />
           <Route exact path="/">
             <Redirect to="/fly" />
           </Route>
