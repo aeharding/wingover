@@ -170,7 +170,15 @@ export default function FlightDetailPage() {
     setFlight({ ...flight, ...changes });
   }
 
-  function handleReady(next: MapView) {
+  function handleReady(next: MapView | null) {
+    if (!next) {
+      // Provider re-create destroyed the view; drop it and every handle.
+      planLineRef.current = null;
+      lineRef.current = null;
+      markersRef.current = null;
+      setMap(null);
+      return;
+    }
     // Grey planned-route reference, created first so it sits UNDER the cyan
     // flown track (later lines draw on top). No markers — just the line.
     planLineRef.current = next.line({

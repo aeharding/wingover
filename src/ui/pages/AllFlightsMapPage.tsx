@@ -66,7 +66,13 @@ export default function AllFlightsMapPage() {
     setSetting("mapView", value);
   }
 
-  function handleReady(next: MapView) {
+  function handleReady(next: MapView | null) {
+    if (!next) {
+      // Provider re-create destroyed the view; drop it and every handle.
+      lineRef.current = null;
+      setMap(null);
+      return;
+    }
     lineRef.current = next.line({
       color: ["get", "color"],
       width: 3.5,

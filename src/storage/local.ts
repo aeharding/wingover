@@ -59,13 +59,29 @@ export async function getSetting(key: string): Promise<string | null> {
 
 export async function setSetting(key: string, value: string) {
   const _id = settingId(key);
-  try {
-    const existing = await localDb.get<SettingDoc>(_id);
-    await localDb.put({ ...existing, value });
-  } catch {
-    await localDb.put({ _id, value });
+  // Two rapid writes to the same key must both land — the loser of a 409
+  // re-reads the winner's rev and retries. An unchanged value is a no-op:
+  // not a write, and not a reason for listeners to tear down every mounted
+  // map.
+  for (let attempt = 0; ; attempt++) {
+    const existing = await localDb.get<SettingDoc>(_id).catch(() => null);
+    if (existing?.value === value) return;
+    try {
+      await localDb.put(existing ? { ...existing, value } : { _id, value });
+      break;
+    } catch (error) {
+      if ((error as { status?: number }).status !== 409 || attempt >= 3) {
+        throw error;
+      }
+    }
   }
-  settingListeners.get(key)?.forEach((listener) => listener(value));
+  for (const listener of settingListeners.get(key) ?? []) {
+    try {
+      listener(value);
+    } catch {
+      // A broken listener must not break the write, or its siblings.
+    }
+  }
 }
 
 /**

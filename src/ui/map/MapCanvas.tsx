@@ -13,7 +13,11 @@ import "./MapView.css";
 
 interface MapCanvasProps {
   base: MapViewKind;
-  onReady?: (view: MapView) => void;
+  // null = the previous view was just destroyed (provider re-create,
+  // unmount). Parents MUST drop their MapView and every handle minted from
+  // it — a 1 Hz fix calling line.set() on a removed map throws, and with no
+  // error boundary that unmounts the whole app mid-flight.
+  onReady?: (view: MapView | null) => void;
 }
 
 // Instantiate the resolved backend, each in its own lazy chunk. MapKit is the
@@ -56,10 +60,31 @@ export default function MapCanvas({ base, onReady }: MapCanvasProps) {
   // the old provider until relaunch. Consumers already rebuild their
   // content on every onReady, so a new view flows through like the first.
   const [epoch, setEpoch] = useState(0);
-  const notifyReady = useEffectEvent((view: MapView) => onReady?.(view));
+  const notifyReady = useEffectEvent((view: MapView | null) => onReady?.(view));
   const baseRef = useRef(base);
 
-  useEffect(() => onSettingChanged("mapBackend", () => setEpoch((n) => n + 1)), []);
+  // The key gates MapLibre satellite (supportsSatellite is decided at
+  // creation), so key changes re-create too — debounced, because the key is
+  // typed keystroke by keystroke in Settings.
+  useEffect(() => {
+    // Re-create = a fresh reveal: the loading veil covers the swap instead
+    // of the old map vanishing to a naked container.
+    const recreate = () => {
+      setRevealed(false);
+      setEpoch((n) => n + 1);
+    };
+    const offBackend = onSettingChanged("mapBackend", recreate);
+    let timer: ReturnType<typeof setTimeout> | null = null;
+    const offKey = onSettingChanged("maptilerKey", () => {
+      if (timer) clearTimeout(timer);
+      timer = setTimeout(recreate, 800);
+    });
+    return () => {
+      offBackend();
+      offKey();
+      if (timer) clearTimeout(timer);
+    };
+  }, []);
 
   useEffect(() => {
     let cancelled = false;
@@ -82,6 +107,8 @@ export default function MapCanvas({ base, onReady }: MapCanvasProps) {
       cancelled = true;
       view?.destroy();
       viewRef.current = null;
+      // The parent's copy is now a landmine; take it away (see props).
+      notifyReady(null);
     };
   }, [epoch]);
 

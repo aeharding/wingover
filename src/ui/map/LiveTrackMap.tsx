@@ -62,9 +62,10 @@ interface LiveTrackMapProps {
   // "clear this checkpoint" control.
   onSelectWaypoint?: (id: string | null) => void;
   onFollowChange: (follow: boolean) => void;
-  // The abstract map, once created — FlyPage gates the satellite toggle on
-  // its supportsSatellite.
-  onMapReady?: (map: MapView) => void;
+  // The abstract map, once created (null when it is destroyed for a
+  // provider re-create) — FlyPage gates the satellite toggle on its
+  // supportsSatellite.
+  onMapReady?: (map: MapView | null) => void;
 }
 
 export default function LiveTrackMap({
@@ -337,6 +338,14 @@ export default function LiveTrackMap({
       <MapCanvas
         base={view}
         onReady={(next) => {
+          if (!next) {
+            // The view these handles came from is destroyed; a 1 Hz fix
+            // touching them would throw (renderNow bails on map === null).
+            trackLineRef.current = null;
+            aircraftRef.current = null;
+            planLineRef.current = null;
+            waypointMarkersRef.current = null;
+          }
           setMap(next);
           onMapReady?.(next);
         }}

@@ -181,7 +181,14 @@ export default function PlanPage() {
     });
   });
 
-  function handleReady(next: MapView) {
+  function handleReady(next: MapView | null) {
+    if (!next) {
+      // Provider re-create destroyed the view; drop it and every handle.
+      lineRef.current = null;
+      markersRef.current = null;
+      setMap(null);
+      return;
+    }
     lineRef.current = next.line({
       color: ROUTE_COLOR,
       width: 3,
