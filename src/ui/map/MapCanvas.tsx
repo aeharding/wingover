@@ -94,10 +94,17 @@ export default function MapCanvas({ base, onReady }: MapCanvasProps) {
   // away mid-gesture. The swipe-back gesture listens natively on the router
   // outlet, so it must be cut off natively here — React's delegated handlers
   // run long after the event has already bubbled through the outlet.
+  // Scoped to the edge strip where swipe-back can start (canStart: x <= 50),
+  // so document-level listeners (Ionic's focus-visible reset among them)
+  // keep hearing everything else the map is touched with.
   useEffect(() => {
     const container = containerRef.current;
     if (!container) return;
-    const stop = (event: Event) => event.stopPropagation();
+    const stop = (event: TouchEvent | MouseEvent) => {
+      const x =
+        "touches" in event ? event.touches[0]?.clientX : event.clientX;
+      if (x !== undefined && x <= 60) event.stopPropagation();
+    };
     container.addEventListener("touchstart", stop);
     container.addEventListener("mousedown", stop);
     return () => {
