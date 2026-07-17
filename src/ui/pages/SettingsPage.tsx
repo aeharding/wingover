@@ -14,7 +14,7 @@ import {
   useIonViewWillEnter,
 } from "@ionic/react";
 import { checkmarkOutline, closeCircle } from "ionicons/icons";
-import { useState, useSyncExternalStore } from "react";
+import { useEffect, useState, useSyncExternalStore } from "react";
 import { useHistory } from "react-router-dom";
 
 import { isTauri } from "../../engine/platform";
@@ -53,14 +53,25 @@ export default function SettingsPage() {
   // (and the next tap a silent no-op) unless the element is remounted.
   const [toggleReset, setToggleReset] = useState(0);
 
-  // Re-read on every entry, not once on mount: the provider subpage edits
-  // the same settings, and this page stays mounted behind it.
-  useIonViewWillEnter(() => {
+  function loadSettings() {
     getSetting("mapBackend").then((value) => {
       if (value === "mapkit" || value === "maplibre") setMapBackend(value);
     });
     getBooleanSetting("autoEndFlight", true).then(setAutoEnd);
     getBooleanSetting("recordInBrowser", false).then(setRecordHere);
+  }
+
+  // Phone: re-read on every Ionic view entry (the provider subpage edits
+  // the same settings and this page stays mounted behind it). Desktop: no
+  // Ionic lifecycle exists, but SettingsRoutes remounts this page per
+  // subpage hop, so a mount effect covers the same ground.
+  useIonViewWillEnter(() => {
+    loadSettings();
+  }, []);
+
+  useEffect(() => {
+    loadSettings();
+    // Loads are idempotent gets; double-firing on phone entry is free.
   }, []);
 
   function saveAutoEnd(value: boolean) {

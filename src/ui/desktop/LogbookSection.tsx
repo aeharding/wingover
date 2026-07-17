@@ -28,7 +28,7 @@ export default function LogbookSection() {
   const { units } = useSettings();
   const history = useHistory();
   const { pathname } = useLocation();
-  const { flights, refresh } = useFlights();
+  const { flights, loaded, refresh } = useFlights();
   const [menuOpen, setMenuOpen] = useState(false);
   const [toastMessage, setToastMessage] = useState<string | null>(null);
   const [importProgress, setImportProgress] = useState<{
@@ -42,7 +42,7 @@ export default function LogbookSection() {
 
   const selectedId = /^\/logbook\/(.+)$/.exec(pathname)?.[1];
   const selected = flights.find((flight) => flight.id === selectedId);
-  const empty = flights.length === 0;
+  const empty = loaded && flights.length === 0;
 
   return (
     <div className="logbook-split">
@@ -81,6 +81,7 @@ export default function LogbookSection() {
         {selected ? (
           <FlightSeat
             id={selected.id}
+            active={pathname.startsWith("/logbook")}
             onDeleted={() => {
               refresh();
               history.replace("/logbook");
@@ -91,7 +92,10 @@ export default function LogbookSection() {
         )}
       </div>
       <IonActionSheet
-        isOpen={menuOpen}
+        // Derived, not just state: overlays portal OUTSIDE the hidden
+        // section, so browser Back would strand an open sheet floating
+        // over the next section.
+        isOpen={menuOpen && pathname.startsWith("/logbook")}
         onDidDismiss={() => setMenuOpen(false)}
         buttons={[
           {

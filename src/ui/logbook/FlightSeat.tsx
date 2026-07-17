@@ -24,6 +24,7 @@ import {
   formatDuration,
   formatSpeed,
 } from "../../flight/format";
+import { isTauri } from "../../engine/platform";
 import { getSetting, setSetting } from "../../storage/local";
 import type { MapViewKind } from "../map/config";
 import MapCanvas from "../map/MapCanvas";
@@ -58,9 +59,13 @@ function endpointMarker(className: string, testId: string): HTMLElement {
  */
 export default function FlightSeat({
   id,
+  active = true,
   onDeleted,
 }: {
   id: string;
+  // False while the logbook section is URL-hidden: overlays portal outside
+  // the hidden subtree and must close with their section.
+  active?: boolean;
   onDeleted: () => void;
 }) {
   const { units } = useSettings();
@@ -96,14 +101,16 @@ export default function FlightSeat({
     mapFullRef.current = mapFull;
     if (!mapFull) return;
     document.body.classList.add("flight-map-full");
-    void document.documentElement
-      .requestFullscreen?.()
-      .then(() => {
-        if (!mapFullRef.current && document.fullscreenElement) {
-          void document.exitFullscreen().catch(() => {});
-        }
-      })
-      .catch(() => {});
+    if (!isTauri()) {
+      void document.documentElement
+        .requestFullscreen?.()
+        .then(() => {
+          if (!mapFullRef.current && document.fullscreenElement) {
+            void document.exitFullscreen().catch(() => {});
+          }
+        })
+        .catch(() => {});
+    }
     const onFullscreenChange = () => {
       if (!document.fullscreenElement) setMapFull(false);
     };
@@ -189,11 +196,12 @@ export default function FlightSeat({
     ]);
     if (bounds) {
       map.fitBounds(bounds, {
-        // Right padding clears the floating card.
-        padding: { top: 56, bottom: 56, left: 56, right: 440 },
+        // Right padding clears the floating card; a collapsed card gives
+        // the space back to the track.
+        padding: { top: 56, bottom: 56, left: 56, right: cardOpen ? 440 : 56 },
       });
     }
-  }, [track, map, flight?.id, flight?.plannedRoute]);
+  }, [track, map, flight?.id, flight?.plannedRoute, cardOpen]);
 
   const stats = flight?.stats;
 
@@ -332,7 +340,7 @@ export default function FlightSeat({
         )}
       </div>
       <IonActionSheet
-        isOpen={optionsOpen}
+        isOpen={optionsOpen && active}
         onDidDismiss={() => setOptionsOpen(false)}
         buttons={[
           {

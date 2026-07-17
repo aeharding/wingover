@@ -149,6 +149,14 @@
   min-height: 0;
 }
 
+/* Map chrome sits bottom-LEFT in the seat: the card owns the right
+   column, and a grown Notes field must never sit under the expand
+   button's hitbox. */
+.seat-map .map-overlay {
+  right: auto;
+  left: 0.9rem;
+}
+
 /* The floating details card: right side, collapsible, gestures land on
    the map everywhere else. */
 .seat-card {

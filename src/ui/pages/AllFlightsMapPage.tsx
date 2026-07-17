@@ -1,4 +1,6 @@
 import {
+  IonIcon,
+  IonButton,
   IonBackButton,
   IonButtons,
   IonContent,
@@ -8,6 +10,8 @@ import {
   IonToolbar,
   useIonViewWillEnter,
 } from "@ionic/react";
+import { chevronBackOutline } from "ionicons/icons";
+import { useHistory } from "react-router-dom";
 import type { Feature } from "geojson";
 import { useEffect, useRef, useState } from "react";
 
@@ -17,6 +21,7 @@ import type { MapViewKind } from "../map/config";
 import MapCanvas from "../map/MapCanvas";
 import { boundsOf, type Line, type LngLat, type MapView } from "../map/types";
 import ViewToggle from "../map/ViewToggle";
+import { useIsDesktop } from "../useIsDesktop";
 
 import "./AllFlightsMapPage.css";
 
@@ -30,6 +35,8 @@ function rampColor(t: number): string {
 }
 
 export default function AllFlightsMapPage() {
+  const history = useHistory();
+  const isDesktop = useIsDesktop();
   const [view, setView] = useState<MapViewKind>("street");
   const [features, setFeatures] = useState<Feature[]>([]);
   const [map, setMap] = useState<MapView | null>(null);
@@ -116,7 +123,16 @@ export default function AllFlightsMapPage() {
       <IonHeader>
         <IonToolbar>
           <IonButtons slot="start">
-            <IonBackButton defaultHref="/logbook" />
+            {isDesktop ? (
+              // No Ionic router in the desktop shell; IonBackButton there
+              // falls back to a FULL document navigation.
+              <IonButton onClick={() => history.push("/logbook")}>
+                <IonIcon slot="start" icon={chevronBackOutline} />
+                Logbook
+              </IonButton>
+            ) : (
+              <IonBackButton defaultHref="/logbook" />
+            )}
           </IonButtons>
           <IonTitle>All Flights</IonTitle>
         </IonToolbar>

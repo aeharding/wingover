@@ -9,11 +9,21 @@ import { type Flight, listFlights, onDocsChanged } from "../../storage/db";
  * from another device appears without a refresh). Shared by LogbookPage
  * and the desktop split's list pane on FlightDetailPage.
  */
-export function useFlights(): { flights: Flight[]; refresh: () => void } {
-  const [flights, setFlights] = useState<Flight[]>([]);
+export function useFlights(): {
+  flights: Flight[];
+  // False until the first read lands: an empty logbook and a not-yet-read
+  // logbook must render differently (the connect funnel must not flash at
+  // existing pilots on a deep link).
+  loaded: boolean;
+  refresh: () => void;
+} {
+  const [state, setState] = useState<{ flights: Flight[]; loaded: boolean }>({
+    flights: [],
+    loaded: false,
+  });
 
   const refresh = () => {
-    void listFlights().then(setFlights);
+    void listFlights().then((flights) => setState({ flights, loaded: true }));
   };
 
   useIonViewWillEnter(() => {
@@ -25,5 +35,5 @@ export function useFlights(): { flights: Flight[]; refresh: () => void } {
     return onDocsChanged("flight", refresh);
   }, []);
 
-  return { flights, refresh };
+  return { flights: state.flights, loaded: state.loaded, refresh };
 }
