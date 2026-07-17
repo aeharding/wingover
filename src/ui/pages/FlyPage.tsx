@@ -43,7 +43,12 @@ import {
 import { LANDING_GRACE_MS } from "../../flight/landing";
 import { bearingBetween, relativeBearing } from "../../flight/nav";
 import { computeStats, haversineMeters } from "../../flight/stats";
-import { listPins, type Pin, saveFlight } from "../../storage/db";
+import {
+  inheritedLaunchName,
+  listPins,
+  type Pin,
+  saveFlight,
+} from "../../storage/db";
 import { getSetting, setSetting } from "../../storage/local";
 import Tile from "../components/Tile";
 import type { MapViewKind } from "../map/config";
@@ -136,6 +141,7 @@ export default function FlyPage() {
       w.longitude,
       w.latitude,
     ]);
+    const launchAt: LngLat = [flown[0].longitude, flown[0].latitude];
     try {
       await saveFlight(
         {
@@ -147,6 +153,8 @@ export default function FlyPage() {
           startedAt,
           stats: computeStats(flown),
           updatedAt: Date.now(),
+          launchAt,
+          launchName: await inheritedLaunchName(launchAt),
           ...(plannedRoute.length > 0 ? { plannedRoute } : {}),
         },
         flown,

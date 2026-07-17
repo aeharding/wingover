@@ -9,6 +9,7 @@ import {
   type Flight,
   getFlight,
   getTrack,
+  inheritedLaunchName,
   listFlights,
   listPins,
   saveFlight,
@@ -115,6 +116,28 @@ describe("storage", () => {
     expect((await listFlights()).map((f) => f.id)).not.toContain(flight.id);
     expect(await getFlight(flight.id)).toBeNull();
     expect(await getTrack(flight.id)).toHaveLength(0);
+  });
+
+  it("inherits the launch name from the nearest previous named launch", async () => {
+    // Two named launches at the same field; the newer name must win, so a
+    // pilot's correction propagates forward without rewriting history.
+    const older: Flight = {
+      ...makeFlight(new FlightSimulator(31, 1000).fixesUpTo(30)),
+      launchAt: [-112.2, 33.9],
+      launchName: "Miller's Field",
+    };
+    const newer: Flight = {
+      ...makeFlight(new FlightSimulator(32, 2_000_000_000).fixesUpTo(30)),
+      launchAt: [-112.2001, 33.9002],
+      launchName: "North Forty",
+    };
+    await saveFlight(older, []);
+    await saveFlight(newer, []);
+
+    // ~150m away: same field.
+    expect(await inheritedLaunchName([-112.1984, 33.9])).toBe("North Forty");
+    // ~5km away: a different place entirely.
+    expect(await inheritedLaunchName([-112.2, 33.95])).toBeUndefined();
   });
 
   it("round-trips, updates, and deletes pins", async () => {

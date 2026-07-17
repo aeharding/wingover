@@ -1,6 +1,7 @@
+import type { LngLat } from "../engine/types";
 import { parseGpx } from "../flight/gpxImport";
 import { computeStats } from "../flight/stats";
-import { saveFlight } from "./db";
+import { inheritedLaunchName, saveFlight } from "./db";
 
 export interface ImportResult {
   imported: number;
@@ -21,6 +22,9 @@ export async function importGpxFiles(
   for (const file of files) {
     try {
       const { name, fixes } = parseGpx(await file.text());
+      // Sequential on purpose (beyond keeping memory flat): each import can
+      // inherit a launch name from the files already landed this batch.
+      const launchAt: LngLat = [fixes[0].longitude, fixes[0].latitude];
       await saveFlight(
         {
           id: crypto.randomUUID(),
@@ -29,6 +33,8 @@ export async function importGpxFiles(
           startedAt: fixes[0].timestamp,
           stats: computeStats(fixes),
           updatedAt: importedAt,
+          launchAt,
+          launchName: await inheritedLaunchName(launchAt),
           source: "gpx-import",
           sourceFilename: file.name,
           importBatchId: batchId,
