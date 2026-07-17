@@ -1,8 +1,10 @@
 import {
   IonBackButton,
+  IonButton,
   IonButtons,
   IonContent,
   IonHeader,
+  IonIcon,
   IonInput,
   IonItem,
   IonList,
@@ -12,9 +14,12 @@ import {
   IonTitle,
   IonToolbar,
 } from "@ionic/react";
+import { chevronBackOutline } from "ionicons/icons";
 import { useEffect, useState } from "react";
+import { useHistory } from "react-router-dom";
 
 import { getSetting, setSetting } from "../../storage/local";
+import { useIsDesktop } from "../useIsDesktop";
 
 import "./SettingsPage.css";
 
@@ -25,6 +30,8 @@ import "./SettingsPage.css";
  * pilot's own MapTiler key — first-party map costs stay zero either way.
  */
 export default function MapProviderPage() {
+  const history = useHistory();
+  const isDesktop = useIsDesktop();
   const [backend, setBackend] = useState("mapkit");
   const [maptilerKey, setMaptilerKey] = useState("");
 
@@ -51,7 +58,14 @@ export default function MapProviderPage() {
       <IonHeader>
         <IonToolbar>
           <IonButtons slot="start">
-            <IonBackButton defaultHref="/settings" text="Settings" />
+            {isDesktop ? (
+              <IonButton onClick={() => history.push("/settings")}>
+                <IonIcon slot="start" icon={chevronBackOutline} />
+                Settings
+              </IonButton>
+            ) : (
+              <IonBackButton defaultHref="/settings" text="Settings" />
+            )}
           </IonButtons>
           <IonTitle>Map Provider</IonTitle>
         </IonToolbar>

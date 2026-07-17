@@ -1,127 +1,222 @@
-/* Desktop (≥992px, matching useIsDesktop.ts): the tab bar becomes a left
-   rail and Logbook/Plan gain split panes. Below the breakpoint every rule
-   here is inert and the app is exactly the phone app. Plain CSS on Ionic
-   structure (STEERING). */
+/* Desktop (≥992px, matching useIsDesktop.ts): the app runs in its own
+   shell (DesktopShell) — a left rail and hand-rolled keep-alive sections,
+   plain react-router, no Ionic outlet. Ionic COMPONENTS render everything
+   inside. Below the breakpoint none of this mounts and the app is exactly
+   the phone app. Plain CSS on our own structure (STEERING). */
 
-@media (min-width: 992px) {
-  /* ── the rail: the tab bar, re-seated ─────────────────────────────── */
-  ion-tabs {
-    flex-direction: row-reverse;
-  }
-
-  ion-tab-bar {
-    width: 76px;
-    height: auto;
-    flex-direction: column;
-    justify-content: flex-start;
-    gap: 4px;
-    padding-top: 10px;
-    border-top: 0;
-    border-right: 1px solid rgba(255, 255, 255, 0.09);
-  }
-
-  ion-tab-button {
-    flex: 0 0 64px;
-    width: 100%;
-  }
-
-  /* The app icon atop the rail: the way back to the landing page. */
-  .rail-brand {
-    display: block;
-    margin: 2px auto 10px;
-  }
-
-  .rail-brand img {
-    display: block;
-    width: 36px;
-    height: 36px;
-    border-radius: 9px;
-  }
-
-  /* ── logbook split: list pane + seat ──────────────────────────────── */
-  .logbook-split {
-    display: flex;
-    height: 100%;
-  }
-
-  .logbook-pane {
-    width: 340px;
-    flex-shrink: 0;
-    overflow-y: auto;
-    border-right: 1px solid rgba(255, 255, 255, 0.09);
-  }
-
-  .logbook-seat {
-    flex: 1;
-    min-width: 0;
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    color: var(--ion-color-medium);
-  }
-
-  /* The detail page's own split: same pane, detail content scrolls in
-     place of the page. */
-  .detail-split {
-    display: flex;
-    height: 100%;
-  }
-
-  .detail-main {
-    position: relative;
-    flex: 1;
-    min-width: 0;
-    overflow-y: auto;
-    display: flex;
-    flex-direction: column;
-  }
-
-  /* The map is a flex item here; without this the fields below quietly
-     shrink it (60vh became ~360px at 1280x800). */
-  .detail-main .flight-detail-map {
-    flex-shrink: 0;
-  }
-
-  /* Full-screen map: the pane bows out, and the map overlays the whole
-     seat — height:100% of a scrolling flex column is not full screen. */
-  .detail-split.no-pane .logbook-pane {
-    display: none;
-  }
-
-  .detail-split.no-pane .detail-main {
-    overflow: hidden;
-  }
-
-  .detail-split.no-pane .flight-detail-map.map-full {
-    position: absolute;
-    inset: 0;
-    height: auto;
-    min-height: 0;
-  }
+.desktop-shell {
+  display: flex;
+  height: 100%;
 }
 
-/* On the phone the split wrappers are transparent to layout: the page is
-   exactly the phone app. */
-.detail-plain {
-  display: contents;
+/* ── the rail ─────────────────────────────────────────────────────────── */
+.desktop-rail {
+  width: 76px;
+  flex-shrink: 0;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 4px;
+  padding-top: 10px;
+  border-right: 1px solid rgba(255, 255, 255, 0.09);
 }
 
-@media (min-width: 992px) {
-
-  /* ── settings: a centered column, not a stretched phone ───────────── */
-  .settings-content ion-list.list-inset,
-  .settings-content .settings-list-header,
-  .settings-content .settings-helper-text {
-    max-width: 640px;
-    margin-inline: auto;
-  }
-
-  .settings-content .settings-list-header {
-    padding-left: 32px;
-  }
+.rail-brand {
+  display: block;
+  margin: 2px auto 10px;
 }
 
-/* ── the totals strip (desktop pane header) ─────────────────────────── */
+.rail-brand img {
+  display: block;
+  width: 36px;
+  height: 36px;
+  border-radius: 9px;
+}
+
+.rail-link {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 3px;
+  width: 64px;
+  height: 60px;
+  border-radius: 12px;
+  color: var(--ion-color-medium);
+  text-decoration: none;
+  font-size: 0.72rem;
+}
+
+.rail-link ion-icon {
+  font-size: 1.45rem;
+}
+
+.rail-link.active {
+  color: var(--wingover-accent);
+  background: rgba(255, 255, 255, 0.06);
+}
+
+/* ── sections (kept alive, hidden when inactive) ──────────────────────── */
+.desktop-main {
+  flex: 1;
+  min-width: 0;
+  position: relative;
+}
+
+.shell-section {
+  position: relative;
+  height: 100%;
+}
+
+.shell-section[hidden] {
+  display: none;
+}
+
+/* ── logbook split ────────────────────────────────────────────────────── */
+.logbook-split {
+  display: flex;
+  height: 100%;
+}
+
+.logbook-pane {
+  width: 340px;
+  flex-shrink: 0;
+  overflow-y: auto;
+  border-right: 1px solid rgba(255, 255, 255, 0.09);
+}
+
+.pane-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 0.6rem 0.5rem 0.5rem 1.1rem;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.09);
+  position: sticky;
+  top: 0;
+  background: var(--ion-background-color);
+  z-index: 2;
+}
+
+.pane-header h1 {
+  margin: 0;
+  font-size: 1.25rem;
+  font-weight: 700;
+}
+
+.logbook-seat {
+  flex: 1;
+  min-width: 0;
+  position: relative;
+  display: flex;
+  flex-direction: column;
+}
+
+.seat-placeholder {
+  flex: 1;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: var(--ion-color-medium);
+}
+
+.logbook-split .logbook-empty {
+  padding: 2.5rem 1.25rem;
+}
+
+/* ── the flight seat: header bar, then the map IS the seat ────────────── */
+.flight-seat {
+  display: flex;
+  flex-direction: column;
+  height: 100%;
+}
+
+.seat-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 0.35rem 0.5rem 0.35rem 1.1rem;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.09);
+}
+
+.seat-title {
+  font-weight: 600;
+  font-size: 0.95rem;
+}
+
+.seat-map {
+  position: relative;
+  flex: 1;
+  min-height: 0;
+}
+
+/* The floating details card: right side, collapsible, gestures land on
+   the map everywhere else. */
+.seat-card {
+  position: absolute;
+  top: 0.9rem;
+  right: 0.9rem;
+  width: 380px;
+  max-height: calc(100% - 1.8rem);
+  overflow-y: auto;
+  background: rgba(13, 15, 18, 0.92);
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  border-radius: 14px;
+  z-index: 5;
+}
+
+.seat-card ion-list {
+  background: transparent;
+  padding-top: 0;
+}
+
+.seat-card ion-item {
+  --background: transparent;
+}
+
+.seat-card-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.5rem;
+  padding: 0.7rem 0.5rem 0.5rem 1rem;
+}
+
+.seat-card-title {
+  font-weight: 700;
+  font-size: 1.02rem;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.seat-card-collapse {
+  flex-shrink: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 2rem;
+  height: 2rem;
+  font-size: 1.1rem;
+  color: var(--ion-color-medium);
+  background: none;
+  border: 0;
+}
+
+.seat-card.collapsed {
+  width: auto;
+  max-width: 380px;
+}
+
+/* ── full screen: nothing but the map ─────────────────────────────────── */
+body.flight-map-full .desktop-rail,
+body.flight-map-full .logbook-pane,
+body.flight-map-full .seat-header,
+body.flight-map-full .seat-card {
+  display: none;
+}
+
+/* ── the totals strip (list pane header) ──────────────────────────────── */
 .flightlist-totals {
   display: grid;
   grid-template-columns: 1fr 1fr 1fr;
@@ -144,8 +239,7 @@
   color: var(--ion-color-medium);
 }
 
-/* The plan wrapper exists at every width; the pane only joins on desktop.
-   .plan-map is the positioned parent the absolute map container fills. */
+/* ── plan: wrapper at every width; the pane joins on desktop ──────────── */
 .plan-split {
   display: flex;
   height: 100%;
@@ -157,7 +251,6 @@
   min-width: 0;
 }
 
-/* ── plan pin pane ──────────────────────────────────────────────────── */
 .plan-pane {
   width: 300px;
   flex-shrink: 0;
@@ -224,7 +317,21 @@
   font-variant-numeric: tabular-nums;
 }
 
-/* ── the connect funnel (fresh browser, empty logbook) ──────────────── */
+/* ── settings: a centered column, not a stretched phone ───────────────── */
+@media (min-width: 992px) {
+  .settings-content ion-list.list-inset,
+  .settings-content .settings-list-header,
+  .settings-content .settings-helper-text {
+    max-width: 640px;
+    margin-inline: auto;
+  }
+
+  .settings-content .settings-list-header {
+    padding-left: 32px;
+  }
+}
+
+/* ── the connect funnel (fresh browser, empty logbook) ────────────────── */
 .connect-funnel {
   max-width: 22rem;
   margin: 0 auto;

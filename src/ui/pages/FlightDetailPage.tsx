@@ -16,33 +16,25 @@ import {
   IonTitle,
   IonToolbar,
   useIonRouter,
-  useIonViewWillEnter,
 } from "@ionic/react";
 import {
   contractOutline,
   ellipsisHorizontal,
   expandOutline,
 } from "ionicons/icons";
-import { useCallback, useEffect, useRef, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { useParams } from "react-router";
 
 import { isTauri } from "../../engine/platform";
-import type { Fix } from "../../engine/types";
 import {
   formatAltitude,
   formatDistance,
   formatDuration,
   formatSpeed,
 } from "../../flight/format";
-import {
-  type Flight,
-  getFlight,
-  getTrack,
-  updateFlight,
-} from "../../storage/db";
 import { getSetting, setSetting } from "../../storage/local";
-import FlightList from "../logbook/FlightList";
-import { useFlights } from "../logbook/useFlights";
+import { useFlightDoc } from "../logbook/useFlightDoc";
+import { useFlightDrafts } from "../logbook/useFlightDrafts";
 import type { MapViewKind } from "../map/config";
 import MapCanvas from "../map/MapCanvas";
 import {
@@ -57,7 +49,6 @@ import {
 import ViewToggle from "../map/ViewToggle";
 import { useSettings } from "../settings/SettingsContext";
 import { useFlightActions } from "../useFlightActions";
-import { useIsDesktop } from "../useIsDesktop";
 
 import "./FlightDetailPage.css";
 
@@ -68,13 +59,18 @@ function endpointMarker(className: string, testId: string): HTMLElement {
   return element;
 }
 
+/**
+ * The PHONE flight page: map on top, details scrolling below. Desktop
+ * renders the logbook split instead (DesktopShell → LogbookSection →
+ * FlightSeat); this page only ever mounts inside the Ionic tab shell.
+ */
 export default function FlightDetailPage() {
   const { id } = useParams<{ id: string }>();
   const router = useIonRouter();
   const { units } = useSettings();
   const { exportFlight, confirmDeleteFlight } = useFlightActions();
-  const [flight, setFlight] = useState<Flight | null>(null);
-  const [track, setTrack] = useState<Fix[]>([]);
+  const { flight, setFlight, track } = useFlightDoc(id);
+  const { drafts, setDraft, commit } = useFlightDrafts(flight, setFlight, track);
   const [optionsOpen, setOptionsOpen] = useState(false);
   const [view, setView] = useState<MapViewKind>("street");
   const [map, setMap] = useState<MapView | null>(null);
@@ -84,42 +80,15 @@ export default function FlightDetailPage() {
   // callback must see the CURRENT intent, not the one it closed over.
   const mapFullRef = useRef(false);
   const contentRef = useRef<HTMLIonContentElement>(null);
-  // The desktop split: the logbook list rides along in a left pane, and
-  // selecting a flight replaces this page (root direction) instead of
-  // stacking map-holding detail pages.
-  const isDesktop = useIsDesktop();
-  const { flights, refresh: refreshFlights } = useFlights();
-  const paneRef = useRef<HTMLDivElement>(null);
-  const [draftName, setDraftName] = useState("");
-  const [draftLaunch, setDraftLaunch] = useState("");
-  const [draftNotes, setDraftNotes] = useState("");
   const lineRef = useRef<Line | null>(null);
   const planLineRef = useRef<Line | null>(null);
   const markersRef = useRef<MarkerLayer | null>(null);
 
-  const load = useCallback(() => {
-    getFlight(id).then((found) => {
-      setFlight(found);
-      setDraftName(found?.name ?? "");
-      setDraftLaunch(found?.launchName ?? "");
-      setDraftNotes(found?.notes ?? "");
-    });
-    getTrack(id).then(setTrack);
+  useEffect(() => {
     getSetting("mapView").then((value) => {
       if (value === "street" || value === "satellite") setView(value);
     });
   }, [id]);
-
-  useIonViewWillEnter(() => {
-    load();
-  }, [load]);
-
-  // Desktop pane navigation can swap the id without an Ionic page
-  // transition; the loads are idempotent gets, so double-firing on a
-  // normal entry costs nothing.
-  useEffect(() => {
-    load();
-  }, [load]);
 
   function changeView(value: MapViewKind) {
     setView(value);
@@ -128,10 +97,9 @@ export default function FlightDetailPage() {
 
   // Full screen means NO bars: the header and tab bar go (the body class
   // hides ion-tab-bar, which lives outside this page), and on the PWA the
-  // Fullscreen API sheds the browser chrome too — where it exists (iPhone
-  // Safari has none for elements; the native app has no chrome to shed).
-  // Everything reverses in the cleanup, so navigating away while expanded
-  // can't strand a hidden tab bar or a fullscreened document.
+  // Fullscreen API sheds the browser chrome too. Everything reverses in
+  // the cleanup, so navigating away while expanded can't strand a hidden
+  // tab bar or a fullscreened document.
   useEffect(() => {
     mapFullRef.current = mapFull;
     if (!mapFull) return;
@@ -162,33 +130,6 @@ export default function FlightDetailPage() {
       }
     };
   }, [mapFull]);
-
-  function commitDetails() {
-    if (!flight) return;
-    const name = draftName.trim() || flight.name;
-    const launchName = draftLaunch.trim() || undefined;
-    const notes = draftNotes;
-    if (
-      name === flight.name &&
-      notes === flight.notes &&
-      launchName === flight.launchName
-    ) {
-      return;
-    }
-    setDraftName(name);
-    setDraftLaunch(launchName ?? "");
-    const changes: Partial<
-      Pick<Flight, "name" | "notes" | "launchName" | "launchAt">
-    > = { name, notes, launchName };
-    // Flights recorded before launchAt existed have no coordinates to match
-    // against — capture them from the loaded track the moment the pilot names
-    // the launch, so future flights from this field inherit the name.
-    if (launchName && !flight.launchAt && track.length > 0) {
-      changes.launchAt = [track[0].longitude, track[0].latitude];
-    }
-    void updateFlight(flight.id, changes);
-    setFlight({ ...flight, ...changes });
-  }
 
   function handleReady(next: MapView | null) {
     if (!next) {
@@ -280,11 +221,9 @@ export default function FlightDetailPage() {
       {!mapFull && (
         <IonHeader>
           <IonToolbar>
-            {!isDesktop && (
-              <IonButtons slot="start">
-                <IonBackButton defaultHref="/logbook" />
-              </IonButtons>
-            )}
+            <IonButtons slot="start">
+              <IonBackButton defaultHref="/logbook" />
+            </IonButtons>
             {/* The when, not the name — the name is the editable field below,
                 and printing it twice an inch apart read as a bug. */}
             <IonTitle>
@@ -310,39 +249,10 @@ export default function FlightDetailPage() {
           </IonToolbar>
         </IonHeader>
       )}
-      <IonContent ref={contentRef} scrollY={!mapFull && !isDesktop}>
-        {/* Desktop: the logbook rides along in a left pane and this page IS
-            the split's detail seat. Phone: both wrappers are display:
-            contents, so the layout is exactly the phone app. */}
-        <div
-          className={
-            isDesktop
-              ? `detail-split${mapFull ? " no-pane" : ""}`
-              : "detail-plain"
-          }
-        >
-          {isDesktop && (
-            <aside className="logbook-pane" ref={paneRef}>
-              <FlightList
-                flights={flights}
-                units={units}
-                scrollRef={paneRef}
-                desktop
-                totalsStrip
-                selectedId={id}
-                onDeleted={(deleted) => {
-                  refreshFlights();
-                  // The open flight just died; its seat has to go too.
-                  if (deleted.id === id) router.push("/logbook", "root");
-                }}
-              />
-            </aside>
-          )}
-          <div className={isDesktop ? "detail-main" : "detail-plain"}>
+      <IonContent ref={contentRef} scrollY={!mapFull}>
         {/* Map and details split the screen instead of a card floating over
-            the track — nothing overlaps the flight anymore, and the stats get
-            room to breathe below. Expandable to full screen: the map is the
-            main event, and the split is only the default. */}
+            the track — nothing overlaps the flight, and the stats get room
+            to breathe below. Expandable to full screen. */}
         <div className={`flight-detail-map${mapFull ? " map-full" : ""}`}>
           <MapCanvas base={view} onReady={handleReady} />
           <div className="map-overlay">
@@ -354,11 +264,7 @@ export default function FlightDetailPage() {
                 // The map is the first child of the scroll area, so top is
                 // where full screen is — without this, expanding while
                 // scrolled down shows the middle of the details instead.
-                // Desktop needs no scroll: full screen is an overlay there,
-                // and ion-content isn't the scroller anyway.
-                if (!mapFull && !isDesktop) {
-                  void contentRef.current?.scrollToTop();
-                }
+                if (!mapFull) void contentRef.current?.scrollToTop();
                 setMapFull(!mapFull);
               }}
             >
@@ -373,16 +279,16 @@ export default function FlightDetailPage() {
           <>
             <IonList>
               <IonItem>
-                {/* Ionic defaults autocapitalize to "off" (unlike bare HTML
-                    inputs), so the iOS keyboard never shifts without these. */}
                 <IonInput
                   label="Name"
                   clearInput
                   autocapitalize="words"
-                  value={draftName}
+                  value={drafts.name}
                   aria-label="Flight name"
-                  onIonInput={(event) => setDraftName(event.detail.value ?? "")}
-                  onIonBlur={commitDetails}
+                  onIonInput={(event) =>
+                    setDraft("name", event.detail.value ?? "")
+                  }
+                  onIonBlur={commit}
                 />
               </IonItem>
               <IonItem>
@@ -391,12 +297,12 @@ export default function FlightDetailPage() {
                   clearInput
                   autocapitalize="words"
                   placeholder="Add location"
-                  value={draftLaunch}
+                  value={drafts.launch}
                   aria-label="Launch location"
                   onIonInput={(event) =>
-                    setDraftLaunch(event.detail.value ?? "")
+                    setDraft("launch", event.detail.value ?? "")
                   }
-                  onIonBlur={commitDetails}
+                  onIonBlur={commit}
                 />
               </IonItem>
               <IonItem>
@@ -408,12 +314,12 @@ export default function FlightDetailPage() {
                   placeholder="Wing, motor, conditions…"
                   rows={1}
                   autoGrow
-                  value={draftNotes}
+                  value={drafts.notes}
                   aria-label="Flight notes"
                   onIonInput={(event) =>
-                    setDraftNotes(event.detail.value ?? "")
+                    setDraft("notes", event.detail.value ?? "")
                   }
-                  onIonBlur={commitDetails}
+                  onIonBlur={commit}
                 />
               </IonItem>
             </IonList>
@@ -450,8 +356,6 @@ export default function FlightDetailPage() {
             </IonList>
           </>
         )}
-          </div>
-        </div>
         <IonActionSheet
           isOpen={optionsOpen}
           onDidDismiss={() => setOptionsOpen(false)}

@@ -15,6 +15,7 @@ import {
 } from "@ionic/react";
 import { checkmarkOutline, closeCircle } from "ionicons/icons";
 import { useState, useSyncExternalStore } from "react";
+import { useHistory } from "react-router-dom";
 
 import { isTauri } from "../../engine/platform";
 import {
@@ -34,6 +35,7 @@ import "./SettingsPage.css";
 export default function SettingsPage() {
   const { units } = useSettings();
   const openSync = useSyncSheet();
+  const history = useHistory();
   const canRecord = useCanRecord();
   const syncStatus = useSyncExternalStore(sync.subscribe, sync.currentStatus);
 
@@ -130,7 +132,7 @@ export default function SettingsPage() {
 
         <div className="settings-list-header">General</div>
         <IonList inset>
-          <IonItem button detail routerLink="/settings/units">
+          <IonItem button detail onClick={() => history.push("/settings/units")}>
             <IonLabel>Units</IonLabel>
             <IonNote slot="end">
               {units === "metric" ? "Metric" : "Imperial"}
@@ -156,7 +158,7 @@ export default function SettingsPage() {
         <IonList inset>
           {/* Apple's pick-one idiom: the row shows the current value and
               pushes a checkmark list. */}
-          <IonItem button detail routerLink="/settings/map">
+          <IonItem button detail onClick={() => history.push("/settings/map")}>
             <IonLabel>Map Provider</IonLabel>
             <IonNote slot="end">
               {mapBackend === "maplibre" ? "MapLibre" : "MapKit"}

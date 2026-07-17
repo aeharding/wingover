@@ -35,7 +35,7 @@ export default function AllFlightsMapPage() {
   const [map, setMap] = useState<MapView | null>(null);
   const lineRef = useRef<Line | null>(null);
 
-  useIonViewWillEnter(() => {
+  function load() {
     getSetting("mapView").then((value) => {
       if (value === "street" || value === "satellite") setView(value);
     });
@@ -59,7 +59,17 @@ export default function AllFlightsMapPage() {
       }
       setFeatures(built);
     })();
+  }
+
+  // Will-enter for the phone shell; a mount effect for the desktop shell
+  // (no Ionic lifecycle there).
+  useIonViewWillEnter(() => {
+    load();
   });
+
+  useEffect(() => {
+    load();
+  }, []);
 
   function changeView(value: MapViewKind) {
     setView(value);
