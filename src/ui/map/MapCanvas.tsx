@@ -140,7 +140,10 @@ export default function MapCanvas({
     if (!container) return;
     container.classList.toggle("satellite", base === "satellite");
     container.classList.toggle("map-loading", !revealed);
-  }, [base, revealed]);
+    // The attribution (an OSM license obligation) is styled per appearance:
+    // its dark-map colors are white-on-white over a light basemap.
+    container.classList.toggle("map-light", appearance === "light");
+  }, [base, revealed, appearance]);
 
   // A drag that starts on the map belongs to the map: without this, a pan
   // beginning near the left edge doubles as Ionic's swipe-back and navigates

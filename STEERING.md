@@ -161,7 +161,7 @@ Extremely simple, barebones, straightforward — in the spirit of PPG Flyer. The
 - **Few screens, no fluff.** Record, logbook, plan, settings. Every screen and control must justify its existence; when in doubt, leave it out.
 - **Plain CSS.** Ionic provides structure, navigation, and platform idiom; styling on top is plain `.css` files. No CSS-in-JS, no Tailwind, no preprocessors, no design system beyond a handful of variables. It doesn't need anything crazy.
 - **Gloves-first.** Oversized touch targets well beyond platform minimums, especially for anything used pre-flight or in-flight. No fiddly gestures, long-presses, or small toggles on the critical path. Stopping a recording is guarded against accidental taps (deliberate action, not a stray thumb).
-- **Sunlight-readable.** High contrast, large numerals on the instrument screen, dark mode. Designed for a phone strapped to a leg or arm in full daylight.
+- **Sunlight-readable.** High contrast, large numerals on the instrument screen, dark mode. Designed for a phone strapped to a leg or arm in full daylight. The one deliberate exception: the live flight MAP uses a light basemap — glare beats dark tiles in full sun — while every ground map stays dark with the rest of the app.
 - **Simple and elegant** beats dense and configurable. Sensible defaults over settings.
 
 ## Development Model

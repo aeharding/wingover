@@ -172,6 +172,25 @@ test("flight detail draws the track even when the map style loads slowly", async
   page.on("pageerror", (error) => pageErrors.push(String(error)));
 
   await page.route("**/api.maptiler.com/**", (route) => route.abort());
+  // The live map (light) fetches the liberty style on the way to this
+  // test's target page; keep it hermetic too.
+  await page.route("**/styles/liberty", (route) =>
+    route.fulfill({
+      contentType: "application/json",
+      body: JSON.stringify({
+        version: 8,
+        sources: {},
+        layers: [
+          {
+            id: "background",
+            type: "background",
+            paint: { "background-color": "#f8f4f0" },
+          },
+        ],
+      }),
+    }),
+  );
+
   await page.route(
     "**/styles/dark",
     async (route) => {
@@ -223,6 +242,25 @@ test("composite map draws all flights even with a slow style", async ({
   page.on("pageerror", (error) => pageErrors.push(String(error)));
 
   await page.route("**/api.maptiler.com/**", (route) => route.abort());
+  // The live map (light) fetches the liberty style on the way to this
+  // test's target page; keep it hermetic too.
+  await page.route("**/styles/liberty", (route) =>
+    route.fulfill({
+      contentType: "application/json",
+      body: JSON.stringify({
+        version: 8,
+        sources: {},
+        layers: [
+          {
+            id: "background",
+            type: "background",
+            paint: { "background-color": "#f8f4f0" },
+          },
+        ],
+      }),
+    }),
+  );
+
   await page.route(
     "**/styles/dark",
     async (route) => {

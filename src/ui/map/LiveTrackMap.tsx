@@ -15,7 +15,6 @@ import {
   type MapView,
   type MarkerLayer,
   type MarkerSpec,
-  PLAN_LINE_COLOR,
   PLANNED_COLOR,
   TRACK_LINE_WIDTH_PX,
 } from "./types";
@@ -32,6 +31,10 @@ import "./LiveTrackMap.css";
 const WHEEL_ZOOM_RATE = 1 / 450;
 const PINCH_ZOOM_RATE = 1 / 100;
 
+// The live map is always light; the shared PLAN_LINE_COLOR grey is tuned
+// for the dark ground maps and washes out here.
+const LIVE_PLAN_LINE_COLOR = "#5c6470";
+
 // The planned route reference: a static grey line from launch through every
 // planned pin, plus numbered markers for the ACTIVE nav sequence (green =
 // planned, yellow = ad-hoc; see types.ts). Passed points are simply absent
@@ -41,7 +44,7 @@ function waypointPinEl(color: string, label: string): HTMLElement {
   const el = document.createElement("div");
   el.className = "waypoint-pin";
   el.setAttribute("aria-hidden", "true");
-  el.innerHTML = `<svg viewBox="0 0 24 32" width="26" height="35" xmlns="http://www.w3.org/2000/svg"><path d="M12 0C5.4 0 0 5.4 0 12c0 9 12 20 12 20s12-11 12-20C24 5.4 18.6 0 12 0z" fill="${color}"/><circle cx="12" cy="12" r="7" fill="#fff"/><text x="12" y="12" text-anchor="middle" dominant-baseline="central" font-size="9.5" font-weight="700" fill="#000">${label}</text></svg>`;
+  el.innerHTML = `<svg viewBox="0 0 24 32" width="26" height="35" xmlns="http://www.w3.org/2000/svg"><path d="M12 0C5.4 0 0 5.4 0 12c0 9 12 20 12 20s12-11 12-20C24 5.4 18.6 0 12 0z" fill="${color}" stroke="rgba(0,0,0,0.35)" stroke-width="1"/><circle cx="12" cy="12" r="7" fill="#fff"/><text x="12" y="12" text-anchor="middle" dominant-baseline="central" font-size="9.5" font-weight="700" fill="#000">${label}</text></svg>`;
   return el;
 }
 
@@ -170,7 +173,9 @@ export default function LiveTrackMap({
     // The grey plan reference is created FIRST so it sits UNDER the cyan flown
     // track (later lines draw on top). A fresh map → force a marker rebuild.
     planLineRef.current = mapView.line({
-      color: PLAN_LINE_COLOR,
+      // Darker than PLAN_LINE_COLOR: this map is always light, and the
+      // shared grey (tuned for dark basemaps) washes out in full sun.
+      color: LIVE_PLAN_LINE_COLOR,
       width: 3,
       opacity: 0.7,
       testId: "plan",

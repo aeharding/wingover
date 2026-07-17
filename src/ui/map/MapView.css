@@ -60,6 +60,21 @@
   color: rgba(235, 238, 242, 0.92);
 }
 
+/* The live map is light; white credit text vanishes there, and the OSM
+   attribution is a license obligation, not decoration. */
+.map-container.map-light .maplibregl-ctrl-attrib {
+  color: rgba(35, 40, 46, 0.85);
+  text-shadow: 0 0 3px rgba(255, 255, 255, 0.9);
+}
+
+.map-container.map-light .maplibregl-ctrl-attrib a {
+  color: rgba(35, 40, 46, 0.95);
+}
+
+.map-container.map-light .maplibregl-ctrl-attrib summary {
+  filter: opacity(0.7);
+}
+
 .map-container .maplibregl-ctrl-attrib summary {
   filter: invert(1) opacity(0.85);
 }
