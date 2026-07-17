@@ -182,6 +182,7 @@ export default function LogbookPage() {
                       <IonLabel>
                         <h2>{flight.name}</h2>
                         <p>
+                          {flight.launchName && `${flight.launchName} · `}
                           {new Date(flight.startedAt).toLocaleString()} ·{" "}
                           {formatDuration(flight.stats.durationSeconds)} ·{" "}
                           {formatDistance(flight.stats.distanceMeters, units)}

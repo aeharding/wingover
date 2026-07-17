@@ -6,20 +6,27 @@ import {
   IonContent,
   IonHeader,
   IonIcon,
+  IonInput,
+  IonItem,
+  IonLabel,
+  IonList,
+  IonNote,
   IonPage,
+  IonTextarea,
   IonTitle,
   IonToolbar,
   useIonRouter,
   useIonViewWillEnter,
 } from "@ionic/react";
 import {
-  chevronDownOutline,
-  chevronUpOutline,
+  contractOutline,
   ellipsisHorizontal,
+  expandOutline,
 } from "ionicons/icons";
 import { useEffect, useRef, useState } from "react";
 import { useParams } from "react-router";
 
+import { isTauri } from "../../engine/platform";
 import type { Fix } from "../../engine/types";
 import {
   formatAltitude,
@@ -68,18 +75,24 @@ export default function FlightDetailPage() {
   const [optionsOpen, setOptionsOpen] = useState(false);
   const [view, setView] = useState<MapViewKind>("street");
   const [map, setMap] = useState<MapView | null>(null);
-  const [expanded, setExpanded] = useState(true);
+  const [mapFull, setMapFull] = useState(false);
+  // Mirrors mapFull for the async fullscreen grant below: two quick taps
+  // can fold the map before the browser grants fullscreen, and the grant
+  // callback must see the CURRENT intent, not the one it closed over.
+  const mapFullRef = useRef(false);
+  const contentRef = useRef<HTMLIonContentElement>(null);
   const [draftName, setDraftName] = useState("");
+  const [draftLaunch, setDraftLaunch] = useState("");
   const [draftNotes, setDraftNotes] = useState("");
   const lineRef = useRef<Line | null>(null);
   const planLineRef = useRef<Line | null>(null);
   const markersRef = useRef<MarkerLayer | null>(null);
-  const overlayRef = useRef<HTMLDivElement>(null);
 
   useIonViewWillEnter(() => {
     getFlight(id).then((found) => {
       setFlight(found);
       setDraftName(found?.name ?? "");
+      setDraftLaunch(found?.launchName ?? "");
       setDraftNotes(found?.notes ?? "");
     });
     getTrack(id).then(setTrack);
@@ -93,14 +106,68 @@ export default function FlightDetailPage() {
     setSetting("mapView", value);
   }
 
+  // Full screen means NO bars: the header and tab bar go (the body class
+  // hides ion-tab-bar, which lives outside this page), and on the PWA the
+  // Fullscreen API sheds the browser chrome too — where it exists (iPhone
+  // Safari has none for elements; the native app has no chrome to shed).
+  // Everything reverses in the cleanup, so navigating away while expanded
+  // can't strand a hidden tab bar or a fullscreened document.
+  useEffect(() => {
+    mapFullRef.current = mapFull;
+    if (!mapFull) return;
+    document.body.classList.add("flight-map-full");
+    if (!isTauri()) {
+      void document.documentElement
+        .requestFullscreen?.()
+        .then(() => {
+          // Folded again before the grant landed: leave immediately, or the
+          // browser stays fullscreen with no listener left to notice.
+          if (!mapFullRef.current && document.fullscreenElement) {
+            void document.exitFullscreen().catch(() => {});
+          }
+        })
+        .catch(() => {});
+    }
+    // Esc / the system gesture exits browser fullscreen without touching our
+    // button — fold the map back down so the two never disagree.
+    const onFullscreenChange = () => {
+      if (!document.fullscreenElement) setMapFull(false);
+    };
+    document.addEventListener("fullscreenchange", onFullscreenChange);
+    return () => {
+      document.body.classList.remove("flight-map-full");
+      document.removeEventListener("fullscreenchange", onFullscreenChange);
+      if (document.fullscreenElement) {
+        void document.exitFullscreen().catch(() => {});
+      }
+    };
+  }, [mapFull]);
+
   function commitDetails() {
     if (!flight) return;
     const name = draftName.trim() || flight.name;
+    const launchName = draftLaunch.trim() || undefined;
     const notes = draftNotes;
-    if (name === flight.name && notes === flight.notes) return;
+    if (
+      name === flight.name &&
+      notes === flight.notes &&
+      launchName === flight.launchName
+    ) {
+      return;
+    }
     setDraftName(name);
-    updateFlight(flight.id, { name, notes });
-    setFlight({ ...flight, name, notes });
+    setDraftLaunch(launchName ?? "");
+    const changes: Partial<
+      Pick<Flight, "name" | "notes" | "launchName" | "launchAt">
+    > = { name, notes, launchName };
+    // Flights recorded before launchAt existed have no coordinates to match
+    // against — capture them from the loaded track the moment the pilot names
+    // the launch, so future flights from this field inherit the name.
+    if (launchName && !flight.launchAt && track.length > 0) {
+      changes.launchAt = [track[0].longitude, track[0].latitude];
+    }
+    void updateFlight(flight.id, changes);
+    setFlight({ ...flight, ...changes });
   }
 
   function handleReady(next: MapView) {
@@ -124,7 +191,9 @@ export default function FlightDetailPage() {
   useEffect(() => {
     if (!map || track.length === 0) return;
 
-    lineRef.current?.set(track.map((fix): LngLat => [fix.longitude, fix.latitude]));
+    lineRef.current?.set(
+      track.map((fix): LngLat => [fix.longitude, fix.latitude]),
+    );
 
     const launch = track[0];
     const landing = track[track.length - 1];
@@ -163,21 +232,15 @@ export default function FlightDetailPage() {
     ]);
 
     // Fit the flown track and the planned pins together, so a plan that
-    // overshoots the track (unreached waypoints) still frames fully.
+    // overshoots the track (unreached waypoints) still frames fully. Extra
+    // bottom padding keeps the track clear of the view toggle.
     const bounds = boundsOf([
       ...track.map((fix): LngLat => [fix.longitude, fix.latitude]),
       ...plannedRoute,
     ]);
-    const overlayHeight =
-      overlayRef.current?.getBoundingClientRect().height ?? 0;
     if (bounds) {
       map.fitBounds(bounds, {
-        padding: {
-          top: (overlayHeight || 220) + 28,
-          bottom: 60,
-          left: 50,
-          right: 50,
-        },
+        padding: { top: 40, bottom: 76, left: 40, right: 40 },
       });
     }
   }, [track, map, flight?.id, flight?.plannedRoute]);
@@ -186,99 +249,136 @@ export default function FlightDetailPage() {
 
   return (
     <IonPage>
-      <IonHeader>
-        <IonToolbar>
-          <IonButtons slot="start">
-            <IonBackButton defaultHref="/logbook" />
-          </IonButtons>
-          <IonTitle>{flight?.name ?? "Flight"}</IonTitle>
-          <IonButtons slot="end">
-            <IonButton
-              aria-label="Options"
-              data-testid="detail-options"
-              onClick={() => setOptionsOpen(true)}
-            >
-              <IonIcon slot="icon-only" icon={ellipsisHorizontal} />
-            </IonButton>
-          </IonButtons>
-        </IonToolbar>
-      </IonHeader>
-      <IonContent scrollY={false}>
-        <div className="flight-detail-map">
+      {!mapFull && (
+        <IonHeader>
+          <IonToolbar>
+            <IonButtons slot="start">
+              <IonBackButton defaultHref="/logbook" />
+            </IonButtons>
+            {/* The when, not the name — the name is the editable field below,
+                and printing it twice an inch apart read as a bug. */}
+            <IonTitle>
+              {flight
+                ? new Date(flight.startedAt).toLocaleString(undefined, {
+                    month: "short",
+                    day: "numeric",
+                    year: "numeric",
+                    hour: "numeric",
+                    minute: "2-digit",
+                  })
+                : "Flight"}
+            </IonTitle>
+            <IonButtons slot="end">
+              <IonButton
+                aria-label="Options"
+                data-testid="detail-options"
+                onClick={() => setOptionsOpen(true)}
+              >
+                <IonIcon slot="icon-only" icon={ellipsisHorizontal} />
+              </IonButton>
+            </IonButtons>
+          </IonToolbar>
+        </IonHeader>
+      )}
+      <IonContent ref={contentRef} scrollY={!mapFull}>
+        {/* Map and details split the screen instead of a card floating over
+            the track — nothing overlaps the flight anymore, and the stats get
+            room to breathe below. Expandable to full screen: the map is the
+            main event, and the split is only the default. */}
+        <div className={`flight-detail-map${mapFull ? " map-full" : ""}`}>
           <MapCanvas base={view} onReady={handleReady} />
-          {flight && stats && (
-            <div className="detail-overlay" ref={overlayRef}>
-              <div className="detail-overlay-header">
-                {expanded ? (
-                  <input
-                    className="detail-title"
-                    value={draftName}
-                    aria-label="Flight name"
-                    onChange={(event) => setDraftName(event.target.value)}
-                    onBlur={commitDetails}
-                  />
-                ) : (
-                  <div className="detail-title-static">{flight.name}</div>
-                )}
-                <button
-                  className="collapse-button"
-                  aria-label={expanded ? "Collapse details" : "Expand details"}
-                  onClick={() => setExpanded(!expanded)}
-                >
-                  <IonIcon
-                    icon={expanded ? chevronUpOutline : chevronDownOutline}
-                  />
-                </button>
-              </div>
-              {expanded && (
-                <>
-                  <textarea
-                    className="detail-notes"
-                    placeholder="Wing, motor, conditions…"
-                    rows={2}
-                    value={draftNotes}
-                    aria-label="Flight notes"
-                    onChange={(event) => setDraftNotes(event.target.value)}
-                    onBlur={commitDetails}
-                  />
-                  <div className="detail-stats">
-                    <Stat
-                      label="Duration"
-                      value={formatDuration(stats.durationSeconds)}
-                    />
-                    <Stat
-                      label="Distance"
-                      value={formatDistance(stats.distanceMeters, units)}
-                    />
-                    <Stat
-                      label="Max above launch"
-                      value={formatAltitude(
-                        stats.maxAltitude -
-                          (stats.launchAltitude ?? stats.minAltitude),
-                        units,
-                      )}
-                    />
-                    <Stat
-                      label="Max altitude"
-                      value={formatAltitude(stats.maxAltitude, units)}
-                    />
-                    <Stat
-                      label="Max speed"
-                      value={formatSpeed(stats.maxSpeed, units)}
-                    />
-                    <Stat
-                      label="Avg speed"
-                      value={formatSpeed(stats.averageSpeed, units)}
-                    />
-                  </div>
-                </>
-              )}
-            </div>
-          )}
           <div className="map-overlay">
+            <button
+              className="map-button"
+              aria-label={mapFull ? "Shrink map" : "Expand map"}
+              data-testid="map-expand"
+              onClick={() => {
+                // The map is the first child of the scroll area, so top is
+                // where full screen is — without this, expanding while
+                // scrolled down shows the middle of the details instead.
+                if (!mapFull) void contentRef.current?.scrollToTop();
+                setMapFull(!mapFull);
+              }}
+            >
+              <IonIcon icon={mapFull ? contractOutline : expandOutline} />
+            </button>
             <ViewToggle view={view} onChange={changeView} />
           </div>
         </div>
+        {flight && stats && (
+          <>
+            <IonList>
+              <IonItem>
+                <IonInput
+                  label="Name"
+                  value={draftName}
+                  aria-label="Flight name"
+                  onIonInput={(event) => setDraftName(event.detail.value ?? "")}
+                  onIonBlur={commitDetails}
+                />
+              </IonItem>
+              <IonItem>
+                <IonInput
+                  label="Launch"
+                  placeholder="Add location"
+                  value={draftLaunch}
+                  aria-label="Launch location"
+                  onIonInput={(event) =>
+                    setDraftLaunch(event.detail.value ?? "")
+                  }
+                  onIonBlur={commitDetails}
+                />
+              </IonItem>
+              <IonItem>
+                {/* rows 1: one line empty (a textarea's native default is
+                    two), growing with content. */}
+                <IonTextarea
+                  label="Notes"
+                  placeholder="Wing, motor, conditions…"
+                  rows={1}
+                  autoGrow
+                  value={draftNotes}
+                  aria-label="Flight notes"
+                  onIonInput={(event) =>
+                    setDraftNotes(event.detail.value ?? "")
+                  }
+                  onIonBlur={commitDetails}
+                />
+              </IonItem>
+            </IonList>
+            <IonList>
+              <Stat
+                label="Duration"
+                value={formatDuration(stats.durationSeconds)}
+              />
+              <Stat
+                label="Distance"
+                value={formatDistance(stats.distanceMeters, units)}
+              />
+              <Stat
+                label="Max speed"
+                value={formatSpeed(stats.maxSpeed, units)}
+              />
+              <Stat
+                label="Avg speed"
+                value={formatSpeed(stats.averageSpeed, units)}
+              />
+              <Stat
+                label="Max altitude"
+                value={formatAltitude(stats.maxAltitude, units)}
+              />
+              <Stat
+                label="Max above launch"
+                lines="none"
+                value={formatAltitude(
+                  stats.maxAltitude -
+                    (stats.launchAltitude ?? stats.minAltitude),
+                  units,
+                )}
+              />
+            </IonList>
+          </>
+        )}
         <IonActionSheet
           isOpen={optionsOpen}
           onDidDismiss={() => setOptionsOpen(false)}
@@ -307,11 +407,21 @@ export default function FlightDetailPage() {
   );
 }
 
-function Stat({ label, value }: { label: string; value: string }) {
+function Stat({
+  label,
+  value,
+  lines,
+}: {
+  label: string;
+  value: string;
+  lines?: "none";
+}) {
   return (
-    <div className="detail-stat">
-      <div className="detail-stat-label">{label}</div>
-      <div className="detail-stat-value">{value}</div>
-    </div>
+    <IonItem lines={lines}>
+      <IonLabel>{label}</IonLabel>
+      <IonNote slot="end" className="detail-stat-value">
+        {value}
+      </IonNote>
+    </IonItem>
   );
 }

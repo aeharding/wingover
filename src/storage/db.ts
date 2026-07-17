@@ -1,7 +1,7 @@
 import PouchDB from "pouchdb-browser";
 
 import type { Fix, LngLat } from "../engine/types";
-import type { FlightStats } from "../flight/stats";
+import { type FlightStats, haversineMeters } from "../flight/stats";
 
 export interface Flight {
   id: string;
@@ -18,6 +18,13 @@ export interface Flight {
   // the grey optimal-path reference on the flight detail map. Absent for
   // flights recorded without a plan and for imported flights.
   plannedRoute?: LngLat[];
+  // Where the flight started ([lng, lat]) and what the pilot calls that
+  // place. The name is per-flight and editable; new flights copy it from
+  // the nearest previous named launch (inheritedLaunchName), so the logbook
+  // itself is the site register — no separate sites collection. Both absent
+  // on flights recorded before the fields existed.
+  launchAt?: LngLat;
+  launchName?: string;
 }
 
 export interface Pin {
@@ -45,6 +52,8 @@ interface FlightDoc {
   importBatchId?: string;
   importedAt?: number;
   plannedRoute?: LngLat[];
+  launchAt?: LngLat;
+  launchName?: string;
 }
 
 /**
@@ -80,6 +89,8 @@ function toFlight(doc: FlightDoc): Flight {
     importBatchId: doc.importBatchId,
     importedAt: doc.importedAt,
     plannedRoute: doc.plannedRoute,
+    launchAt: doc.launchAt,
+    launchName: doc.launchName,
   };
 }
 
@@ -141,6 +152,8 @@ export async function saveFlight(flight: Flight, fixes: Fix[]) {
     importBatchId: flight.importBatchId,
     importedAt: flight.importedAt,
     plannedRoute: flight.plannedRoute,
+    launchAt: flight.launchAt,
+    launchName: flight.launchName,
   });
 }
 
@@ -239,10 +252,63 @@ export async function getTrack(flightId: string): Promise<Fix[]> {
 
 export async function updateFlight(
   flightId: string,
-  changes: Partial<Pick<Flight, "name" | "notes">>,
+  changes: Partial<Pick<Flight, "name" | "notes" | "launchName" | "launchAt">>,
 ) {
   const doc = await db.get<FlightDoc>(flightDocId(flightId));
   await db.put({ ...doc, ...changes, updatedAt: Date.now() });
+}
+
+/**
+ * How close two launches must be to count as the same place. Sized to a
+ * flying field, not a region: far enough to absorb GPS scatter and laying
+ * out on the other end of the same field, near enough that the next farm
+ * over stays its own place.
+ */
+const SAME_LAUNCH_METERS = 300;
+
+export interface NamedLaunch {
+  at: LngLat;
+  name: string;
+}
+
+/**
+ * Every named launch in the logbook, newest flight first (listFlights
+ * order). Loaded once and matched many times by batch import — per-file
+ * loads made a 1000-file import spend more time naming flights than
+ * saving them.
+ */
+export async function namedLaunches(): Promise<NamedLaunch[]> {
+  return (await listFlights()).flatMap((flight) =>
+    flight.launchAt && flight.launchName
+      ? [{ at: flight.launchAt, name: flight.launchName }]
+      : [],
+  );
+}
+
+/** Newest-first input makes this most-recent-wins, so renaming a flight's
+ * launch propagates forward to future flights without rewriting past ones. */
+export function nearestLaunchName(
+  launches: NamedLaunch[],
+  launchAt: LngLat,
+): string | undefined {
+  const here = { longitude: launchAt[0], latitude: launchAt[1] };
+  return launches.find(
+    (launch) =>
+      haversineMeters(here, {
+        longitude: launch.at[0],
+        latitude: launch.at[1],
+      }) <= SAME_LAUNCH_METERS,
+  )?.name;
+}
+
+/**
+ * The launch name a new flight at this point should carry, from the pilot's
+ * own history.
+ */
+export async function inheritedLaunchName(
+  launchAt: LngLat,
+): Promise<string | undefined> {
+  return nearestLaunchName(await namedLaunches(), launchAt);
 }
 
 export async function deleteFlight(flightId: string) {

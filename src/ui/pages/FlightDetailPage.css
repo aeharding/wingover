@@ -1,112 +1,40 @@
+/* Map on top, details below — a split, not an overlay. The old floating card
+   covered the track it existed to show, and its title duplicated the header's.
+   vh (not %) because IonContent's scroll host doesn't size against the page. */
 .flight-detail-map {
-  position: absolute;
-  inset: 0;
+  position: relative;
+  /* The map is the main event — it gets the lion's share of the screen, and
+     the details are what scrolls. */
+  height: 60vh;
+  min-height: 320px;
 }
 
-.detail-overlay {
-  position: absolute;
-  top: 0.75rem;
-  left: 0.75rem;
-  right: 0.75rem;
-  z-index: 5;
-  padding: 0.6rem 0.75rem;
-  background: rgba(24, 26, 29, 0.9);
-  border: 1px solid #333;
-  border-radius: 12px;
+/* Expanded, the map takes the whole content area; the details wait below,
+   unreachable until it shrinks back (scrolling is off while expanded). */
+.flight-detail-map.map-full {
+  height: 100%;
+  min-height: 0;
 }
 
-@media (min-width: 768px) {
-  .detail-overlay {
-    left: auto;
-    width: 400px;
-  }
+/* No bars means the tab bar too — it belongs to the app shell, not this
+   page, so a body class set while the map is expanded reaches out to it. */
+body.flight-map-full ion-tab-bar {
+  display: none;
 }
 
-.detail-overlay-header {
-  display: flex;
-  align-items: center;
-  gap: 0.5rem;
+/* The toggle rides the map box, not the viewport — no home-indicator inset
+   needed this far from the screen bottom (MapView.css adds one for the
+   full-screen maps, which is right again once THIS map is full screen). */
+.flight-detail-map:not(.map-full) .map-overlay {
+  bottom: 0.9rem;
 }
 
-.detail-title,
-.detail-title-static {
-  flex: 1;
-  min-width: 0;
-  font-size: 1.05rem;
-  font-weight: 600;
-  color: #fff;
-  background: none;
-  border: none;
-  padding: 0.2rem 0;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-}
-
-.detail-title:focus {
-  outline: none;
-  border-bottom: 1px solid var(--wingover-accent);
-}
-
-.collapse-button {
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  width: 2.2rem;
-  height: 2.2rem;
-  flex-shrink: 0;
-  font-size: 1.2rem;
-  color: #cfd3d8;
-  background: none;
-  border: none;
-}
-
-.detail-notes {
-  width: 100%;
-  margin-top: 0.35rem;
-  padding: 0.35rem 0;
-  font-size: 0.85rem;
-  color: #dfe3e8;
-  background: none;
-  border: none;
-  resize: none;
-}
-
-.detail-notes:focus {
-  outline: none;
-}
-
-.detail-notes::placeholder {
-  color: #7c828a;
-}
-
-.detail-stats {
-  display: grid;
-  grid-template-columns: 1fr 1fr;
-  gap: 0.4rem 0.75rem;
-  margin-top: 0.4rem;
-}
-
-.detail-stat {
-  display: flex;
-  align-items: baseline;
-  justify-content: space-between;
-  gap: 0.5rem;
-  min-width: 0;
-}
-
-.detail-stat-label {
-  font-size: 0.72rem;
-  color: #a7acb3;
-  white-space: nowrap;
-}
-
+/* Stat values are the point of the rows — full contrast and lined-up digits,
+   not IonNote's muted default. */
 .detail-stat-value {
-  font-size: 0.95rem;
+  color: var(--ion-text-color);
   font-weight: 600;
-  color: #fff;
   font-variant-numeric: tabular-nums;
-  white-space: nowrap;
 }
 
 .endpoint-marker {
