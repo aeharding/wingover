@@ -3,11 +3,14 @@
   <head>
     <meta charset="utf-8" />
     <!-- Returning pilots skip the pitch: the app stamps wingover.used on its
-         first real load, and this forwards before paint. -->
+         first real load, and this forwards before paint. A same-origin
+         referrer means the pilot came FROM the app (the rail icon, the
+         About row) and wants the pitch, not a bounce straight back. -->
     <script>
       try {
         if (
           location.pathname === "/" &&
+          !document.referrer.startsWith(location.origin) &&
           localStorage.getItem("wingover.used")
         )
           location.replace("/logbook");

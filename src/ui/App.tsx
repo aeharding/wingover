@@ -15,13 +15,11 @@ import {
   navigateOutline,
   settingsOutline,
 } from "ionicons/icons";
-import { useEffect, useState, useSyncExternalStore } from "react";
+import { useEffect, useSyncExternalStore } from "react";
 import { Redirect, Route } from "react-router-dom";
 
 import { engine } from "../engine";
 import { isTauri } from "../engine/platform";
-import { getBooleanSetting, onSettingChanged } from "../storage/local";
-import { launchParam } from "./map/config";
 import AllFlightsMapPage from "./pages/AllFlightsMapPage";
 import FlightDetailPage from "./pages/FlightDetailPage";
 import FlyPage from "./pages/FlyPage";
@@ -32,6 +30,8 @@ import SettingsPage from "./pages/SettingsPage";
 import UnitsPage from "./pages/UnitsPage";
 import { SettingsProvider } from "./settings/SettingsContext";
 import { SyncSheetsProvider } from "./sync/SyncSheets";
+import { useCanRecord } from "./useCanRecord";
+import { useIsDesktop } from "./useIsDesktop";
 
 import "./desktop.css";
 
@@ -76,43 +76,9 @@ function AppBody() {
   return <TabShell />;
 }
 
-/**
- * Whether this build can record a flight. Tauri always (the native engine
- * is the whole point); a browser only via the mock engine (?mock-speed,
- * the dev/e2e seam) or the explicit Advanced opt-in — browsers can stop
- * background recording at any time, so an unqualified Fly tab in a browser
- * would be a promise the platform can't keep (STEERING: PWA recording is
- * best-effort at most). The real audience for the opt-in is Android phone
- * browsers before the native app exists.
- */
-function recordOverride(): boolean {
-  if (isTauri() || launchParam("mock-speed") !== null) return true;
-  // e2e drives the REAL web engine with stubbed geolocation and needs the
-  // Fly tab without the Advanced opt-in dance — same pattern as the
-  // "wingover.map" backend override.
-  try {
-    return localStorage.getItem("wingover.record") === "1";
-  } catch {
-    return false;
-  }
-}
-
-function useCanRecord(): boolean {
-  const [canRecord, setCanRecord] = useState(recordOverride);
-  useEffect(() => {
-    if (recordOverride()) return;
-    void getBooleanSetting("recordInBrowser", false).then(
-      (on) => on && setCanRecord(true),
-    );
-    return onSettingChanged("recordInBrowser", (value) =>
-      setCanRecord(value === "true"),
-    );
-  }, []);
-  return canRecord;
-}
-
 function TabShell() {
   const canRecord = useCanRecord();
+  const isDesktop = useIsDesktop();
   return (
     <IonReactRouter>
       <IonTabs>
@@ -144,6 +110,15 @@ function TabShell() {
           </Route>
         </IonRouterOutlet>
         <IonTabBar slot="bottom">
+          {isDesktop && !isTauri() && (
+            /* The way back out the front door: the app icon tops the rail
+               and opens the landing page. Same-origin, and the landing's
+               script shows app-referred visits the pitch instead of
+               bouncing them straight back here. */
+            <a className="rail-brand" href="/" aria-label="About Wingover">
+              <img src="/icon-192.png" alt="" width="36" height="36" />
+            </a>
+          )}
           {canRecord && (
             <IonTabButton tab="fly" href="/fly">
               <IonIcon icon={navigateOutline} />

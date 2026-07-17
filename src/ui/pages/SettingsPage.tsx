@@ -23,15 +23,18 @@ import {
   setBooleanSetting,
 } from "../../storage/local";
 import * as sync from "../../sync";
+import { openExternal } from "../externalLinks";
 import { useSettings } from "../settings/SettingsContext";
 import { describe as describeSync } from "../sync/describe";
 import { useSyncSheet } from "../sync/SyncSheets";
+import { useCanRecord } from "../useCanRecord";
 
 import "./SettingsPage.css";
 
 export default function SettingsPage() {
   const { units } = useSettings();
   const openSync = useSyncSheet();
+  const canRecord = useCanRecord();
   const syncStatus = useSyncExternalStore(sync.subscribe, sync.currentStatus);
 
   // One row, one question: are the flights backed up? Off is never a neutral
@@ -107,17 +110,23 @@ export default function SettingsPage() {
           </IonItem>
         </IonList>
 
-        <div className="settings-list-header">Recording</div>
-        <IonList inset>
-          <IonItem>
-            <IonToggle
-              checked={autoEnd}
-              onIonChange={(event) => saveAutoEnd(event.detail.checked)}
-            >
-              Auto-end flight after landing
-            </IonToggle>
-          </IonItem>
-        </IonList>
+        {/* Recording settings only exist where recording does: on the web
+            the section appears once "Record in this browser" is enabled. */}
+        {canRecord && (
+          <>
+            <div className="settings-list-header">Recording</div>
+            <IonList inset>
+              <IonItem>
+                <IonToggle
+                  checked={autoEnd}
+                  onIonChange={(event) => saveAutoEnd(event.detail.checked)}
+                >
+                  Auto-end flight after landing
+                </IonToggle>
+              </IonItem>
+            </IonList>
+          </>
+        )}
 
         <div className="settings-list-header">General</div>
         <IonList inset>
@@ -126,6 +135,20 @@ export default function SettingsPage() {
             <IonNote slot="end">
               {units === "metric" ? "Metric" : "Imperial"}
             </IonNote>
+          </IonItem>
+          <IonItem
+            button
+            detail
+            onClick={() => {
+              // The landing page. In the app it opens in Safari (navigating
+              // the webview away from the SPA would strand it); on the web
+              // it is a same-origin hop, and its script shows the pitch to
+              // app-referred visits instead of bouncing back.
+              if (isTauri()) void openExternal("https://wingover.app/");
+              else location.assign("/");
+            }}
+          >
+            <IonLabel>About Wingover</IonLabel>
           </IonItem>
         </IonList>
 
