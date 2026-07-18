@@ -21,7 +21,15 @@
           location.replace("/logbook");
       } catch {}
     </script>
-    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <!-- viewport-fit=cover lets content render behind iOS 26 Safari's
+         floating bar (verified on-device via a diagnostic page): without it
+         Safari stops the page at the safe-area boundary, which is what
+         clipped the fixed sun. iOS silently ignores viewport-fit unless
+         width=device-width and initial-scale are BOTH also present. -->
+    <meta
+      name="viewport"
+      content="width=device-width, initial-scale=1, viewport-fit=cover"
+    />
     <meta name="color-scheme" content="dark" />
     <meta
       name="description"
@@ -57,6 +65,10 @@
       }
       body {
         margin: 0;
+        /* viewport-fit=cover makes iOS inject implicit safe-area padding on
+           body; zero it so layout stays ours (the footer handles the bottom
+           inset itself). */
+        padding: 0;
         background: linear-gradient(
           to bottom,
           #241a3d 0%,
@@ -681,7 +693,9 @@
       footer {
         max-width: 60rem;
         margin: 0 auto;
-        padding: 2.5rem 1.5rem 1.6rem;
+        /* The page now extends under the floating bar; lift the footer
+           links clear of it. Zero where there is no bottom inset. */
+        padding: 2.5rem 1.5rem calc(1.6rem + env(safe-area-inset-bottom, 0px));
         font-size: 0.8rem;
         color: rgba(253, 240, 220, 0.85);
       }
