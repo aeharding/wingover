@@ -94,6 +94,54 @@ class ShareFileArgs: Decodable {
   let content: String
 }
 
+/// Sends new-window requests to the system browser; forwards everything else
+/// to wry's own delegate.
+///
+/// WKWebView opens no window for `target="_blank"` or `window.open()` on its
+/// own, so any link asking for one just does nothing on tap — notably Apple
+/// Maps' "Legal" credit, which lives in a CLOSED shadow root that no JS click
+/// handler can reach (the event is retargeted to the shadow host before it
+/// ever bubbles to `document`). wry routes new-window requests through
+/// `createWebViewWith` and, with no handler configured, drops them. We take
+/// that one method to open the URL in Safari, and forward every other call
+/// (JS dialogs, capture-permission prompts, the file picker) to the delegate
+/// wry already installed, so nothing else regresses.
+final class NewWindowToBrowserDelegate: NSObject, WKUIDelegate {
+  weak var forwardTo: WKUIDelegate?
+
+  init(forwardingTo delegate: WKUIDelegate?) {
+    self.forwardTo = delegate
+    super.init()
+  }
+
+  func webView(
+    _ webView: WKWebView,
+    createWebViewWith configuration: WKWebViewConfiguration,
+    for navigationAction: WKNavigationAction,
+    windowFeatures: WKWindowFeatures
+  ) -> WKWebView? {
+    if let url = navigationAction.request.url,
+      let scheme = url.scheme?.lowercased(),
+      scheme == "http" || scheme == "https"
+    {
+      UIApplication.shared.open(url)
+    }
+    // Never a child webview: the app is one fixed shell.
+    return nil
+  }
+
+  override func responds(to aSelector: Selector!) -> Bool {
+    super.responds(to: aSelector) || (forwardTo?.responds(to: aSelector) ?? false)
+  }
+
+  override func forwardingTarget(for aSelector: Selector!) -> Any? {
+    if let forwardTo = forwardTo, forwardTo.responds(to: aSelector) {
+      return forwardTo
+    }
+    return super.forwardingTarget(for: aSelector)
+  }
+}
+
 // Sensor/actuator shim (ARCHITECTURE.md): five dumb primitives — capture,
 // drain, permissions, speak, share. NO business logic, NO storage: the
 // Rust core owns the durable session log, cursors, and all announcement
@@ -106,6 +154,8 @@ class WingoverPlugin: Plugin, CLLocationManagerDelegate {
   private var positionRequests: [Invoke] = []
   private var siwa: SiwaDelegate?
   private var lastError: String?
+  // WKWebView.uiDelegate is weak, so the plugin retains ours for the app's life.
+  private var newWindowDelegate: NewWindowToBrowserDelegate?
 
   // WKWebView raises the keyboard only for focus born of a user gesture; a
   // programmatic focus() lands a caret with no keyboard — which is how the
@@ -155,6 +205,14 @@ class WingoverPlugin: Plugin, CLLocationManagerDelegate {
   // are designed around.
   @objc public override func load(webview: WKWebView) {
     webview.scrollView.bounces = true
+    // WKWebView opens no window for target=_blank / window.open, so links
+    // that request one die on tap — the Apple Maps "Legal" credit lives in a
+    // closed shadow root no JS handler can reach. Route those to Safari,
+    // wrapping wry's delegate so the file picker (GPX import) and dialogs are
+    // untouched.
+    let delegate = NewWindowToBrowserDelegate(forwardingTo: webview.uiDelegate)
+    newWindowDelegate = delegate
+    webview.uiDelegate = delegate
   }
 
   //
