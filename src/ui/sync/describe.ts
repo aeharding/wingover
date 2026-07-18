@@ -12,7 +12,11 @@ export function describe(status: sync.SyncStatus): {
 } {
   switch (status.state) {
     case "off":
-      return { label: "Off", detail: "Flights stay on this device.", tone: "" };
+      return {
+        label: "Off",
+        detail: "Flights are not being backed up.",
+        tone: "",
+      };
     case "connecting":
       return { label: "Connecting", detail: "", tone: "" };
     case "paused":

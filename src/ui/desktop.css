@@ -45,15 +45,64 @@
   color: var(--ion-color-medium);
   text-decoration: none;
   font-size: 0.72rem;
+  cursor: pointer;
+  transition: background 0.15s;
 }
 
 .rail-link ion-icon {
   font-size: 1.45rem;
 }
 
+/* Before .active in the cascade on purpose: hovering the current tab
+   keeps the stronger active wash. Covers the sync chip too (it shares
+   .rail-link). */
+.rail-link:hover {
+  background: rgba(255, 255, 255, 0.04);
+}
+
 .rail-link.active {
   color: var(--wingover-accent);
   background: rgba(255, 255, 255, 0.06);
+}
+
+/* The sync chip anchors the rail's bottom. Status colors match the phone
+   Settings row (P3 full-saturation, no fallbacks by doctrine). */
+.rail-sync {
+  margin-top: auto;
+  margin-bottom: 10px;
+  background: none;
+  border: 0;
+}
+
+.rail-sync.sync-off ion-icon {
+  color: color(display-p3 1 0 0);
+}
+
+.rail-sync.sync-on :is(ion-icon, ion-spinner) {
+  color: color(display-p3 0 1 0);
+}
+
+.rail-sync.sync-mid :is(ion-icon, ion-spinner) {
+  color: var(--ion-color-warning);
+}
+
+.rail-sync ion-spinner {
+  width: 1.45rem;
+  height: 1.45rem;
+}
+
+/* The chip's menu: status first, then the verbs. */
+.rail-sync-pop {
+  --width: 280px;
+}
+
+.rail-sync-pop ion-list {
+  padding-top: 0.25rem;
+  padding-bottom: 0.25rem;
+}
+
+.rail-sync-pop .rail-sync-state ion-label p {
+  font-size: 0.78rem;
 }
 
 /* ── sections (kept alive, hidden when inactive) ──────────────────────── */

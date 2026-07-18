@@ -21,8 +21,17 @@ import type { CredentialProvider, Credentials } from "../types";
  * destroys it.
  */
 
-/** The auto-renewable subscription, as configured in App Store Connect. */
-export const SUBSCRIPTION_PRODUCT_ID = "app.wingover.sync.monthly";
+/** The auto-renewable subscription terms, as configured in App Store
+ * Connect. One subscription group: buying either replaces the other, and
+ * Apple prorates the switch itself. */
+export const SUBSCRIPTION_PRODUCT_IDS = {
+  monthly: "app.wingover.sync.monthly",
+  yearly: "app.wingover.sync.yearly",
+} as const;
+
+export type SubscriptionTerm = keyof typeof SUBSCRIPTION_PRODUCT_IDS;
+
+const ALL_PRODUCT_IDS = Object.values(SUBSCRIPTION_PRODUCT_IDS);
 
 /**
  * The newest transaction for our subscription, active OR expired.
@@ -33,7 +42,7 @@ export const SUBSCRIPTION_PRODUCT_ID = "app.wingover.sync.monthly";
  */
 export async function currentEntitlementJWS(): Promise<string | null> {
   return invoke<string | null>("plugin:wingover|storekit_current_entitlement", {
-    productIds: [SUBSCRIPTION_PRODUCT_ID],
+    productIds: ALL_PRODUCT_IDS,
   });
 }
 
@@ -229,16 +238,16 @@ export interface StoreProduct {
  * a live button whose only possible outcome is "no such product" is worse than
  * an honest dead one.
  */
-export async function subscriptionProduct(): Promise<StoreProduct | null> {
-  if (!isTauri()) return null;
+export async function subscriptionProducts(): Promise<StoreProduct[]> {
+  if (!isTauri()) return [];
   try {
     const { products } = await invoke<{ products: StoreProduct[] }>(
       "plugin:wingover|storekit_products",
-      { productIds: [SUBSCRIPTION_PRODUCT_ID] },
+      { productIds: ALL_PRODUCT_IDS },
     );
-    return products[0] ?? null;
+    return products;
   } catch {
-    return null;
+    return [];
   }
 }
 

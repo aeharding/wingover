@@ -52,6 +52,13 @@ both two-rows and a transforming label shipped and got reverted — pilots
 think in one question, and the org chart of the billing system is not their
 problem.
 
+Desktop: the rail's sync chip is this row's twin, same one-glance answer,
+same colors, plus a spinner while docs are actually moving. Settings drops
+the row there rather than saying the same thing twice. The chip opens a
+small menu: status, Manage sync (Log In while off; both raise the sheet),
+Log out on the web, and, while off with flights still on the computer,
+Delete local data (always confirmed: nothing backs it up).
+
 ## The Sync sheet
 
 One modal, every view derived from state, nothing to operate that the state
@@ -189,12 +196,20 @@ deletion, the one way an account ends.)
 | Subscriber wanting desktop, later | PWA → Sign in with Apple. The login flow is born on the PWA; iOS only borrows its door. |
 | Web subscriber _(later)_ gets an iPhone | iOS Log In → Sign in with Apple → same status screen. Their subscription is managed on the web; the iOS app never mentions web pricing. |
 
-## Logout, exactly one verb
+## Logout, one verb per platform
 
-**Turn off sync** = forget this device's credential. Nothing is deleted, on
-the device or the server, and **billing is unchanged** — the fine print says
-both, and Manage Subscription sits adjacent so the pilot who came to cancel
-finds the real door. When identity ships, logins mint the CouchDB credential
+**Turn off sync** (iOS) = forget this device's credential. Nothing is
+deleted, on the device or the server, and **billing is unchanged** — the fine
+print says both, and Manage Subscription sits adjacent so the pilot who came
+to cancel finds the real door.
+
+**Log out** (web) = leave this computer entirely: forget the connection AND
+remove the local copy — shared-computer semantics a phone doesn't have.
+Flush-then-decide: logging out first runs one final push. When it proves the
+server current there is no dialog at all (an always-on confirm trains
+click-through); only when it cannot (offline, lapsed, rejected credential)
+does a confirm appear, stating the real stakes. The app resets in place —
+never a reload. When identity ships, logins mint the CouchDB credential
 and step aside; there is no session to expire, so logout never becomes a
 second, different verb. **Delete account** _(later)_ is the separate, explicit,
 destructive act — required in-app once linking exists (guideline 5.1.1(v)).

@@ -188,10 +188,10 @@ test("a lapsed client replicates pull-only and never pushes into a 403", async (
   // Give the lapsed client something it would push, if it were going to.
   await page.evaluate(async () => {
     const specifier = "/src/storage/db.ts";
-    const { db } = (await import(/* @vite-ignore */ specifier)) as {
-      db: { put(doc: Record<string, unknown>): Promise<unknown> };
+    const { syncedDb } = (await import(/* @vite-ignore */ specifier)) as {
+      syncedDb(): { put(doc: Record<string, unknown>): Promise<unknown> };
     };
-    await db.put({
+    await syncedDb().put({
       _id: `flight:lapsed-${Date.now()}`,
       name: "recorded while lapsed",
       startedAt: Date.now(),
@@ -260,14 +260,54 @@ test("one sheet: pitch when nothing, self-host connects, status when on", async 
     timeout: 15_000,
   });
 
-  // ...and off again, without deleting anything: back to the pitch.
+  // ...and out again. On the web the exit is LOG OUT (shared-computer
+  // semantics): a final flush proves the server current, then the local
+  // copy is destroyed and the app resets IN PLACE. Never a reload — the
+  // body tag below dies with the document if anyone reintroduces one.
+  await page.evaluate(() => document.body.setAttribute("data-no-reload", "1"));
   await page.getByTestId("settings-sync").click();
   await expect(page.getByTestId("sync-state")).toHaveText("On");
+  await expect(page.getByTestId("sync-off")).toContainText("Log out");
   await page.getByTestId("sync-off").click();
-  await expect(page.getByTestId("sync-headline")).toBeVisible();
+  // Fully synced, so no confirm to click through: the sheet closes itself
+  // and the row reads honestly red-Off, all in the same page load.
+  await expect(page.getByTestId("settings-sync")).toContainText("Off", {
+    timeout: 15_000,
+  });
+  await expect(page.locator("body")).toHaveAttribute("data-no-reload", "1");
 
   expect(errors).toEqual([]);
   await context.close();
+});
+
+test("logging out with unsynced flights warns before deleting them", async ({
+  page,
+}) => {
+  // A recorded flight plus a LAPSED (pull-only) connection: the pre-logout
+  // flush cannot push, so the flight exists only on this computer and the
+  // confirm must appear — this is the one case logout destroys anything.
+  await page.goto("/?mock-speed=40&map-style=blank");
+  await page.getByRole("button", { name: "Start Flight" }).click();
+  await expect(page.getByTestId("recording")).toBeVisible({ timeout: 10_000 });
+  await page.waitForTimeout(400);
+  await page.getByRole("button", { name: "Stop flight" }).click();
+  await page.getByRole("button", { name: "Stop", exact: true }).click();
+  await expect(
+    page.getByRole("button", { name: "Start Flight" }),
+  ).toBeVisible();
+  await enableSync(page, `dirty${Date.now()}`, false);
+
+  await page.goto("/settings?map-style=blank");
+  await page.getByTestId("settings-sync").click();
+  await page.getByTestId("sync-off").click();
+  // :not(.overlay-hidden): Settings declares its record-toggle IonAlert,
+  // which sits in the DOM dismissed; only the live overlay is the confirm.
+  const alert = page.locator("ion-alert:not(.overlay-hidden)");
+  await expect(alert).toContainText("haven't synced");
+  await alert.getByRole("button", { name: "Log out" }).click();
+  await expect(page.getByTestId("settings-sync")).toContainText("Off", {
+    timeout: 15_000,
+  });
 });
 
 test("a lapsed subscription is read-only on the server, never locked out", async ({
