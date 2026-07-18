@@ -2,16 +2,21 @@
 <html lang="en">
   <head>
     <meta charset="utf-8" />
-    <!-- Returning pilots skip the pitch: the app stamps wingover.used on its
-         first real load, and this forwards before paint. A same-origin
-         referrer means the pilot came FROM the app (the rail icon, the
-         About row) and wants the pitch, not a bounce straight back. -->
+    <!-- Returning pilots on DESKTOP skip the pitch: the app stamps
+         wingover.used on its first real load, and this forwards before paint
+         — but only at desktop width, where the browser IS the app and the
+         rail logo is the way back here. On mobile there is no forward: a
+         visit to the root shows the landing, and pilots reach the app by
+         adding it to the home screen (manifest start_url is /logbook) or
+         bookmarking. A same-origin referrer (the desktop rail logo) still
+         shows the pitch, not a bounce straight back. -->
     <script>
       try {
         if (
           location.pathname === "/" &&
           !document.referrer.startsWith(location.origin) &&
-          localStorage.getItem("wingover.used")
+          localStorage.getItem("wingover.used") &&
+          window.matchMedia("(min-width: 992px)").matches
         )
           location.replace("/logbook");
       } catch {}
@@ -711,6 +716,26 @@
       </a>
       <a class="nav-open" href="/logbook">Open app</a>
     </nav>
+    <script>
+      // iOS should get the native app, not the foreground-only PWA (no
+      // background recording on web). Point the button at get.wingover.app:
+      // it opens the app if installed (once Universal Links ship) and
+      // otherwise sends iOS to the App Store / TestFlight. Everyone else keeps
+      // the web app. The default href works with no JS. iPad on iPadOS 13+
+      // reports as "Macintosh", so the touch check catches it.
+      (function () {
+        var ua = navigator.userAgent || "";
+        var isIOS =
+          /iphone|ipod|ipad/i.test(ua) ||
+          (navigator.platform === "MacIntel" && navigator.maxTouchPoints > 1);
+        if (!isIOS) return;
+        var btn = document.querySelector(".nav-open");
+        if (btn) {
+          btn.href = "https://get.wingover.app";
+          btn.textContent = "Get the app";
+        }
+      })();
+    </script>
 
     <main>
       <header class="hero">
