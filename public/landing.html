@@ -21,7 +21,15 @@
           location.replace("/logbook");
       } catch {}
     </script>
-    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <!-- viewport-fit=cover is what lets anything render behind iOS 26
+         Safari's floating tab bar: without it, Safari stops the page at the
+         safe-area boundary and paints a solid backstop bar there, which is
+         what clipped the fixed sun. With it, fixed/absolute elements extend
+         to the true screen bottom and show through the Liquid Glass bar. -->
+    <meta
+      name="viewport"
+      content="width=device-width, initial-scale=1, viewport-fit=cover"
+    />
     <meta name="color-scheme" content="dark" />
     <meta
       name="description"
@@ -681,7 +689,10 @@
       footer {
         max-width: 60rem;
         margin: 0 auto;
-        padding: 2.5rem 1.5rem 1.6rem;
+        /* viewport-fit=cover extends the page under the floating bar, so the
+           footer links need lifting clear of it. Zero everywhere without a
+           bottom inset. */
+        padding: 2.5rem 1.5rem calc(1.6rem + env(safe-area-inset-bottom, 0px));
         font-size: 0.8rem;
         color: rgba(253, 240, 220, 0.85);
       }
