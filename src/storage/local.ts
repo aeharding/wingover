@@ -1,6 +1,6 @@
 import PouchDB from "pouchdb-browser";
 
-import { db } from "./db";
+import { syncedDb } from "./db";
 
 /**
  * Device-local storage. Never replicates.
@@ -39,12 +39,15 @@ const settingId = (key: string) => `setting:${key}`;
  * empty ranged query.
  */
 export async function purgeSyncedSettings(): Promise<void> {
-  const stale = await db.allDocs({
+  const synced = syncedDb();
+  const stale = await synced.allDocs({
     startkey: "setting:",
     endkey: "setting:￰",
   });
   await Promise.all(
-    stale.rows.map((row) => db.remove(row.id, row.value.rev).catch(() => {})),
+    stale.rows.map((row) =>
+      synced.remove(row.id, row.value.rev).catch(() => {}),
+    ),
   );
 }
 

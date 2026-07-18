@@ -1,6 +1,6 @@
 import PouchDB from "pouchdb-browser";
 
-import { db } from "../storage/db";
+import { syncedDb } from "../storage/db";
 import type { Credentials, SyncAccount, SyncStatus } from "./types";
 
 /**
@@ -53,9 +53,28 @@ let account: SyncAccount | null = null;
 export function currentAccount(): SyncAccount | null {
   if (held !== accountFor) {
     accountFor = held;
-    account = held ? { kind: held.kind, entitled: held.entitled } : null;
+    account = held
+      ? {
+          kind: held.kind,
+          entitled: held.entitled,
+          login: held.login,
+        }
+      : null;
   }
   return account;
+}
+
+/**
+ * Amends the held credential in place (e.g. appleLinked flipping true the
+ * moment a link succeeds), persists it through the sink, and notifies so
+ * currentAccount rebuilds. Not for anything replication keys off (url,
+ * password) — those need a restart, not a patch.
+ */
+export function patchCredentials(patch: Partial<Credentials>) {
+  if (!held) return;
+  held = { ...held, ...patch };
+  onCredentialsChanged?.(held);
+  set(status);
 }
 
 function set(next: SyncStatus) {
@@ -105,7 +124,7 @@ let backfilled = false;
 async function backfill(target: PouchDB.Database) {
   backfilled = true;
   try {
-    await db.replicate.to(target, { checkpoint: false });
+    await syncedDb().replicate.to(target, { checkpoint: false });
   } catch {
     // Next launch tries again; the local copy is the truth meanwhile.
     backfilled = false;
@@ -167,22 +186,41 @@ function connect() {
 
   if (!pullOnly && !backfilled) void backfill(target);
 
-  const sync = pullOnly ? null : db.sync(target, options);
+  const sync = pullOnly ? null : syncedDb().sync(target, options);
   handle = (sync ??
-    db.replicate.from(
+    syncedDb().replicate.from(
       target,
       options,
     )) as unknown as PouchDB.Replication.Sync<object>;
 
   const readOnly = pullOnly;
-  const idle = () => set({ state: "syncing", lastSyncedAt, readOnly });
+  // What the source still holds beyond what's landed here, from the last
+  // batch's `pending`. It is the only way to tell a between-batch breather
+  // from actually caught up: PouchDB emits `paused` for BOTH, so the
+  // initial pull of a whole logbook flickered the spinner off between
+  // every ~100-doc batch without it. Zero when the source doesn't report
+  // it, which degrades to the plain event-driven behavior.
+  let pendingDocs = 0;
+
+  const idle = () =>
+    set({ state: "syncing", lastSyncedAt, readOnly, active: false });
+  // Docs on the wire (`active` opens a burst, `change` lands each batch):
+  // the UI spins. `paused` with no error and nothing pending is caught up.
+  const busy = () =>
+    set({ state: "syncing", lastSyncedAt, readOnly, active: true });
 
   handle
-    .on("change", () => {
+    .on("change", (info: unknown) => {
       lastSyncedAt = Date.now();
-      idle();
+      // Sync wraps the batch in {direction, change}; a bare replication
+      // hands it over directly. `pending` is typed in neither.
+      const batch = ((info as { change?: object }).change ?? info) as {
+        pending?: number;
+      };
+      pendingDocs = batch.pending ?? 0;
+      busy();
     })
-    .on("active", idle)
+    .on("active", busy)
     .on("denied", () => {
       // The paywall and our idea of it disagree — the subscription lapsed while
       // we were running. Drop to pull-only rather than push into a wall.
@@ -242,8 +280,45 @@ function connect() {
       // the honest answer to "are my flights backed up?" — it goes stale on its
       // own if this keeps failing, without ever crying wolf. Only a rejected
       // credential is a real problem, and that arrives on `error`.
-      if (!error) idle();
+      if (!error) {
+        if (pendingDocs > 0) busy();
+        else idle();
+      }
     });
+  }
+}
+
+/**
+ * The pre-logout flush: one non-live push, so "everything is on the server"
+ * is a fact this call just made true rather than a hope. False means it
+ * could NOT be proven: no credential, a lapse (the server 403s pushes), a
+ * rejected doc, or a network too slow to answer — the caller warns before
+ * destroying anything local. Bounded, because a dead network must not hang
+ * logout: past the timeout the push is cancelled and reads as unproven.
+ * Builds its own target when replication is torn down (paused, error), so
+ * the flush still runs from any resting state that holds a credential.
+ */
+export async function flushPush(timeoutMs = 8000): Promise<boolean> {
+  if (!held || !held.entitled) return false;
+  const target =
+    remote ??
+    new PouchDB(`${held.url}/${held.dbName}`, {
+      auth: { username: held.username, password: held.password },
+      skip_setup: true,
+    });
+  const push = syncedDb().replicate.to(target);
+  const timer = setTimeout(() => push.cancel(), timeoutMs);
+  try {
+    const result = await push;
+    return (
+      result.ok === true &&
+      result.status !== "cancelled" &&
+      (result.doc_write_failures ?? 0) === 0
+    );
+  } catch {
+    return false;
+  } finally {
+    clearTimeout(timer);
   }
 }
 
