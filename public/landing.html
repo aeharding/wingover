@@ -73,23 +73,8 @@
         overflow-x: clip;
       }
 
-      /* The sun sits in a full-screen layer, deliberately NOT position:fixed:
-         iOS clips fixed elements at the floating Safari bar, so a fixed sun
-         set at the bar instead of the true screen bottom. This absolute layer
-         is the whole screen tall (100lvh, behind the bar), so the sun sets at
-         the real bottom, and — being absolute, not fixed — it scrolls up and
-         rises with the page instead of a scroll-timeline animation. */
-      .skyline {
-        position: absolute;
-        inset: 0 0 auto 0;
-        height: 100vh;
-        height: 100lvh;
-        overflow: hidden;
-        pointer-events: none;
-        z-index: -1;
-      }
       .sun {
-        position: absolute;
+        position: fixed;
         right: 6vw;
         bottom: -13rem;
         width: 20rem;
@@ -98,6 +83,24 @@
         background: #ffc66b;
         opacity: 0.38;
         box-shadow: 0 0 130px 60px rgba(255, 198, 107, 0.26);
+        pointer-events: none;
+      }
+      /* The sun rises as you scroll: a CSS scroll-driven animation, no JS.
+         Browsers without animation-timeline (or with reduced motion) keep
+         the static half-set sun. */
+      @media (prefers-reduced-motion: no-preference) {
+        @supports (animation-timeline: scroll()) {
+          @keyframes sunrise {
+            to {
+              transform: translateY(-22rem);
+              opacity: 0.5;
+            }
+          }
+          .sun {
+            animation: sunrise linear both;
+            animation-timeline: scroll(root);
+          }
+        }
       }
       nav,
       main,
@@ -701,7 +704,7 @@
     </style>
   </head>
   <body>
-    <div class="skyline" aria-hidden="true"><div class="sun"></div></div>
+    <div class="sun" aria-hidden="true"></div>
 
     <nav>
       <a class="wordmark" href="/">
