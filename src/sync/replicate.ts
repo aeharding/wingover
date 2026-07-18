@@ -18,6 +18,24 @@ let paused = false;
 let status: SyncStatus = { state: "off" };
 let lastSyncedAt: number | null = null;
 
+// The active-sync spinner rests on a settle timer, not a live doc count.
+// PouchDB's per-batch `pending` was meant to tell a between-batch breather
+// from truly caught up, but in a live replication the final batch's
+// `pending` never reliably reaches 0 (and a bidirectional sync's two
+// directions clobber a shared count), so the spinner stuck on "syncing"
+// forever after everything had landed — the flake reported on-device. Now
+// any wire activity marks busy, and the spinner rests only once the quiet
+// has HELD this long; any change in the window cancels the rest.
+let activeSettleTimer: ReturnType<typeof setTimeout> | null = null;
+const ACTIVE_SETTLE_MS = 1500;
+
+function clearActiveSettle() {
+  if (activeSettleTimer !== null) {
+    clearTimeout(activeSettleTimer);
+    activeSettleTimer = null;
+  }
+}
+
 const listeners = new Set<() => void>();
 
 /**
@@ -78,11 +96,15 @@ export function patchCredentials(patch: Partial<Credentials>) {
 }
 
 function set(next: SyncStatus) {
+  // Any state change cancels a tentative "rest the spinner" timer, so a
+  // pending idle can never fire late and clobber a later error/off/busy.
+  clearActiveSettle();
   status = next;
   for (const listener of listeners) listener();
 }
 
 function teardown() {
+  clearActiveSettle();
   handle?.cancel();
   handle = null;
   remote = null;
@@ -194,30 +216,26 @@ function connect() {
     )) as unknown as PouchDB.Replication.Sync<object>;
 
   const readOnly = pullOnly;
-  // What the source still holds beyond what's landed here, from the last
-  // batch's `pending`. It is the only way to tell a between-batch breather
-  // from actually caught up: PouchDB emits `paused` for BOTH, so the
-  // initial pull of a whole logbook flickered the spinner off between
-  // every ~100-doc batch without it. Zero when the source doesn't report
-  // it, which degrades to the plain event-driven behavior.
-  let pendingDocs = 0;
 
   const idle = () =>
     set({ state: "syncing", lastSyncedAt, readOnly, active: false });
   // Docs on the wire (`active` opens a burst, `change` lands each batch):
-  // the UI spins. `paused` with no error and nothing pending is caught up.
+  // the UI spins, immediately.
   const busy = () =>
     set({ state: "syncing", lastSyncedAt, readOnly, active: true });
+  // `paused` fires between every batch of a bulk pull AND when truly caught
+  // up, so it cannot rest the spinner directly without flickering the whole
+  // way down. Instead it arms a delayed rest: a change/active inside the
+  // window cancels it (via set()), so the spinner holds through the pull and
+  // stops for good only once the quiet actually lasts.
+  const settle = () => {
+    clearActiveSettle();
+    activeSettleTimer = setTimeout(idle, ACTIVE_SETTLE_MS);
+  };
 
   handle
-    .on("change", (info: unknown) => {
+    .on("change", () => {
       lastSyncedAt = Date.now();
-      // Sync wraps the batch in {direction, change}; a bare replication
-      // hands it over directly. `pending` is typed in neither.
-      const batch = ((info as { change?: object }).change ?? info) as {
-        pending?: number;
-      };
-      pendingDocs = batch.pending ?? 0;
       busy();
     })
     .on("active", busy)
@@ -280,10 +298,7 @@ function connect() {
       // the honest answer to "are my flights backed up?" — it goes stale on its
       // own if this keeps failing, without ever crying wolf. Only a rejected
       // credential is a real problem, and that arrives on `error`.
-      if (!error) {
-        if (pendingDocs > 0) busy();
-        else idle();
-      }
+      if (!error) settle();
     });
   }
 }
