@@ -18,7 +18,7 @@ test("flight detail shows stats, exports GPX, and deletes", async ({
   await recordQuickFlight(page);
 
   await page.getByText("Logbook", { exact: true }).click();
-  await page.getByRole("heading", { name: /^Flight / }).click();
+  await page.locator(".flight-row").click();
 
   await expect(page.getByText("Max altitude")).toBeVisible();
   await expect(page.getByText("Avg speed")).toBeVisible();

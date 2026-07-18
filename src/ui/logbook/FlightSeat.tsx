@@ -18,13 +18,14 @@ import {
 } from "ionicons/icons";
 import { useEffect, useRef, useState } from "react";
 
+import { isTauri } from "../../engine/platform";
 import {
+  flightTitle,
+  formatAirtime,
   formatAltitude,
   formatDistance,
-  formatDuration,
   formatSpeed,
 } from "../../flight/format";
-import { isTauri } from "../../engine/platform";
 import { getSetting, setSetting } from "../../storage/local";
 import type { MapViewKind } from "../map/config";
 import MapCanvas from "../map/MapCanvas";
@@ -196,12 +197,17 @@ export default function FlightSeat({
     ]);
     if (bounds) {
       map.fitBounds(bounds, {
-        // Right padding clears the floating card; a collapsed card gives
-        // the space back to the track.
-        padding: { top: 56, bottom: 56, left: 56, right: cardOpen ? 440 : 56 },
+        // Right padding clears the OPEN card, always: collapsing must not
+        // jump the camera around — it just reveals more of the map that
+        // was under the card. Full screen hides the card entirely, so the
+        // track expands to the whole viewport instead — including when
+        // the arrow keys switch flights while full screen.
+        padding: mapFull
+          ? { top: 56, bottom: 56, left: 56, right: 56 }
+          : { top: 56, bottom: 56, left: 56, right: 440 },
       });
     }
-  }, [track, map, flight?.id, flight?.plannedRoute, cardOpen]);
+  }, [track, map, flight?.id, flight?.plannedRoute, mapFull]);
 
   const stats = flight?.stats;
 
@@ -246,7 +252,7 @@ export default function FlightSeat({
         {flight && stats && (
           <div className={`seat-card${cardOpen ? "" : " collapsed"}`}>
             <div className="seat-card-header">
-              <div className="seat-card-title">{flight.name}</div>
+              <div className="seat-card-title">{flightTitle(flight)}</div>
               <button
                 className="seat-card-collapse"
                 aria-label={cardOpen ? "Collapse details" : "Expand details"}
@@ -265,6 +271,7 @@ export default function FlightSeat({
                       label="Name"
                       clearInput
                       autocapitalize="words"
+                      placeholder="Add name"
                       value={drafts.name}
                       aria-label="Flight name"
                       onIonInput={(event) =>
@@ -306,7 +313,7 @@ export default function FlightSeat({
                 <IonList>
                   <Stat
                     label="Duration"
-                    value={formatDuration(stats.durationSeconds)}
+                    value={formatAirtime(stats.durationSeconds)}
                   />
                   <Stat
                     label="Distance"

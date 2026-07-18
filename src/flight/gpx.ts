@@ -1,5 +1,6 @@
 import type { Fix } from "../engine/types";
 import type { Flight } from "../storage/db";
+import { flightTitle } from "./format";
 
 function escapeXml(value: string): string {
   return value
@@ -10,7 +11,7 @@ function escapeXml(value: string): string {
 }
 
 export function flightToGpx(
-  flight: Pick<Flight, "name">,
+  flight: Pick<Flight, "name" | "launchName" | "startedAt">,
   fixes: Fix[],
 ): string {
   const points = fixes
@@ -26,7 +27,7 @@ export function flightToGpx(
   return `<?xml version="1.0" encoding="UTF-8"?>
 <gpx version="1.1" creator="Wingover" xmlns="http://www.topografix.com/GPX/1/1">
   <trk>
-    <name>${escapeXml(flight.name)}</name>
+    <name>${escapeXml(flightTitle(flight))}</name>
     <trkseg>
 ${points}
     </trkseg>

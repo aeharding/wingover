@@ -17,7 +17,7 @@ import { ellipsisHorizontal } from "ionicons/icons";
 import { useEffect, useRef, useState } from "react";
 
 import { isTauri } from "../../engine/platform";
-import { formatDistance, formatDuration } from "../../flight/format";
+import { formatAirtime, formatDistance } from "../../flight/format";
 import { importGpxFiles } from "../../storage/importGpx";
 import ConnectFunnel from "../logbook/ConnectFunnel";
 import FlightList from "../logbook/FlightList";
@@ -175,7 +175,7 @@ export default function LogbookPage() {
         {flights.length > 0 && (
           <div className="logbook-totals">
             <IonNote>
-              {flights.length} flights · {formatDuration(totalDuration)} ·{" "}
+              {flights.length} flights · {formatAirtime(totalDuration)} ·{" "}
               {formatDistance(totalDistance, units)}
             </IonNote>
           </div>

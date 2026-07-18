@@ -6,9 +6,10 @@ import {
   IonToast,
 } from "@ionic/react";
 import { ellipsisHorizontal } from "ionicons/icons";
-import { useRef, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { useHistory, useLocation } from "react-router-dom";
 
+import { formatAirtime, formatDistance } from "../../flight/format";
 import { importGpxFiles } from "../../storage/importGpx";
 import ConnectFunnel from "../logbook/ConnectFunnel";
 import FlightList from "../logbook/FlightList";
@@ -16,6 +17,22 @@ import FlightSeat from "../logbook/FlightSeat";
 import { useFlights } from "../logbook/useFlights";
 import AllFlightsMapPage from "../pages/AllFlightsMapPage";
 import { useSettings } from "../settings/SettingsContext";
+
+/**
+ * The list pane's width, remembered per device. Plain localStorage, not a
+ * setting: pure UI geometry, needed synchronously at first paint.
+ */
+const PANE_KEY = "wingover.logbookPane";
+const PANE_DEFAULT = 340;
+const PANE_MIN = 260;
+const PANE_MAX = 520;
+
+/** Also bounded by the window: the seat keeps room for the stats card and
+ *  the map padding that clears it (440px reserve + margins). */
+function clampPane(width: number): number {
+  const max = Math.max(PANE_MIN, Math.min(PANE_MAX, window.innerWidth - 700));
+  return Math.min(max, Math.max(PANE_MIN, width));
+}
 
 /**
  * The desktop logbook: a persistent split. The list never remounts (scroll
@@ -37,16 +54,124 @@ export default function LogbookSection() {
   } | null>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
   const paneRef = useRef<HTMLDivElement>(null);
+  const [paneWidth, setPaneWidth] = useState(() => {
+    const stored = Number(localStorage.getItem(PANE_KEY));
+    return stored >= PANE_MIN && stored <= PANE_MAX ? stored : PANE_DEFAULT;
+  });
+  const paneWidthRef = useRef(paneWidth);
+
+  function rememberPane(width: number) {
+    paneWidthRef.current = width;
+    setPaneWidth(width);
+    localStorage.setItem(PANE_KEY, String(width));
+  }
+
+  function startPaneDrag(down: React.PointerEvent<HTMLDivElement>) {
+    down.preventDefault();
+    const handle = down.currentTarget;
+    handle.setPointerCapture(down.pointerId);
+    const startX = down.clientX;
+    const startWidth = paneWidthRef.current;
+    const move = (event: PointerEvent) => {
+      const next = clampPane(startWidth + event.clientX - startX);
+      paneWidthRef.current = next;
+      setPaneWidth(next);
+    };
+    const up = () => {
+      handle.removeEventListener("pointermove", move);
+      handle.removeEventListener("pointerup", up);
+      localStorage.setItem(PANE_KEY, String(paneWidthRef.current));
+    };
+    handle.addEventListener("pointermove", move);
+    handle.addEventListener("pointerup", up);
+  }
+
+  const selectedIdForKeys = /^\/logbook\/(.+)$/.exec(pathname)?.[1];
+
+  // Arrow keys walk the logbook. replace, not push: holding a key must not
+  // flood the history stack. Reads window.location live so the listener is
+  // inert while the section is URL-hidden, and yields to anything typed.
+  useEffect(() => {
+    const onKey = (event: KeyboardEvent) => {
+      if (event.key !== "ArrowDown" && event.key !== "ArrowUp") return;
+      const path = window.location.pathname;
+      if (!path.startsWith("/logbook") || path === "/logbook/map") return;
+      const target = event.target as HTMLElement | null;
+      if (
+        target?.closest("input, textarea, ion-input, ion-textarea, ion-alert")
+      ) {
+        return;
+      }
+      const index = flights.findIndex(
+        (flight) => flight.id === selectedIdForKeys,
+      );
+      const next =
+        event.key === "ArrowDown"
+          ? flights[index + 1] ?? (index === -1 ? flights[0] : undefined)
+          : flights[index - 1];
+      if (!next) return;
+      event.preventDefault();
+      history.replace(`/logbook/${next.id}`);
+    };
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+  }, [flights, selectedIdForKeys, history]);
+
+  // A selection that stops existing (web log-out emptied the store; the
+  // flight was deleted on another device) folds back to the bare list
+  // instead of seating a ghost id.
+  useEffect(() => {
+    if (
+      loaded &&
+      selectedIdForKeys &&
+      selectedIdForKeys !== "map" &&
+      !flights.some((flight) => flight.id === selectedIdForKeys)
+    ) {
+      history.replace("/logbook");
+    }
+  }, [loaded, flights, selectedIdForKeys, history]);
 
   if (pathname === "/logbook/map") return <AllFlightsMapPage />;
 
   const selectedId = /^\/logbook\/(.+)$/.exec(pathname)?.[1];
   const selected = flights.find((flight) => flight.id === selectedId);
   const empty = loaded && flights.length === 0;
+  const totalDistance = flights.reduce(
+    (sum, flight) => sum + flight.stats.distanceMeters,
+    0,
+  );
+  const totalDuration = flights.reduce(
+    (sum, flight) => sum + flight.stats.durationSeconds,
+    0,
+  );
 
   return (
     <div className="logbook-split">
-      <aside className="logbook-pane" ref={paneRef}>
+      <aside className="logbook-pane" style={{ width: paneWidth }}>
+        <div
+          className="pane-resizer"
+          role="separator"
+          aria-orientation="vertical"
+          aria-label="Resize flight list"
+          tabIndex={0}
+          data-testid="pane-resizer"
+          onPointerDown={startPaneDrag}
+          onDoubleClick={() => rememberPane(PANE_DEFAULT)}
+          onKeyDown={(event) => {
+            const delta =
+              event.key === "ArrowLeft"
+                ? -16
+                : event.key === "ArrowRight"
+                  ? 16
+                  : 0;
+            if (!delta) return;
+            event.preventDefault();
+            rememberPane(clampPane(paneWidthRef.current + delta));
+          }}
+        />
+        {/* Header and totals are pinned OUTSIDE the scroller: the list's
+            scroll view starts at pixel zero, so the virtualizer needs no
+            leading-margin math at all. */}
         <div className="pane-header">
           <h1>Logbook</h1>
           <IonButton
@@ -58,23 +183,40 @@ export default function LogbookSection() {
             <IonIcon slot="icon-only" icon={ellipsisHorizontal} />
           </IonButton>
         </div>
+        {!empty && flights.length > 0 && (
+          <div className="flightlist-totals">
+            <div>
+              <b>{flights.length}</b>
+              <span>Flights</span>
+            </div>
+            <div>
+              <b>{formatAirtime(totalDuration)}</b>
+              <span>Airtime</span>
+            </div>
+            <div>
+              <b>{formatDistance(totalDistance, units)}</b>
+              <span>Distance</span>
+            </div>
+          </div>
+        )}
         {empty ? (
           <div className="logbook-empty">
             <ConnectFunnel onImport={() => fileInputRef.current?.click()} />
           </div>
         ) : (
-          <FlightList
-            flights={flights}
-            units={units}
-            scrollRef={paneRef}
-            totalsStrip
-            selectedId={selectedId}
-            onSelect={(flight) => history.push(`/logbook/${flight.id}`)}
-            onDeleted={(deleted) => {
-              refresh();
-              if (deleted.id === selectedId) history.replace("/logbook");
-            }}
-          />
+          <div className="logbook-pane-scroll" ref={paneRef}>
+            <FlightList
+              flights={flights}
+              units={units}
+              scrollRef={paneRef}
+              selectedId={selectedId}
+              onSelect={(flight) => history.push(`/logbook/${flight.id}`)}
+              onDeleted={(deleted) => {
+                refresh();
+                if (deleted.id === selectedId) history.replace("/logbook");
+              }}
+            />
+          </div>
         )}
       </aside>
       <div className="logbook-seat" data-testid="logbook-seat">

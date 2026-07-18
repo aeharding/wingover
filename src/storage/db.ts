@@ -246,6 +246,33 @@ export async function resetSyncedData(): Promise<void> {
   }
 }
 
+/**
+ * One-time heal, run at every boot: recorded flights used to be born
+ * with the display default baked into `name` ("Flight " + the locale
+ * datetime), which every surface then had to un-bake. Strips exactly the
+ * string this device would have minted; a pilot's own name can never
+ * match. Every boot rather than a done-flag, because sync can pull an
+ * un-healed copy in from another device (or a phone still on the old
+ * build) at any time; the pass is a metadata read over a few hundred
+ * docs. Locale caveat: a default minted under another locale reads as a
+ * custom name and survives, which shows a stale title instead of ever
+ * deleting something typed.
+ */
+export async function stripMintedFlightNames(): Promise<void> {
+  const result = await db.allDocs<FlightDoc>({
+    include_docs: true,
+    startkey: "flight:",
+    endkey: "flight:\ufff0",
+  });
+  for (const row of result.rows) {
+    const doc = row.doc;
+    if (!doc) continue;
+    if (doc.name === `Flight ${new Date(doc.startedAt).toLocaleString()}`) {
+      await db.put({ ...doc, name: "" });
+    }
+  }
+}
+
 export async function listFlights(): Promise<Flight[]> {
   const result = await db.allDocs<FlightDoc>({
     include_docs: true,

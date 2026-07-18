@@ -13,6 +13,7 @@ import {
   listPins,
   saveFlight,
   savePin,
+  stripMintedFlightNames,
   syncedDb,
   updateFlight,
   updatePin,
@@ -184,6 +185,26 @@ describe("storage", () => {
     const b = setSetting("maptilerKey", "abc123");
     await Promise.all([a, b]);
     expect(await getSetting("maptilerKey")).toBe("abc123");
+  });
+});
+describe("stripMintedFlightNames", () => {
+  it("strips exactly the minted default name, never a pilot's", async () => {
+    const fixes = new FlightSimulator(7, 0).fixesUpTo(60);
+    const minted: Flight = {
+      ...makeFlight(fixes),
+      name: `Flight ${new Date(fixes[0].timestamp).toLocaleString()}`,
+    };
+    const custom: Flight = { ...makeFlight(fixes), name: "Sunset ridge" };
+    await saveFlight(minted, fixes);
+    await saveFlight(custom, fixes);
+
+    await stripMintedFlightNames();
+
+    expect((await getFlight(minted.id))?.name).toBe("");
+    expect((await getFlight(custom.id))?.name).toBe("Sunset ridge");
+    // Idempotent: a second pass changes nothing.
+    await stripMintedFlightNames();
+    expect((await getFlight(minted.id))?.name).toBe("");
   });
 });
 

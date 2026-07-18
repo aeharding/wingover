@@ -27,9 +27,9 @@ import { useParams } from "react-router";
 
 import { isTauri } from "../../engine/platform";
 import {
+  formatAirtime,
   formatAltitude,
   formatDistance,
-  formatDuration,
   formatSpeed,
 } from "../../flight/format";
 import { getSetting, setSetting } from "../../storage/local";
@@ -283,6 +283,7 @@ export default function FlightDetailPage() {
                   label="Name"
                   clearInput
                   autocapitalize="words"
+                  placeholder="Add name"
                   value={drafts.name}
                   aria-label="Flight name"
                   onIonInput={(event) =>
@@ -326,7 +327,7 @@ export default function FlightDetailPage() {
             <IonList>
               <Stat
                 label="Duration"
-                value={formatDuration(stats.durationSeconds)}
+                value={formatAirtime(stats.durationSeconds)}
               />
               <Stat
                 label="Distance"

@@ -15,10 +15,12 @@ interface Loaded {
 }
 
 /**
- * One flight and its track, keyed by id. The stored value remembers WHICH
- * id it belongs to and the return is derived from that match, so a
- * persistent consumer (the desktop seat) shows nothing of flight A while
- * flight B loads — no clear-state effect needed.
+ * One flight and its track, keyed by id. The TRACK is id-gated: while
+ * flight B loads, the map shows nothing of flight A (a mislabeled line is
+ * worse than a blank beat). The FLIGHT doc is held through the gap: the
+ * seat's card stays mounted and swaps content instead of flickering out
+ * and back per selection — the gap is a local read, tens of ms, and no
+ * interaction can land inside it (blur commits before the click).
  */
 export function useFlightDoc(id: string): {
   flight: Flight | null;
@@ -55,7 +57,7 @@ export function useFlightDoc(id: string): {
 
   const current = loaded?.id === id ? loaded : null;
   return {
-    flight: current?.flight ?? null,
+    flight: current?.flight ?? loaded?.flight ?? null,
     track: current?.track ?? [],
     setFlight: (flight) =>
       setLoaded((prior) => (prior?.id === id ? { ...prior, flight } : prior)),
