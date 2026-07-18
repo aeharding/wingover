@@ -266,32 +266,6 @@ export async function logOut(): Promise<void> {
 }
 
 /**
- * Whether a logout right now would be non-destructive, made true rather
- * than guessed: runs the final flush (replicate.flushPush). The UI calls
- * this first and only confirms when it returns false — an always-on
- * confirm trains click-through, and a proven-clean logout needs none.
- */
-export async function flushForLogOut(): Promise<boolean> {
-  return replicate.flushPush();
-}
-
-/**
- * Web only: leave this computer entirely. Forgets the connection AND
- * removes the local copy of the flights — the shared-computer semantics
- * "turn off sync" deliberately doesn't have (there, every flight stays).
- * The server and other devices are untouched. No reload, ever:
- * resetSyncedData swaps the store in place and notifies every subscriber,
- * stop() collapses status to "off", and the UI re-derives itself live.
- */
-export async function logOut(): Promise<void> {
-  replicate.stop();
-  const store = await credentialStore();
-  await store.clear();
-  await setBooleanSetting(SYNC_DISABLED_KEY, true);
-  await resetSyncedData();
-}
-
-/**
  * Guideline 5.1.1(v), and basic decency: the hosted database and account,
  * actually gone. Local flights stay; the subscription is Apple's to cancel.
  * Distinct from disable(), which forgets only this device's connection.
