@@ -80,9 +80,14 @@
         width: 20rem;
         height: 20rem;
         border-radius: 50%;
-        background: #ffc66b;
-        opacity: 0.38;
-        box-shadow: 0 0 130px 60px rgba(255, 198, 107, 0.26);
+        /* Alpha lives in the COLOR, not element opacity: iOS 26 Safari clips
+           fixed layers with opaque backgrounds at the floating bar's top
+           edge, while transparent backgrounds composite separately and paint
+           behind the bar (edoardolunardi.dev, "Safari 26 and the Strange
+           Case of Fixed Overlays"). Same pixels, different compositor path.
+           Shadow alpha pre-multiplied (0.26 x 0.38) to keep the old glow. */
+        background: rgba(255, 198, 107, 0.38);
+        box-shadow: 0 0 130px 60px rgba(255, 198, 107, 0.1);
         pointer-events: none;
       }
       /* The sun rises as you scroll: a CSS scroll-driven animation, no JS.
@@ -93,7 +98,9 @@
           @keyframes sunrise {
             to {
               transform: translateY(-22rem);
-              opacity: 0.5;
+              /* The rise still brightens, via the color's alpha (element
+                 opacity would put the layer back on the clipped path). */
+              background-color: rgba(255, 198, 107, 0.5);
             }
           }
           .sun {
