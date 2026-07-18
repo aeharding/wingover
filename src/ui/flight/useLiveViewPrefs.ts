@@ -1,8 +1,8 @@
 import { useEffect, useState } from "react";
 
 import { getSetting, setSetting } from "../../storage/local";
-import type { MapViewKind } from "./config";
-import { readLiveViewState, writeLiveViewState } from "./liveViewState";
+import type { MapViewKind } from "../map/config";
+import { readLiveViewState, writeLiveViewState } from "../map/liveViewState";
 
 interface LiveViewPrefs {
   mapView: MapViewKind;

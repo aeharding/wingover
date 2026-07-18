@@ -31,7 +31,7 @@ export const PLAN_LINE_COLOR = "#8f96a3";
 // display-p3 so it matches the in-flight stat cyan exactly; the TS twin of
 // --wingover-accent / --stat-cyan in theme.css (map colors are JS strings
 // passed to the backends, not CSS). Keep in sync.
-export const ACCENT_CYAN = "color(display-p3 0 0.7 1)";
+export const ACCENT_CYAN = "color(display-p3 0.32 0.8 1)";
 
 // The waypoint palette, shared by the plan page and the live map so a pin
 // reads the same everywhere: planned pins/route GREEN, ad-hoc pins YELLOW —

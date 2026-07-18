@@ -1,0 +1,13 @@
+/* Sized like ion-icon: a 1em box driven by font-size, colored by
+   currentColor through the mask. */
+.native-icon {
+  display: inline-block;
+  width: 1em;
+  height: 1em;
+  flex-shrink: 0;
+  background-color: currentColor;
+  -webkit-mask-repeat: no-repeat;
+  -webkit-mask-size: 100% 100%;
+  mask-repeat: no-repeat;
+  mask-size: 100% 100%;
+}

@@ -1,0 +1,20 @@
+/* The green confirmation pill, styled after the Ionic success toast it
+   replaced. */
+.fly-toast {
+  position: fixed;
+  top: calc(env(safe-area-inset-top) + 10px);
+  left: 50%;
+  transform: translateX(-50%);
+  z-index: 100;
+  max-width: min(92vw, 480px);
+  padding: 0.9rem 1.4rem;
+  border-radius: 12px;
+  background: #2dd55b;
+  color: #000;
+  font-weight: 600;
+  transition: opacity 0.4s;
+}
+
+.fly-toast-out {
+  opacity: 0;
+}

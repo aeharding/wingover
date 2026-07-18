@@ -250,6 +250,40 @@ test("flight detail draws the track even when the map style loads slowly", async
   expect(pageErrors).toEqual([]);
 });
 
+test("the unsnapped compass realigns north, instantly", async ({ page }) => {
+  await page.goto("/?mock-speed=40&map=maplibre");
+  await page.getByRole("button", { name: "Start Flight" }).click();
+  await expect(page.getByTestId("recording")).toBeVisible({ timeout: 10_000 });
+
+  const bearing = () =>
+    page.evaluate(() =>
+      Math.abs(
+        (
+          document.querySelector(".live-map .map-container") as HTMLElement & {
+            __map?: { getBearing(): number };
+          }
+        ).__map!.getBearing(),
+      ),
+    );
+
+  // Track-up rotates the camera to course; the sim flies a curving path,
+  // so a nonzero bearing arrives within a few fixes.
+  await page.getByRole("button", { name: "Track up" }).click();
+  await expect.poll(bearing, { timeout: 15_000 }).toBeGreaterThan(1);
+
+  // Unsnap; the bearing freezes wherever course left it.
+  const map = (await page.locator(".live-map").boundingBox())!;
+  await page.mouse.move(map.x + map.width / 2, map.y + map.height / 2);
+  await page.mouse.down();
+  await page.mouse.move(map.x + map.width / 2 - 140, map.y + map.height / 2, {
+    steps: 8,
+  });
+  await page.mouse.up();
+
+  await page.getByRole("button", { name: "Align north" }).click();
+  await expect.poll(bearing).toBeLessThan(0.5);
+});
+
 test("composite map draws all flights even with a slow style", async ({
   page,
 }) => {

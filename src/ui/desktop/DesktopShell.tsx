@@ -27,8 +27,8 @@ import {
 import { isTauri } from "../../engine/platform";
 import { resetSyncedData } from "../../storage/db";
 import * as sync from "../../sync";
+import FlyPage from "../flight/FlyPage";
 import { useFlights } from "../logbook/useFlights";
-import FlyPage from "../pages/FlyPage";
 import MapProviderPage from "../pages/MapProviderPage";
 import PlanPage from "../pages/PlanPage";
 import SettingsPage from "../pages/SettingsPage";

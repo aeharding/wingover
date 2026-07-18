@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from "react";
 
-import type { MapView } from "./types";
+import type { MapView } from "../map/types";
 
 import "./ZoomControl.css";
 
