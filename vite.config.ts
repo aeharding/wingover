@@ -3,6 +3,7 @@ import react, { reactCompilerPreset } from "@vitejs/plugin-react";
 import { defineConfig } from "vitest/config";
 
 import { fakeAuth } from "./dev/fake-auth-plugin";
+import { landingAtRoot } from "./dev/landing-plugin";
 
 // Set by `tauri ios dev --host`: the LAN address the phone loads the dev
 // server from. Vite must listen on it (and serve HMR over it) or the
@@ -18,6 +19,8 @@ export default defineConfig({
     // Dev/e2e only — serves POST /v1/session against the local dev CouchDB so
     // sync is developable with no Apple, no StoreKit and no Mac. Never built.
     fakeAuth(),
+    // Dev/preview parity with Caddy's exact-/ landing route.
+    landingAtRoot(),
   ],
   optimizeDeps: {
     include: [
