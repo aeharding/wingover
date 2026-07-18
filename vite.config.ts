@@ -1,5 +1,6 @@
 import babel from "@rolldown/plugin-babel";
 import react, { reactCompilerPreset } from "@vitejs/plugin-react";
+import { VitePWA } from "vite-plugin-pwa";
 import { defineConfig } from "vitest/config";
 
 import { fakeAuth } from "./dev/fake-auth-plugin";
@@ -21,6 +22,26 @@ export default defineConfig({
     fakeAuth(),
     // Dev/preview parity with Caddy's exact-/ landing route.
     landingAtRoot(),
+    // Service worker: precache the app shell so a cold start works offline
+    // and repeat loads are instant. autoUpdate = a new deploy's worker takes
+    // over without a prompt. The manifest already lives in public/ (linked
+    // from index.html + the landing), so this only adds the worker. Disabled
+    // in dev by default, so the dev server and e2e never see it.
+    VitePWA({
+      registerType: "autoUpdate",
+      manifest: false,
+      workbox: {
+        globPatterns: ["**/*.{js,css,html,ico,png,svg,webmanifest}"],
+        // maplibre + Ionic + PouchDB make one big chunk; the 2 MB default
+        // would silently drop it from the precache.
+        maximumFileSizeToCacheInBytes: 6 * 1024 * 1024,
+        // Deep links load the SPA shell offline. Only the SPA's OWN routes
+        // fall back to index.html; "/" (landing), /privacy and /s/ (share)
+        // are Caddy's static pages and must reach the network, not the shell.
+        navigateFallback: "/index.html",
+        navigateFallbackAllowlist: [/^\/(fly|logbook|plan|settings)(\/|$)/],
+      },
+    }),
   ],
   optimizeDeps: {
     include: [
