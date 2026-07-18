@@ -337,190 +337,21 @@
       }
 
       /* The phone: big, readable, unafraid. */
-      .ph {
-        width: min(320px, 86vw);
-        aspect-ratio: 320 / 648;
-        border: 1px solid rgba(70, 49, 92, 0.9);
-        border-radius: 42px;
-        background: #000;
-        overflow: hidden;
-        box-shadow: 0 30px 60px rgba(40, 20, 50, 0.55);
-        display: flex;
-        flex-direction: column;
+      /* Real app screenshots (screenshots/web-optimize.mjs), already framed in
+         the SAME iPhone chrome as the App Store shots (Dynamic Island, status
+         bar, home indicator) on a transparent background, at the exact screen
+         aspect so nothing is cropped. */
+      .deviceshot {
+        width: min(300px, 80vw);
+        height: auto;
+        display: block;
         flex-shrink: 0;
-        color: #f2f4f6;
+        filter: drop-shadow(0 30px 55px rgba(20, 10, 30, 0.55));
       }
-
-      /* deck */
-      .deck {
-        flex: 1;
-        display: flex;
-        flex-direction: column;
-        gap: 12px;
-        padding: 24px 18px 0;
-      }
-      .dstat {
-        background: var(--tile);
-        border-radius: 14px;
-        padding: 12px 16px 14px;
-      }
-      .dstat span {
-        display: block;
-        font-size: 0.72rem;
-        letter-spacing: 0.1em;
-        text-transform: uppercase;
-        color: var(--app-faint);
-      }
-      .dstat b {
-        font-size: 2.3rem;
-        font-weight: 800;
-        font-variant-numeric: tabular-nums;
-        line-height: 1.1;
-        color: #fff;
-      }
-      .dstat small {
-        font-size: 0.95rem;
-        color: var(--app-muted);
-        font-weight: 600;
-        margin-left: 4px;
-      }
-      .dstat.cyan b {
-        color: color(display-p3 0 0.7 1);
-      }
-      .dstat.grn b {
-        color: color(display-p3 0 1 0);
-      }
-      .dstat.yel b {
-        color: color(display-p3 1 0.95 0);
-      }
-      .mapfill {
-        flex: 1;
-        margin: 8px -18px 0;
-        position: relative;
-        background: #101215;
-        min-height: 120px;
-      }
-      .mapfill.tall {
-        margin: 0;
-        min-height: 300px;
-      }
-      .mapfill svg {
-        position: absolute;
-        inset: 0;
+      .bappshot {
         width: 100%;
-        height: 100%;
-      }
-
-      /* list screens */
-      .screen {
-        flex: 1;
-        display: flex;
-        flex-direction: column;
-      }
-      .tt {
-        font-weight: 800;
-        font-size: 1.35rem;
-        padding: 26px 20px 12px;
-      }
-      .totals {
-        display: flex;
-        gap: 18px;
-        padding: 0 20px 14px;
-        border-bottom: 1px solid var(--hair-dark);
-      }
-      .totals div b {
+        height: auto;
         display: block;
-        font-size: 1.05rem;
-        font-variant-numeric: tabular-nums;
-      }
-      .totals div span {
-        font-size: 0.6rem;
-        letter-spacing: 0.08em;
-        text-transform: uppercase;
-        color: var(--app-faint);
-      }
-      .phrow {
-        padding: 13px 20px;
-        border-bottom: 1px solid var(--hair-dark);
-      }
-      .phrow h3 {
-        margin: 0 0 2px;
-        font-size: 1rem;
-        font-weight: 600;
-      }
-      .phrow p {
-        margin: 0;
-        font-size: 0.82rem;
-        color: var(--app-muted);
-        white-space: nowrap;
-        overflow: hidden;
-        text-overflow: ellipsis;
-        font-variant-numeric: tabular-nums;
-      }
-      .statrows {
-        margin: 10px 20px 0;
-        background: var(--tile);
-        border-radius: 14px;
-        padding: 2px 16px;
-      }
-      .stat {
-        display: flex;
-        justify-content: space-between;
-        align-items: baseline;
-        padding: 10px 0;
-        border-bottom: 1px solid var(--hair-dark);
-        font-size: 0.92rem;
-      }
-      .stat:last-child {
-        border-bottom: 0;
-      }
-      .stat span {
-        color: var(--app-muted);
-      }
-      .stat b {
-        font-variant-numeric: tabular-nums;
-        font-weight: 650;
-      }
-      .launchline {
-        display: flex;
-        align-items: center;
-        gap: 8px;
-        color: var(--app-muted);
-        font-size: 0.92rem;
-        padding: 2px 20px 10px;
-      }
-
-      /* sync sheet */
-      .syncstate {
-        text-align: center;
-        padding: 34px 20px 10px;
-      }
-      .syncstate b {
-        font-size: 2.4rem;
-        font-weight: 800;
-        color: color(display-p3 0 1 0);
-      }
-      .syncstate p {
-        margin: 4px 0 0;
-        color: var(--app-muted);
-        font-size: 0.92rem;
-      }
-      .syncbtn {
-        margin: 12px 20px 0;
-        border: 1px solid var(--hair-dark);
-        background: var(--tile);
-        border-radius: 14px;
-        padding: 15px;
-        text-align: center;
-        font-weight: 600;
-        font-size: 0.98rem;
-      }
-      .syncbtn.quiet {
-        background: none;
-        border: 0;
-        color: var(--app-muted);
-        font-weight: 500;
-        padding: 10px;
       }
 
       /* sync duo: the desktop browser behind, the phone overlapping in
@@ -560,143 +391,22 @@
         border-radius: 5px;
         padding: 0.12rem 0.7rem;
       }
-      .bapp {
-        display: flex;
-        height: 300px;
-        color: #f2f4f6;
-      }
-      .brail {
-        width: 44px;
-        border-right: 1px solid var(--hair-dark);
-        display: flex;
-        flex-direction: column;
-        align-items: center;
-        gap: 14px;
-        padding-top: 14px;
-      }
-      .brail svg {
-        width: 17px;
-        height: 17px;
-        color: var(--app-faint);
-      }
-      .brail svg.on {
-        color: color(display-p3 0 0.7 1);
-      }
-      .blist {
-        width: 168px;
-        border-right: 1px solid var(--hair-dark);
-        overflow: hidden;
-      }
-      .blist .bt {
-        font-weight: 800;
-        font-size: 0.85rem;
-        padding: 12px 12px 8px;
-        border-bottom: 1px solid var(--hair-dark);
-      }
-      .brow {
-        padding: 8px 12px;
-        border-bottom: 1px solid var(--hair-dark);
-      }
-      .brow.sel {
-        background: #14161a;
-        box-shadow: inset 2px 0 0 color(display-p3 0 0.7 1);
-      }
-      .brow h4 {
-        margin: 0 0 1px;
-        font-size: 0.66rem;
-        font-weight: 600;
-      }
-      .brow p {
-        margin: 0;
-        font-size: 0.56rem;
-        color: var(--app-muted);
-        white-space: nowrap;
-        overflow: hidden;
-        text-overflow: ellipsis;
-      }
-      .bdetail {
-        flex: 1;
-        position: relative;
-        background: #101215;
-      }
-      .bdetail svg {
+      .deviceshot.mini {
         position: absolute;
-        inset: 0;
-        width: 100%;
-        height: 100%;
-      }
-      .ph.mini {
-        position: absolute;
-        width: 178px;
-        right: -1.4rem;
+        width: 186px;
+        right: -1.6rem;
         bottom: -2.6rem;
-        border-radius: 28px;
-        box-shadow: 0 26px 52px rgba(30, 15, 40, 0.65);
+        filter: drop-shadow(0 24px 42px rgba(20, 10, 30, 0.62));
       }
       /* Narrow screens: the overhang has no room; the phone overlaps the
          browser's INNER edge instead, so the duo can never exceed the
          viewport regardless of width. */
       @media (max-width: 560px) {
-        .ph.mini {
-          right: 0.5rem;
-          bottom: -1.6rem;
+        .deviceshot.mini {
+          width: 150px;
+          right: 0.4rem;
+          bottom: -1.4rem;
         }
-      }
-      .ph.mini .tt {
-        font-size: 0.95rem;
-        padding: 16px 14px 6px;
-      }
-      .ph.mini .syncstate {
-        padding: 16px 14px 4px;
-      }
-      .ph.mini .syncstate b {
-        font-size: 1.6rem;
-      }
-      .ph.mini .syncstate p {
-        font-size: 0.68rem;
-      }
-      .ph.mini .syncbtn {
-        margin: 8px 12px 0;
-        padding: 9px;
-        font-size: 0.72rem;
-        border-radius: 10px;
-      }
-      .ph.mini .syncbtn.quiet {
-        padding: 7px;
-      }
-
-      /* map markers */
-      .mk {
-        position: absolute;
-        width: 30px;
-        height: 30px;
-        border-radius: 50%;
-        border: 3px solid #fff;
-        box-shadow: 0 2px 7px rgba(0, 0, 0, 0.6);
-        display: flex;
-        align-items: center;
-        justify-content: center;
-        font-size: 0.82rem;
-        color: #000;
-        transform: translate(-50%, -50%);
-        font-weight: 700;
-      }
-      .mk.wp {
-        background: #35e06a;
-      }
-      .mk.adhoc {
-        background: color(display-p3 0 0.7 1);
-      }
-      .chip {
-        position: absolute;
-        left: 14px;
-        bottom: 14px;
-        background: rgba(24, 26, 29, 0.92);
-        border: 1px solid var(--hair-dark);
-        border-radius: 9px;
-        padding: 6px 12px;
-        font-size: 0.88rem;
-        font-variant-numeric: tabular-nums;
       }
 
       /* the closer: why it stays small */
@@ -810,21 +520,11 @@
 
       <!-- 1 · Fly -->
       <section class="feat">
-        <div class="ph" aria-hidden="true">
-          <div class="deck">
-            <div class="dstat cyan"><span>Groundspeed</span><b>24<small>mph</small></b></div>
-            <div class="dstat"><span>Altitude</span><b>1,180<small>ft</small></b></div>
-            <div class="dstat grn"><span>Climb</span><b>+320<small>fpm</small></b></div>
-            <div class="dstat yel"><span>Flight time</span><b>0:42:18</b></div>
-            <div class="mapfill">
-              <svg viewBox="0 0 320 220" preserveAspectRatio="xMidYMid slice" role="presentation">
-                <rect width="320" height="220" fill="#101215" />
-                <polyline points="36,190 82,120 138,132 186,66 244,92 288,40" fill="none" stroke="#00b3ff" stroke-width="4" stroke-linejoin="round" />
-                <polygon points="0,-11 8,9 0,5 -8,9" fill="#00b3ff" transform="translate(288 40) rotate(40)" />
-              </svg>
-            </div>
-          </div>
-        </div>
+        <img
+          class="deviceshot"
+          src="/shots/fly.webp"
+          alt="Wingover recording a flight: live groundspeed, altitude and climb over an Apple Maps satellite track."
+        />
         <div class="feat-text">
           <h2>A flight deck built for the air</h2>
           <p>
@@ -837,21 +537,11 @@
 
       <!-- 2 · Logbook -->
       <section class="feat rev">
-        <div class="ph" aria-hidden="true">
-          <div class="screen">
-            <div class="tt">Logbook</div>
-            <div class="totals">
-              <div><b>87</b><span>Flights</span></div>
-              <div><b>64:12</b><span>Airtime</span></div>
-              <div><b>743 mi</b><span>Distance</span></div>
-            </div>
-            <div class="phrow"><h3>Evening cruise</h3><p>Miller's Field · 42 min · 12.4 mi</p></div>
-            <div class="phrow"><h3>Sandbar out-and-back</h3><p>Sandbar East · 1 h 04 · 21.7 mi</p></div>
-            <div class="phrow"><h3>Fairgrounds demo</h3><p>Fairgrounds LZ · 51 min · 14.9 mi</p></div>
-            <div class="phrow"><h3>Morning flight</h3><p>Miller's Field · 44 min · 13.1 mi</p></div>
-            <div class="phrow"><h3>First light</h3><p>Miller's Field · 38 min · 9.8 mi</p></div>
-          </div>
-        </div>
+        <img
+          class="deviceshot"
+          src="/shots/logbook.webp"
+          alt="The Wingover logbook: a list of recorded flights with airtime, distance and launch site."
+        />
         <div class="feat-text">
           <h2>A logbook that keeps itself</h2>
           <p>
@@ -864,31 +554,11 @@
 
       <!-- 3 · Flight detail -->
       <section class="feat">
-        <div class="ph" aria-hidden="true">
-          <div class="screen">
-            <div class="mapfill tall">
-              <svg viewBox="0 0 320 300" preserveAspectRatio="xMidYMid slice" role="presentation">
-                <rect width="320" height="300" fill="#101215" />
-                <path d="M0 250 C 90 220, 160 270, 320 235 L 320 300 L 0 300 Z" fill="#0e1418" />
-                <path d="M-10 90 L 330 50" stroke="#1b1e22" stroke-width="8" />
-                <path d="M96 -10 L 130 310" stroke="#1b1e22" stroke-width="6" />
-                <polyline
-                  points="48,252 70,210 102,204 134,166 172,180 206,140 244,152 266,112 242,92 202,106 170,80 134,96 100,86 76,120 64,168 60,224 66,238"
-                  fill="none" stroke="#00b3ff" stroke-width="3.5" stroke-linejoin="round" stroke-linecap="round" />
-                <circle cx="48" cy="252" r="8" fill="#22a04a" stroke="#fff" stroke-width="2.5" />
-                <circle cx="66" cy="238" r="8" fill="#e0483a" stroke="#fff" stroke-width="2.5" />
-              </svg>
-            </div>
-            <div class="tt" style="padding-top: 16px">Evening cruise</div>
-            <div class="launchline">Miller's Field</div>
-            <div class="statrows">
-              <div class="stat"><span>Duration</span><b>42:18</b></div>
-              <div class="stat"><span>Distance</span><b>12.4 mi</b></div>
-              <div class="stat"><span>Max speed</span><b>38 mph</b></div>
-              <div class="stat"><span>Max above launch</span><b>1,180 ft</b></div>
-            </div>
-          </div>
-        </div>
+        <img
+          class="deviceshot"
+          src="/shots/detail.webp"
+          alt="A recorded flight in detail: the full track on satellite with duration, distance and altitude stats."
+        />
         <div class="feat-text">
           <h2>Every flight, mapped</h2>
           <p>
@@ -901,23 +571,11 @@
 
       <!-- 4 · Plan -->
       <section class="feat rev">
-        <div class="ph" aria-hidden="true">
-          <div class="screen">
-            <div class="mapfill tall" style="min-height: 100%">
-              <svg viewBox="0 0 320 648" preserveAspectRatio="xMidYMid slice" role="presentation">
-                <rect width="320" height="648" fill="#101215" />
-                <path d="M0 500 C 90 460, 200 560, 320 470 L 320 648 L 0 648 Z" fill="#0e1418" />
-                <path d="M-10 220 L 330 160" stroke="#1b1e22" stroke-width="9" />
-                <path d="M120 -10 L 170 660" stroke="#1b1e22" stroke-width="6" />
-                <polyline points="70,500 160,230 260,340" fill="none" stroke="#5a6068" stroke-width="4" stroke-dasharray="9 9" opacity="0.8" />
-              </svg>
-              <div class="mk wp" style="left: 22%; top: 77%">1</div>
-              <div class="mk wp" style="left: 50%; top: 35.5%">2</div>
-              <div class="mk adhoc" style="left: 81%; top: 52.5%">3</div>
-              <div class="chip">Route: 8.2 mi</div>
-            </div>
-          </div>
-        </div>
+        <img
+          class="deviceshot"
+          src="/shots/plan.webp"
+          alt="Planning a route in Wingover: numbered waypoints dropped on a satellite map with running distance."
+        />
         <div class="feat-text">
           <h2>Plan the next one</h2>
           <p>
@@ -929,52 +587,23 @@
 
       <!-- 5 · Sync -->
       <section class="feat">
-        <div class="duo" aria-hidden="true">
+        <div class="duo">
           <div class="browser">
             <div class="bwbar">
               <i></i><i></i><i></i>
               <span class="bwurl">wingover.app/logbook</span>
             </div>
-            <div class="bapp">
-              <div class="brail">
-                <svg class="on" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><rect x="4" y="3" width="16" height="18" rx="2"/><path d="M8 8h8M8 12h8M8 16h5"/></svg>
-                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M12 21s-7-6.1-7-11a7 7 0 0 1 14 0c0 4.9-7 11-7 11z"/><circle cx="12" cy="10" r="2.4"/></svg>
-                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><circle cx="12" cy="12" r="3.2"/><path d="M12 4v2.4M12 17.6V20M4 12h2.4M17.6 12H20M6.3 6.3l1.7 1.7M16 16l1.7 1.7M17.7 6.3 16 8M8 16l-1.7 1.7"/></svg>
-              </div>
-              <div class="blist">
-                <div class="bt">Logbook</div>
-                <div class="brow sel"><h4>Evening cruise</h4><p>Miller's Field · 42 min</p></div>
-                <div class="brow"><h4>Sandbar out-and-back</h4><p>Sandbar East · 1 h 04</p></div>
-                <div class="brow"><h4>Fairgrounds demo</h4><p>Fairgrounds LZ · 51 min</p></div>
-                <div class="brow"><h4>Morning flight</h4><p>Miller's Field · 44 min</p></div>
-                <div class="brow"><h4>First light</h4><p>Miller's Field · 38 min</p></div>
-              </div>
-              <div class="bdetail">
-                <svg viewBox="0 0 300 300" preserveAspectRatio="xMidYMid slice" role="presentation">
-                  <rect width="300" height="300" fill="#101215" />
-                  <path d="M0 250 C 90 220, 160 270, 300 235 L 300 300 L 0 300 Z" fill="#0e1418" />
-                  <path d="M-10 90 L 310 50" stroke="#1b1e22" stroke-width="7" />
-                  <polyline
-                    points="44,240 66,200 96,194 126,158 162,172 194,134 230,146 250,108 228,90 190,102 160,78 126,92 94,82 72,114 60,160 56,214 62,228"
-                    fill="none" stroke="#00b3ff" stroke-width="3" stroke-linejoin="round" stroke-linecap="round" />
-                  <circle cx="44" cy="240" r="7" fill="#22a04a" stroke="#fff" stroke-width="2" />
-                  <circle cx="62" cy="228" r="7" fill="#e0483a" stroke="#fff" stroke-width="2" />
-                </svg>
-              </div>
-            </div>
+            <img
+              class="bappshot"
+              src="/shots/desktop.webp"
+              alt="Wingover open in a desktop browser: the logbook list, map and flight stats side by side."
+            />
           </div>
-          <div class="ph mini">
-            <div class="screen">
-              <div class="tt">Sync</div>
-              <div class="syncstate">
-                <b>On</b>
-                <p>Everything is backed up.</p>
-              </div>
-              <div class="syncbtn">Use on your computer</div>
-              <div class="syncbtn">Manage subscription</div>
-              <div class="syncbtn quiet">Turn off sync</div>
-            </div>
-          </div>
+          <img
+            class="deviceshot mini"
+            src="/shots/sync.webp"
+            alt="The Wingover sync sheet on iPhone, showing sync turned on."
+          />
         </div>
         <div class="feat-text">
           <h2>Sync, if you want it</h2>

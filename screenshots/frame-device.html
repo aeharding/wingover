@@ -1,0 +1,90 @@
+<!doctype html>
+<html>
+  <head>
+    <meta charset="utf-8" />
+    <link rel="stylesheet" href="./assets/sf-pro.css" />
+    <style>
+      * { margin: 0; padding: 0; box-sizing: border-box; }
+      :root { --u: 18px; --screen-ar: 393 / 852; }
+      html, body { width: 100%; height: 100%; background: transparent; }
+      body {
+        display: flex; align-items: center; justify-content: center;
+        -webkit-font-smoothing: antialiased;
+        font-family: "SF Pro Text", system-ui, -apple-system, sans-serif;
+      }
+      /* Same iPhone skeleton as the App Store frames (frame.html): thin dark
+         bezel, Dynamic Island, floating status bar + home indicator. No outer
+         shadow — the landing adds a drop-shadow so it follows the rounded
+         shape. Rendered on a transparent page and captured with omitBackground
+         so it drops onto wingover.app's own background. */
+      /* Same screen-height-in-u as the App Store frames (~165u) so the u-based
+         chrome — status-bar text, glyphs, padding — lands at identical
+         proportions. (frame.html's phone is ~165u tall; matching that is what
+         keeps the status bar from rendering oversized.) */
+      .phone {
+        height: calc(var(--u) * 165);
+        display: flex;
+        padding: calc(var(--u) * 2.6);
+        border-radius: calc(var(--u) * 10);
+        background: #0a0a0c;
+        box-shadow: inset 0 0 0 1px rgba(255, 255, 255, 0.08);
+      }
+      .screen {
+        position: relative; height: 100%; aspect-ratio: var(--screen-ar);
+        border-radius: calc(var(--u) * 7.4); overflow: hidden; background: #000;
+      }
+      .screen img {
+        position: absolute; inset: 0; width: 100%; height: 100%;
+        object-fit: cover; object-position: top center; display: block;
+      }
+      .island {
+        position: absolute; top: 1.35%; left: 50%; transform: translateX(-50%);
+        width: 30%; height: 4.15%; background: #000; border-radius: 999px; z-index: 4;
+      }
+      .home-indicator {
+        position: absolute; bottom: 0.85%; left: 50%; transform: translateX(-50%);
+        width: 34%; height: 0.62%; border-radius: 999px; z-index: 6;
+      }
+      .home-indicator.light { background: rgba(255, 255, 255, 0.9); }
+      .home-indicator.dark { background: rgba(0, 0, 0, 0.45); }
+      .statusbar {
+        position: absolute; top: 0; left: 0; right: 0; height: 6.3%;
+        display: flex; align-items: center; justify-content: space-between;
+        padding: 0 calc(var(--u) * 4.6) 0 calc(var(--u) * 5.2);
+        z-index: 5; font-weight: 600; font-size: calc(var(--u) * 3.05);
+        letter-spacing: -0.02em;
+      }
+      .statusbar.dark { color: #000; }
+      .statusbar.light { color: #fff; }
+      .statusbar .glyphs { display: flex; align-items: center; gap: calc(var(--u) * 0.85); }
+      .statusbar svg { height: calc(var(--u) * 2.35); width: auto; fill: currentColor; }
+    </style>
+  </head>
+  <body>
+    <div class="phone">
+      <div class="screen">
+        <img id="shot" />
+        <div class="island"></div>
+        <div class="home-indicator" id="hi"></div>
+        <div class="statusbar" id="sb">
+          <span>9:41</span>
+          <span class="glyphs">
+            <svg viewBox="0 0 18 12"><rect x="0" y="8" width="3" height="4" rx="1"/><rect x="5" y="5" width="3" height="7" rx="1"/><rect x="10" y="2.5" width="3" height="9.5" rx="1"/><rect x="15" y="0" width="3" height="12" rx="1"/></svg>
+            <svg viewBox="0 0 16 12"><path d="M8 2.4c2.7 0 5.2 1 7.1 2.8l-1.5 1.6A7.9 7.9 0 0 0 8 5.6c-2.1 0-4.1.8-5.6 2.2L.9 6.2A10.3 10.3 0 0 1 8 2.4Zm0 3.9c1.6 0 3.1.6 4.2 1.7l-1.6 1.6c-.7-.7-1.6-1-2.6-1s-1.9.4-2.6 1L3.8 8c1.1-1.1 2.6-1.7 4.2-1.7Zm0 3.6 1.5 1.5-1.5 1.5-1.5-1.5L8 10Z"/></svg>
+            <svg viewBox="0 0 27 12"><rect x="0.5" y="0.5" width="22" height="11" rx="3" fill="none" stroke="currentColor" stroke-opacity="0.4"/><rect x="2" y="2" width="19" height="8" rx="1.6"/><rect x="24" y="4" width="2" height="4" rx="1"/></svg>
+          </span>
+        </div>
+      </div>
+    </div>
+    <script>
+      window.__renderDevice = function (F) {
+        const r = document.documentElement.style;
+        r.setProperty("--u", F.u + "px");
+        r.setProperty("--screen-ar", F.screenAr);
+        document.getElementById("sb").className = "statusbar " + (F.tone || "light");
+        document.getElementById("hi").className = "home-indicator " + (F.tone || "light");
+        document.getElementById("shot").src = F.shot;
+      };
+    </script>
+  </body>
+</html>

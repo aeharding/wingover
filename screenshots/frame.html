@@ -1,0 +1,278 @@
+<!doctype html>
+<html>
+  <head>
+    <meta charset="utf-8" />
+    <link rel="stylesheet" href="./assets/sf-pro.css" />
+    <style>
+      * {
+        margin: 0;
+        padding: 0;
+        box-sizing: border-box;
+      }
+      :root {
+        --ink: #fdf5e2;
+        --muted: rgba(253, 240, 220, 0.68);
+        --gold: #ffd489;
+      }
+      html,
+      body {
+        width: 100%;
+        height: 100%;
+      }
+      body {
+        font-family: "SF Pro Text", system-ui, -apple-system, sans-serif;
+        color: var(--ink);
+        overflow: hidden;
+        /* The landing's dusk sky + a warm sun-glow low, so the App Store
+           carousel and wingover.app read as one brand. */
+        background:
+          radial-gradient(
+            135% 78% at 72% 112%,
+            rgba(255, 200, 110, 0.4) 0%,
+            rgba(255, 150, 78, 0.13) 34%,
+            transparent 62%
+          ),
+          linear-gradient(
+            to bottom,
+            #241a3d 0%,
+            #33223f 33%,
+            #4a2b43 60%,
+            #6b3739 82%,
+            #8a5330 100%
+          );
+        -webkit-font-smoothing: antialiased;
+      }
+      .wrap {
+        width: 100%;
+        height: 100%;
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        /* device unit: everything scales off viewport width via var(--u) set
+           per device by the composer, so iPhone and iPad share one design. */
+        padding: calc(var(--u) * 7) calc(var(--u) * 7.5) 0;
+      }
+      .head {
+        text-align: center;
+        flex-shrink: 0;
+      }
+      .headline {
+        font-family: "SF Pro Display", system-ui, sans-serif;
+        font-weight: 800;
+        letter-spacing: -0.03em;
+        /* The tight tracking swallows the space after a sentence-break period
+           ("Land. It's" read as "Land.It's"); widen word gaps to compensate. */
+        word-spacing: 0.12em;
+        line-height: 1.03;
+        font-size: calc(var(--u) * 9.4);
+        text-wrap: balance;
+      }
+      .headline .accent {
+        color: var(--gold);
+      }
+      .sub {
+        font-weight: 500;
+        letter-spacing: -0.006em;
+        line-height: 1.34;
+        color: var(--muted);
+        font-size: calc(var(--u) * 3.7);
+        margin-top: calc(var(--u) * 2.7);
+        max-width: 34ch;
+        margin-inline: auto;
+      }
+      /* privacy check-row: instant, scannable claims */
+      .checks {
+        display: flex;
+        flex-wrap: wrap;
+        justify-content: center;
+        gap: calc(var(--u) * 1.6) calc(var(--u) * 2.2);
+        margin-top: calc(var(--u) * 3.4);
+        /* Cap the width so four claims break 2 + 2 instead of 3 + 1. */
+        max-width: calc(var(--u) * 52);
+        margin-inline: auto;
+      }
+      .checks span {
+        display: inline-flex;
+        align-items: center;
+        gap: calc(var(--u) * 0.9);
+        font-weight: 600;
+        font-size: calc(var(--u) * 2.7);
+        color: var(--ink);
+        opacity: 0.9;
+      }
+      .checks span::before {
+        content: "";
+        width: calc(var(--u) * 2.6);
+        height: calc(var(--u) * 2.6);
+        border-radius: 50%;
+        background: var(--gold);
+        -webkit-mask: var(--tick) center / 62% no-repeat;
+        mask: var(--tick) center / 62% no-repeat;
+      }
+      .stage {
+        flex: 1;
+        min-height: 0;
+        width: 100%;
+        display: flex;
+        justify-content: center;
+        align-items: center;
+        padding-bottom: calc(var(--u) * 3);
+      }
+      /* Flat, iPhone-inspired skeleton: a thin dark bezel around the screen,
+         a Dynamic Island pill, no gloss. The app runs edge-to-edge with the
+         status bar and island floating over it (real iOS: content underlaps). */
+      .phone {
+        height: 93%;
+        display: flex;
+        padding: calc(var(--u) * 2.6);
+        border-radius: calc(var(--u) * 10);
+        background: #0a0a0c;
+        box-shadow:
+          inset 0 0 0 1px rgba(255, 255, 255, 0.08),
+          0 calc(var(--u) * 4) calc(var(--u) * 12) rgba(12, 6, 22, 0.62),
+          0 calc(var(--u) * 1) calc(var(--u) * 3) rgba(0, 0, 0, 0.5);
+      }
+      .screen {
+        position: relative;
+        height: 100%;
+        aspect-ratio: var(--screen-ar);
+        border-radius: calc(var(--u) * 7.4);
+        overflow: hidden;
+        background: #000;
+      }
+      .screen img {
+        position: absolute;
+        inset: 0;
+        width: 100%;
+        height: 100%;
+        object-fit: cover;
+        object-position: top center;
+        display: block;
+      }
+      /* Dynamic Island — a simple black pill, centered near the top. */
+      .island {
+        position: absolute;
+        top: 1.35%;
+        left: 50%;
+        transform: translateX(-50%);
+        width: 30%;
+        height: 4.15%;
+        background: #000;
+        border-radius: 999px;
+        z-index: 4;
+      }
+      /* The home indicator — the pill you swipe to switch apps. Fills the
+         bottom safe area so it reads as a real screen, not dead space.
+         Tone-matched: light bar over dark shots, dark bar over light ones. */
+      .home-indicator {
+        position: absolute;
+        bottom: 0.85%;
+        left: 50%;
+        transform: translateX(-50%);
+        width: 34%;
+        height: 0.62%;
+        border-radius: 999px;
+        z-index: 6;
+      }
+      .home-indicator.light {
+        background: rgba(255, 255, 255, 0.9);
+      }
+      .home-indicator.dark {
+        background: rgba(0, 0, 0, 0.45);
+      }
+      /* Status bar floats over the app (no strip): clock left, glyphs right,
+         flanking the island. Height matches the safe-area inset baked into
+         the capture, so the two line up. */
+      .statusbar {
+        position: absolute;
+        top: 0;
+        left: 0;
+        right: 0;
+        height: 6.3%;
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        padding: 0 calc(var(--u) * 4.6) 0 calc(var(--u) * 5.2);
+        z-index: 5;
+        font-weight: 600;
+        font-size: calc(var(--u) * 3.05);
+        letter-spacing: -0.02em;
+      }
+      .statusbar.dark {
+        color: #000;
+      }
+      .statusbar.light {
+        color: #fff;
+      }
+      .statusbar .glyphs {
+        display: flex;
+        align-items: center;
+        gap: calc(var(--u) * 0.85);
+      }
+      .statusbar svg {
+        height: calc(var(--u) * 2.35);
+        width: auto;
+        fill: currentColor;
+      }
+    </style>
+  </head>
+  <body>
+    <div class="wrap">
+      <div class="head">
+        <div class="headline" id="hl"></div>
+        <div class="sub" id="sub"></div>
+        <div class="checks" id="checks"></div>
+      </div>
+      <div class="stage">
+        <div class="phone">
+          <div class="screen">
+            <img id="shot" />
+            <div class="island"></div>
+            <div class="home-indicator" id="hi"></div>
+            <div class="statusbar" id="sb">
+              <span id="clock">9:41</span>
+              <span class="glyphs">
+                <svg viewBox="0 0 18 12"><rect x="0" y="8" width="3" height="4" rx="1"/><rect x="5" y="5" width="3" height="7" rx="1"/><rect x="10" y="2.5" width="3" height="9.5" rx="1"/><rect x="15" y="0" width="3" height="12" rx="1"/></svg>
+                <svg viewBox="0 0 16 12"><path d="M8 2.4c2.7 0 5.2 1 7.1 2.8l-1.5 1.6A7.9 7.9 0 0 0 8 5.6c-2.1 0-4.1.8-5.6 2.2L.9 6.2A10.3 10.3 0 0 1 8 2.4Zm0 3.9c1.6 0 3.1.6 4.2 1.7l-1.6 1.6c-.7-.7-1.6-1-2.6-1s-1.9.4-2.6 1L3.8 8c1.1-1.1 2.6-1.7 4.2-1.7Zm0 3.6 1.5 1.5-1.5 1.5-1.5-1.5L8 10Z"/></svg>
+                <svg viewBox="0 0 27 12"><rect x="0.5" y="0.5" width="22" height="11" rx="3" fill="none" stroke="currentColor" stroke-opacity="0.4"/><rect x="2" y="2" width="19" height="8" rx="1.6"/><rect x="24" y="4" width="2" height="4" rx="1"/></svg>
+              </span>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+    <script>
+      const TICK =
+        "url(\"data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24'%3E%3Cpath fill='%23000' d='M9.55 17.05 4.9 12.4l1.4-1.4 3.25 3.25L17.7 6.1l1.4 1.4z'/%3E%3C/svg%3E\")";
+      window.__render = function (F) {
+        document.documentElement.style.setProperty("--u", F.u + "px");
+        document.documentElement.style.setProperty("--screen-ar", F.screenAr);
+        document.documentElement.style.setProperty("--tick", TICK);
+        const hl = document.getElementById("hl");
+        // headline supports an {accent} span via <b> markers in the string
+        hl.innerHTML = (F.headline || "").replace(
+          /\[(.+?)\]/g,
+          '<span class="accent">$1</span>',
+        );
+        const sub = document.getElementById("sub");
+        // \n in a sub becomes a hard break, so a phrase like "Just flying"
+        // never orphans across an auto-wrap.
+        sub.innerHTML = (F.sub || "")
+          .replace(/[&<>]/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;" })[c])
+          .replace(/\n/g, "<br>");
+        sub.style.display = F.sub ? "" : "none";
+        const checks = document.getElementById("checks");
+        checks.innerHTML = "";
+        (F.checks || []).forEach((c) => {
+          const s = document.createElement("span");
+          s.textContent = c;
+          checks.appendChild(s);
+        });
+        checks.style.display = (F.checks || []).length ? "" : "none";
+        document.getElementById("sb").className = "statusbar " + (F.tone || "light");
+        document.getElementById("hi").className = "home-indicator " + (F.tone || "light");
+        document.getElementById("shot").src = F.shot;
+      };
+    </script>
+  </body>
+</html>

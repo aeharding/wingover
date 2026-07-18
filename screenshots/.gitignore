@@ -1,0 +1,7 @@
+# Framed store PNGs are copied into fastlane/screenshots/ (committed); raw
+# captures feed the committed public/shots/*.webp and design/hero.webp. All of
+# out/ is regenerable via `pnpm screenshots`.
+out/
+
+# Apple SF Pro fonts (~18 MB, proprietary). Rebuilt on demand by fetch-fonts.mjs.
+assets/sf-pro.css

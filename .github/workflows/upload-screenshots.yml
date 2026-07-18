@@ -1,0 +1,47 @@
+name: Upload screenshots
+
+# Screenshots are generated locally (`pnpm screenshots`) and committed under
+# fastlane/screenshots/en-US; this job uploads the committed PNGs to App Store
+# Connect. No app binary, no text metadata. Runs automatically whenever the
+# committed screenshots change on main, plus manual dispatch.
+on:
+  push:
+    branches: [main]
+    paths:
+      - "fastlane/screenshots/**"
+      - "fastlane/Fastfile"
+      - ".github/workflows/upload-screenshots.yml"
+  workflow_dispatch:
+
+jobs:
+  upload:
+    environment: deploy
+    # deliver is a pure App Store Connect API upload (no Xcode/signing), so a
+    # cheap Ubuntu runner is enough.
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+
+      # Skips gracefully until the deploy secret exists.
+      - name: Check deploy credentials
+        id: creds
+        env:
+          HAS_KEY: ${{ secrets.APP_STORE_CONNECT_KEY != '' }}
+        run: echo "have=$HAS_KEY" >> "$GITHUB_OUTPUT"
+
+      - uses: ruby/setup-ruby@v1
+        if: steps.creds.outputs.have == 'true'
+        with:
+          bundler-cache: true
+
+      # Same App Store Connect API key JSON as the TestFlight job. deliver reads
+      # key_id/issuer_id/key straight from it via api_key_path.
+      - name: Prepare Apple API key
+        if: steps.creds.outputs.have == 'true'
+        run: echo "$APP_STORE_CONNECT_KEY" > authkey.json
+        env:
+          APP_STORE_CONNECT_KEY: ${{ secrets.APP_STORE_CONNECT_KEY }}
+
+      - name: Upload screenshots to App Store Connect
+        if: steps.creds.outputs.have == 'true'
+        run: bundle exec fastlane ios screenshots

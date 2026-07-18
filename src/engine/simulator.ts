@@ -38,9 +38,14 @@ export class FlightSimulator {
   constructor(
     seed: number,
     private startTime: number,
+    home?: { latitude: number; longitude: number },
   ) {
     this.rand = mulberry32(seed);
     this.heading = this.rand() * 360;
+    if (home) {
+      this.latitude = home.latitude;
+      this.longitude = home.longitude;
+    }
   }
 
   fixesUpTo(count: number): Fix[] {

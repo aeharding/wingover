@@ -10,7 +10,9 @@ test("a plain browser hides Fly and lands on the logbook", async ({
 }) => {
   // No ?mock-speed: this is a real browser visitor, not the e2e engine seam.
   await page.goto("/?map-style=blank");
-  await expect(page).toHaveURL(/\/logbook$/);
+  // The index redirect now carries the query string across (it is ?mock-speed
+  // that must survive in general), so the landing URL keeps ?map-style here.
+  await expect(page).toHaveURL(/\/logbook(\?|$)/);
   await expect(page.getByTestId("rail-logbook")).toBeVisible();
   await expect(page.getByTestId("rail-fly")).toHaveCount(0);
   // Empty logbook in a browser is the connect funnel, not a dead end.

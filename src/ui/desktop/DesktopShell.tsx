@@ -68,7 +68,7 @@ function sectionOf(pathname: string): Section | null {
 
 function DesktopFrame() {
   const canRecord = useCanRecord();
-  const { pathname } = useLocation();
+  const { pathname, search } = useLocation();
   const section = sectionOf(pathname);
   // Sections mount on first visit and then stay alive hidden — tab
   // switches must not tear down the plan map or the logbook split. First
@@ -78,7 +78,12 @@ function DesktopFrame() {
   // doubles.
   const [visited] = useState(() => new Set<Section>());
 
-  if (!section) return <Redirect to={canRecord ? "/fly" : "/logbook"} />;
+  // Carry the query through so ?mock-speed / ?map / ?mock-home survive the
+  // index redirect (and any reload landing back on it).
+  if (!section)
+    return (
+      <Redirect to={{ pathname: canRecord ? "/fly" : "/logbook", search }} />
+    );
   if (section === "fly" && !canRecord) return <Redirect to="/logbook" />;
   visited.add(section);
 
