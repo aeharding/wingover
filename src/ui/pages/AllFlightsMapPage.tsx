@@ -1,19 +1,19 @@
 import {
-  IonIcon,
-  IonButton,
   IonBackButton,
+  IonButton,
   IonButtons,
   IonContent,
   IonHeader,
+  IonIcon,
   IonPage,
   IonTitle,
   IonToolbar,
   useIonViewWillEnter,
 } from "@ionic/react";
-import { chevronBackOutline } from "ionicons/icons";
-import { useHistory } from "react-router-dom";
 import type { Feature } from "geojson";
+import { chevronBackOutline } from "ionicons/icons";
 import { useEffect, useRef, useState } from "react";
+import { useHistory } from "react-router-dom";
 
 import { getTrack, listFlights } from "../../storage/db";
 import { getSetting, setSetting } from "../../storage/local";

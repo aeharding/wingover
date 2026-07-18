@@ -77,6 +77,16 @@ function featuresOf(
 
 const toCoord = (p: LngLat) => new mapkit.Coordinate(p[1], p[0]);
 
+function measureSafeAreaBottom(): number {
+  const probe = document.createElement("div");
+  probe.style.cssText =
+    "position:fixed;bottom:0;height:env(safe-area-inset-bottom);visibility:hidden";
+  document.body.appendChild(probe);
+  const px = probe.getBoundingClientRect().height;
+  probe.remove();
+  return px;
+}
+
 export async function createMapKitMapView(
   container: HTMLElement,
   initialBase: MapViewKind,
@@ -95,6 +105,13 @@ export async function createMapKitMapView(
   });
   // Ground screens ride dark like the rest of the app; the live flight
   // map is always light (sunlight-readable, STEERING).
+  // The Apple logo + Legal link are a license surface; on iPhone the map's
+  // bottom edge sits under the home indicator, so inset them by the safe
+  // area. Zero everywhere without one (desktop, older devices).
+  const safeBottom = measureSafeAreaBottom();
+  if (safeBottom > 0) {
+    map.padding = new mapkit.Padding(0, 0, safeBottom, 0);
+  }
   map.colorScheme =
     appearance === "light"
       ? mapkit.ColorScheme.Light
@@ -222,6 +239,21 @@ export async function createMapKitMapView(
         region.span.latitudeDelta /= Math.max(
           0.1,
           1 - (inset.top + inset.bottom) / h,
+        );
+        // Scaling the span zooms out around the UNTOUCHED center, which is
+        // only half of padding: an asymmetric inset must also MOVE the
+        // center, or a right-heavy inset (the seat's stats card) leaves
+        // the track centered under the very thing the padding reserved
+        // room for. Offset = half the imbalance, in degrees at the new
+        // spans (longitude grows rightward, latitude grows upward while
+        // pixel y grows downward, hence the signs).
+        region.center = new mapkit.Coordinate(
+          region.center.latitude -
+            ((inset.bottom - inset.top) / 2) *
+              (region.span.latitudeDelta / h),
+          region.center.longitude +
+            ((inset.right - inset.left) / 2) *
+              (region.span.longitudeDelta / w),
         );
       }
       map.setRegionAnimated(region, false);

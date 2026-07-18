@@ -45,6 +45,11 @@
   border-color: var(--wingover-accent);
 }
 
+/* Attribution rides above the home indicator on phones. */
+.map-container .maplibregl-ctrl-bottom-left {
+  margin-bottom: env(safe-area-inset-bottom);
+}
+
 .map-container .maplibregl-ctrl-attrib {
   box-sizing: border-box;
   max-width: calc(100vw - 6rem);
