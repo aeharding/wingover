@@ -54,6 +54,10 @@
            A viewport-fixed 50/50 gradient does it; the body's own gradient
            covers everything in between, so the hard split is never seen. */
         background: linear-gradient(to bottom, #241a3d 50%, #92582f 50%) fixed;
+        /* No horizontal panning, ever: iOS ignores root-level overflow-x, so
+           the fix is removing the overflow at the source (main, below) and
+           refusing sideways overscroll chaining here as a belt. */
+        overscroll-behavior-x: none;
       }
       body {
         margin: 0;
@@ -80,15 +84,33 @@
         width: 20rem;
         height: 20rem;
         border-radius: 50%;
-        /* Alpha lives in the COLOR, not element opacity: iOS 26 Safari clips
-           fixed layers with opaque backgrounds at the floating bar's top
-           edge, while transparent backgrounds composite separately and paint
-           behind the bar (edoardolunardi.dev, "Safari 26 and the Strange
-           Case of Fixed Overlays"). Same pixels, different compositor path.
-           Shadow alpha pre-multiplied (0.26 x 0.38) to keep the old glow. */
-        background: rgba(255, 198, 107, 0.38);
-        box-shadow: 0 0 130px 60px rgba(255, 198, 107, 0.1);
+        background: #ffc66b;
+        opacity: 0.38;
+        box-shadow: 0 0 130px 60px rgba(255, 198, 107, 0.26);
         pointer-events: none;
+      }
+      .horizon {
+        display: none;
+        position: fixed;
+        left: 0;
+        right: 0;
+        bottom: 0;
+        height: 8px;
+        background: #000000;
+        z-index: 2;
+        pointer-events: none;
+      }
+      /* iOS-only (every iOS browser is WebKit): the Liquid Glass bar zone
+         samples these colors. Elsewhere this block never applies, so no
+         stray strip on desktop/Android and no black overscroll on macOS. */
+      @supports (-webkit-touch-callout: none) {
+        html,
+        body {
+          background-color: #000;
+        }
+        .horizon {
+          display: block;
+        }
       }
       /* The sun rises as you scroll: a CSS scroll-driven animation, no JS.
          Browsers without animation-timeline (or with reduced motion) keep
@@ -98,9 +120,7 @@
           @keyframes sunrise {
             to {
               transform: translateY(-22rem);
-              /* The rise still brightens, via the color's alpha (element
-                 opacity would put the layer back on the clipped path). */
-              background-color: rgba(255, 198, 107, 0.5);
+              opacity: 0.5;
             }
           }
           .sun {
@@ -114,6 +134,14 @@
       footer {
         position: relative;
         z-index: 1;
+      }
+      /* The hero stars/clouds and screenshot mocks deliberately overhang
+         their columns; clipping at main (full-width) discards that overhang
+         from the page's scrollable overflow entirely, so phones have nothing
+         to pan sideways to. Desktop unaffected (the overhang stays inside
+         main's width there). */
+      main {
+        overflow-x: clip;
       }
 
       nav {
@@ -503,7 +531,7 @@
         flex-shrink: 0;
       }
       .browser {
-        width: min(520px, 92vw);
+        width: min(520px, 86vw);
         border: 1px solid rgba(70, 49, 92, 0.9);
         border-radius: 12px;
         overflow: hidden;
@@ -604,6 +632,15 @@
         bottom: -2.6rem;
         border-radius: 28px;
         box-shadow: 0 26px 52px rgba(30, 15, 40, 0.65);
+      }
+      /* Narrow screens: the overhang has no room; the phone overlaps the
+         browser's INNER edge instead, so the duo can never exceed the
+         viewport regardless of width. */
+      @media (max-width: 560px) {
+        .ph.mini {
+          right: 0.5rem;
+          bottom: -1.6rem;
+        }
       }
       .ph.mini .tt {
         font-size: 0.95rem;
@@ -712,6 +749,7 @@
   </head>
   <body>
     <div class="sun" aria-hidden="true"></div>
+    <div class="horizon" aria-hidden="true"></div>
 
     <nav>
       <a class="wordmark" href="/">
