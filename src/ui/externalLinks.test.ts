@@ -26,11 +26,15 @@ function clickAnchor(href: string): MouseEvent {
   return event;
 }
 
+const pristineOpen = window.open;
+
 describe("installExternalLinkHandler", () => {
   afterEach(() => {
     setTauri(false);
     document.body.innerHTML = "";
     openUrlMock.mockClear();
+    // The handler shims window.open; restore it so tests don't leak wrappers.
+    window.open = pristineOpen;
   });
 
   it("installs no click handler on the web", () => {
@@ -58,6 +62,26 @@ describe("installExternalLinkHandler", () => {
     installExternalLinkHandler();
     const event = clickAnchor("#section");
     expect(event.defaultPrevented).toBe(false);
+    expect(openUrlMock).not.toHaveBeenCalled();
+  });
+
+  it("routes a window.open(http) — MapKit's Legal link — to the opener", async () => {
+    setTauri(true);
+    installExternalLinkHandler();
+    const result = window.open("https://gspe21-ssl.ls.apple.com/legal");
+    // No WKWebView popup: the shim returns null and hands off to the opener.
+    expect(result).toBeNull();
+    await vi.waitFor(() =>
+      expect(openUrlMock).toHaveBeenCalledWith(
+        "https://gspe21-ssl.ls.apple.com/legal",
+      ),
+    );
+  });
+
+  it("leaves non-http window.open alone under Tauri", () => {
+    setTauri(true);
+    installExternalLinkHandler();
+    window.open("about:blank");
     expect(openUrlMock).not.toHaveBeenCalled();
   });
 });
