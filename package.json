@@ -11,7 +11,8 @@
     "test": "vitest run",
     "test:watch": "vitest",
     "e2e": "playwright test",
-    "lint": "eslint ."
+    "lint": "eslint .",
+    "screenshots": "node screenshots/fetch-fonts.mjs && node screenshots/generate.mjs && node screenshots/generate-ipad.mjs && node screenshots/web-optimize.mjs && node screenshots/hero.mjs"
   },
   "dependencies": {
     "@apple/mapkit-loader": "^1.0.0",

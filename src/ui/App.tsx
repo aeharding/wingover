@@ -115,9 +115,22 @@ function TabShell() {
           <Route exact path="/settings" component={SettingsPage} />
           <Route exact path="/settings/map" component={MapProviderPage} />
           <Route exact path="/settings/units" component={UnitsPage} />
-          <Route exact path="/">
-            <Redirect to={canRecord ? "/fly" : "/logbook"} />
-          </Route>
+          <Route
+            exact
+            path="/"
+            render={({ location }) => (
+              // Carry the query through: ?mock-speed / ?map / ?mock-home are
+              // read on load, and dropping them here means a reload (or an
+              // HMR refresh) lands on a bare /fly and silently loses the mock
+              // engine or map override.
+              <Redirect
+                to={{
+                  pathname: canRecord ? "/fly" : "/logbook",
+                  search: location.search,
+                }}
+              />
+            )}
+          />
         </IonRouterOutlet>
         <IonTabBar slot="bottom">
           {canRecord && (

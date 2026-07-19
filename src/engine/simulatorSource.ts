@@ -33,7 +33,10 @@ function toSourcePosition(fix: Fix): SourcePosition {
 // way native capture owns its log: a fresh watch (no `since` cursor)
 // starts a new deterministic flight, a rehydrating watch resumes the same
 // one and redelivers everything after the cursor.
-export function createSimulatorSource(compression: number): PositionSource {
+export function createSimulatorSource(
+  compression: number,
+  home?: { latitude: number; longitude: number },
+): PositionSource {
   return {
     watch(onPositions, onError, options) {
       void onError;
@@ -52,7 +55,7 @@ export function createSimulatorSource(compression: number): PositionSource {
         localStorage.setItem(SESSION_KEY, JSON.stringify(session));
       }
       const active = session;
-      const simulator = new FlightSimulator(active.seed, active.startedAt);
+      const simulator = new FlightSimulator(active.seed, active.startedAt, home);
       let emitted = 0;
       const timer = setInterval(
         () => {

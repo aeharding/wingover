@@ -1,0 +1,85 @@
+<!doctype html>
+<html>
+  <head>
+    <meta charset="utf-8" />
+    <link rel="stylesheet" href="./assets/sf-pro.css" />
+    <style>
+      * { margin: 0; padding: 0; box-sizing: border-box; }
+      :root { --ink: #fdf5e2; --muted: rgba(253, 240, 220, 0.68); --gold: #ffd489; }
+      html, body { width: 100%; height: 100%; }
+      body {
+        font-family: "SF Pro Text", system-ui, -apple-system, sans-serif;
+        color: var(--ink); overflow: hidden;
+        background:
+          radial-gradient(135% 78% at 72% 112%, rgba(255, 200, 110, 0.4) 0%, rgba(255, 150, 78, 0.13) 34%, transparent 62%),
+          linear-gradient(to bottom, #241a3d 0%, #33223f 33%, #4a2b43 60%, #6b3739 82%, #8a5330 100%);
+        -webkit-font-smoothing: antialiased;
+      }
+      .wrap {
+        width: 100%; height: 100%;
+        display: flex; flex-direction: column; align-items: center;
+        padding: calc(var(--u) * 4) calc(var(--u) * 6) 0;
+      }
+      .head { text-align: center; flex-shrink: 0; }
+      .headline {
+        font-family: "SF Pro Display", system-ui, sans-serif;
+        font-weight: 800; letter-spacing: -0.025em; word-spacing: 0.1em;
+        line-height: 1.04; font-size: calc(var(--u) * 5); text-wrap: balance;
+      }
+      .headline .accent { color: var(--gold); }
+      .sub {
+        font-weight: 500; letter-spacing: -0.006em; line-height: 1.34;
+        color: var(--muted); font-size: calc(var(--u) * 2.3);
+        margin-top: calc(var(--u) * 1.6); max-width: 52ch; margin-inline: auto;
+      }
+      .stage { padding-top: calc(var(--u) * 2.5); }
+      .stage {
+        flex: 1; min-height: 0; width: 100%;
+        display: flex; justify-content: center; align-items: center;
+        padding-bottom: calc(var(--u) * 3);
+      }
+      /* Flat, thin uniform bezel — an iPad, no notch. */
+      .tablet {
+        height: 100%; display: flex;
+        padding: calc(var(--u) * 1.5);
+        border-radius: calc(var(--u) * 3.6);
+        background: #0a0a0c;
+        box-shadow:
+          inset 0 0 0 1px rgba(255, 255, 255, 0.08),
+          0 calc(var(--u) * 3.5) calc(var(--u) * 10) rgba(12, 6, 22, 0.62),
+          0 calc(var(--u) * 1) calc(var(--u) * 3) rgba(0, 0, 0, 0.5);
+      }
+      .screen {
+        position: relative; height: 100%; aspect-ratio: var(--screen-ar);
+        border-radius: calc(var(--u) * 2.4); overflow: hidden; background: #000;
+      }
+      .screen img {
+        position: absolute; inset: 0; width: 100%; height: 100%;
+        object-fit: cover; object-position: top center; display: block;
+      }
+    </style>
+  </head>
+  <body>
+    <div class="wrap">
+      <div class="head">
+        <div class="headline" id="hl"></div>
+        <div class="sub" id="sub"></div>
+      </div>
+      <div class="stage">
+        <div class="tablet"><div class="screen"><img id="shot" /></div></div>
+      </div>
+    </div>
+    <script>
+      window.__render = function (F) {
+        const r = document.documentElement.style;
+        r.setProperty("--u", F.u + "px");
+        r.setProperty("--screen-ar", F.screenAr);
+        document.getElementById("hl").innerHTML = (F.headline || "").replace(
+          /\[(.+?)\]/g, '<span class="accent">$1</span>');
+        const sub = document.getElementById("sub");
+        sub.innerHTML = (F.sub || "").replace(/[&<>]/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;" })[c]).replace(/\n/g, "<br>");
+        document.getElementById("shot").src = F.shot;
+      };
+    </script>
+  </body>
+</html>

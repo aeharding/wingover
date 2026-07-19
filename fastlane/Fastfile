@@ -58,4 +58,24 @@ platform :ios do
       changelog: "GitHub Actions build #{build_number}, ref #{ENV['GITHUB_REF']}, sha #{ENV['GITHUB_SHA']}, msg #{ENV['COMMIT_MSG']}",
     )
   end
+
+  desc "Upload the committed App Store screenshots (screenshots only, no binary, no metadata text)"
+  lane :screenshots do
+    # Screenshots are generated locally (`pnpm screenshots`) and committed under
+    # fastlane/screenshots/en-US; this lane only uploads them. deliver sorts by
+    # image dimensions into device classes (iPhone 6.9", iPad 13"). No Xcode or
+    # signing needed — it is a pure App Store Connect API upload.
+    upload_to_app_store(
+      app_identifier: APP_IDENTIFIER,
+      api_key_path: "authkey.json",
+      skip_binary_upload: true,
+      skip_metadata: true,
+      skip_screenshots: false,
+      overwrite_screenshots: true,
+      submit_for_review: false,
+      run_precheck_before_submit: false,
+      # Non-interactive: no HTML preview confirmation prompt in CI.
+      force: true,
+    )
+  end
 end
