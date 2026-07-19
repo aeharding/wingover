@@ -2,7 +2,7 @@ import { createRequire } from "module";
 import { spawn } from "child_process";
 import { fileURLToPath } from "url";
 import { dirname, join } from "path";
-import { readFileSync, writeFileSync, mkdirSync, rmSync, readdirSync } from "fs";
+import { readFileSync, writeFileSync, mkdirSync, rmSync, readdirSync, copyFileSync } from "fs";
 import net from "net";
 
 const require = createRequire("/home/aeharding/wingover/package.json");
@@ -431,13 +431,16 @@ async function ensureServer() {
 async function run() {
   const only = process.argv[2]; // optional shot id filter
   mkdirSync(FASTLANE, { recursive: true });
-  // On a full run, clear this device's old shots first so a renamed/removed
-  // shot can't leave a stale file behind (deliver would upload it). A
-  // single-shot run leaves its siblings in place.
+  // A full run renders into a STAGING dir and swaps into fastlane only after
+  // every shot succeeds, so a mid-run failure (a timeout, MapKit not settling,
+  // Ctrl-C) can never leave a partial or half-renamed set for `deliver` to
+  // upload — the previous good set stays untouched. A single-shot run updates
+  // just that one file in place, leaving its siblings alone.
+  const STAGE = join(HERE, "out", `stage-${PREFIX}`);
+  const DEST = only ? FASTLANE : STAGE;
   if (!only) {
-    for (const f of readdirSync(FASTLANE)) {
-      if (f.startsWith(`${PREFIX}-`) && f.endsWith(".png")) rmSync(join(FASTLANE, f));
-    }
+    rmSync(STAGE, { recursive: true, force: true });
+    mkdirSync(STAGE, { recursive: true });
   }
   const server = await ensureServer();
   const browser = await ENGINE.launch();
@@ -527,7 +530,7 @@ async function run() {
           });
           await cpage.evaluate(() => document.fonts.ready);
           await cpage.waitForTimeout(200);
-          const out = join(FASTLANE, `${PREFIX}-${shot.id}.png`);
+          const out = join(DEST, `${PREFIX}-${shot.id}.png`);
           await cpage.screenshot({ path: out, type: "png" });
           await cpage.close();
           console.log(`  -> ${out}`);
@@ -576,7 +579,7 @@ async function run() {
         });
         await cpage.evaluate(() => document.fonts.ready);
         await cpage.waitForTimeout(200);
-        const out = join(FASTLANE, `${PREFIX}-${shot.id}.png`);
+        const out = join(DEST, `${PREFIX}-${shot.id}.png`);
         await cpage.screenshot({ path: out, type: "png" });
         await cpage.close();
         console.log(`  -> ${out}`);
@@ -584,6 +587,15 @@ async function run() {
       await capCtxGround.close();
       await capCtxFlight.close();
       await comCtx.close();
+    }
+    // Reached only if every shot rendered. Swap the freshly staged set into
+    // fastlane: drop this device's old shots (clears any renamed/removed
+    // straggler) and copy the staged ones in.
+    if (!only) {
+      for (const f of readdirSync(FASTLANE)) {
+        if (f.startsWith(`${PREFIX}-`) && f.endsWith(".png")) rmSync(join(FASTLANE, f));
+      }
+      for (const f of readdirSync(STAGE)) copyFileSync(join(STAGE, f), join(FASTLANE, f));
     }
   } finally {
     await browser.close();

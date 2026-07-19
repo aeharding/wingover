@@ -2,7 +2,7 @@ import { createRequire } from "module";
 import { spawn } from "child_process";
 import { fileURLToPath } from "url";
 import { dirname, join } from "path";
-import { readFileSync, writeFileSync, mkdirSync, rmSync, readdirSync } from "fs";
+import { readFileSync, writeFileSync, mkdirSync, rmSync, readdirSync, copyFileSync } from "fs";
 import net from "net";
 
 const require = createRequire("/home/aeharding/wingover/package.json");
@@ -245,12 +245,14 @@ const SHOTS = [
 async function run() {
   const only = process.argv[2];
   mkdirSync(FASTLANE, { recursive: true });
-  // Full run: clear this device's old shots so a renamed shot leaves no stale
-  // file; a single-shot run keeps its siblings.
+  // Full run stages then swaps into fastlane only on full success (a mid-run
+  // failure leaves the previous set intact); a single-shot run updates that
+  // one file in place. Same reasoning as the phone generator.
+  const STAGE = join(HERE, "out", `stage-${PREFIX}`);
+  const DEST = only ? FASTLANE : STAGE;
   if (!only) {
-    for (const f of readdirSync(FASTLANE)) {
-      if (f.startsWith(`${PREFIX}-`) && f.endsWith(".png")) rmSync(join(FASTLANE, f));
-    }
+    rmSync(STAGE, { recursive: true, force: true });
+    mkdirSync(STAGE, { recursive: true });
   }
   const server = await ensureServer();
   const browser = await chromium.launch();
@@ -311,10 +313,17 @@ async function run() {
       });
       await cpage.evaluate(() => document.fonts.ready);
       await cpage.waitForTimeout(200);
-      const out = join(FASTLANE, `${PREFIX}-${shot.id}.png`);
+      const out = join(DEST, `${PREFIX}-${shot.id}.png`);
       await cpage.screenshot({ path: out, type: "png" });
       await cpage.close();
       console.log(`  -> ${out}`);
+    }
+    // Reached only if every shot rendered: swap the staged set into fastlane.
+    if (!only) {
+      for (const f of readdirSync(FASTLANE)) {
+        if (f.startsWith(`${PREFIX}-`) && f.endsWith(".png")) rmSync(join(FASTLANE, f));
+      }
+      for (const f of readdirSync(STAGE)) copyFileSync(join(STAGE, f), join(FASTLANE, f));
     }
   } finally {
     await browser.close();

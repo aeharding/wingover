@@ -9,13 +9,17 @@ on:
       - "src/**"
       - "src-tauri/**"
       - "public/**"
+      # Screenshot commits are uploaded by upload-screenshots.yml (a cheap API
+      # upload); they must NOT burn a ~10-min macOS TestFlight build. `pnpm
+      # screenshots` writes BOTH the store PNGs (fastlane) and the web WebP
+      # (public/shots), so both output paths are excluded — the negations sit
+      # after their positive globs (public/**, fastlane/**) so they win.
+      - "!public/shots/**"
       - "index.html"
       - "package.json"
       - "pnpm-lock.yaml"
       - "vite.config.ts"
       - "fastlane/**"
-      # Screenshot commits are uploaded by upload-screenshots.yml (a cheap API
-      # upload); they must NOT burn a ~10-min macOS TestFlight build.
       - "!fastlane/screenshots/**"
       - ".github/workflows/testflight.yml"
   workflow_dispatch:
