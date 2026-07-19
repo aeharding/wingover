@@ -96,6 +96,31 @@
   --width: 280px;
 }
 
+/* The chip sits at the very bottom of the rail, so Ionic anchors this menu to
+   the viewport's bottom edge (side="right", alignment="end") by measuring the
+   menu's height exactly once, as it opens, and setting `top` from it. But the
+   menu's contents mount as the popover opens, so under load the measurement
+   can catch them empty, read a height of ~0, and pin `top` at the trigger's
+   bottom — the rows then spill below the fold, and a right-side popover never
+   reflows to recover, so "Log In" stays unclickable (the e2e sync-chip test
+   then times out clicking it). Pin the menu's bottom ourselves instead:
+   `bottom: 10px` lands its lower edge on the chip's (the chip has a 10px
+   bottom margin), exactly where alignment="end" intends, but
+   height-independently — so the menu is always fully on-screen no matter what
+   the open-time measurement read. Overrides Ionic's inline `top`. */
+.rail-sync-pop::part(content) {
+  top: auto !important;
+  bottom: 10px !important;
+}
+
+/* Ionic still points its arrow at where it *thinks* the menu is (from that
+   same measurement), which no longer matches our pinned position. Drop it —
+   a bottom-left account menu reads fine without one, and on the dark chrome
+   the nub was invisible anyway. */
+.rail-sync-pop::part(arrow) {
+  display: none;
+}
+
 .rail-sync-pop ion-list {
   padding-top: 0.25rem;
   padding-bottom: 0.25rem;
