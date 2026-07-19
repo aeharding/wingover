@@ -46,6 +46,20 @@ export async function currentEntitlementJWS(): Promise<string | null> {
   });
 }
 
+/**
+ * The StoreKit environment this build is running in — Sandbox on TestFlight,
+ * Production on the App Store — from the app's AppTransaction receipt. Available
+ * locally, with no subscription and offline, so a relaunch can catch a
+ * cross-environment install (TestFlight over App Store, or the reverse) before
+ * it replicates the wrong account's cached credentials. Native only.
+ */
+export async function appEnvironment(): Promise<"Sandbox" | "Production"> {
+  const environment = await invoke<string>(
+    "plugin:wingover|storekit_environment",
+  );
+  return environment === "Sandbox" ? "Sandbox" : "Production";
+}
+
 export async function purchaseJWS(productId: string): Promise<string> {
   return invoke<string>("plugin:wingover|storekit_purchase", { productId });
 }

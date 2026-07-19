@@ -1,0 +1,13 @@
+# Automatically generated - DO NOT EDIT!
+
+"$schema" = "../../schemas/schema.json"
+
+[[permission]]
+identifier = "allow-storekit-environment"
+description = "Enables the storekit_environment command without any pre-configured scope."
+commands.allow = ["storekit_environment"]
+
+[[permission]]
+identifier = "deny-storekit-environment"
+description = "Denies the storekit_environment command without any pre-configured scope."
+commands.deny = ["storekit_environment"]

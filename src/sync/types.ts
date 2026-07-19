@@ -34,6 +34,15 @@ export interface Credentials {
    * error.
    */
   entitled: boolean;
+  /**
+   * The StoreKit environment this account belongs to (server-reported):
+   * Sandbox for a TestFlight/beta account, Production for the App Store. Lets a
+   * relaunch spot cached credentials minted in the OTHER environment — a
+   * TestFlight build installed over an App Store one, or the reverse — and
+   * refuse to replicate them into the wrong account (sync/index.ts resume()).
+   * Absent on a self-host/manual account.
+   */
+  environment?: "Sandbox" | "Production" | null;
 }
 
 /**

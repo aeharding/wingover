@@ -21,6 +21,7 @@
     "wingover:allow-storekit-current-entitlement",
     "wingover:allow-storekit-purchase",
     "wingover:allow-storekit-manage-subscriptions",
+    "wingover:allow-storekit-environment",
     "wingover:allow-sign-in-with-apple",
     "opener:default"
   ]

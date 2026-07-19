@@ -7,6 +7,7 @@ import {
   setBooleanSetting,
 } from "../storage/local";
 import {
+  appEnvironment,
   appleIdentityToken,
   appleProvider,
   probeEntitlementJWS,
@@ -132,14 +133,31 @@ export async function resume(override?: CredentialProvider): Promise<void> {
   }
 
   let credentials = stored;
+  let refreshed = false;
   const provider = override ?? refresherFor(stored);
   if (provider) {
     try {
       credentials = await provider.obtain();
       await store.save(credentials);
+      refreshed = true;
     } catch {
       // Offline, or the service is down. Neither is a reason to stop syncing.
     }
+  }
+
+  // Cross-environment guard (StoreKit accounts only). A TestFlight build shares
+  // its data container with an App Store install of the same bundle id, so the
+  // credential in the Keychain can belong to the OTHER environment. Replaying it
+  // would push this build's flights into the wrong account's database. When we
+  // couldn't refresh (offline, or not subscribed in THIS environment) and the
+  // stored credential's environment doesn't match the one this build actually
+  // runs in, hold sync off rather than replicate the mismatch: the local
+  // flights are untouched, and a matching obtain() — they subscribe here, or
+  // relaunch the other build — resumes it. AppTransaction is local, so this
+  // works offline too.
+  if (!refreshed && stored.kind === "apple" && stored.environment) {
+    const live = await appEnvironment().catch(() => null);
+    if (live && live !== stored.environment) return;
   }
 
   begin(credentials);

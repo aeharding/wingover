@@ -633,6 +633,28 @@ class WingoverPlugin: Plugin, CLLocationManagerDelegate {
     }
   }
 
+  // The StoreKit environment this build runs in — Sandbox for TestFlight,
+  // Production for the App Store — from the app's own AppTransaction receipt.
+  // Available locally with no subscription and offline, which is the point: the
+  // client uses it to refuse replicating credentials minted in the OTHER
+  // environment (a TestFlight build over an App Store install, or the reverse)
+  // into the wrong account. Pattern-matched like the Transaction reads above —
+  // reading .environment isn't trusting the signature. See sync/index.ts.
+  @objc public func storekitEnvironment(_ invoke: Invoke) {
+    Task {
+      do {
+        let appTransaction: AppTransaction
+        switch try await AppTransaction.shared {
+        case .verified(let value): appTransaction = value
+        case .unverified(let value, _): appTransaction = value
+        }
+        invoke.resolve(["environment": appTransaction.environment.rawValue])
+      } catch {
+        invoke.reject(error.localizedDescription)
+      }
+    }
+  }
+
   // Apple's own subscription-management sheet, for the CURRENT storefront.
   // This is the difference between "my subscription is missing" and seeing
   // it: the public apps.apple.com page never lists sandbox/TestFlight
