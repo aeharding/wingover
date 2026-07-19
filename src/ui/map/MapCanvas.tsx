@@ -20,6 +20,12 @@ interface MapCanvasProps {
   // Dark is the default world (matches the app); the live flight map passes
   // "light" — full sun is where the dark basemap loses (STEERING).
   appearance?: MapAppearance;
+  // The page owns the map's layout, so it says whether the map is placed
+  // edge-to-edge (a full-screen or in-flight map, whose bottom sits under the
+  // home indicator) — then MapKit insets its Apple/Legal controls off the
+  // indicator. Embedded maps (logbook, plan, the desktop panes) leave it false;
+  // the inset would only float those controls into a gap.
+  edgeToEdge?: boolean;
   // null = the previous view was just destroyed (provider re-create,
   // unmount). Parents MUST drop their MapView and every handle minted from
   // it — a 1 Hz fix calling line.set() on a removed map throws, and with no
@@ -35,6 +41,7 @@ async function createBackend(
   container: HTMLElement,
   base: MapViewKind,
   appearance: MapAppearance,
+  edgeToEdge: boolean,
 ): Promise<MapView> {
   const backend = await resolveBackend();
   if (backend === "fake") {
@@ -44,7 +51,7 @@ async function createBackend(
   if (backend === "mapkit") {
     try {
       const { createMapKitMapView } = await import("./mapkit/adapter");
-      return await createMapKitMapView(container, base, appearance);
+      return await createMapKitMapView(container, base, appearance, edgeToEdge);
     } catch (error) {
       console.warn("MapKit unavailable; falling back to MapLibre", error);
     }
@@ -61,6 +68,7 @@ async function createBackend(
 export default function MapCanvas({
   base,
   appearance = "dark",
+  edgeToEdge = false,
   onReady,
 }: MapCanvasProps) {
   const containerRef = useRef<HTMLDivElement>(null);
@@ -104,7 +112,12 @@ export default function MapCanvas({
     (async () => {
       if (!containerRef.current) return;
       const createdWith = baseRef.current;
-      view = await createBackend(containerRef.current, createdWith, appearance);
+      view = await createBackend(
+        containerRef.current,
+        createdWith,
+        appearance,
+        edgeToEdge,
+      );
       if (cancelled) {
         view.destroy();
         return;
@@ -129,7 +142,7 @@ export default function MapCanvas({
       // The parent's copy is now a landmine; take it away (see props).
       notifyReady(null);
     };
-  }, [epoch, appearance]);
+  }, [epoch, appearance, edgeToEdge]);
 
   useEffect(() => {
     baseRef.current = base;
