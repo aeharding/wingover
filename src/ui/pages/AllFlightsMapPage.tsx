@@ -139,7 +139,9 @@ export default function AllFlightsMapPage() {
       </IonHeader>
       <IonContent scrollY={false}>
         <div className="all-flights-map">
-          <MapCanvas base={view} onReady={handleReady} />
+          {/* Full-screen on phone (bottom under the home indicator); a pane in
+              the desktop shell, where it is not edge-to-edge. */}
+          <MapCanvas base={view} onReady={handleReady} edgeToEdge={!isDesktop} />
           <div className="composite-legend">
             Oldest → newest
             <div className="legend-bar" />
