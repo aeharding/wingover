@@ -50,6 +50,10 @@ const kit = vi.hoisted(() => {
     toOpts: [] as Array<Record<string, unknown> | undefined>, // replicate.to (backfill)
   };
 
+  // Configurable so a flushPush test can prove the false-on-failure path
+  // (write failures) without a real remote. Reset to success each test.
+  let pushResult: Record<string, unknown> = { ok: true };
+
   const fakeLocal = {
     sync(_target: unknown, opts: Record<string, unknown>) {
       const h = makeEmitter();
@@ -67,9 +71,9 @@ const kit = vi.hoisted(() => {
       },
       to(_target: unknown, opts?: Record<string, unknown>) {
         seen.toOpts.push(opts);
-        const p = Promise.resolve({ ok: true }) as Promise<{ ok: boolean }> & {
-          cancel(): void;
-        };
+        const p = Promise.resolve({ ...pushResult }) as Promise<
+          Record<string, unknown>
+        > & { cancel(): void };
         p.cancel = () => {};
         return p;
       },
@@ -79,11 +83,15 @@ const kit = vi.hoisted(() => {
   return {
     fakeLocal,
     seen,
+    setPushResult(r: Record<string, unknown>) {
+      pushResult = r;
+    },
     reset() {
       seen.sync = null;
       seen.syncOpts = null;
       seen.pull = null;
       seen.toOpts = [];
+      pushResult = { ok: true };
     },
   };
 });
@@ -170,21 +178,28 @@ describe("_design docs never cross the wire (regression: #90 root cause)", () =>
 });
 
 describe("denied handling (regression: entitled pilots stuck on 'Not subscribed')", () => {
-  test("a _design/auth denial does NOT lapse the subscription", () => {
+  // Real pouchdb-browser 9.0.0 shapes: sync() wraps the rejected bulkDocs entry
+  // as { direction, doc: { id } }; a plain replication emits that entry directly
+  // (id at top level). The #90 bug read NEITHER (doc._id), so a genuine
+  // _design/auth denial fell through the guard and lapsed the subscription.
+  test("a _design/auth denial (sync shape) does NOT lapse the subscription", () => {
     replicate.start(entitled);
     const handle = kit.seen.sync!;
     kit.reset();
 
-    handle.emit("denied", { id: "_design/auth", error: "forbidden" });
+    handle.emit("denied", {
+      direction: "push",
+      doc: { id: "_design/auth", error: "forbidden", reason: "not a server admin" },
+    });
 
     expect(replicate.currentAccount()?.entitled).toBe(true);
     expect(kit.seen.pull).toBeNull(); // no drop to pull-only
     expect(kit.seen.sync).toBeNull(); // no teardown + reconnect
   });
 
-  test("a _design denial reported via doc._id is also ignored", () => {
+  test("a _design/auth denial (plain-replication shape, id at top level) is also ignored", () => {
     replicate.start(entitled);
-    kit.seen.sync!.emit("denied", { doc: { _id: "_design/auth" } });
+    kit.seen.sync!.emit("denied", { id: "_design/auth", error: "forbidden" });
     expect(replicate.currentAccount()?.entitled).toBe(true);
   });
 
@@ -193,7 +208,10 @@ describe("denied handling (regression: entitled pilots stuck on 'Not subscribed'
     replicate.setCredentialSink(sink);
     replicate.start(entitled);
 
-    kit.seen.sync!.emit("denied", { id: "recorded-1", error: "forbidden" });
+    kit.seen.sync!.emit("denied", {
+      direction: "push",
+      doc: { id: "recorded-1", error: "forbidden" },
+    });
 
     expect(replicate.currentAccount()?.entitled).toBe(false);
     expect(sink).toHaveBeenCalledWith(
@@ -230,10 +248,32 @@ describe("error handling", () => {
     expect(status().state).toBe("unsubscribed");
   });
 
-  test("a rejected password (401) lands on 'error'", () => {
+  // fatalAuthFailure turns a 401/403 into words the pilot can act on, and the
+  // remedies are opposites (retype vs. wait vs. nothing), so the message must
+  // tell them apart — a bare "error" that read the same for all three misdirects.
+  test("a rejected password (401) names the password", () => {
     replicate.start(entitled);
     kit.seen.sync!.emit("error", { status: 401, reason: "unauthorized" });
     expect(status().state).toBe("error");
+    expect(status().message).toMatch(/password/i);
+  });
+
+  test("a lockout (locked reason) tells the pilot to wait, not to retype", () => {
+    replicate.start(entitled);
+    kit.seen.sync!.emit("error", {
+      status: 401,
+      reason: "Name or password is incorrect. (the account is locked)",
+    });
+    expect(status().message).toMatch(/wait/i);
+    expect(status().message).not.toMatch(/password/i);
+  });
+
+  test("a 403 names database access, not the password", () => {
+    replicate.start(entitled);
+    kit.seen.sync!.emit("error", { status: 403, reason: "forbidden" });
+    expect(status().state).toBe("error");
+    expect(status().message).toMatch(/access|database/i);
+    expect(status().message).not.toMatch(/password/i);
   });
 });
 
@@ -292,5 +332,13 @@ describe("flushPush (the pre-logout proof)", () => {
   test("pushes and proves success for an entitled credential", async () => {
     replicate.start(entitled);
     expect(await replicate.flushPush()).toBe(true);
+  });
+
+  test("returns false when the push reports write failures", async () => {
+    // The proof is "everything landed on the server"; a doc_write_failure means
+    // it did not, so logout must warn rather than destroy the local copy.
+    kit.setPushResult({ ok: true, doc_write_failures: 1 });
+    replicate.start(entitled);
+    expect(await replicate.flushPush()).toBe(false);
   });
 });
