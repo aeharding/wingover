@@ -254,7 +254,9 @@ export default function FlightDetailPage() {
             the track — nothing overlaps the flight, and the stats get room
             to breathe below. Expandable to full screen. */}
         <div className={`flight-detail-map${mapFull ? " map-full" : ""}`}>
-          <MapCanvas base={view} onReady={handleReady} />
+          {/* Edge-to-edge only when expanded to full screen (bottom under the
+              home indicator); embedded in the split, it isn't. */}
+          <MapCanvas base={view} onReady={handleReady} edgeToEdge={mapFull} />
           <div className="map-overlay">
             <button
               className="map-button"

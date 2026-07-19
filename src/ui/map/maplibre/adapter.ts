@@ -204,6 +204,9 @@ export async function createMapLibreMapView(
     }),
     supportsSatellite,
 
+    // MapLibre's attribution is CSS-positioned; its safe-area lives in
+    // MapView.css, so there is nothing to set on the map itself.
+    setEdgeToEdge() {},
     setBaseMap(base) {
       void resolveMapStyle(base, appearance).then((next) => map.setStyle(next));
     },

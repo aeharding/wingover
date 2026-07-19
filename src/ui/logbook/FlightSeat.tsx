@@ -235,7 +235,9 @@ export default function FlightSeat({
         </IonButton>
       </div>
       <div className="seat-map">
-        <MapCanvas base={view} onReady={handleReady} />
+        {/* Edge-to-edge only when expanded to full screen; embedded in the
+            desktop split it sits above other UI, so no inset. */}
+        <MapCanvas base={view} onReady={handleReady} edgeToEdge={mapFull} />
         <div className="map-overlay">
           <button
             className="map-button"

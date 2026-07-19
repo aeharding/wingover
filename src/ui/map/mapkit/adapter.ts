@@ -91,10 +91,6 @@ export async function createMapKitMapView(
   container: HTMLElement,
   initialBase: MapViewKind,
   appearance: MapAppearance,
-  // The page lays the map out and knows whether it reaches the screen's bottom
-  // edge (a full-screen or in-flight map) or sits embedded with UI below it
-  // (logbook, plan, the desktop panes). See the padding note below.
-  edgeToEdge = false,
 ): Promise<MapView> {
   await loadMapKit();
 
@@ -109,15 +105,6 @@ export async function createMapKitMapView(
   });
   // Ground screens ride dark like the rest of the app; the live flight
   // map is always light (sunlight-readable, STEERING).
-  // The Apple logo + Legal link are a license surface. Inset them off the home
-  // indicator ONLY when the page lays this map out edge-to-edge, whose bottom
-  // really does sit under the indicator. Embedded maps (logbook, plan, the
-  // desktop panes) have UI below them, so the same inset just lifts the
-  // controls into a visible gap. Zero without a safe area (desktop, older).
-  const safeBottom = edgeToEdge ? measureSafeAreaBottom() : 0;
-  if (safeBottom > 0) {
-    map.padding = new mapkit.Padding(0, 0, safeBottom, 0);
-  }
   map.colorScheme =
     appearance === "light"
       ? mapkit.ColorScheme.Light
@@ -174,6 +161,20 @@ export async function createMapKitMapView(
 
     setBaseMap(base) {
       map.mapType = baseToMapType(base);
+    },
+
+    // The Apple logo + Legal link are a license surface; inset them off the
+    // home indicator only when the page places this map edge-to-edge (bottom
+    // really under the indicator). Embedded maps pass false, so the controls
+    // never float into a gap. measureSafeAreaBottom is 0 with no safe area
+    // (desktop, older devices), which zeroes the padding too.
+    setEdgeToEdge(edge) {
+      map.padding = new mapkit.Padding(
+        0,
+        0,
+        edge ? measureSafeAreaBottom() : 0,
+        0,
+      );
     },
 
     destroy() {
