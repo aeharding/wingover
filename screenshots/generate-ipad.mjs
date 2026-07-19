@@ -1,9 +1,9 @@
-import { createRequire } from "module";
 import { spawn } from "child_process";
-import { fileURLToPath } from "url";
-import { dirname, join } from "path";
-import { readFileSync, writeFileSync, mkdirSync, rmSync, readdirSync, copyFileSync } from "fs";
+import { copyFileSync, mkdirSync, readdirSync, readFileSync, rmSync, writeFileSync } from "fs";
+import { createRequire } from "module";
 import net from "net";
+import { dirname, join } from "path";
+import { fileURLToPath } from "url";
 
 const require = createRequire("/home/aeharding/wingover/package.json");
 const { chromium } = require("@playwright/test");
@@ -34,10 +34,10 @@ const DEV = "ipad-13";
 const FASTLANE = join(HERE, "..", "fastlane", "screenshots", "en-US");
 const PREFIX = "ipad";
 
-// iPad 13" LANDSCAPE, 2752x2064. The split-shell wants width (in portrait the
-// detail pane is narrower than its card padding and the map zooms out); the app
-// is captured at iPad landscape points (1376x1032) where the split has room.
-const OUT = [2752, 2064];
+// iPad 13" LANDSCAPE, 2752x2064 store pixels (LOGICAL 1376x1032 * DSF 2). The
+// split-shell wants width (in portrait the detail pane is narrower than its
+// card padding and the map zooms out); the app is captured at iPad landscape
+// points (1376x1032) where the split has room.
 const LOGICAL = [1376, 1032];
 const DSF = 2;
 const APPVP = [1376, 1032];

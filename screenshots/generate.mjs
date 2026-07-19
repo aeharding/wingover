@@ -1,9 +1,9 @@
-import { createRequire } from "module";
 import { spawn } from "child_process";
-import { fileURLToPath } from "url";
-import { dirname, join } from "path";
-import { readFileSync, writeFileSync, mkdirSync, rmSync, readdirSync, copyFileSync } from "fs";
+import { copyFileSync, mkdirSync, readdirSync, readFileSync, rmSync, writeFileSync } from "fs";
+import { createRequire } from "module";
 import net from "net";
+import { dirname, join } from "path";
+import { fileURLToPath } from "url";
 
 const require = createRequire("/home/aeharding/wingover/package.json");
 const { chromium, webkit } = require("@playwright/test");

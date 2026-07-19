@@ -1,7 +1,7 @@
+import { mkdirSync, readFileSync, writeFileSync } from "fs";
 import { createRequire } from "module";
-import { fileURLToPath } from "url";
 import { dirname, join } from "path";
-import { readFileSync, writeFileSync, mkdirSync } from "fs";
+import { fileURLToPath } from "url";
 
 const require = createRequire("/home/aeharding/wingover/package.json");
 const { chromium } = require("@playwright/test");

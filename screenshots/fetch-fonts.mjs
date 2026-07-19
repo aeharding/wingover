@@ -1,6 +1,6 @@
-import { writeFileSync, existsSync } from "fs";
-import { fileURLToPath } from "url";
+import { existsSync, writeFileSync } from "fs";
 import { dirname, join } from "path";
+import { fileURLToPath } from "url";
 
 // Build screenshots/assets/sf-pro.css (embedded @font-face rules) from Apple's
 // SF Pro OTFs, downloaded on demand. The generated CSS (~18 MB of proprietary

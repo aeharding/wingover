@@ -1,7 +1,7 @@
+import { mkdirSync, readFileSync, writeFileSync } from "fs";
 import { createRequire } from "module";
-import { fileURLToPath } from "url";
 import { dirname, join } from "path";
-import { readFileSync, writeFileSync, mkdirSync } from "fs";
+import { fileURLToPath } from "url";
 
 const require = createRequire("/home/aeharding/wingover/package.json");
 const { chromium } = require("@playwright/test");
@@ -20,7 +20,7 @@ async function run() {
     `<!doctype html><html><head><meta charset="utf-8"><style>
       * { margin: 0; padding: 0; box-sizing: border-box; }
       html, body { background: transparent; }
-      .strip { display: inline-flex; gap: 92px; padding: 24px; }
+      .strip { display: inline-flex; gap: 92px; }
       .strip img { height: 1180px; display: block; }
     </style></head><body><div class="strip">` +
     imgs.map((b) => `<img src="data:image/png;base64,${b}">`).join("") +
