@@ -94,6 +94,26 @@ function gpxToFixes(file) {
   return toFixes(pts);
 }
 
+// Clip a GPX to its first `seconds` of track, in memory, so the hero can replay
+// a real flight HELD mid-flight without committing a separate pre-clipped file.
+// Keeps trkpts within `seconds` of the first fix and preserves the surrounding
+// <gpx>/<trkseg> wrapper. (The on-screen timer measures from takeoff, which the
+// engine detects a few minutes in, so the clip runs longer than it reads.)
+function clipGpx(xml, seconds) {
+  const matches = [...xml.matchAll(/<trkpt[\s\S]*?<\/trkpt>/g)];
+  if (!matches.length) return xml;
+  const t0 = Date.parse(/<time>([^<]+)<\/time>/.exec(matches[0][0])[1]);
+  const kept = [];
+  for (const m of matches) {
+    const tm = /<time>([^<]+)<\/time>/.exec(m[0]);
+    const t = tm ? Date.parse(tm[1]) : null;
+    if (t != null && (t - t0) / 1000 > seconds) break;
+    kept.push(m[0]);
+  }
+  const last = matches[matches.length - 1];
+  return xml.slice(0, matches[0].index) + kept.join("\n      ") + xml.slice(last.index + last[0].length);
+}
+
 // A wandering synthetic track near (lng,lat) — the logbook list shows only
 // date/duration/distance, so shape isn't scrutinized; it fills the book out.
 function synthToFixes(lng, lat, alt, startIso, count) {
@@ -131,7 +151,7 @@ const SEED_FLIGHTS = [
   { name: "Sunset over the Wisconsin", launchName: "Spring Green, WI", notes: "",
     fixes: synthToFixes(-90.06, 43.17, 225, "2025-08-06T23:55:00Z", 1240) }, // ~62 min
   { name: "Morning glass, smooth as it gets", launchName: "Oregon, WI", notes: "",
-    fixes: gpxToFixes("flight-b.gpx") }, // 83 min real (2025)
+    fixes: synthToFixes(-89.40, 42.88, 300, "2025-05-27T11:30:00Z", 1600) }, // ~80 min
 ].map((f) => ({ ...f, id: `recorded-${f.fixes[0].timestamp}`, startedAt: f.fixes[0].timestamp }));
 
 // A short cross-country route for the Plan + in-flight-plan shots, over open
@@ -197,10 +217,12 @@ const SHOTS = [
     sub: "No account. No telemetry.\nJust flying.",
     tone: "light",
     // Real default backend (Apple Maps / MapKit JS — its token authorizes on
-    // localhost), satellite seeded below. The flight is a real GPX (see `gpx`),
-    // served at /__mock.gpx and replayed then HELD at its final point:
-    // deterministic framing, and a stationary aircraft means no follow-drift.
-    gpx: "hero.gpx",
+    // localhost), satellite seeded below. A mid-flight CLIP of the real flight
+    // (clipGpx), served at /__mock.gpx and replayed then HELD at its final
+    // point: deterministic framing, and a stationary aircraft means no
+    // follow-drift. 1672s lands on the "24:04 / +1,519 ft" hero moment.
+    gpx: "flight-a.gpx",
+    clip: 1672,
     url: "/?mock-speed=600&mock-gpx=/__mock.gpx",
     async prep(page) {
       await page.getByRole("button", { name: "Start Flight" }).click();
@@ -539,7 +561,8 @@ async function run() {
         console.log(`[${dev}] ${shot.id}: capturing…`);
         const page = await ctx.newPage();
         if (shot.gpx) {
-          const gpxBody = readFileSync(join(HERE, "assets", shot.gpx), "utf8");
+          let gpxBody = readFileSync(join(HERE, "assets", shot.gpx), "utf8");
+          if (shot.clip) gpxBody = clipGpx(gpxBody, shot.clip);
           // Match by PATHNAME only — a glob like **/__mock.gpx also matches
           // the navigation URL (whose query ends with mock-gpx=/__mock.gpx),
           // which would fulfill the page itself as a downloadable GPX.

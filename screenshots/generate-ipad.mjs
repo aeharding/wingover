@@ -123,6 +123,22 @@ function gpxToFixes(file) {
   }
   return toFixes(pts);
 }
+// Clip a GPX to its first `seconds` in memory (see generate.mjs) so the hero
+// replays a real flight held mid-flight without a committed pre-clipped file.
+function clipGpx(xml, seconds) {
+  const matches = [...xml.matchAll(/<trkpt[\s\S]*?<\/trkpt>/g)];
+  if (!matches.length) return xml;
+  const t0 = Date.parse(/<time>([^<]+)<\/time>/.exec(matches[0][0])[1]);
+  const kept = [];
+  for (const m of matches) {
+    const tm = /<time>([^<]+)<\/time>/.exec(m[0]);
+    const t = tm ? Date.parse(tm[1]) : null;
+    if (t != null && (t - t0) / 1000 > seconds) break;
+    kept.push(m[0]);
+  }
+  const last = matches[matches.length - 1];
+  return xml.slice(0, matches[0].index) + kept.join("\n      ") + xml.slice(last.index + last[0].length);
+}
 function synth(lng, lat, alt, startIso, count) {
   const pts = [];
   let course = 40, la = lat, lo = lng;
@@ -205,7 +221,8 @@ const SHOTS = [
     headline: "A flight deck built for the [air].",
     sub: "Groundspeed, altitude, climb; readable in full sun.",
     flight: true,
-    gpx: "hero.gpx",
+    gpx: "flight-a.gpx",
+    clip: 1672, // first 1672s of the real flight, held mid-flight
     url: "/fly?mock-speed=600&mock-gpx=/__mock.gpx",
     async prep(page) {
       await page.getByRole("button", { name: "Start Flight" }).click();
@@ -291,7 +308,8 @@ async function run() {
       console.log(`[ipad] ${shot.id}: capturing…`);
       const page = await ctx.newPage();
       if (shot.gpx) {
-        const gpxBody = readFileSync(join(HERE, "assets", shot.gpx), "utf8");
+        let gpxBody = readFileSync(join(HERE, "assets", shot.gpx), "utf8");
+        if (shot.clip) gpxBody = clipGpx(gpxBody, shot.clip);
         await page.route(
           (url) => url.pathname === "/__mock.gpx",
           (route) => route.fulfill({ contentType: "application/gpx+xml", body: gpxBody }),
