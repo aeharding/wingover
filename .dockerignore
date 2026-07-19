@@ -1,0 +1,35 @@
+# Keep the build context lean: only what `pnpm build` needs
+# (package.json, pnpm-lock.yaml, src/, public/, index.html, dev/, tsconfig,
+# vite.config.ts) reaches the daemon. Everything below is irrelevant to the
+# web build or would bloat/leak the context.
+
+node_modules
+dist
+
+.git
+.github
+.claude
+
+# Native app, tests, tooling, docs — none of it feeds the web bundle.
+src-tauri
+e2e
+test-results
+playwright-report
+fastlane
+design
+eslint-rules
+reference
+screenshots
+
+Gemfile
+Gemfile.lock
+*.md
+
+# Never pull a developer's local secrets into the image; the token comes in
+# as a build-arg. The public example file is harmless but also unneeded.
+.env
+.env.*
+!.env.example
+
+Dockerfile
+.dockerignore

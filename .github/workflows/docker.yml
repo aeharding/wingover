@@ -1,0 +1,74 @@
+name: Docker
+
+# Builds the versioned PWA container image (the deploy unit) and, on a release
+# tag, publishes it to GHCR. PRs build single-arch to catch Dockerfile breakage
+# without pushing; a bare version tag (e.g. 0.2.0, created by `pnpm release`)
+# publishes ghcr.io/aeharding/wingover:<version> + :latest. The infra pulls it.
+on:
+  push:
+    tags:
+      - "[0-9]+.[0-9]+.[0-9]+"
+  pull_request:
+    # Only re-validate the image when something that feeds the build changes.
+    paths:
+      - "Dockerfile"
+      - ".dockerignore"
+      - "deploy/**"
+      - ".github/workflows/docker.yml"
+      - "src/**"
+      - "public/**"
+      - "index.html"
+      - "package.json"
+      - "pnpm-lock.yaml"
+      - "vite.config.ts"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  packages: write
+
+jobs:
+  docker:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+
+      # QEMU provides the arm64 emulation that the multi-arch (tag) build needs.
+      - uses: docker/setup-qemu-action@v4
+      - uses: docker/setup-buildx-action@v4
+
+      # Only real publishes need a registry login; PRs (incl. from forks, where
+      # the token is read-only) just build.
+      - if: github.event_name != 'pull_request'
+        uses: docker/login-action@v4
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ github.token }}
+
+      # metadata-action derives the tags from the ref: the bare version on a
+      # tag push, plus latest. `latest` only moves on a version-tag push, never
+      # on a manual dispatch or an old-tag re-run. No hand-rolled tag logic.
+      - id: meta
+        uses: docker/metadata-action@v6
+        with:
+          images: ghcr.io/aeharding/wingover
+          tags: |
+            type=ref,event=tag
+            type=raw,value=latest,enable=${{ github.event_name == 'push' }}
+
+      - uses: docker/build-push-action@v7
+        with:
+          context: .
+          # PRs validate amd64 only (arm64 under QEMU is slow); tags build both.
+          platforms: ${{ github.event_name == 'pull_request' && 'linux/amd64' || 'linux/amd64,linux/arm64' }}
+          # PRs validate the build only; tags and dispatch publish.
+          push: ${{ github.event_name != 'pull_request' }}
+          tags: ${{ steps.meta.outputs.tags }}
+          labels: ${{ steps.meta.outputs.labels }}
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
+          # Public, origin-locked MapKit token baked into the client bundle.
+          # A repo variable (not a secret), mirroring testflight.yml.
+          build-args: |
+            VITE_MAPKIT_TOKEN_WINGOVER_APP=${{ vars.VITE_MAPKIT_TOKEN_WINGOVER_APP }}
