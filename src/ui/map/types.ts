@@ -169,6 +169,10 @@ export interface MapView {
   // supplied their own MapTiler key. Pages hide the view toggle when false.
   readonly supportsSatellite: boolean;
   setBaseMap(base: MapViewKind): void;
+  // Inset MapKit's Apple/Legal controls off the home indicator (true) or not
+  // (false). Live — so the layouting page can flip it on a fullscreen toggle
+  // without re-creating the map. MapLibre/fake no-op (their attribution is CSS).
+  setEdgeToEdge(edge: boolean): void;
   destroy(): void;
 
   // Camera — the only live, imperative surface. moveTo unifies

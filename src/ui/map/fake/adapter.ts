@@ -168,6 +168,7 @@ export function createFakeMapView(container: HTMLElement): MapView {
     ready: Promise.resolve(),
     supportsSatellite: true,
     setBaseMap() {},
+    setEdgeToEdge() {},
     destroy() {
       container.removeEventListener("pointerdown", onPointerDown);
       container.removeEventListener("pointermove", onPointerMove);

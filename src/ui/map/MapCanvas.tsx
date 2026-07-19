@@ -41,7 +41,6 @@ async function createBackend(
   container: HTMLElement,
   base: MapViewKind,
   appearance: MapAppearance,
-  edgeToEdge: boolean,
 ): Promise<MapView> {
   const backend = await resolveBackend();
   if (backend === "fake") {
@@ -51,7 +50,7 @@ async function createBackend(
   if (backend === "mapkit") {
     try {
       const { createMapKitMapView } = await import("./mapkit/adapter");
-      return await createMapKitMapView(container, base, appearance, edgeToEdge);
+      return await createMapKitMapView(container, base, appearance);
     } catch (error) {
       console.warn("MapKit unavailable; falling back to MapLibre", error);
     }
@@ -82,6 +81,7 @@ export default function MapCanvas({
   const [epoch, setEpoch] = useState(0);
   const notifyReady = useEffectEvent((view: MapView | null) => onReady?.(view));
   const baseRef = useRef(base);
+  const edgeToEdgeRef = useRef(edgeToEdge);
 
   // The key gates MapLibre satellite (supportsSatellite is decided at
   // creation), so key changes re-create too — debounced, because the key is
@@ -112,17 +112,15 @@ export default function MapCanvas({
     (async () => {
       if (!containerRef.current) return;
       const createdWith = baseRef.current;
-      view = await createBackend(
-        containerRef.current,
-        createdWith,
-        appearance,
-        edgeToEdge,
-      );
+      view = await createBackend(containerRef.current, createdWith, appearance);
       if (cancelled) {
         view.destroy();
         return;
       }
       viewRef.current = view;
+      // Apply the current edge-to-edge inset to the fresh map (and to one
+      // re-created by a provider swap); the effect below keeps it in sync.
+      view.setEdgeToEdge(edgeToEdgeRef.current);
       // The base can move while createBackend is in flight (pages load the
       // persisted view async, and the base effect no-ops on a null
       // viewRef): a satellite pilot refreshing the page got a street map
@@ -142,12 +140,20 @@ export default function MapCanvas({
       // The parent's copy is now a landmine; take it away (see props).
       notifyReady(null);
     };
-  }, [epoch, appearance, edgeToEdge]);
+  }, [epoch, appearance]);
 
   useEffect(() => {
     baseRef.current = base;
     viewRef.current?.setBaseMap(base);
   }, [base]);
+
+  // Live edge-to-edge: a fullscreen toggle (a logbook entry map expanding to
+  // full screen) flips this without tearing the map down. Ref-mirrored so the
+  // creation effect above reads the latest value.
+  useEffect(() => {
+    edgeToEdgeRef.current = edgeToEdge;
+    viewRef.current?.setEdgeToEdge(edgeToEdge);
+  }, [edgeToEdge]);
 
   // Modifier classes go through classList: maplibre writes its own classes to
   // this container, and a React className write would clobber them.
