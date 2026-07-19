@@ -258,9 +258,12 @@ function connect() {
       // client can never push it back. `replicated` above keeps it off the wire;
       // guard here too, because misreading this as a lapse is exactly what
       // stranded entitled pilots on "Not subscribed".
+      // sync() wraps the rejected doc as { doc: { id } }; a plain (pull-only)
+      // replication emits the bulkDocs error entry directly (id at top level).
+      // Read both — pouchdb-browser 9.0.0.
       const rejected =
-        (info as { id?: string; doc?: { _id?: string } } | undefined) ?? {};
-      if (String(rejected.id ?? rejected.doc?._id ?? "").startsWith("_design/"))
+        (info as { id?: string; doc?: { id?: string } } | undefined) ?? {};
+      if (String(rejected.doc?.id ?? rejected.id ?? "").startsWith("_design/"))
         return;
       // The paywall and our idea of it disagree — the subscription lapsed while
       // we were running. Drop to pull-only rather than push into a wall.
