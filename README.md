@@ -5,7 +5,7 @@
 <h1 align="center">Wingover</h1>
 
 <p align="center">
-Flight recorder and planner for paramotor pilots. Open source and privacy-first: no account, no telemetry, no server — your flights stay on your device. Optional sync, if you want it, goes only to a server you choose: your own CouchDB, or ours.
+Paramotor flight recorder
 </p>
 
 <p align="center">
