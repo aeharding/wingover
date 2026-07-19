@@ -143,10 +143,23 @@ let backfilled = false;
  * without one. Cheap: revs_diff means only what the server lacks crosses the
  * wire, and a logbook is hundreds of docs.
  */
+// _design/auth is server-owned: the subscription's validate_doc_update lives
+// there, and the database's _security makes it admin-only, so a client pushing
+// it back is forbidden ("not a db or server admin"). It replicates DOWN like
+// any document, but the push is rejected — and PouchDB reports that rejection
+// as `denied`, the very event a lapsed subscription fires. So an entitled
+// pilot's launch pushed the design doc, was denied, and dropped ITSELF to
+// read-only ("Not subscribed") every time. Design docs have no place in a
+// pilot's replication; keep them off the wire in both directions.
+const replicated = (doc: { _id: string }) => !doc._id.startsWith("_design/");
+
 async function backfill(target: PouchDB.Database) {
   backfilled = true;
   try {
-    await syncedDb().replicate.to(target, { checkpoint: false });
+    await syncedDb().replicate.to(target, {
+      checkpoint: false,
+      filter: replicated,
+    });
   } catch {
     // Next launch tries again; the local copy is the truth meanwhile.
     backfilled = false;
@@ -203,7 +216,7 @@ function connect() {
   // Pull-only when the subscription has lapsed. The server would 403 a push
   // anyway; mirroring its answer means a lapsed pilot sees "read-only", not a
   // stream of errors. Their flights keep coming DOWN — that is the promise.
-  const options = { live: true, retry: true } as const;
+  const options = { live: true, retry: true, filter: replicated } as const;
   const pullOnly = !held.entitled;
 
   if (!pullOnly && !backfilled) void backfill(target);
@@ -239,7 +252,16 @@ function connect() {
       busy();
     })
     .on("active", busy)
-    .on("denied", () => {
+    .on("denied", (info: unknown) => {
+      if (!held) return;
+      // A design-doc rejection is NOT a lapse: _design/auth is admin-only, so a
+      // client can never push it back. `replicated` above keeps it off the wire;
+      // guard here too, because misreading this as a lapse is exactly what
+      // stranded entitled pilots on "Not subscribed".
+      const rejected =
+        (info as { id?: string; doc?: { _id?: string } } | undefined) ?? {};
+      if (String(rejected.id ?? rejected.doc?._id ?? "").startsWith("_design/"))
+        return;
       // The paywall and our idea of it disagree — the subscription lapsed while
       // we were running. Drop to pull-only rather than push into a wall.
       //
@@ -248,7 +270,6 @@ function connect() {
       // saying `true`, and every launch during the lapse would start a full
       // push, burn another batch of flights past the checkpoint, and only then
       // downgrade. The next entitled connect backfills whatever was lost.
-      if (!held) return;
       held = { ...held, entitled: false };
       onCredentialsChanged?.(held);
       teardown();
