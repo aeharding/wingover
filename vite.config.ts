@@ -5,6 +5,7 @@ import { defineConfig } from "vitest/config";
 
 import { fakeAuth } from "./dev/fake-auth-plugin";
 import { landingAtRoot } from "./dev/landing-plugin";
+import { version } from "./package.json";
 
 // Set by `tauri ios dev --host`: the LAN address the phone loads the dev
 // server from. Vite must listen on it (and serve HMR over it) or the
@@ -12,6 +13,9 @@ import { landingAtRoot } from "./dev/landing-plugin";
 const tauriDevHost = process.env.TAURI_DEV_HOST;
 
 export default defineConfig({
+  define: {
+    __APP_VERSION__: JSON.stringify(version),
+  },
   plugins: [
     react(),
     babel({
