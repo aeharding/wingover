@@ -319,7 +319,14 @@ function connect() {
       // the honest answer to "are my flights backed up?" — it goes stale on its
       // own if this keeps failing, without ever crying wolf. Only a rejected
       // credential is a real problem, and that arrives on `error`.
-      if (!error) settle();
+      if (!error) {
+        // A clean pause is a catch-up: replication just confirmed it is level
+        // with the server, whether or not a doc actually moved. Stamp it, so an
+        // idle launch shows "Last synced …" instead of "Waiting for changes" —
+        // which only ever appeared while nothing had yet crossed the wire.
+        lastSyncedAt = Date.now();
+        settle();
+      }
     });
   }
 }
