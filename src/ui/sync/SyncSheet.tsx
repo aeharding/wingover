@@ -266,6 +266,7 @@ function Pitch({
 }) {
   const monthly = byTerm(products, "monthly");
   const yearly = byTerm(products, "yearly");
+  const native = isTauri();
   return (
     <>
       <h2 className="sync-headline" data-testid="sync-headline">
@@ -290,6 +291,8 @@ function Pitch({
       {problem && <p className="sync-error-message">{problem}</p>}
 
       {monthly ? (
+        // iOS: subscribing is the one clear action; the year is a lighter
+        // companion beneath it, not a rival for the tap.
         <>
           <IonButton
             expand="block"
@@ -300,7 +303,7 @@ function Pitch({
             {busy ? (
               <IonSpinner name="crescent" />
             ) : (
-              `Subscribe for ${monthly.displayPrice}/month`
+              `Subscribe · ${monthly.displayPrice}/month`
             )}
           </IonButton>
           {yearly && (
@@ -311,34 +314,58 @@ function Pitch({
               onClick={() => onBuy("yearly")}
               data-testid="sync-subscribe-yearly"
             >
-              {`Or ${yearly.displayPrice}/year (2 months free)`}
+              {`${yearly.displayPrice}/year · 2 months free`}
             </IonButton>
           )}
         </>
-      ) : isTauri() ? (
+      ) : native ? (
         <IonButton expand="block" disabled data-testid="sync-subscribe">
           Subscribe (coming soon)
         </IonButton>
-      ) : null}
+      ) : (
+        // Web: no StoreKit, so no buy button and no price to quote. Say what it
+        // is and where to get it, rather than a blank screen whose fine print
+        // used to promise an App Store renewal that wasn't on it.
+        <p className="sync-pitch-note" data-testid="sync-web-note">
+          Sync is a subscription, from the Wingover app on your iPhone. Already
+          subscribed? Sign in below.
+        </p>
+      )}
 
-      <IonButton
-        expand="block"
-        className="sync-siwa-button"
-        disabled={busy}
-        onClick={onSignIn}
-        data-testid="sync-signin"
-      >
-        {busy ? (
-          <IonSpinner name="crescent" />
-        ) : (
-          <>
-            <IonIcon slot="start" icon={logoApple} aria-hidden="true" />
-            Sign in with Apple
-          </>
-        )}
-      </IonButton>
+      {/* Sign in is a door, not a place: quiet on iOS (a web-born account
+          arriving on a phone), the prominent way back for a subscriber on the
+          web. Either way it keeps the same testid. */}
+      {native ? (
+        <IonButton
+          fill="clear"
+          size="small"
+          className="sync-quiet-action"
+          disabled={busy}
+          onClick={onSignIn}
+          data-testid="sync-signin"
+        >
+          {busy ? <IonSpinner name="crescent" /> : "Have an account? Sign in"}
+        </IonButton>
+      ) : (
+        <IonButton
+          expand="block"
+          className="sync-siwa-button"
+          disabled={busy}
+          onClick={onSignIn}
+          data-testid="sync-signin"
+        >
+          {busy ? (
+            <IonSpinner name="crescent" />
+          ) : (
+            <>
+              <IonIcon slot="start" icon={logoApple} aria-hidden="true" />
+              Sign in with Apple
+            </>
+          )}
+        </IonButton>
+      )}
 
-      {isTauri() && (
+      {native && (
         <IonButton
           fill="clear"
           size="small"
@@ -472,21 +499,35 @@ function Connected({
         </IonButton>
       )}
 
-      {/* Resubscribe: the lapse is discovered here, the remedy is a purchase. */}
+      {/* Resubscribe: the lapse is discovered here, the remedy is a purchase.
+          Both plans, matching the pitch, so a lapse never buries the year. */}
       {lapsed &&
         (byTerm(products, "monthly") ? (
-          <IonButton
-            expand="block"
-            disabled={busy}
-            onClick={() => onBuy("monthly")}
-            data-testid="sync-resubscribe"
-          >
-            {busy ? (
-              <IonSpinner name="crescent" />
-            ) : (
-              `Resubscribe for ${byTerm(products, "monthly")?.displayPrice}/month`
+          <>
+            <IonButton
+              expand="block"
+              disabled={busy}
+              onClick={() => onBuy("monthly")}
+              data-testid="sync-resubscribe"
+            >
+              {busy ? (
+                <IonSpinner name="crescent" />
+              ) : (
+                `Resubscribe · ${byTerm(products, "monthly")?.displayPrice}/month`
+              )}
+            </IonButton>
+            {byTerm(products, "yearly") && (
+              <IonButton
+                expand="block"
+                fill="outline"
+                disabled={busy}
+                onClick={() => onBuy("yearly")}
+                data-testid="sync-resubscribe-yearly"
+              >
+                {`${byTerm(products, "yearly")?.displayPrice}/year · 2 months free`}
+              </IonButton>
             )}
-          </IonButton>
+          </>
         ) : isTauri() ? (
           <p
             className="sync-fine-print"
@@ -554,7 +595,10 @@ function Connected({
         </IonButton>
       )}
 
-      {(hosted || supporter || appleSub !== null) && (
+      {/* A subscription to manage means one exists: never for a dormant
+          (signed-in, never-subscribed) account, whose Manage link opened an
+          empty App Store page. */}
+      {!dormant && (hosted || supporter || appleSub !== null) && (
         <IonButton
           fill="clear"
           size="small"
@@ -738,18 +782,23 @@ function FinePrint({
   showTerms: boolean;
 }) {
   if (!showTerms) return null;
+  const monthly = byTerm(products, "monthly");
+  const yearly = byTerm(products, "yearly");
   return (
     <p className="sync-fine-print">
-      {byTerm(products, "monthly")
-        ? [
-            `${byTerm(products, "monthly")?.displayPrice}/month`,
-            ...(byTerm(products, "yearly")
-              ? [`or ${byTerm(products, "yearly")?.displayPrice}/year`]
-              : []),
+      {/* The auto-renew disclosure is App Review's required paywall copy, and it
+          belongs only where a purchase happens: with StoreKit products on iOS,
+          never on the web, which has no buy button and nothing to renew. */}
+      {monthly && (
+        <>
+          {[
+            `${monthly.displayPrice}/month`,
+            ...(yearly ? [`or ${yearly.displayPrice}/year`] : []),
             "auto-renews",
-          ].join(", ")
-        : "Auto-renews"}{" "}
-      until cancelled in your App Store settings.{" "}
+          ].join(", ")}{" "}
+          until cancelled in your App Store settings.{" "}
+        </>
+      )}
       <a href="https://www.apple.com/legal/internet-services/itunes/dev/stdeula/">
         Terms of Use
       </a>{" "}
