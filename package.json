@@ -12,7 +12,8 @@
     "test:watch": "vitest",
     "e2e": "playwright test",
     "lint": "eslint .",
-    "screenshots": "node screenshots/fetch-fonts.mjs && node screenshots/generate.mjs && node screenshots/generate-ipad.mjs && node screenshots/web-optimize.mjs && node screenshots/hero.mjs"
+    "screenshots": "node screenshots/fetch-fonts.mjs && node screenshots/generate.mjs && node screenshots/generate-ipad.mjs && node screenshots/web-optimize.mjs && node screenshots/hero.mjs",
+    "release": "release-it"
   },
   "dependencies": {
     "@apple/mapkit-loader": "^1.0.0",
@@ -55,6 +56,7 @@
     "globals": "^17.7.0",
     "happy-dom": "^20.10.6",
     "prettier": "^3.9.5",
+    "release-it": "^20.2.1",
     "typescript": "^6.0.3",
     "typescript-eslint": "^8.64.0",
     "vite": "^8.1.5",

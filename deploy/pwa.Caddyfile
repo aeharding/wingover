@@ -1,0 +1,20 @@
+# In-image serving rules for the wingover PWA. These used to live in the
+# server repo's edge Caddyfile; they now travel WITH the app so the serving
+# contract is versioned alongside the bundle it serves. The edge proxy just
+# reverse_proxies to this container on :80.
+
+:80 {
+	encode gzip
+
+	root * /srv
+
+	# landing.html answers EXACTLY "/", nothing else.
+	@root path /
+	rewrite @root /landing.html
+
+	# SPA deep links (/logbook) fall through to the shell; clean .html URLs
+	# (/privacy -> /privacy.html) resolve without the extension.
+	try_files {path} {path}.html /index.html
+
+	file_server
+}
