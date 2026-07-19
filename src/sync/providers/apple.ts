@@ -46,6 +46,43 @@ export async function currentEntitlementJWS(): Promise<string | null> {
   });
 }
 
+/**
+ * The StoreKit environment this build is running in — Sandbox on TestFlight,
+ * Production on the App Store — from the app's AppTransaction receipt. Available
+ * locally, with no subscription and offline, so a relaunch can catch a
+ * cross-environment install (TestFlight over App Store, or the reverse) before
+ * it replicates the wrong account's cached credentials. Native only.
+ */
+export async function appEnvironment(): Promise<"Sandbox" | "Production"> {
+  const environment = await invoke<string>(
+    "plugin:wingover|storekit_environment",
+  );
+  return environment === "Sandbox" ? "Sandbox" : "Production";
+}
+
+/**
+ * True when a STORED credential belongs to a different StoreKit environment than
+ * the one this build runs in — the case resume() must NOT replicate, because it
+ * would push this build's flights into the OTHER environment's account. Only a
+ * stamped apple credential can mismatch: an UNSTAMPED one (minted before the
+ * server began reporting `environment`) can't be judged here and rides the next
+ * online refresh to re-stamp; manual/self-host creds have no StoreKit
+ * environment. A null `live` (a cold or failed AppTransaction read) means "can't
+ * tell" and fails OPEN — better than stranding a legitimate offline pilot. All
+ * of these misplace only the pilot's OWN data, never another user's.
+ */
+export function isEnvMismatch(
+  stored: Credentials,
+  live: "Sandbox" | "Production" | null,
+): boolean {
+  return (
+    stored.kind === "apple" &&
+    !!stored.environment &&
+    !!live &&
+    stored.environment !== live
+  );
+}
+
 export async function purchaseJWS(productId: string): Promise<string> {
   return invoke<string>("plugin:wingover|storekit_purchase", { productId });
 }

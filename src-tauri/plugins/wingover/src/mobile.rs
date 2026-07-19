@@ -37,6 +37,11 @@ struct JwsResponse {
     jws: Option<String>,
 }
 
+#[derive(Deserialize)]
+struct EnvironmentResponse {
+    environment: String,
+}
+
 // Sensor/actuator shim: five dumb primitives, all logic lives in Rust.
 pub struct Wingover<R: Runtime>(PluginHandle<R>);
 
@@ -117,6 +122,12 @@ impl<R: Runtime> Wingover<R> {
         self.0
             .run_mobile_plugin("storekitManageSubscriptions", ())
             .map_err(Into::into)
+    }
+
+    pub fn storekit_environment(&self) -> crate::Result<String> {
+        let response: EnvironmentResponse =
+            self.0.run_mobile_plugin("storekitEnvironment", ())?;
+        Ok(response.environment)
     }
 
     pub fn sign_in_with_apple(&self) -> crate::Result<String> {

@@ -1,6 +1,7 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
 
-import { isUnlinked, siwaProvider } from "./apple";
+import type { Credentials } from "../types";
+import { isEnvMismatch, isUnlinked, siwaProvider } from "./apple";
 
 /**
  * The StoreKit paths need a device; this covers the identity path, which is
@@ -68,5 +69,50 @@ describe("siwaProvider", () => {
 
     await expect(failure).rejects.toThrow(/500/);
     await expect(failure).rejects.not.toSatisfy(isUnlinked);
+  });
+});
+
+describe("isEnvMismatch (the resume() cross-environment guard)", () => {
+  const cred = (over: Partial<Credentials> = {}): Credentials => ({
+    kind: "apple",
+    url: "u",
+    dbName: "d",
+    username: "n",
+    password: "p",
+    entitled: true,
+    ...over,
+  });
+
+  it("blocks a stamped apple credential whose environment differs from the build", () => {
+    expect(isEnvMismatch(cred({ environment: "Production" }), "Sandbox")).toBe(
+      true,
+    );
+    expect(isEnvMismatch(cred({ environment: "Sandbox" }), "Production")).toBe(
+      true,
+    );
+  });
+
+  it("allows a matching environment", () => {
+    expect(
+      isEnvMismatch(cred({ environment: "Production" }), "Production"),
+    ).toBe(false);
+    expect(isEnvMismatch(cred({ environment: "Sandbox" }), "Sandbox")).toBe(
+      false,
+    );
+  });
+
+  it("cannot judge an unstamped credential or an unknown live env — fails open", () => {
+    // The migration blind spot and the cold-receipt fail-open, made explicit:
+    // both leave sync to proceed (the credential rides the next refresh).
+    expect(isEnvMismatch(cred({ environment: undefined }), "Sandbox")).toBe(
+      false,
+    );
+    expect(isEnvMismatch(cred({ environment: "Production" }), null)).toBe(false);
+  });
+
+  it("ignores non-apple (self-host / fake) credentials", () => {
+    expect(
+      isEnvMismatch(cred({ kind: "manual", environment: "Production" }), "Sandbox"),
+    ).toBe(false);
   });
 });

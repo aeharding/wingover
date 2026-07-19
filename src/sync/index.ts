@@ -7,8 +7,10 @@ import {
   setBooleanSetting,
 } from "../storage/local";
 import {
+  appEnvironment,
   appleIdentityToken,
   appleProvider,
+  isEnvMismatch,
   probeEntitlementJWS,
   purchaseJWS,
   siwaProvider,
@@ -132,14 +134,36 @@ export async function resume(override?: CredentialProvider): Promise<void> {
   }
 
   let credentials = stored;
+  let refreshed = false;
   const provider = override ?? refresherFor(stored);
   if (provider) {
     try {
       credentials = await provider.obtain();
       await store.save(credentials);
+      refreshed = true;
     } catch {
       // Offline, or the service is down. Neither is a reason to stop syncing.
     }
+  }
+
+  // Cross-environment guard — native only (web domains don't share storage). A
+  // TestFlight build shares its data container with an App Store install of the
+  // same bundle id, so the cached credential can belong to the OTHER
+  // environment; replaying it would push this build's flights into the wrong
+  // account's database. When we couldn't refresh (offline, or not subscribed in
+  // THIS environment) and the stored credential's stamped environment doesn't
+  // match the one this build runs in, hold sync off rather than replicate the
+  // mismatch — local flights are untouched, and a matching obtain() (subscribe
+  // here, or relaunch the other build) resumes it.
+  //
+  // Two bounded gaps, both the pilot's OWN data and never cross-user: an
+  // UNSTAMPED credential (from before the server reported `environment`) can't
+  // be judged and rides the next online refresh to re-stamp; and if the
+  // AppTransaction read fails (a cold receipt cache offline) we fail OPEN rather
+  // than strand a legitimate offline pilot. See isEnvMismatch.
+  if (!refreshed && isTauri()) {
+    const live = await appEnvironment().catch(() => null);
+    if (isEnvMismatch(stored, live)) return;
   }
 
   begin(credentials);
