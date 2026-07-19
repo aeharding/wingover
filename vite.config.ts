@@ -34,16 +34,14 @@ export default defineConfig({
     VitePWA({
       registerType: "autoUpdate",
       manifest: false,
-      workbox: {
+      strategies: "injectManifest",
+      srcDir: "src",
+      filename: "sw.ts",
+      injectManifest: {
         globPatterns: ["**/*.{js,css,html,ico,png,svg,webmanifest}"],
         // maplibre + Ionic + PouchDB make one big chunk; the 2 MB default
         // would silently drop it from the precache.
         maximumFileSizeToCacheInBytes: 6 * 1024 * 1024,
-        // Deep links load the SPA shell offline. Only the SPA's OWN routes
-        // fall back to index.html; "/" (landing), /privacy and /s/ (share)
-        // are Caddy's static pages and must reach the network, not the shell.
-        navigateFallback: "/index.html",
-        navigateFallbackAllowlist: [/^\/(fly|logbook|plan|settings)(\/|$)/],
       },
     }),
   ],

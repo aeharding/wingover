@@ -117,6 +117,13 @@ function TabShell() {
           <Route exact path="/settings/units" component={UnitsPage} />
           <Route
             exact
+            path="/home"
+            render={({ location }) => (
+              <Redirect to={{ pathname: "/", search: location.search }} />
+            )}
+          />
+          <Route
+            exact
             path="/"
             render={({ location }) => (
               // Carry the query through: ?mock-speed / ?map / ?mock-home are

@@ -15,5 +15,7 @@
     "noUnusedParameters": true,
     "types": ["vite/client", "node", "apple-mapkit"]
   },
-  "include": ["src", "e2e", "vite.config.ts", "playwright.config.ts"]
+  "include": ["src", "e2e", "vite.config.ts", "playwright.config.ts"],
+  // src/sw.ts is a worker module (webworker lib); vite-plugin-pwa builds it.
+  "exclude": ["src/sw.ts"]
 }
