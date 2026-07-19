@@ -3,6 +3,7 @@ import { load } from "@apple/mapkit-loader";
 const MAPKIT_TOKENS: Record<string, string> = {
   localhost: import.meta.env.VITE_MAPKIT_TOKEN_LOCALHOST,
   "wingover.app": import.meta.env.VITE_MAPKIT_TOKEN_WINGOVER_APP,
+  "beta.wingover.app": import.meta.env.VITE_MAPKIT_TOKEN_BETA_WINGOVER_APP,
   "tauri://localhost": import.meta.env.VITE_MAPKIT_TOKEN_TAURI,
 };
 
