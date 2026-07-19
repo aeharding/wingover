@@ -20,6 +20,25 @@ test("a plain browser hides Fly and lands on the logbook", async ({
   await expect(page.getByTestId("funnel-import")).toBeVisible();
 });
 
+test("the brand logo goes to the landing/marketing page", async ({ page }) => {
+  await page.goto("/?mock-speed=40&map-style=blank");
+  await expect(page.getByTestId("rail-brand")).toHaveAttribute("href", "/");
+
+  await page.getByTestId("rail-brand").click();
+
+  await expect(page).toHaveURL(/^https?:\/\/[^/]+\/$/);
+  await expect(page.getByRole("link", { name: /open app/i })).toBeVisible();
+  await expect(page.getByTestId("rail-logbook")).toHaveCount(0);
+});
+
+test("the PWA start_url /home resolves to the app home, carrying the query", async ({
+  page,
+}) => {
+  await page.goto("/home?map-style=blank");
+  await expect(page).toHaveURL(/\/logbook\?map-style=blank/);
+  await expect(page.getByTestId("rail-logbook")).toBeVisible();
+});
+
 test("the logbook splits: list stays while the flight shows", async ({
   page,
 }) => {

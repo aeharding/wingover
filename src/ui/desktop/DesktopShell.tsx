@@ -90,7 +90,12 @@ function DesktopFrame() {
   return (
     <div className="desktop-shell">
       <nav className="desktop-rail">
-        <a className="rail-brand" href="/" aria-label="About Wingover">
+        <a
+          className="rail-brand"
+          href="/"
+          aria-label="About Wingover"
+          data-testid="rail-brand"
+        >
           <img src="/icon-192.png" alt="" width="36" height="36" />
         </a>
         {canRecord && (

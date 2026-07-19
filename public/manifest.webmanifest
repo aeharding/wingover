@@ -2,7 +2,7 @@
   "name": "Wingover",
   "short_name": "Wingover",
   "description": "Paramotor flight recorder and planner",
-  "start_url": "/logbook",
+  "start_url": "/home",
   "display": "standalone",
   "background_color": "#000000",
   "theme_color": "#000000",

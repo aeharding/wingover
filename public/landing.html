@@ -2,25 +2,6 @@
 <html lang="en">
   <head>
     <meta charset="utf-8" />
-    <!-- Returning pilots on DESKTOP skip the pitch: the app stamps
-         wingover.used on its first real load, and this forwards before paint
-         — but only at desktop width, where the browser IS the app and the
-         rail logo is the way back here. On mobile there is no forward: a
-         visit to the root shows the landing, and pilots reach the app by
-         adding it to the home screen (manifest start_url is /logbook) or
-         bookmarking. A same-origin referrer (the desktop rail logo) still
-         shows the pitch, not a bounce straight back. -->
-    <script>
-      try {
-        if (
-          location.pathname === "/" &&
-          !document.referrer.startsWith(location.origin) &&
-          localStorage.getItem("wingover.used") &&
-          window.matchMedia("(min-width: 992px)").matches
-        )
-          location.replace("/logbook");
-      } catch {}
-    </script>
     <meta name="viewport" content="width=device-width, initial-scale=1" />
     <meta name="color-scheme" content="dark" />
     <meta
