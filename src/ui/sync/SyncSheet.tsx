@@ -327,8 +327,7 @@ function Pitch({
         // is and where to get it, rather than a blank screen whose fine print
         // used to promise an App Store renewal that wasn't on it.
         <p className="sync-pitch-note" data-testid="sync-web-note">
-          Sync is a subscription, from the Wingover app on your iPhone. Already
-          subscribed? Sign in below.
+          Sync is a subscription, from the Wingover app on your iPhone.
         </p>
       )}
 
@@ -359,7 +358,7 @@ function Pitch({
           ) : (
             <>
               <IonIcon slot="start" icon={logoApple} aria-hidden="true" />
-              Sign in with Apple
+              Already subscribed? Sign in
             </>
           )}
         </IonButton>
