@@ -85,3 +85,8 @@ jobs:
           build-args: |
             VITE_MAPKIT_TOKEN_WINGOVER_APP=${{ vars.VITE_MAPKIT_TOKEN_WINGOVER_APP }}
             VITE_MAPKIT_TOKEN_BETA_WINGOVER_APP=${{ vars.VITE_MAPKIT_TOKEN_BETA_WINGOVER_APP }}
+            # The footer sha marks a continuous build (:main -> beta.wingover.app);
+            # a version-tag build (-> wingover.app) sends an empty sha and the
+            # footer shows the clean version alone. Gated on the ref from the
+            # Actions context (Voyager-style) — no git read in the build.
+            GIT_SHA=${{ startsWith(github.ref, 'refs/tags/') && '' || github.sha }}
