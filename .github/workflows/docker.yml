@@ -84,3 +84,4 @@ jobs:
           # A repo variable (not a secret), mirroring testflight.yml.
           build-args: |
             VITE_MAPKIT_TOKEN_WINGOVER_APP=${{ vars.VITE_MAPKIT_TOKEN_WINGOVER_APP }}
+            VITE_MAPKIT_TOKEN_BETA_WINGOVER_APP=${{ vars.VITE_MAPKIT_TOKEN_BETA_WINGOVER_APP }}
