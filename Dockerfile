@@ -31,6 +31,12 @@ ENV VITE_MAPKIT_TOKEN_WINGOVER_APP=${VITE_MAPKIT_TOKEN_WINGOVER_APP}
 ARG VITE_MAPKIT_TOKEN_BETA_WINGOVER_APP
 ENV VITE_MAPKIT_TOKEN_BETA_WINGOVER_APP=${VITE_MAPKIT_TOKEN_BETA_WINGOVER_APP}
 
+# The commit SHA this image was built from. The build context excludes .git
+# (see .dockerignore), so vite cannot read it from git — CI passes it in and
+# vite bakes the first 8 chars into the settings footer.
+ARG GIT_SHA
+ENV GIT_SHA=${GIT_SHA}
+
 # tsc --noEmit && vite build -> /app/dist
 RUN pnpm build
 

@@ -214,7 +214,11 @@ export default function SettingsPage() {
         />
 
         <div style={{ textAlign: "center", paddingTop: "2rem" }}>
-          <IonNote>Wingover {__APP_VERSION__} · AGPL-3.0</IonNote>
+          <IonNote>
+            {`Wingover ${__APP_VERSION__}${
+              __APP_GIT_SHA__ ? ` (${__APP_GIT_SHA__})` : ""
+            } · AGPL-3.0`}
+          </IonNote>
         </div>
       </IonContent>
     </IonPage>

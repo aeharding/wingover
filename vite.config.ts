@@ -12,9 +12,21 @@ import { version } from "./package.json";
 // device gets a connection refused.
 const tauriDevHost = process.env.TAURI_DEV_HOST;
 
+// The commit this build was cut from, for the settings footer (Voyager-style
+// version + sha). Not read from git: the Docker build context excludes .git
+// (see .dockerignore), and a dev working copy is not a release. CI passes it
+// from the Actions context instead — docker.yml sends github.sha as GIT_SHA for
+// a continuous build (:main -> beta.wingover.app) and an empty sha for a version
+// tag (-> wingover.app / App Store), so a release footer shows the clean version
+// alone. GITHUB_SHA is the same value auto-exported on the direct runner, the
+// fallback for the TestFlight build (which only ever builds main). Empty for
+// local dev builds. Sliced to 8 chars.
+const gitSha = (process.env.GIT_SHA ?? process.env.GITHUB_SHA ?? "").slice(0, 8);
+
 export default defineConfig({
   define: {
     __APP_VERSION__: JSON.stringify(version),
+    __APP_GIT_SHA__: JSON.stringify(gitSha),
   },
   plugins: [
     react(),
