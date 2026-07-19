@@ -1,11 +1,18 @@
 name: Docker
 
-# Builds the versioned PWA container image (the deploy unit) and, on a release
-# tag, publishes it to GHCR. PRs build single-arch to catch Dockerfile breakage
-# without pushing; a bare version tag (e.g. 0.2.0, created by `pnpm release`)
-# publishes ghcr.io/aeharding/wingover:<version> + :latest. The infra pulls it.
+# Builds the versioned PWA container image (the deploy unit) and publishes it to
+# GHCR — nothing else. Two channels, mirroring iOS: every push to `main`
+# publishes :main (the web analog of TestFlight, served at beta.wingover.app); a
+# bare version tag (e.g. 0.2.0, created by `pnpm release`) publishes :<version>
+# + :latest (prod, wingover.app). :latest is ALWAYS the newest release. PRs
+# build single-arch to catch Dockerfile breakage without pushing.
+#
+# This repo owns the ARTIFACT, not the deploy: it never touches wingover.app.
+# The box pulls new images itself (a Watchtower poll defined in the wingover.app
+# repo), so there is no dispatch, no SSH, and no deploy credential here.
 on:
   push:
+    branches: [main]
     tags:
       - "[0-9]+.[0-9]+.[0-9]+"
   pull_request:
@@ -46,23 +53,28 @@ jobs:
           username: ${{ github.actor }}
           password: ${{ github.token }}
 
-      # metadata-action derives the tags from the ref: the bare version on a
-      # tag push, plus latest. `latest` only moves on a version-tag push, never
-      # on a manual dispatch or an old-tag re-run. No hand-rolled tag logic.
+      # metadata-action derives the tags from the ref: :<version> + :latest on a
+      # version-tag push, :main on a main push. `latest=false` disables the
+      # auto-latest flavor so :latest comes ONLY from the explicit tag-gated
+      # rule below — it always points at the newest RELEASE, never at main.
       - id: meta
         uses: docker/metadata-action@v6
         with:
           images: ghcr.io/aeharding/wingover
+          flavor: latest=false
           tags: |
             type=ref,event=tag
-            type=raw,value=latest,enable=${{ github.event_name == 'push' }}
+            type=ref,event=branch
+            type=raw,value=latest,enable=${{ startsWith(github.ref, 'refs/tags/') }}
 
       - uses: docker/build-push-action@v7
         with:
           context: .
-          # PRs validate amd64 only (arm64 under QEMU is slow); tags build both.
-          platforms: ${{ github.event_name == 'pull_request' && 'linux/amd64' || 'linux/amd64,linux/arm64' }}
-          # PRs validate the build only; tags and dispatch publish.
+          # Only release tags build multi-arch (arm64 under QEMU is slow, and
+          # only prod pins a version); PRs and the frequent :main build amd64
+          # only — the one puller (the Droplet) is amd64.
+          platforms: ${{ startsWith(github.ref, 'refs/tags/') && 'linux/amd64,linux/arm64' || 'linux/amd64' }}
+          # PRs validate the build only; main, tags, and dispatch publish.
           push: ${{ github.event_name != 'pull_request' }}
           tags: ${{ steps.meta.outputs.tags }}
           labels: ${{ steps.meta.outputs.labels }}
