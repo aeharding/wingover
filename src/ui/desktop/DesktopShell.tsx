@@ -16,7 +16,7 @@ import {
   settingsOutline,
   syncOutline,
 } from "ionicons/icons";
-import { useRef, useState, useSyncExternalStore } from "react";
+import { useState, useSyncExternalStore } from "react";
 import {
   BrowserRouter,
   NavLink,
@@ -174,7 +174,12 @@ function DesktopFrame() {
 function RailSync() {
   const openSync = useSyncSheet();
   const status = useSyncExternalStore(sync.subscribe, sync.currentStatus);
-  const popover = useRef<HTMLIonPopoverElement>(null);
+  // Controlled, not trigger="rail-sync": Ionic resolves a string trigger on
+  // load, before the sibling chip's element is registered, and warns the
+  // trigger is missing on every desktop mount. Opening from the click event
+  // sidesteps the lookup entirely.
+  const [menuOpen, setMenuOpen] = useState(false);
+  const [menuEvent, setMenuEvent] = useState<MouseEvent | undefined>(undefined);
   const { logOut, busy } = useLogOut();
   const { flights } = useFlights();
   const [presentAlert] = useIonAlert();
@@ -187,10 +192,13 @@ function RailSync() {
   return (
     <>
       <button
-        id="rail-sync"
         className={`rail-link rail-sync ${tone}`}
         aria-label={`Sync: ${off ? "Off" : label}`}
         data-testid="rail-sync"
+        onClick={(e) => {
+          setMenuEvent(e.nativeEvent);
+          setMenuOpen(true);
+        }}
       >
         {active ? (
           <IonSpinner name="crescent" aria-hidden="true" />
@@ -205,8 +213,9 @@ function RailSync() {
         <span>Sync</span>
       </button>
       <IonPopover
-        ref={popover}
-        trigger="rail-sync"
+        isOpen={menuOpen}
+        event={menuEvent}
+        onDidDismiss={() => setMenuOpen(false)}
         side="right"
         alignment="end"
         className="rail-sync-pop"
@@ -223,7 +232,7 @@ function RailSync() {
             detail={false}
             data-testid="rail-sync-manage"
             onClick={() => {
-              void popover.current?.dismiss();
+              setMenuOpen(false);
               openSync();
             }}
           >
@@ -236,7 +245,7 @@ function RailSync() {
               disabled={busy}
               data-testid="rail-sync-logout"
               onClick={() => {
-                void logOut(() => void popover.current?.dismiss());
+                void logOut(() => setMenuOpen(false));
               }}
             >
               <IonLabel color="danger">Log out</IonLabel>
@@ -257,7 +266,7 @@ function RailSync() {
               detail={false}
               data-testid="rail-sync-erase"
               onClick={() => {
-                void popover.current?.dismiss();
+                setMenuOpen(false);
                 presentAlert({
                   header: "Delete local data?",
                   message:
