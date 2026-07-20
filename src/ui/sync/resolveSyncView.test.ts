@@ -46,6 +46,8 @@ describe("resolveSyncView", () => {
     expect(v.showResubscribe).toBe(false);
     expect(v.showDormantSubscribe).toBe(false);
     expect(v.showSignIn).toBe(false);
+    expect(v.showTurnOffNote).toBe(true);
+    expect(v.statusDetail).toContain("Last synced");
   });
 
   test("On, NOT linked: offers Use on your computer instead of the Linked note", () => {
@@ -103,6 +105,8 @@ describe("resolveSyncView", () => {
     expect(v.showSelfHost).toBe(true);
     expect(v.showManage).toBe(false);
     expect(v.showTurnOn).toBe(false);
+    expect(v.statusDetail).toBe("Flights are not being backed up.");
+    expect(v.showTurnOffNote).toBe(false);
   });
 
   test("Supporter (self-host + a StoreKit sub): reads On, thanks note, Manage, no Delete, never lapsed", () => {
