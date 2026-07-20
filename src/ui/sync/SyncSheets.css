@@ -4,22 +4,17 @@
    The gradient carries the contrast so ANY photo works, and if the file is
    missing the scrim alone still renders — no broken build, no broken screen.
 
-   The photo + scrim live in a slot="fixed" layer, NOT the content's own
-   --background. Bound to a fullscreen collapsible-header content, the
-   background sometimes rendered shoved down by the header's height (the
-   header-gap bug). A fixed slot is composited outside the scroll/header
-   padding math, so it always fills the sheet edge to edge. Voyager's welcome
-   background works exactly this way. The content keeps a flat base color so
-   the extreme safe-area edges are never a transparent gap. */
-.sync-home-content {
-  --background: var(--ion-background-color);
-}
-
-.sync-home-bg {
-  position: absolute;
-  inset: 0;
-  pointer-events: none;
-  background:
+   The photo lives on the MODAL's --background, i.e. .modal-wrapper: the one
+   element that spans the whole sheet, behind the header AND the content. It
+   used to sit on the fullscreen content's --background and rely on Ionic's
+   collapsible-header bleed (a negative top tied to --offset-top) to reach up
+   under the header. That bleed is measured at runtime and sometimes didn't
+   apply, so the transparent fade header revealed the black modal background
+   as a bar at the top. On the wrapper there is no offset math to miss: the
+   hero always underlays everything. Everything above it (content, both
+   headers) is made transparent so it shows through. */
+.sync-modal {
+  --background:
     linear-gradient(
       to bottom,
       transparent 0%,
@@ -27,20 +22,32 @@
       rgba(0, 0, 0, 0.72) 72%,
       var(--ion-background-color) 97%
     ),
-    url("/sync-hero.jpg") center / cover no-repeat,
-    var(--ion-background-color);
+    url("/sync-hero.jpg") center / cover no-repeat, var(--ion-background-color);
+}
+
+/* Transparent so the modal-wrapper hero shows through the whole sheet. */
+.sync-home-content {
+  --background: transparent;
 }
 
 /* Flex the scroll container so the condensed header takes its natural height
    and the body fills exactly what's left. min-height:100% on the body instead
-   would stack with the header and push the last control off-screen. z-index
-   lifts the scrolled body above the fixed background layer: Ionic composites
-   slot="fixed" on top of the scroll content by default (it's meant for FABs),
-   so the content must be raised to sit over it. */
+   would stack with the header and push the last control off-screen. */
 .sync-home-content::part(scroll) {
-  z-index: 1;
   display: flex;
   flex-direction: column;
+}
+
+/* theme.css sets `ion-toolbar { --background: var(--ion-background-color) }`
+   globally for the native-iOS nav bar. That document-scope rule outranks the
+   color=" " transparency hack (a normal declaration in the outer tree beats
+   the component's shadow-DOM :host(.ion-color) rule), so the condensed toolbar
+   renders opaque and hides the hero. Re-clear it here so the photo reads
+   behind the large title. The pinned fade header keeps its background: at rest
+   it fades to transparent (hero shows through), and it fades back in as a
+   solid bar as the title scrolls away, the native iOS behavior. */
+.sync-home-content ion-header[collapse="condense"] ion-toolbar {
+  --background: transparent;
 }
 
 .sync-home-body {

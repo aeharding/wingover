@@ -133,10 +133,6 @@ function SyncHome({
             <IonTitle size="large">Sync</IonTitle>
           </IonToolbar>
         </IonHeader>
-        {/* Photo + scrim ride a fixed layer, not the content's --background:
-            outside the collapsible header's padding math, so the header can't
-            shove it down (Voyager's welcome bg). */}
-        <div className="sync-home-bg" slot="fixed" aria-hidden="true" />
         <div className="sync-home-body">
           {nothing ? (
             <Pitch
