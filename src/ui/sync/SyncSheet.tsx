@@ -122,7 +122,7 @@ function SyncHome({
 
   return (
     <>
-      <IonHeader translucent collapse="fade" className="sync-home-header">
+      <IonHeader collapse="fade" className="sync-home-header">
         <IonToolbar>
           <IonTitle>Sync</IonTitle>
         </IonToolbar>
@@ -574,7 +574,9 @@ function Connected({
   const off = status.state === "off";
   const dormant = status.state === "unsubscribed";
   const lapsed =
-    (status.state === "syncing" && status.readOnly && account?.kind !== "manual") ||
+    (status.state === "syncing" &&
+      status.readOnly &&
+      account?.kind !== "manual") ||
     (off && appleSub === "expired");
   const hosted = account?.kind === "apple";
 
@@ -584,7 +586,9 @@ function Connected({
         // Subscribed (or lapsed) but not connected on this device — the
         // healer state. Rare now that the subscription is a standing opt-in,
         // but a deliberate "Turn off sync" lands here.
-        <div className={`sync-state ${appleSub === "expired" ? "sync-state-readonly" : ""}`}>
+        <div
+          className={`sync-state ${appleSub === "expired" ? "sync-state-readonly" : ""}`}
+        >
           <span className="sync-state-label" data-testid="sync-state">
             {appleSub === "expired" ? "Expired" : "Off"}
           </span>
@@ -798,8 +802,8 @@ function LinkAccountPage({
           ) : (
             <>
               <p className="sync-login-lede">
-                One optional step: link your Apple Account, and you can sign
-                in at wingover.app to see your flights on any computer.
+                One optional step: link your Apple Account, and you can sign in
+                at wingover.app to see your flights on any computer.
               </p>
 
               {problem && <p className="sync-error-message">{problem}</p>}
