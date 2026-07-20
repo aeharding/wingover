@@ -120,12 +120,21 @@ describe("resolveSyncView", () => {
   });
 
   test("Error → red; Paused/Connecting → neutral (the rail's amber-everything bug)", () => {
-    expect(resolveSyncView(PROBLEM, apple("apple"), "active", NATIVE).statusTone).toBe("error");
-    expect(resolveSyncView(PAUSED, apple("apple"), "active", NATIVE).statusTone).toBe("neutral");
-    expect(resolveSyncView(CONNECTING, apple("apple"), "active", NATIVE).statusTone).toBe("neutral");
+    expect(
+      resolveSyncView(PROBLEM, apple("apple"), "active", NATIVE).statusTone,
+    ).toBe("error");
+    expect(
+      resolveSyncView(PAUSED, apple("apple"), "active", NATIVE).statusTone,
+    ).toBe("neutral");
+    expect(
+      resolveSyncView(CONNECTING, apple("apple"), "active", NATIVE).statusTone,
+    ).toBe("neutral");
   });
 
   test("turnOffLabel: the web is always Log out", () => {
-    expect(resolveSyncView(syncing(false), apple("apple"), "active", WEB).turnOffLabel).toBe("Log out");
+    expect(
+      resolveSyncView(syncing(false), apple("apple"), "active", WEB)
+        .turnOffLabel,
+    ).toBe("Log out");
   });
 });

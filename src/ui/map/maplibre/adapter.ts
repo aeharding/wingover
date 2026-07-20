@@ -1,9 +1,5 @@
 import type { Feature, FeatureCollection } from "geojson";
-import {
-  AttributionControl,
-  Map as MapLibreMap,
-  Marker,
-} from "maplibre-gl";
+import { AttributionControl, Map as MapLibreMap, Marker } from "maplibre-gl";
 import type { GeoJSONSource, MapMouseEvent } from "maplibre-gl";
 
 import {
@@ -108,9 +104,7 @@ export async function createMapLibreMapView(
    * one boundary that cannot go wider, through the real linear-light
    * matrix, so the hue survives even where the gamut clamps.
    */
-  function toSrgb(
-    color: string | ["get", string],
-  ): string | ["get", string] {
+  function toSrgb(color: string | ["get", string]): string | ["get", string] {
     if (typeof color !== "string") return color;
     const m =
       /^color\(display-p3\s+([\d.]+)\s+([\d.]+)\s+([\d.]+)\s*(?:\/\s*([\d.]+))?\)$/.exec(
@@ -246,7 +240,8 @@ export async function createMapLibreMapView(
     },
 
     lockZoomAnchor(anchor) {
-      const options = anchor === "center" ? { around: "center" as const } : undefined;
+      const options =
+        anchor === "center" ? { around: "center" as const } : undefined;
       map.scrollZoom.enable(options);
       map.touchZoomRotate.enable(options);
     },
@@ -268,8 +263,7 @@ export async function createMapLibreMapView(
         set(geometry) {
           rec.data = toFeatureCollection(geometry);
           const source = map.getSource(rec.sourceId) as
-            | GeoJSONSource
-            | undefined;
+            GeoJSONSource | undefined;
           if (source) source.setData(rec.data);
           else sync();
         },

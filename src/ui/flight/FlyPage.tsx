@@ -17,12 +17,7 @@ import {
 import { engine } from "../../engine";
 import { isTauri } from "../../engine/platform";
 import { startFlight } from "../../engine/session";
-import type {
-  EngineStatus,
-  Fix,
-  LngLat,
-  Waypoint,
-} from "../../engine/types";
+import type { EngineStatus, Fix, LngLat, Waypoint } from "../../engine/types";
 import {
   formatAltitude,
   formatClimb,
@@ -55,7 +50,6 @@ import { useLiveViewPrefs } from "./useLiveViewPrefs";
 
 import "./FlyPage.css";
 
-
 // WAL hydration happens once per app launch. The App swaps the whole nav shell
 // for a bare <FlyPage> when a flight is active, so FlyPage remounts mid-session
 // (the moment a flight starts, and again when it ends). Seeding `ready` from
@@ -84,7 +78,12 @@ export default function FlyPage() {
   // must not flash the Start button during a live-flight reload.
   const [ready, setReady] = useState(hydratedOnce);
   const { confirm: bigConfirm, element: confirmElement } = useBigConfirm();
-  const { mapView, follow, trackUp, update: updateLiveView } = useLiveViewPrefs();
+  const {
+    mapView,
+    follow,
+    trackUp,
+    update: updateLiveView,
+  } = useLiveViewPrefs();
   const [liveMap, setLiveMap] = useState<MapView | null>(null);
   const [mapTopInset, setMapTopInset] = useState(0);
   // The planned route, for the idle-screen distance. Reloaded on every entry
@@ -119,7 +118,9 @@ export default function FlyPage() {
     // Unsnapping drops track-up WITH it: resuming is two deliberate
     // presses (snap, then compass), never one button silently re-enabling
     // a second mode.
-    updateLiveView(value ? { follow: true } : { follow: false, trackUp: false });
+    updateLiveView(
+      value ? { follow: true } : { follow: false, trackUp: false },
+    );
   }
 
   function changeTrackUp(value: boolean) {
@@ -283,277 +284,272 @@ export default function FlyPage() {
 
   return (
     <div className="fly-content">
-        {status === "idle" && (
-          <div className="fly-idle">
-            <IdleBackdrop />
-            <h1>Wingover</h1>
-            <button className="start-button" onClick={armFlight}>
-              Start Flight
-            </button>
-            {plannedRouteMeters > 0 && (
-              <div className="planned-route" data-testid="planned-route">
-                Planned route: {formatDistance(plannedRouteMeters, units)}
-              </div>
-            )}
-            {gpsError && (
-              <div className="gps-error" data-testid="gps-error">
-                {gpsError.message}
-              </div>
-            )}
-          </div>
-        )}
-        {(status === "acquiring" || status === "armed") && (
-          <div className="fly-armed" data-testid="armed">
-            <div className="armed-message">
-              <div
-                className={status === "armed" ? "pulse" : "pulse acquiring"}
-                aria-hidden="true"
-              />
-              <h2>
-                {status === "acquiring"
-                  ? "Acquiring GPS"
-                  : "Waiting for takeoff"}
-              </h2>
-              <p>{status === "acquiring" ? ACQUIRING_HINT : ARMED_HINT}</p>
+      {status === "idle" && (
+        <div className="fly-idle">
+          <IdleBackdrop />
+          <h1>Wingover</h1>
+          <button className="start-button" onClick={armFlight}>
+            Start Flight
+          </button>
+          {plannedRouteMeters > 0 && (
+            <div className="planned-route" data-testid="planned-route">
+              Planned route: {formatDistance(plannedRouteMeters, units)}
             </div>
-            {gpsError && (
-              <div className="gps-error" data-testid="gps-error">
-                {gpsError.message}
-              </div>
-            )}
-            {status === "acquiring" ? (
-              <div className="armed-accuracy" data-testid="armed-accuracy">
-                {latest
-                  ? `±${formatAltitude(latest.horizontalAccuracy, units)} H · ±${formatAltitude(latest.verticalAccuracy, units)} V`
-                  : "—"}
-              </div>
-            ) : (
-              <div className="armed-speed" data-testid="armed-speed">
-                {latest ? formatSpeed(latest.speed, units) : "—"}
-              </div>
-            )}
-            <button className="cancel-button" onClick={confirmEndFlight}>
-              Cancel
-            </button>
+          )}
+          {gpsError && (
+            <div className="gps-error" data-testid="gps-error">
+              {gpsError.message}
+            </div>
+          )}
+        </div>
+      )}
+      {(status === "acquiring" || status === "armed") && (
+        <div className="fly-armed" data-testid="armed">
+          <div className="armed-message">
+            <div
+              className={status === "armed" ? "pulse" : "pulse acquiring"}
+              aria-hidden="true"
+            />
+            <h2>
+              {status === "acquiring" ? "Acquiring GPS" : "Waiting for takeoff"}
+            </h2>
+            <p>{status === "acquiring" ? ACQUIRING_HINT : ARMED_HINT}</p>
           </div>
-        )}
-        {(status === "recording" || status === "landed") && (
-          <div className="fly-recording" data-testid="recording">
-            <div className="instruments" ref={instrumentsRef}>
-              <Tile
-                label="Above launch"
-                value={
-                  latest && first
-                    ? formatAltitude(latest.altitude - first.altitude, units)
-                    : "—"
-                }
-                accent="cyan"
-                testId="instrument-agl"
-              />
-              <Tile
-                label="Duration"
-                value={formatDuration(durationSeconds)}
-                testId="instrument-duration"
-              />
-              <Tile
-                label="Altitude MSL"
-                value={latest ? formatAltitude(latest.altitude, units) : "—"}
-                testId="instrument-msl"
-              />
-              <Tile
-                label="Climb rate"
-                value={latest ? formatClimb(latest.climbRate, units) : "—"}
-                testId="instrument-climb"
-              />
-              <Tile
-                label="Ground speed"
-                value={latest ? formatSpeed(latest.speed, units) : "—"}
-                accent="green"
-                testId="instrument-speed"
-              />
-              <Tile
-                label={`Distance to ${navLabel}`}
-                value={
-                  latest && navTarget
-                    ? formatDistance(toTargetDistance, units)
-                    : "—"
-                }
-                accent="green"
-                testId="instrument-target-distance"
-              />
-              <Tile
-                label="Course"
-                value={latest ? formatCourse(latest.course) : "—"}
-                icon={latest ? <Compass course={latest.course} /> : undefined}
-                accent="yellow"
-                testId="instrument-course"
-              />
-              <Tile
-                label={`Direction to ${navLabel}`}
-                value={
-                  latest && navTarget
-                    ? formatRelativeDegrees(toTargetRelative)
-                    : "—"
-                }
-                icon={
-                  latest && navTarget ? (
-                    <span
-                      className="launch-arrow"
-                      style={{ rotate: `${toTargetRelative}deg` }}
-                      aria-hidden="true"
-                    >
-                      {/* The same chevron as the map's blue location arrow,
+          {gpsError && (
+            <div className="gps-error" data-testid="gps-error">
+              {gpsError.message}
+            </div>
+          )}
+          {status === "acquiring" ? (
+            <div className="armed-accuracy" data-testid="armed-accuracy">
+              {latest
+                ? `±${formatAltitude(latest.horizontalAccuracy, units)} H · ±${formatAltitude(latest.verticalAccuracy, units)} V`
+                : "—"}
+            </div>
+          ) : (
+            <div className="armed-speed" data-testid="armed-speed">
+              {latest ? formatSpeed(latest.speed, units) : "—"}
+            </div>
+          )}
+          <button className="cancel-button" onClick={confirmEndFlight}>
+            Cancel
+          </button>
+        </div>
+      )}
+      {(status === "recording" || status === "landed") && (
+        <div className="fly-recording" data-testid="recording">
+          <div className="instruments" ref={instrumentsRef}>
+            <Tile
+              label="Above launch"
+              value={
+                latest && first
+                  ? formatAltitude(latest.altitude - first.altitude, units)
+                  : "—"
+              }
+              accent="cyan"
+              testId="instrument-agl"
+            />
+            <Tile
+              label="Duration"
+              value={formatDuration(durationSeconds)}
+              testId="instrument-duration"
+            />
+            <Tile
+              label="Altitude MSL"
+              value={latest ? formatAltitude(latest.altitude, units) : "—"}
+              testId="instrument-msl"
+            />
+            <Tile
+              label="Climb rate"
+              value={latest ? formatClimb(latest.climbRate, units) : "—"}
+              testId="instrument-climb"
+            />
+            <Tile
+              label="Ground speed"
+              value={latest ? formatSpeed(latest.speed, units) : "—"}
+              accent="green"
+              testId="instrument-speed"
+            />
+            <Tile
+              label={`Distance to ${navLabel}`}
+              value={
+                latest && navTarget
+                  ? formatDistance(toTargetDistance, units)
+                  : "—"
+              }
+              accent="green"
+              testId="instrument-target-distance"
+            />
+            <Tile
+              label="Course"
+              value={latest ? formatCourse(latest.course) : "—"}
+              icon={latest ? <Compass course={latest.course} /> : undefined}
+              accent="yellow"
+              testId="instrument-course"
+            />
+            <Tile
+              label={`Direction to ${navLabel}`}
+              value={
+                latest && navTarget
+                  ? formatRelativeDegrees(toTargetRelative)
+                  : "—"
+              }
+              icon={
+                latest && navTarget ? (
+                  <span
+                    className="launch-arrow"
+                    style={{ rotate: `${toTargetRelative}deg` }}
+                    aria-hidden="true"
+                  >
+                    {/* The same chevron as the map's blue location arrow,
                           so "direction to launch" reads as an obvious
                           pointer, not a thin glyph. */}
-                      <svg viewBox="-8 -11 16 20" className="launch-arrow-svg">
-                        <polygon points="0,-10 7,8 0,4 -7,8" />
-                      </svg>
-                    </span>
-                  ) : undefined
-                }
-                accent="yellow"
-                testId="instrument-target-direction"
-              />
-            </div>
-            <LiveTrackMap
-              track={track}
-              latest={latest}
-              view={mapView}
-              follow={follow}
-              trackUp={trackUp}
-              topInset={mapTopInset}
-              plannedWaypoints={snapshot.waypoints}
-              navWaypoints={snapshot.activeWaypoints}
-              onMapReady={setLiveMap}
-              onAddWaypoint={(at) => {
-                // Long-press: the new ad-hoc point becomes the next target;
-                // tap it then clear if it was a mistap.
-                void engine.addAdhocWaypoint(at);
-              }}
-              onSelectWaypoint={(id) => {
-                // Only the next waypoint — the current target — can be selected
-                // to clear. A tap on any other pin (or a deselect) clears.
-                setSelectedWaypointId(id === nextWaypoint?.id ? id : null);
-              }}
-              onFollowChange={changeFollow}
+                    <svg viewBox="-8 -11 16 20" className="launch-arrow-svg">
+                      <polygon points="0,-10 7,8 0,4 -7,8" />
+                    </svg>
+                  </span>
+                ) : undefined
+              }
+              accent="yellow"
+              testId="instrument-target-direction"
             />
-            {gpsError && (
-              <div
-                className="gps-error recording-error"
-                style={{ top: mapTopInset + 12 }}
-                data-testid="gps-error"
-              >
-                {gpsError.message}
-              </div>
-            )}
-            <div className="flight-controls">
-              {/* Contextual: floats ABOVE the fixed control grid (which is
+          </div>
+          <LiveTrackMap
+            track={track}
+            latest={latest}
+            view={mapView}
+            follow={follow}
+            trackUp={trackUp}
+            topInset={mapTopInset}
+            plannedWaypoints={snapshot.waypoints}
+            navWaypoints={snapshot.activeWaypoints}
+            onMapReady={setLiveMap}
+            onAddWaypoint={(at) => {
+              // Long-press: the new ad-hoc point becomes the next target;
+              // tap it then clear if it was a mistap.
+              void engine.addAdhocWaypoint(at);
+            }}
+            onSelectWaypoint={(id) => {
+              // Only the next waypoint — the current target — can be selected
+              // to clear. A tap on any other pin (or a deselect) clears.
+              setSelectedWaypointId(id === nextWaypoint?.id ? id : null);
+            }}
+            onFollowChange={changeFollow}
+          />
+          {gpsError && (
+            <div
+              className="gps-error recording-error"
+              style={{ top: mapTopInset + 12 }}
+              data-testid="gps-error"
+            >
+              {gpsError.message}
+            </div>
+          )}
+          <div className="flight-controls">
+            {/* Contextual: floats ABOVE the fixed control grid (which is
                   bottom-anchored) so appearing/disappearing never nudges the
                   four regular controls out of their fixed positions. */}
-              {selectedWaypoint && (
-                <button
-                  className="map-button skip-button"
-                  aria-label="Clear selected waypoint"
-                  data-testid="remove-waypoint"
-                  onClick={() => {
-                    void engine.removeWaypoint(selectedWaypoint.id);
-                    setSelectedWaypointId(null);
-                  }}
-                >
-                  {/* A location pin with a small trash badge: "delete this
+            {selectedWaypoint && (
+              <button
+                className="map-button skip-button"
+                aria-label="Clear selected waypoint"
+                data-testid="remove-waypoint"
+                onClick={() => {
+                  void engine.removeWaypoint(selectedWaypoint.id);
+                  setSelectedWaypointId(null);
+                }}
+              >
+                {/* A location pin with a small trash badge: "delete this
                       selected checkpoint". */}
-                  <span className="skip-icon" aria-hidden="true">
-                    <span className="skip-icon-pin">
-                      <NativeIcon icon={locationOutline} />
-                    </span>
-                    <NativeIcon
-                      className="skip-icon-badge"
-                      icon={closeOutline}
-                    />
+                <span className="skip-icon" aria-hidden="true">
+                  <span className="skip-icon-pin">
+                    <NativeIcon icon={locationOutline} />
                   </span>
-                </button>
+                  <NativeIcon className="skip-icon-badge" icon={closeOutline} />
+                </span>
+              </button>
+            )}
+            <div className="flight-controls-grid">
+              <button
+                className="map-button"
+                aria-label={follow ? "Track up" : "Align north"}
+                // The mode light shows only while the mode is in
+                // effect (unsnapping also clears the pref; the gate
+                // guards any future unsnap path that forgets to).
+                data-active={follow && trackUp}
+                onClick={() => {
+                  if (follow) {
+                    changeTrackUp(!trackUp);
+                    return;
+                  }
+                  // Unsnapped, the compass is a north reset: bearing
+                  // zero, immediately, mode untouched. No animation,
+                  // ever, in flight. Always present — a control that
+                  // comes and goes is worse than one that occasionally
+                  // has nothing to do.
+                  liveMap?.moveTo({ bearing: 0 }, { animate: false });
+                }}
+              >
+                <NativeIcon icon={compassOutline} />
+              </button>
+              <button
+                className="map-button"
+                aria-label="Follow aircraft"
+                data-active={follow}
+                // A toggle: pressing while snapped unsnaps (and takes
+                // track-up down with it, via changeFollow).
+                onClick={() => changeFollow(!follow)}
+              >
+                <NativeIcon icon={locateOutline} />
+              </button>
+              {liveMap?.supportsSatellite && (
+                <ViewToggle view={mapView} onChange={changeMapView} />
               )}
-              <div className="flight-controls-grid">
-                <button
-                  className="map-button"
-                  aria-label={follow ? "Track up" : "Align north"}
-                  // The mode light shows only while the mode is in
-                  // effect (unsnapping also clears the pref; the gate
-                  // guards any future unsnap path that forgets to).
-                  data-active={follow && trackUp}
-                  onClick={() => {
-                    if (follow) {
-                      changeTrackUp(!trackUp);
-                      return;
-                    }
-                    // Unsnapped, the compass is a north reset: bearing
-                    // zero, immediately, mode untouched. No animation,
-                    // ever, in flight. Always present — a control that
-                    // comes and goes is worse than one that occasionally
-                    // has nothing to do.
-                    liveMap?.moveTo({ bearing: 0 }, { animate: false });
-                  }}
-                >
-                  <NativeIcon icon={compassOutline} />
-                </button>
-                <button
-                  className="map-button"
-                  aria-label="Follow aircraft"
-                  data-active={follow}
-                  // A toggle: pressing while snapped unsnaps (and takes
-                  // track-up down with it, via changeFollow).
-                  onClick={() => changeFollow(!follow)}
-                >
-                  <NativeIcon icon={locateOutline} />
-                </button>
-                {liveMap?.supportsSatellite && (
-                  <ViewToggle view={mapView} onChange={changeMapView} />
-                )}
-                <button
-                  className="map-button stop-button"
-                  aria-label="Stop flight"
-                  onClick={confirmEndFlight}
-                >
-                  <NativeIcon icon={stopIcon} />
-                </button>
-              </div>
+              <button
+                className="map-button stop-button"
+                aria-label="Stop flight"
+                onClick={confirmEndFlight}
+              >
+                <NativeIcon icon={stopIcon} />
+              </button>
             </div>
-            {status === "landed" && landingAt !== null && (
-              /* Same surface as the end-flight confirm (BigConfirm's
+          </div>
+          {status === "landed" && landingAt !== null && (
+            /* Same surface as the end-flight confirm (BigConfirm's
                  classes): one dialog language in flight. The scrim is the
                  safe answer, like Cancel there. */
+            <div
+              className="big-confirm"
+              role="presentation"
+              data-testid="landing-prompt"
+              onClick={dismissLandingPrompt}
+            >
               <div
-                className="big-confirm"
-                role="presentation"
-                data-testid="landing-prompt"
-                onClick={dismissLandingPrompt}
+                className="big-confirm-panel"
+                role="alertdialog"
+                aria-modal="true"
+                aria-label="Landing detected"
+                onClick={(event) => event.stopPropagation()}
               >
-                <div
-                  className="big-confirm-panel"
-                  role="alertdialog"
-                  aria-modal="true"
-                  aria-label="Landing detected"
-                  onClick={(event) => event.stopPropagation()}
-                >
-                  <div className="big-confirm-title">Landing detected</div>
-                  <div className="big-confirm-actions">
-                    <button
-                      className="big-confirm-cancel"
-                      onClick={dismissLandingPrompt}
-                    >
-                      Still flying
-                    </button>
-                    <button className="big-confirm-action" onClick={endFlight}>
-                      Stop
-                      {snapshot.autoEnd ? ` (${landingSecondsLeft})` : ""}
-                    </button>
-                  </div>
+                <div className="big-confirm-title">Landing detected</div>
+                <div className="big-confirm-actions">
+                  <button
+                    className="big-confirm-cancel"
+                    onClick={dismissLandingPrompt}
+                  >
+                    Still flying
+                  </button>
+                  <button className="big-confirm-action" onClick={endFlight}>
+                    Stop
+                    {snapshot.autoEnd ? ` (${landingSecondsLeft})` : ""}
+                  </button>
                 </div>
               </div>
-            )}
-          </div>
-        )}
-        {confirmElement}
+            </div>
+          )}
+        </div>
+      )}
+      {confirmElement}
     </div>
   );
 }
@@ -575,8 +571,22 @@ function IdleBackdrop() {
     >
       <circle className="idle-star" cx="322" cy="150" r="14" />
       <circle className="idle-star" cx="470" cy="86" r="9" />
-      <rect className="idle-cloud" x="470" y="690" width="180" height="26" rx="13" />
-      <rect className="idle-cloud" x="560" y="742" width="110" height="22" rx="11" />
+      <rect
+        className="idle-cloud"
+        x="470"
+        y="690"
+        width="180"
+        height="26"
+        rx="13"
+      />
+      <rect
+        className="idle-cloud"
+        x="560"
+        y="742"
+        width="110"
+        height="22"
+        rx="11"
+      />
       <circle className="idle-sun" cx="348" cy="812" r="135" />
       <g transform="translate(25 -20)">
         <g className="idle-lines" fill="none">

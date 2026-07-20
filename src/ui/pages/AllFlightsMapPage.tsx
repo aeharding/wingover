@@ -141,7 +141,11 @@ export default function AllFlightsMapPage() {
         <div className="all-flights-map">
           {/* Full-screen on phone (bottom under the home indicator); a pane in
               the desktop shell, where it is not edge-to-edge. */}
-          <MapCanvas base={view} onReady={handleReady} edgeToEdge={!isDesktop} />
+          <MapCanvas
+            base={view}
+            onReady={handleReady}
+            edgeToEdge={!isDesktop}
+          />
           <div className="composite-legend">
             Oldest → newest
             <div className="legend-bar" />

@@ -782,7 +782,9 @@ function LinkAccountPage({
       </IonHeader>
       <IonContent>
         <div className="sync-login-body">
-          <div className={`sync-state ${SHEET_TONE_CLASS[describe(status).tone]}`}>
+          <div
+            className={`sync-state ${SHEET_TONE_CLASS[describe(status).tone]}`}
+          >
             <span className="sync-state-label">{describe(status).label}</span>
             <span className="sync-state-detail">
               {status.state === "syncing" && !status.readOnly

@@ -107,12 +107,17 @@ describe("isEnvMismatch (the resume() cross-environment guard)", () => {
     expect(isEnvMismatch(cred({ environment: undefined }), "Sandbox")).toBe(
       false,
     );
-    expect(isEnvMismatch(cred({ environment: "Production" }), null)).toBe(false);
+    expect(isEnvMismatch(cred({ environment: "Production" }), null)).toBe(
+      false,
+    );
   });
 
   it("ignores non-apple (self-host / fake) credentials", () => {
     expect(
-      isEnvMismatch(cred({ kind: "manual", environment: "Production" }), "Sandbox"),
+      isEnvMismatch(
+        cred({ kind: "manual", environment: "Production" }),
+        "Sandbox",
+      ),
     ).toBe(false);
   });
 });

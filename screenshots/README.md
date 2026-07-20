@@ -14,13 +14,13 @@ pnpm screenshots
 
 That runs, in order:
 
-| step               | output                                              |
-| ------------------ | --------------------------------------------------- |
-| `fetch-fonts.mjs`  | `assets/sf-pro.css` (SF Pro, downloaded on demand)  |
-| `generate.mjs`     | iPhone 6.9" store shots → `fastlane/screenshots/en-US/iphone-*.png` |
-| `generate-ipad.mjs`| iPad 13" store shots → `fastlane/screenshots/en-US/ipad-*.png` |
-| `web-optimize.mjs` | device-framed WebP for wingover.app → `public/shots/*.webp` |
-| `hero.mjs`         | README filmstrip → `design/hero.webp`               |
+| step                | output                                                              |
+| ------------------- | ------------------------------------------------------------------- |
+| `fetch-fonts.mjs`   | `assets/sf-pro.css` (SF Pro, downloaded on demand)                  |
+| `generate.mjs`      | iPhone 6.9" store shots → `fastlane/screenshots/en-US/iphone-*.png` |
+| `generate-ipad.mjs` | iPad 13" store shots → `fastlane/screenshots/en-US/ipad-*.png`      |
+| `web-optimize.mjs`  | device-framed WebP for wingover.app → `public/shots/*.webp`         |
+| `hero.mjs`          | README filmstrip → `design/hero.webp`                               |
 
 The framed store PNGs are written straight into fastlane's folder; the
 un-framed captures land in `out/raw/` (gitignored) and feed the web + README

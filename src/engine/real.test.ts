@@ -933,7 +933,9 @@ describe("waypoint navigation", () => {
   // N9 — remove the current target by id → the plan advances.
   it("removing the next planned waypoint advances the plan", async () => {
     const engine = createEngine();
-    await armAndTakeOff(engine, { waypoints: [wp("a", 43.03), wp("b", 43.06)] });
+    await armAndTakeOff(engine, {
+      waypoints: [wp("a", 43.03), wp("b", 43.06)],
+    });
     await engine.removeWaypoint("a");
     expect(engine.snapshotSync().waypointsCursor).toBe(1);
     expect(engine.snapshotSync().nextWaypoint?.id).toBe("b");
@@ -1016,7 +1018,9 @@ describe("waypoint navigation", () => {
   it("one fix inside two overlapping radii reaches both", async () => {
     const engine = createEngine();
     // A@43.030, B@43.031 — 111 m apart, rings overlap.
-    await armAndTakeOff(engine, { waypoints: [wp("A", 43.03), wp("B", 43.031)] });
+    await armAndTakeOff(engine, {
+      waypoints: [wp("A", 43.03), wp("B", 43.031)],
+    });
     drive(43.0305); // inside both A and B
     const snap = engine.snapshotSync();
     expect(snap.waypointsCursor).toBe(2);

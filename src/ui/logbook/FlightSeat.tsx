@@ -72,7 +72,11 @@ export default function FlightSeat({
   const { units } = useSettings();
   const { exportFlight, confirmDeleteFlight } = useFlightActions();
   const { flight, setFlight, track } = useFlightDoc(id);
-  const { drafts, setDraft, commit } = useFlightDrafts(flight, setFlight, track);
+  const { drafts, setDraft, commit } = useFlightDrafts(
+    flight,
+    setFlight,
+    track,
+  );
   const [optionsOpen, setOptionsOpen] = useState(false);
   const [view, setView] = useState<MapViewKind>("street");
   const [map, setMap] = useState<MapView | null>(null);

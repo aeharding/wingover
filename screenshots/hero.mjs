@@ -11,11 +11,20 @@ const { chromium } = require("@playwright/test");
 // README's own background through).
 const HERE = dirname(fileURLToPath(import.meta.url));
 const STORE = join(HERE, "..", "fastlane", "screenshots", "en-US");
-const FILES = ["iphone-1-inflight.png", "iphone-2-logbook.png", "iphone-3-detail.png", "iphone-4-plan.png", "iphone-5-inflight-plan.png", "iphone-6-sync.png"];
+const FILES = [
+  "iphone-1-inflight.png",
+  "iphone-2-logbook.png",
+  "iphone-3-detail.png",
+  "iphone-4-plan.png",
+  "iphone-5-inflight-plan.png",
+  "iphone-6-sync.png",
+];
 const OUT_W = 2200; // width of the committed WebP
 
 async function run() {
-  const imgs = FILES.map((f) => readFileSync(join(STORE, f)).toString("base64"));
+  const imgs = FILES.map((f) =>
+    readFileSync(join(STORE, f)).toString("base64"),
+  );
   const html =
     `<!doctype html><html><head><meta charset="utf-8"><style>
       * { margin: 0; padding: 0; box-sizing: border-box; }
@@ -28,9 +37,14 @@ async function run() {
 
   const browser = await chromium.launch();
   try {
-    const page = await browser.newPage({ viewport: { width: 1600, height: 1400 }, deviceScaleFactor: 2 });
+    const page = await browser.newPage({
+      viewport: { width: 1600, height: 1400 },
+      deviceScaleFactor: 2,
+    });
     await page.setContent(html, { waitUntil: "networkidle" });
-    const png = await page.locator(".strip").screenshot({ omitBackground: true });
+    const png = await page
+      .locator(".strip")
+      .screenshot({ omitBackground: true });
     // Downscale to a lean WebP (alpha preserved) for the repo.
     const enc = await browser.newPage();
     const url = await enc.evaluate(
@@ -55,9 +69,14 @@ async function run() {
     const out = join(dir, "hero.webp");
     const bytes = Buffer.from(url.split(",")[1], "base64");
     writeFileSync(out, bytes);
-    console.log(`wrote design/hero.webp  ${(bytes.length / 1024).toFixed(0)} KB`);
+    console.log(
+      `wrote design/hero.webp  ${(bytes.length / 1024).toFixed(0)} KB`,
+    );
   } finally {
     await browser.close();
   }
 }
-run().catch((e) => { console.error(e); process.exit(1); });
+run().catch((e) => {
+  console.error(e);
+  process.exit(1);
+});

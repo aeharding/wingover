@@ -45,6 +45,8 @@ describe("getCurrentPosition (web fallback)", () => {
 
   it("rejects when geolocation is unavailable", async () => {
     setNavigator({});
-    await expect(getCurrentPosition()).rejects.toThrow("no geolocation support");
+    await expect(getCurrentPosition()).rejects.toThrow(
+      "no geolocation support",
+    );
   });
 });

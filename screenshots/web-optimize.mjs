@@ -33,9 +33,14 @@ const PHONE_JOBS = [
 ];
 const PHONE_W = 780;
 // Desktop split-shell (iPad landscape capture), plain, for the browser mock.
-const DESKTOP_JOB = { src: "ipad-13/2-logbook.png", out: "desktop.webp", w: 1600 };
+const DESKTOP_JOB = {
+  src: "ipad-13/2-logbook.png",
+  out: "desktop.webp",
+  w: 1600,
+};
 
-const dataUri = (p) => "data:image/png;base64," + readFileSync(join(RAW, p)).toString("base64");
+const dataUri = (p) =>
+  "data:image/png;base64," + readFileSync(join(RAW, p)).toString("base64");
 
 // Resize a PNG buffer to width `w` and encode WebP (alpha preserved).
 async function encodeWebp(page, pngBuf, w, q) {
@@ -63,25 +68,41 @@ async function run() {
   mkdirSync(DEST, { recursive: true });
   const browser = await chromium.launch();
   try {
-    const framePage = await browser.newPage({ viewport: { width: 1400, height: 1800 }, deviceScaleFactor: 2 });
+    const framePage = await browser.newPage({
+      viewport: { width: 1400, height: 1800 },
+      deviceScaleFactor: 2,
+    });
     await framePage.goto(FRAME_DEVICE, { waitUntil: "networkidle" });
     const enc = await browser.newPage();
     for (const job of PHONE_JOBS) {
       await framePage.evaluate((F) => window.__renderDevice(F), {
-        u: U, screenAr: SCREEN_AR, tone: "light", shot: dataUri(job.src),
+        u: U,
+        screenAr: SCREEN_AR,
+        tone: "light",
+        shot: dataUri(job.src),
       });
       await framePage.evaluate(() => document.fonts.ready);
       await framePage.waitForTimeout(150);
-      const png = await framePage.locator(".phone").screenshot({ omitBackground: true });
+      const png = await framePage
+        .locator(".phone")
+        .screenshot({ omitBackground: true });
       const webp = await encodeWebp(enc, png, PHONE_W, QUALITY);
       writeFileSync(join(DEST, job.out), webp);
       console.log(`  ${job.out}  ${(webp.length / 1024).toFixed(0)} KB`);
     }
-    const desk = await encodeWebp(enc, readFileSync(join(RAW, DESKTOP_JOB.src)), DESKTOP_JOB.w, QUALITY);
+    const desk = await encodeWebp(
+      enc,
+      readFileSync(join(RAW, DESKTOP_JOB.src)),
+      DESKTOP_JOB.w,
+      QUALITY,
+    );
     writeFileSync(join(DEST, DESKTOP_JOB.out), desk);
     console.log(`  ${DESKTOP_JOB.out}  ${(desk.length / 1024).toFixed(0)} KB`);
   } finally {
     await browser.close();
   }
 }
-run().catch((e) => { console.error(e); process.exit(1); });
+run().catch((e) => {
+  console.error(e);
+  process.exit(1);
+});

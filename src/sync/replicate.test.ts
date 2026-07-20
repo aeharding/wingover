@@ -171,7 +171,9 @@ describe("_design docs never cross the wire (regression: #90 root cause)", () =>
 
   test("the backfill push carries the same filter", () => {
     replicate.start(entitled);
-    const filter = kit.seen.toOpts[0]!.filter as (d: { _id: string }) => boolean;
+    const filter = kit.seen.toOpts[0]!.filter as (d: {
+      _id: string;
+    }) => boolean;
     expect(filter({ _id: "_design/auth" })).toBe(false);
     expect(filter({ _id: "recorded-1" })).toBe(true);
   });
@@ -189,7 +191,11 @@ describe("denied handling (regression: entitled pilots stuck on 'Not subscribed'
 
     handle.emit("denied", {
       direction: "push",
-      doc: { id: "_design/auth", error: "forbidden", reason: "not a server admin" },
+      doc: {
+        id: "_design/auth",
+        error: "forbidden",
+        reason: "not a server admin",
+      },
     });
 
     expect(replicate.currentAccount()?.entitled).toBe(true);
