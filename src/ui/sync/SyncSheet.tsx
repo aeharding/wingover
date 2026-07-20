@@ -29,9 +29,20 @@ import {
 import { isTauri } from "../../engine/platform";
 import * as sync from "../../sync";
 import { openExternal } from "../externalLinks";
-import { describe } from "./describe";
+import { describe, type SyncTone } from "./describe";
+import { resolveSyncView } from "./resolveSyncView";
 import { SelfHostPage } from "./SelfHostPage";
 import { useLogOut } from "./useLogOut";
+
+// A semantic tone → the sheet's status-label modifier class. On/off/neutral
+// ride the default label color; only a lapse (amber) and an error (red) paint.
+const SHEET_TONE_CLASS: Record<SyncTone, string> = {
+  on: "",
+  off: "",
+  warn: "sync-state-readonly",
+  error: "sync-state-error",
+  neutral: "",
+};
 
 /**
  * THE sync surface — one sheet, one question ("are my flights backed up?"),
@@ -121,7 +132,6 @@ function SyncHome({
     }
   }
 
-  const supporter = account?.kind === "manual" && appleSub !== null;
   const connected = status.state !== "off";
   // The pitch shows only when there is truly nothing: no connection, no
   // account, no subscription on this device.
@@ -166,7 +176,6 @@ function SyncHome({
               status={status}
               account={account}
               appleSub={appleSub}
-              supporter={supporter}
               products={products}
               busy={busy || loggingOut}
               problem={problem}
@@ -550,7 +559,6 @@ function Connected({
   status,
   account,
   appleSub,
-  supporter,
   products,
   busy,
   problem,
@@ -565,7 +573,6 @@ function Connected({
   status: sync.SyncStatus;
   account: sync.SyncAccount | null;
   appleSub: "active" | "expired" | null;
-  supporter: boolean;
   products: sync.StoreProduct[];
   busy: boolean;
   problem: string | null;
@@ -577,44 +584,20 @@ function Connected({
   onDelete: () => void;
   onConnected: () => void;
 }) {
-  const { label, detail, tone } = describe(status);
-  const off = status.state === "off";
-  const dormant = status.state === "unsubscribed";
-  const lapsed =
-    (status.state === "syncing" &&
-      status.readOnly &&
-      account?.kind !== "manual") ||
-    (off && appleSub === "expired");
-  const hosted = account?.kind === "apple";
+  // One pure resolve; everything below is a dumb render of its fields, so no
+  // action can contradict the account/status (the class of bug this replaced).
+  const v = resolveSyncView(status, account, appleSub, isTauri());
 
   return (
     <>
-      {off ? (
-        // Subscribed (or lapsed) but not connected on this device — the
-        // healer state. Rare now that the subscription is a standing opt-in,
-        // but a deliberate "Turn off sync" lands here.
-        <div
-          className={`sync-state ${appleSub === "expired" ? "sync-state-readonly" : ""}`}
-        >
-          <span className="sync-state-label" data-testid="sync-state">
-            {appleSub === "expired" ? "Expired" : "Off"}
-          </span>
-          <span className="sync-state-detail">
-            Flights are not being backed up.
-          </span>
-        </div>
-      ) : (
-        <div className={`sync-state ${tone}`}>
-          <span className="sync-state-label" data-testid="sync-state">
-            {supporter && status.state === "syncing" && !status.readOnly
-              ? "On"
-              : label}
-          </span>
-          <span className="sync-state-detail">{detail}</span>
-        </div>
-      )}
+      <div className={`sync-state ${SHEET_TONE_CLASS[v.statusTone]}`}>
+        <span className="sync-state-label" data-testid="sync-state">
+          {v.statusLabel}
+        </span>
+        <span className="sync-state-detail">{v.statusDetail}</span>
+      </div>
 
-      {supporter && (
+      {v.supporterNote && (
         <p className="sync-fine-print" data-testid="sync-supporting">
           Subscribed. Thank you for supporting Wingover; your own server stays
           connected.
@@ -627,7 +610,7 @@ function Connected({
       {problem && <p className="sync-error-message">{problem}</p>}
 
       {/* Turn sync (back) on: subscribed on this device but not connected. */}
-      {off && appleSub === "active" && isTauri() && (
+      {v.showTurnOn && (
         <IonButton
           expand="block"
           disabled={busy}
@@ -640,18 +623,18 @@ function Connected({
 
       {/* Resubscribe: the lapse is discovered here, the remedy is a purchase.
           Both plans, matching the pitch, so a lapse never buries the year. */}
-      {lapsed && (
+      {v.showResubscribe && (
         <ResubscribeArea products={products} busy={busy} onBuy={onBuy} />
       )}
 
       {/* Dormant: signed in, never subscribed — prompted to subscribe
           (SYNC-UX.md). Web checkout replaces the sentence when it exists. */}
-      {dormant && (
+      {v.showDormantSubscribe && (
         <DormantSubscribe products={products} busy={busy} onBuy={onBuy} />
       )}
 
       {/* Off + a lapsed or absent sub still deserves a way in. */}
-      {off && appleSub !== "active" && (
+      {v.showSignIn && (
         <AppleSignInButton
           label="Sign in with Apple"
           onClick={onSignIn}
@@ -660,7 +643,7 @@ function Connected({
         />
       )}
 
-      {!off && (
+      {v.showTurnOff && (
         <IonButton
           expand="block"
           fill="outline"
@@ -669,14 +652,14 @@ function Connected({
           onClick={onTurnOff}
           data-testid="sync-off"
         >
-          {!isTauri() ? "Log out" : dormant ? "Sign out" : "Turn off sync"}
+          {v.turnOffLabel}
         </IonButton>
       )}
 
       {/* A subscription to manage means one exists: never for a dormant
           (signed-in, never-subscribed) account, whose Manage link opened an
           empty App Store page. */}
-      {!dormant && (hosted || supporter || appleSub !== null) && (
+      {v.showManage && (
         <IonButton
           fill="clear"
           size="small"
@@ -688,7 +671,7 @@ function Connected({
         </IonButton>
       )}
 
-      {hosted && isTauri() && !dormant && account?.login !== "apple" && (
+      {v.showUseOnComputer && (
         // Junction 2 catch-up for pilots who skipped the post-purchase page —
         // opens the same page. Idempotent server-side. Once the server says
         // the Apple Account is linked, the door becomes the note below.
@@ -704,13 +687,13 @@ function Connected({
         </IonButton>
       )}
 
-      {hosted && isTauri() && !dormant && account?.login === "apple" && (
+      {v.showLinkedNote && (
         <p className="sync-fine-print" data-testid="sync-linked-note">
           Linked. Sign in with Apple at wingover.app any time.
         </p>
       )}
 
-      {hosted && !dormant && (
+      {v.showDelete && (
         <IonButton
           fill="clear"
           size="small"
@@ -724,9 +707,9 @@ function Connected({
         </IonButton>
       )}
 
-      {off && <SelfHostLink onConnected={onConnected} />}
+      {v.showSelfHost && <SelfHostLink onConnected={onConnected} />}
 
-      {!off && !dormant && (
+      {v.showTurnOffNote && (
         <p className="sync-fine-print">
           {isTauri()
             ? "Turning sync off forgets this device's connection, and it stays off until you turn it back on. Nothing is deleted: every flight stays on this device and on the server. If you subscribe, billing is unchanged."
@@ -799,7 +782,7 @@ function LinkAccountPage({
       </IonHeader>
       <IonContent>
         <div className="sync-login-body">
-          <div className={`sync-state ${describe(status).tone}`}>
+          <div className={`sync-state ${SHEET_TONE_CLASS[describe(status).tone]}`}>
             <span className="sync-state-label">{describe(status).label}</span>
             <span className="sync-state-detail">
               {status.state === "syncing" && !status.readOnly

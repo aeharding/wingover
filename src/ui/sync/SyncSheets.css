@@ -239,3 +239,9 @@
 .settings-sync-warn {
   color: var(--ion-color-warning);
 }
+
+/* A real problem (error): red, so the row flags it instead of the neutral gray
+   it used to render. */
+.settings-sync-error {
+  color: color(display-p3 1 0 0);
+}
