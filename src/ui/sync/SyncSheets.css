@@ -2,8 +2,18 @@
    photograph behind text is unreadable in the exact conditions this app is
    built for (STEERING: sunlight-readable, high contrast, leg-mounted phone).
    The gradient carries the contrast so ANY photo works, and if the file is
-   missing the scrim alone still renders — no broken build, no broken screen. */
-.sync-home-content {
+   missing the scrim alone still renders — no broken build, no broken screen.
+
+   The photo lives on the MODAL's --background, i.e. .modal-wrapper: the one
+   element that spans the whole sheet, behind the header AND the content. It
+   used to sit on the fullscreen content's --background and rely on Ionic's
+   collapsible-header bleed (a negative top tied to --offset-top) to reach up
+   under the header. That bleed is measured at runtime and sometimes didn't
+   apply, so the transparent fade header revealed the black modal background
+   as a bar at the top. On the wrapper there is no offset math to miss: the
+   hero always underlays everything. Everything above it (content, both
+   headers) is made transparent so it shows through. */
+.sync-modal {
   --background:
     linear-gradient(
       to bottom,
@@ -15,12 +25,29 @@
     url("/sync-hero.jpg") center / cover no-repeat, var(--ion-background-color);
 }
 
+/* Transparent so the modal-wrapper hero shows through the whole sheet. */
+.sync-home-content {
+  --background: transparent;
+}
+
 /* Flex the scroll container so the condensed header takes its natural height
    and the body fills exactly what's left. min-height:100% on the body instead
    would stack with the header and push the last control off-screen. */
 .sync-home-content::part(scroll) {
   display: flex;
   flex-direction: column;
+}
+
+/* theme.css sets `ion-toolbar { --background: var(--ion-background-color) }`
+   globally for the native-iOS nav bar. That document-scope rule outranks the
+   color=" " transparency hack (a normal declaration in the outer tree beats
+   the component's shadow-DOM :host(.ion-color) rule), so the condensed toolbar
+   renders opaque and hides the hero. Re-clear it here so the photo reads
+   behind the large title. The pinned fade header keeps its background: at rest
+   it fades to transparent (hero shows through), and it fades back in as a
+   solid bar as the title scrolls away, the native iOS behavior. */
+.sync-home-content ion-header[collapse="condense"] ion-toolbar {
+  --background: transparent;
 }
 
 .sync-home-body {

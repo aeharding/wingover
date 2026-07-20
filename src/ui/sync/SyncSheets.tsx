@@ -44,6 +44,7 @@ export function SyncSheetsProvider({ children }: { children: ReactNode }) {
     <SyncSheetContext.Provider value={present}>
       {children}
       <IonModal
+        className="sync-modal"
         isOpen={open}
         onDidDismiss={close}
         presentingElement={presenting ?? undefined}
