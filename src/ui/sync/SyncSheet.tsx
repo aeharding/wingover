@@ -314,7 +314,7 @@ function Pitch({
               onClick={() => onBuy("yearly")}
               data-testid="sync-subscribe-yearly"
             >
-              {`${yearly.displayPrice}/year · 2 months free`}
+              {`${yearly.displayPrice}/year`}
             </IonButton>
           )}
         </>
@@ -523,7 +523,7 @@ function Connected({
                 onClick={() => onBuy("yearly")}
                 data-testid="sync-resubscribe-yearly"
               >
-                {`${byTerm(products, "yearly")?.displayPrice}/year · 2 months free`}
+                {`${byTerm(products, "yearly")?.displayPrice}/year`}
               </IonButton>
             )}
           </>
