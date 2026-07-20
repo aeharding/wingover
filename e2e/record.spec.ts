@@ -58,9 +58,9 @@ test("arm, auto-takeoff, reload kill drill, stop, logbook", async ({
 
   await page.getByRole("button", { name: "Stop flight" }).click();
   await page.getByRole("button", { name: "Stop", exact: true }).click();
-  await expect(
-    page.getByRole("button", { name: "Start Flight" }),
-  ).toBeVisible({ timeout: 15_000 });
+  await expect(page.getByRole("button", { name: "Start Flight" })).toBeVisible({
+    timeout: 15_000,
+  });
   await expect(page.locator("ion-tab-bar")).toBeVisible();
 
   await page.getByText("Logbook", { exact: true }).click();
@@ -225,9 +225,7 @@ test("zoom control zooms one-fingered from anywhere without unpinning follow", a
   await expect.poll(valuenow).toBeLessThan(zoomedIn);
 });
 
-test("follow and track-up: two modes, deliberate resumes", async ({
-  page,
-}) => {
+test("follow and track-up: two modes, deliberate resumes", async ({ page }) => {
   await page.goto("/?mock-speed=40&map-style=blank");
   await page.getByRole("button", { name: "Start Flight" }).click();
   await expect(page.getByTestId("recording")).toBeVisible({ timeout: 10_000 });
@@ -283,7 +281,10 @@ test("edge guards stop an edge swipe from panning, inland drag still pans", asyn
   // — so it covers the home-indicator swipe strip exactly and steals no more
   // map-drag area than the OS already owns. Chromium reports no inset, so zero
   // here is correct and intentional: no gesture area, nothing to guard.
-  await expect(page.locator(".map-edge-guard-bottom")).toHaveCSS("height", "0px");
+  await expect(page.locator(".map-edge-guard-bottom")).toHaveCSS(
+    "height",
+    "0px",
+  );
 
   // So to exercise the guard at all, stand in for a device that HAS a home
   // indicator. This tests the mechanism (a touch starting in the guard is

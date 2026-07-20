@@ -529,9 +529,7 @@ test("a credential that goes stale is explained, not dumped raw", async ({
     timeout: 20_000,
   });
   await expect(
-    page.getByText(
-      /rejected this device's password|locked this account/,
-    ),
+    page.getByText(/rejected this device's password|locked this account/),
   ).toBeVisible();
 
   await context.close();

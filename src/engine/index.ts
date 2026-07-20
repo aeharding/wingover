@@ -36,7 +36,10 @@ function chooseEngine(): RecordingEngine {
       const compression = Number.isFinite(parsed) && parsed > 0 ? parsed : 60;
       return new GeolocationRecordingEngine(
         withWebCore(
-          createSimulatorSource(compression, parseHome(params.get("mock-home"))),
+          createSimulatorSource(
+            compression,
+            parseHome(params.get("mock-home")),
+          ),
         ),
       );
     }

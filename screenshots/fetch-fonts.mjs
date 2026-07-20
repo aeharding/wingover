@@ -19,12 +19,42 @@ const BASE = `https://raw.githubusercontent.com/sahibjotsaggu/San-Francisco-Pro-
 // download as a cheap integrity check (catches a truncated/mangled fetch or an
 // error page served in place of the font).
 const FACES = [
-  { family: "SF Pro Text", weight: 400, file: "SF-Pro-Text-Regular.otf", bytes: 2230172 },
-  { family: "SF Pro Text", weight: 500, file: "SF-Pro-Text-Medium.otf", bytes: 2300344 },
-  { family: "SF Pro Text", weight: 600, file: "SF-Pro-Text-Semibold.otf", bytes: 2300840 },
-  { family: "SF Pro Text", weight: 700, file: "SF-Pro-Text-Bold.otf", bytes: 2275752 },
-  { family: "SF Pro Text", weight: 800, file: "SF-Pro-Text-Heavy.otf", bytes: 2286508 },
-  { family: "SF Pro Display", weight: 800, file: "SF-Pro-Display-Heavy.otf", bytes: 2311308 },
+  {
+    family: "SF Pro Text",
+    weight: 400,
+    file: "SF-Pro-Text-Regular.otf",
+    bytes: 2230172,
+  },
+  {
+    family: "SF Pro Text",
+    weight: 500,
+    file: "SF-Pro-Text-Medium.otf",
+    bytes: 2300344,
+  },
+  {
+    family: "SF Pro Text",
+    weight: 600,
+    file: "SF-Pro-Text-Semibold.otf",
+    bytes: 2300840,
+  },
+  {
+    family: "SF Pro Text",
+    weight: 700,
+    file: "SF-Pro-Text-Bold.otf",
+    bytes: 2275752,
+  },
+  {
+    family: "SF Pro Text",
+    weight: 800,
+    file: "SF-Pro-Text-Heavy.otf",
+    bytes: 2286508,
+  },
+  {
+    family: "SF Pro Display",
+    weight: 800,
+    file: "SF-Pro-Display-Heavy.otf",
+    bytes: 2311308,
+  },
 ];
 
 if (existsSync(OUT) && !process.argv.includes("--force")) {

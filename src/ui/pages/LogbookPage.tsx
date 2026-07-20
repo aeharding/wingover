@@ -157,9 +157,7 @@ export default function LogbookPage() {
             ) : (
               // A fresh browser is a front door: the pilot's flights are on
               // their phone, and this is where they connect (SYNC-UX).
-              <ConnectFunnel
-                onImport={() => fileInputRef.current?.click()}
-              />
+              <ConnectFunnel onImport={() => fileInputRef.current?.click()} />
             )}
           </div>
         ) : (

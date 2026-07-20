@@ -12,6 +12,8 @@
     "test:watch": "vitest",
     "e2e": "playwright test",
     "lint": "eslint .",
+    "format": "prettier --write .",
+    "format:check": "prettier --check .",
     "screenshots": "node screenshots/fetch-fonts.mjs && node screenshots/generate.mjs && node screenshots/generate-ipad.mjs && node screenshots/web-optimize.mjs && node screenshots/hero.mjs",
     "release": "release-it"
   },

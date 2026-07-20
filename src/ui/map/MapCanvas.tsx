@@ -1,11 +1,7 @@
 import { useEffect, useEffectEvent, useRef, useState } from "react";
 
 import { onSettingChanged } from "../../storage/local";
-import {
-  type MapAppearance,
-  type MapViewKind,
-  resolveBackend,
-} from "./config";
+import { type MapAppearance, type MapViewKind, resolveBackend } from "./config";
 import type { MapView } from "./types";
 
 // maplibre-gl.css must load before MapView.css: both style the shared
@@ -179,8 +175,7 @@ export default function MapCanvas({
     const container = containerRef.current;
     if (!container) return;
     const stop = (event: TouchEvent | MouseEvent) => {
-      const x =
-        "touches" in event ? event.touches[0]?.clientX : event.clientX;
+      const x = "touches" in event ? event.touches[0]?.clientX : event.clientX;
       if (x !== undefined && x <= 60) event.stopPropagation();
     };
     container.addEventListener("touchstart", stop);

@@ -14,26 +14,23 @@ test("live map survives a slow-loading style", async ({ page }) => {
   // Abort all MapTiler first, then win specifically for the street style
   // (keyless OpenFreeMap liberty; the live map is light) with a slow, minimal style.
   await page.route("**/api.maptiler.com/**", (route) => route.abort());
-  await page.route(
-    "**/styles/liberty",
-    async (route) => {
-      await new Promise((resolve) => setTimeout(resolve, 800));
-      await route.fulfill({
-        contentType: "application/json",
-        body: JSON.stringify({
-          version: 8,
-          sources: {},
-          layers: [
-            {
-              id: "background",
-              type: "background",
-              paint: { "background-color": "#222" },
-            },
-          ],
-        }),
-      });
-    },
-  );
+  await page.route("**/styles/liberty", async (route) => {
+    await new Promise((resolve) => setTimeout(resolve, 800));
+    await route.fulfill({
+      contentType: "application/json",
+      body: JSON.stringify({
+        version: 8,
+        sources: {},
+        layers: [
+          {
+            id: "background",
+            type: "background",
+            paint: { "background-color": "#222" },
+          },
+        ],
+      }),
+    });
+  });
 
   await page.goto("/?mock-speed=40&map=maplibre");
   await page.getByRole("button", { name: "Start Flight" }).click();
@@ -127,7 +124,9 @@ test("a style reload that drops the aircraft layer restores it", async ({
   // track source — then let the app's own styledata listener run. It must
   // restore the aircraft (the "aircraft vanishes until app restart" bug).
   const result = await page.evaluate(() => {
-    const container = document.querySelector(".map-container") as HTMLElement & {
+    const container = document.querySelector(
+      ".map-container",
+    ) as HTMLElement & {
       __map?: {
         getLayer: (id: string) => unknown;
         getSource: (id: string) => unknown;
@@ -191,26 +190,23 @@ test("flight detail draws the track even when the map style loads slowly", async
     }),
   );
 
-  await page.route(
-    "**/styles/dark",
-    async (route) => {
-      await new Promise((resolve) => setTimeout(resolve, 800));
-      await route.fulfill({
-        contentType: "application/json",
-        body: JSON.stringify({
-          version: 8,
-          sources: {},
-          layers: [
-            {
-              id: "background",
-              type: "background",
-              paint: { "background-color": "#222" },
-            },
-          ],
-        }),
-      });
-    },
-  );
+  await page.route("**/styles/dark", async (route) => {
+    await new Promise((resolve) => setTimeout(resolve, 800));
+    await route.fulfill({
+      contentType: "application/json",
+      body: JSON.stringify({
+        version: 8,
+        sources: {},
+        layers: [
+          {
+            id: "background",
+            type: "background",
+            paint: { "background-color": "#222" },
+          },
+        ],
+      }),
+    });
+  });
 
   await page.goto("/?mock-speed=40&map=maplibre");
   await page.getByRole("button", { name: "Start Flight" }).click();
@@ -310,26 +306,23 @@ test("composite map draws all flights even with a slow style", async ({
     }),
   );
 
-  await page.route(
-    "**/styles/dark",
-    async (route) => {
-      await new Promise((resolve) => setTimeout(resolve, 800));
-      await route.fulfill({
-        contentType: "application/json",
-        body: JSON.stringify({
-          version: 8,
-          sources: {},
-          layers: [
-            {
-              id: "background",
-              type: "background",
-              paint: { "background-color": "#222" },
-            },
-          ],
-        }),
-      });
-    },
-  );
+  await page.route("**/styles/dark", async (route) => {
+    await new Promise((resolve) => setTimeout(resolve, 800));
+    await route.fulfill({
+      contentType: "application/json",
+      body: JSON.stringify({
+        version: 8,
+        sources: {},
+        layers: [
+          {
+            id: "background",
+            type: "background",
+            paint: { "background-color": "#222" },
+          },
+        ],
+      }),
+    });
+  });
 
   await page.goto("/?mock-speed=40&map=maplibre");
   await page.getByRole("button", { name: "Start Flight" }).click();

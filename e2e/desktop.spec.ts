@@ -5,9 +5,7 @@ import { expect, test } from "@playwright/test";
 // into a laptop-sized window to exercise the rail + split layout.
 test.use({ viewport: { width: 1280, height: 800 } });
 
-test("a plain browser hides Fly and lands on the logbook", async ({
-  page,
-}) => {
+test("a plain browser hides Fly and lands on the logbook", async ({ page }) => {
   // No ?mock-speed: this is a real browser visitor, not the e2e engine seam.
   await page.goto("/?map-style=blank");
   // The index redirect now carries the query string across (it is ?mock-speed

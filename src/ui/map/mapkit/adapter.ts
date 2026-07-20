@@ -106,9 +106,7 @@ export async function createMapKitMapView(
   // Ground screens ride dark like the rest of the app; the live flight
   // map is always light (sunlight-readable, STEERING).
   map.colorScheme =
-    appearance === "light"
-      ? mapkit.ColorScheme.Light
-      : mapkit.ColorScheme.Dark;
+    appearance === "light" ? mapkit.ColorScheme.Light : mapkit.ColorScheme.Dark;
 
   // The bearing the app last asked for. The glyph is oriented against this
   // (heading − lastBearing → 0 in track-up), so it holds pointing up.
@@ -256,11 +254,9 @@ export async function createMapKitMapView(
         // pixel y grows downward, hence the signs).
         region.center = new mapkit.Coordinate(
           region.center.latitude -
-            ((inset.bottom - inset.top) / 2) *
-              (region.span.latitudeDelta / h),
+            ((inset.bottom - inset.top) / 2) * (region.span.latitudeDelta / h),
           region.center.longitude +
-            ((inset.right - inset.left) / 2) *
-              (region.span.longitudeDelta / w),
+            ((inset.right - inset.left) / 2) * (region.span.longitudeDelta / w),
         );
       }
       map.setRegionAnimated(region, false);
@@ -434,7 +430,10 @@ export async function createMapKitMapView(
           }
           // Rebuild the id→ann map in spec order: update survivors in place,
           // create the rest.
-          const next = new Map<string, { ann: Annotation; reusable: boolean }>();
+          const next = new Map<
+            string,
+            { ann: Annotation; reusable: boolean }
+          >();
           for (const spec of specs) {
             const existing = entries.get(spec.id);
             if (reusedIds.has(spec.id) && existing) {
@@ -450,7 +449,10 @@ export async function createMapKitMapView(
               marker.glyphColor = spec.glyphColor ?? "#000000";
               next.set(spec.id, existing);
             } else {
-              next.set(spec.id, { ann: create(spec), reusable: !isInteractive(spec) });
+              next.set(spec.id, {
+                ann: create(spec),
+                reusable: !isInteractive(spec),
+              });
             }
           }
           entries = next;

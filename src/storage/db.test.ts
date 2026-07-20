@@ -104,7 +104,9 @@ describe("storage", () => {
       { attachments: false },
     );
     expect(renamed._attachments).toBeUndefined();
-    expect((await syncedDb().get(`track:${flight.id}`))._rev).toBe(trackBefore._rev);
+    expect((await syncedDb().get(`track:${flight.id}`))._rev).toBe(
+      trackBefore._rev,
+    );
   });
 
   it("deletes a flight and its track", async () => {
@@ -207,4 +209,3 @@ describe("stripMintedFlightNames", () => {
     expect((await getFlight(minted.id))?.name).toBe("");
   });
 });
-

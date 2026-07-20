@@ -1,8 +1,6 @@
 {
   "identifier": "default",
-  "windows": [
-    "main"
-  ],
+  "windows": ["main"],
   "permissions": [
     "core:default",
     "wingover:allow-start-watch",

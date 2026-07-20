@@ -155,7 +155,10 @@ export default function LiveTrackMap({
     const rate = event.ctrlKey ? PINCH_ZOOM_RATE : WHEEL_ZOOM_RATE;
     const { min, max } = map.zoomRange();
     const from = map.camera().zoom;
-    const next = Math.min(max, Math.max(min, from - (event.deltaY ?? 0) * rate));
+    const next = Math.min(
+      max,
+      Math.max(min, from - (event.deltaY ?? 0) * rate),
+    );
     map.moveTo({ zoom: next }, { animate: false });
   });
 
@@ -363,7 +366,10 @@ export default function LiveTrackMap({
           (home indicator). A touch that starts here targets the guard,
           not the map's canvas, so the map cannot pan while iOS decides
           the edge swipe; the OS gesture, being system-level, still fires. */}
-      <div className="map-edge-guard map-edge-guard-bottom" aria-hidden="true" />
+      <div
+        className="map-edge-guard map-edge-guard-bottom"
+        aria-hidden="true"
+      />
     </div>
   );
 }

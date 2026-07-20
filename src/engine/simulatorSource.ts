@@ -55,7 +55,11 @@ export function createSimulatorSource(
         localStorage.setItem(SESSION_KEY, JSON.stringify(session));
       }
       const active = session;
-      const simulator = new FlightSimulator(active.seed, active.startedAt, home);
+      const simulator = new FlightSimulator(
+        active.seed,
+        active.startedAt,
+        home,
+      );
       let emitted = 0;
       const timer = setInterval(
         () => {

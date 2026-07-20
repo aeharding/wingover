@@ -69,7 +69,10 @@ export function createFakeMapView(container: HTMLElement): MapView {
   function project(at: LngLat): { x: number; y: number } {
     const { w, h } = size();
     const d = degPerPx();
-    return { x: w / 2 + (at[0] - center[0]) / d, y: h / 2 - (at[1] - center[1]) / d };
+    return {
+      x: w / 2 + (at[0] - center[0]) / d,
+      y: h / 2 - (at[1] - center[1]) / d,
+    };
   }
 
   // ── gesture fan-out ───────────────────────────────────────────────────

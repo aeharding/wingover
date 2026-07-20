@@ -60,9 +60,8 @@ describe("isLanded", () => {
 // detected and the walk saved into the flight of record.
 describe("isLanded at walking pace", () => {
   it("detects a landing while the pilot walks around", () => {
-    const walking = Array.from(
-      { length: LANDING_SUSTAIN_FIXES },
-      (_, i) => fix(1.2 + (i % 3) * 0.4),
+    const walking = Array.from({ length: LANDING_SUSTAIN_FIXES }, (_, i) =>
+      fix(1.2 + (i % 3) * 0.4),
     );
     expect(isLanded([...flying, ...walking])).toBe(true);
   });

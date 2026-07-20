@@ -60,9 +60,7 @@ describe("format", () => {
 
   it("titles a flight: name, else launch site, else date", () => {
     const base = { startedAt: new Date("2026-07-12T06:42:00").getTime() };
-    expect(flightTitle({ ...base, name: "Sunset ridge" })).toBe(
-      "Sunset ridge",
-    );
+    expect(flightTitle({ ...base, name: "Sunset ridge" })).toBe("Sunset ridge");
     expect(flightTitle({ ...base, name: "", launchName: "Madcity" })).toBe(
       "Madcity",
     );
