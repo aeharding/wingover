@@ -39,12 +39,16 @@ export default defineConfig({
     // Dev/preview parity with Caddy's exact-/ landing route.
     landingAtRoot(),
     // Service worker: precache the app shell so a cold start works offline
-    // and repeat loads are instant. autoUpdate = a new deploy's worker takes
-    // over without a prompt. The manifest already lives in public/ (linked
-    // from index.html + the landing), so this only adds the worker. Disabled
-    // in dev by default, so the dev server and e2e never see it.
+    // and repeat loads are instant. registerType "prompt" (paired with a worker
+    // that does NOT skipWaiting/clientsClaim, see src/sw.ts) so a new deploy's
+    // worker WAITS instead of hijacking an open tab — a hijacked tab still runs
+    // the old index.html and would 404 on the old chunk hashes this deploy
+    // dropped, breaking the map until a manual refresh. The update lands on the
+    // next launch. The manifest already lives in public/ (linked from
+    // index.html + the landing), so this only adds the worker. Disabled in dev
+    // by default, so the dev server and e2e never see it.
     VitePWA({
-      registerType: "autoUpdate",
+      registerType: "prompt",
       manifest: false,
       strategies: "injectManifest",
       srcDir: "src",
