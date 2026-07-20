@@ -94,11 +94,18 @@ function SyncHome({
     setProblem(null);
     try {
       await sync.purchase(term);
+      // StoreKit's entitlement just changed; re-derive the local copy so a
+      // resubscribe's fresh "active" replaces the stale mount-time "expired"
+      // (this appleSub cache is otherwise stamped once — see its declaration).
+      void sync.appleSubscriptionState().then(setAppleSub);
       // The thank-you/link page gets its own screen (SYNC-UX.md junction 2):
       // the inline offer was cramped and hard to read. Only when the purchase
       // actually connected this device (the supporter guard means a self-
-      // hoster's purchase doesn't).
-      if (isTauri() && sync.currentAccount()?.kind === "apple") {
+      // hoster's purchase doesn't), and only when NOT already linked: pushing
+      // the link offer to a pilot who linked long ago (a resubscribe)
+      // contradicts the "Linked" view right behind it.
+      const acct = sync.currentAccount();
+      if (isTauri() && acct?.kind === "apple" && acct.login !== "apple") {
         void nav.current?.push(() => <LinkAccountPage nav={nav} />);
       }
     } catch (error) {
@@ -745,9 +752,14 @@ function LinkAccountPage({
   // actually landed read-only (a stale purchase transaction) — the pilot
   // popped back to a contradiction.
   const status = useSyncExternalStore(sync.subscribe, sync.currentStatus);
+  const account = useSyncExternalStore(sync.subscribe, sync.currentAccount);
   const [busy, setBusy] = useState(false);
   const [problem, setProblem] = useState<string | null>(null);
-  const [linked, setLinked] = useState(false);
+  // Derived from the account, NOT a local flag: linkAppleAccount patches
+  // account.login and the store notifies, so this flips on its own. It also
+  // means an already-linked pilot who lands here (a resubscribe) reads "Linked",
+  // never an offer to link what is already linked — the bug this replaced.
+  const linked = account?.login === "apple";
 
   function pop() {
     void nav.current?.pop();
@@ -758,7 +770,8 @@ function LinkAccountPage({
     setProblem(null);
     try {
       await sync.linkAppleAccount();
-      setLinked(true);
+      // No local flag: account.login flips to "apple" through the store and
+      // `linked` above recomputes true.
     } catch (error) {
       const text = error instanceof Error ? error.message : String(error);
       if (!/cancelled/i.test(text)) setProblem(text);
