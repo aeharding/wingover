@@ -14,7 +14,10 @@ import {
 // the ONLY coverage of the products (iOS) path: the sync e2e runs on the web,
 // where StoreKit serves nothing, so it never sees a real plan button.
 const product = (term: sync.SubscriptionTerm, displayPrice: string) =>
-  ({ id: sync.SUBSCRIPTION_PRODUCT_IDS[term], displayPrice }) as sync.StoreProduct;
+  ({
+    id: sync.SUBSCRIPTION_PRODUCT_IDS[term],
+    displayPrice,
+  }) as sync.StoreProduct;
 
 const monthly = product("monthly", "$2.99");
 const yearly = product("yearly", "$29.99");

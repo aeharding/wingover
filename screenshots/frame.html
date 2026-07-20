@@ -20,7 +20,11 @@
         height: 100%;
       }
       body {
-        font-family: "SF Pro Text", system-ui, -apple-system, sans-serif;
+        font-family:
+          "SF Pro Text",
+          system-ui,
+          -apple-system,
+          sans-serif;
         color: var(--ink);
         overflow: hidden;
         /* The landing's dusk sky + a warm sun-glow low, so the App Store
@@ -232,9 +236,31 @@
             <div class="statusbar" id="sb">
               <span id="clock">9:41</span>
               <span class="glyphs">
-                <svg viewBox="0 0 18 12"><rect x="0" y="8" width="3" height="4" rx="1"/><rect x="5" y="5" width="3" height="7" rx="1"/><rect x="10" y="2.5" width="3" height="9.5" rx="1"/><rect x="15" y="0" width="3" height="12" rx="1"/></svg>
-                <svg viewBox="0 0 16 12"><path d="M8 2.4c2.7 0 5.2 1 7.1 2.8l-1.5 1.6A7.9 7.9 0 0 0 8 5.6c-2.1 0-4.1.8-5.6 2.2L.9 6.2A10.3 10.3 0 0 1 8 2.4Zm0 3.9c1.6 0 3.1.6 4.2 1.7l-1.6 1.6c-.7-.7-1.6-1-2.6-1s-1.9.4-2.6 1L3.8 8c1.1-1.1 2.6-1.7 4.2-1.7Zm0 3.6 1.5 1.5-1.5 1.5-1.5-1.5L8 10Z"/></svg>
-                <svg viewBox="0 0 27 12"><rect x="0.5" y="0.5" width="22" height="11" rx="3" fill="none" stroke="currentColor" stroke-opacity="0.4"/><rect x="2" y="2" width="19" height="8" rx="1.6"/><rect x="24" y="4" width="2" height="4" rx="1"/></svg>
+                <svg viewBox="0 0 18 12">
+                  <rect x="0" y="8" width="3" height="4" rx="1" />
+                  <rect x="5" y="5" width="3" height="7" rx="1" />
+                  <rect x="10" y="2.5" width="3" height="9.5" rx="1" />
+                  <rect x="15" y="0" width="3" height="12" rx="1" />
+                </svg>
+                <svg viewBox="0 0 16 12">
+                  <path
+                    d="M8 2.4c2.7 0 5.2 1 7.1 2.8l-1.5 1.6A7.9 7.9 0 0 0 8 5.6c-2.1 0-4.1.8-5.6 2.2L.9 6.2A10.3 10.3 0 0 1 8 2.4Zm0 3.9c1.6 0 3.1.6 4.2 1.7l-1.6 1.6c-.7-.7-1.6-1-2.6-1s-1.9.4-2.6 1L3.8 8c1.1-1.1 2.6-1.7 4.2-1.7Zm0 3.6 1.5 1.5-1.5 1.5-1.5-1.5L8 10Z"
+                  />
+                </svg>
+                <svg viewBox="0 0 27 12">
+                  <rect
+                    x="0.5"
+                    y="0.5"
+                    width="22"
+                    height="11"
+                    rx="3"
+                    fill="none"
+                    stroke="currentColor"
+                    stroke-opacity="0.4"
+                  />
+                  <rect x="2" y="2" width="19" height="8" rx="1.6" />
+                  <rect x="24" y="4" width="2" height="4" rx="1" />
+                </svg>
               </span>
             </div>
           </div>
@@ -258,7 +284,10 @@
         // \n in a sub becomes a hard break, so a phrase like "Just flying"
         // never orphans across an auto-wrap.
         sub.innerHTML = (F.sub || "")
-          .replace(/[&<>]/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;" })[c])
+          .replace(
+            /[&<>]/g,
+            (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;" })[c],
+          )
           .replace(/\n/g, "<br>");
         sub.style.display = F.sub ? "" : "none";
         const checks = document.getElementById("checks");
@@ -269,8 +298,10 @@
           checks.appendChild(s);
         });
         checks.style.display = (F.checks || []).length ? "" : "none";
-        document.getElementById("sb").className = "statusbar " + (F.tone || "light");
-        document.getElementById("hi").className = "home-indicator " + (F.tone || "light");
+        document.getElementById("sb").className =
+          "statusbar " + (F.tone || "light");
+        document.getElementById("hi").className =
+          "home-indicator " + (F.tone || "light");
         document.getElementById("shot").src = F.shot;
       };
     </script>

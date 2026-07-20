@@ -1,5 +1,12 @@
 import { spawn } from "child_process";
-import { copyFileSync, mkdirSync, readdirSync, readFileSync, rmSync, writeFileSync } from "fs";
+import {
+  copyFileSync,
+  mkdirSync,
+  readdirSync,
+  readFileSync,
+  rmSync,
+  writeFileSync,
+} from "fs";
 import { createRequire } from "module";
 import net from "net";
 import { dirname, join } from "path";
@@ -18,7 +25,10 @@ function portOpen(port) {
 async function ensureServer() {
   if (await portOpen(5173)) return null;
   console.log("booting dev server…");
-  const p = spawn("pnpm", ["dev"], { cwd: "/home/aeharding/wingover", stdio: "ignore" });
+  const p = spawn("pnpm", ["dev"], {
+    cwd: "/home/aeharding/wingover",
+    stdio: "ignore",
+  });
   for (let i = 0; i < 60; i++) {
     await new Promise((r) => setTimeout(r, 1000));
     if (await portOpen(5173)) return p;
@@ -82,23 +92,41 @@ function smooth(a) {
     return s[s.length >> 1];
   });
   return med.map((_, i) => {
-    let s = 0, n = 0;
-    for (let k = Math.max(0, i - 5); k <= Math.min(med.length - 1, i + 5); k++) { s += med[k]; n++; }
+    let s = 0,
+      n = 0;
+    for (
+      let k = Math.max(0, i - 5);
+      k <= Math.min(med.length - 1, i + 5);
+      k++
+    ) {
+      s += med[k];
+      n++;
+    }
     return s / n;
   });
 }
 function toFixes(pts) {
-  const R = 6371000, rad = Math.PI / 180;
+  const R = 6371000,
+    rad = Math.PI / 180;
   const der = pts.map((p, i) => {
     const prev = pts[i - 1];
-    let speed = 0, course = 0, climbRate = 0;
+    let speed = 0,
+      course = 0,
+      climbRate = 0;
     if (prev && p.t && prev.t) {
       const dt = (p.t - prev.t) / 1000 || 1;
-      const dLat = (p.lat - prev.lat) * rad, dLon = (p.lon - prev.lon) * rad;
-      const a = Math.sin(dLat / 2) ** 2 + Math.cos(prev.lat * rad) * Math.cos(p.lat * rad) * Math.sin(dLon / 2) ** 2;
+      const dLat = (p.lat - prev.lat) * rad,
+        dLon = (p.lon - prev.lon) * rad;
+      const a =
+        Math.sin(dLat / 2) ** 2 +
+        Math.cos(prev.lat * rad) *
+          Math.cos(p.lat * rad) *
+          Math.sin(dLon / 2) ** 2;
       speed = (2 * R * Math.asin(Math.min(1, Math.sqrt(a)))) / dt;
       const y = Math.sin(dLon) * Math.cos(p.lat * rad);
-      const x = Math.cos(prev.lat * rad) * Math.sin(p.lat * rad) - Math.sin(prev.lat * rad) * Math.cos(p.lat * rad) * Math.cos(dLon);
+      const x =
+        Math.cos(prev.lat * rad) * Math.sin(p.lat * rad) -
+        Math.sin(prev.lat * rad) * Math.cos(p.lat * rad) * Math.cos(dLon);
       course = (Math.atan2(y, x) / rad + 360) % 360;
       climbRate = (p.alt - prev.alt) / dt;
     }
@@ -106,20 +134,32 @@ function toFixes(pts) {
   });
   const speed = smooth(der.map((d) => d.speed));
   return pts.map((p, i) => ({
-    timestamp: p.t, latitude: p.lat, longitude: p.lon, altitude: p.alt,
-    speed: speed[i], course: der[i].course, climbRate: der[i].climbRate,
-    horizontalAccuracy: 5, verticalAccuracy: 5,
+    timestamp: p.t,
+    latitude: p.lat,
+    longitude: p.lon,
+    altitude: p.alt,
+    speed: speed[i],
+    course: der[i].course,
+    climbRate: der[i].climbRate,
+    horizontalAccuracy: 5,
+    verticalAccuracy: 5,
   }));
 }
 function gpxToFixes(file) {
   const xml = readFileSync(join(HERE, "assets", file), "utf8");
-  const re = /<trkpt[^>]*lat="([-\d.]+)"[^>]*lon="([-\d.]+)"[^>]*>([\s\S]*?)<\/trkpt>/g;
+  const re =
+    /<trkpt[^>]*lat="([-\d.]+)"[^>]*lon="([-\d.]+)"[^>]*>([\s\S]*?)<\/trkpt>/g;
   const pts = [];
   let m;
   while ((m = re.exec(xml))) {
     const ele = /<ele>([-\d.]+)<\/ele>/.exec(m[3]);
     const time = /<time>([^<]+)<\/time>/.exec(m[3]);
-    pts.push({ lat: +m[1], lon: +m[2], alt: ele ? +ele[1] : 0, t: time ? Date.parse(time[1]) : null });
+    pts.push({
+      lat: +m[1],
+      lon: +m[2],
+      alt: ele ? +ele[1] : 0,
+      t: time ? Date.parse(time[1]) : null,
+    });
   }
   return toFixes(pts);
 }
@@ -137,18 +177,29 @@ function clipGpx(xml, seconds) {
     kept.push(m[0]);
   }
   const last = matches[matches.length - 1];
-  return xml.slice(0, matches[0].index) + kept.join("\n      ") + xml.slice(last.index + last[0].length);
+  return (
+    xml.slice(0, matches[0].index) +
+    kept.join("\n      ") +
+    xml.slice(last.index + last[0].length)
+  );
 }
 function synth(lng, lat, alt, startIso, count) {
   const pts = [];
-  let course = 40, la = lat, lo = lng;
+  let course = 40,
+    la = lat,
+    lo = lng;
   const start = Date.parse(startIso);
   for (let i = 0; i < count; i++) {
     course += Math.sin(i / 8) * 7 + Math.sin(i / 3.3) * 2.4;
     const cr = (course * Math.PI) / 180;
     la += (22 * Math.cos(cr)) / 111320;
     lo += (22 * Math.sin(cr)) / (111320 * Math.cos((la * Math.PI) / 180));
-    pts.push({ lat: la, lon: lo, alt: alt + Math.sin(i / 12) * 60 + i * 0.2, t: start + i * 3000 });
+    pts.push({
+      lat: la,
+      lon: lo,
+      alt: alt + Math.sin(i / 12) * 60 + i * 0.2,
+      t: start + i * 3000,
+    });
   }
   return toFixes(pts);
 }
@@ -156,18 +207,42 @@ function synth(lng, lat, alt, startIso, count) {
 // The detail pane (shot 2) opens FLIGHTS[0]; make it the REAL Oregon flight so
 // the split shows an authentic recorded track, not a synthetic line.
 const FLIGHTS = [
-  { name: "Wing tip touches w/ Paul", launchName: "Oregon, WI",
-    notes: "Clear, 4mph from NW, Paul followed on his slow student wing, I had to trim in to do tip touches.",
-    fixes: gpxToFixes("flight-a.gpx") },
-  { name: "One-tank XC", launchName: "Blue Mounds, WI",
+  {
+    name: "Wing tip touches w/ Paul",
+    launchName: "Oregon, WI",
+    notes:
+      "Clear, 4mph from NW, Paul followed on his slow student wing, I had to trim in to do tip touches.",
+    fixes: gpxToFixes("flight-a.gpx"),
+  },
+  {
+    name: "One-tank XC",
+    launchName: "Blue Mounds, WI",
     notes: "Cloudbase ~5,000, light NW. Full tank down the valley and back.",
-    fixes: synth(-89.84, 43.03, 395, "2025-06-24T19:20:00Z", 3000) },
-  { name: "Golden hour cruise", launchName: "Blue Mounds, WI", notes: "",
-    fixes: synth(-89.83, 43.02, 390, "2025-07-12T23:40:00Z", 980) },
-  { name: "First flight of spring", launchName: "Brooklyn, WI", notes: "",
-    fixes: synth(-89.38, 42.85, 300, "2025-03-29T21:00:00Z", 840) },
-].map((f) => ({ ...f, id: `recorded-${f.fixes[0].timestamp}`, startedAt: f.fixes[0].timestamp }));
-const PINS = [[-90.33, 43.47], [-90.27, 43.51], [-90.21, 43.49], [-90.15, 43.55]];
+    fixes: synth(-89.84, 43.03, 395, "2025-06-24T19:20:00Z", 3000),
+  },
+  {
+    name: "Golden hour cruise",
+    launchName: "Blue Mounds, WI",
+    notes: "",
+    fixes: synth(-89.83, 43.02, 390, "2025-07-12T23:40:00Z", 980),
+  },
+  {
+    name: "First flight of spring",
+    launchName: "Brooklyn, WI",
+    notes: "",
+    fixes: synth(-89.38, 42.85, 300, "2025-03-29T21:00:00Z", 840),
+  },
+].map((f) => ({
+  ...f,
+  id: `recorded-${f.fixes[0].timestamp}`,
+  startedAt: f.fixes[0].timestamp,
+}));
+const PINS = [
+  [-90.33, 43.47],
+  [-90.27, 43.51],
+  [-90.21, 43.49],
+  [-90.15, 43.55],
+];
 
 async function seedFlights(page) {
   await page.evaluate(async (flights) => {
@@ -175,10 +250,20 @@ async function seedFlights(page) {
     const { computeStats } = await import("/src/flight/stats.ts");
     const local = await import("/src/storage/local.ts");
     await local.setSetting("mapView", "satellite");
-    for (const existing of await db.listFlights()) await db.deleteFlight(existing.id);
+    for (const existing of await db.listFlights())
+      await db.deleteFlight(existing.id);
     for (const f of flights) {
       await db.saveFlight(
-        { id: f.id, name: f.name, notes: f.notes, startedAt: f.startedAt, stats: computeStats(f.fixes), updatedAt: Date.now(), launchAt: [f.fixes[0].longitude, f.fixes[0].latitude], launchName: f.launchName },
+        {
+          id: f.id,
+          name: f.name,
+          notes: f.notes,
+          startedAt: f.startedAt,
+          stats: computeStats(f.fixes),
+          updatedAt: Date.now(),
+          launchAt: [f.fixes[0].longitude, f.fixes[0].latitude],
+          launchName: f.launchName,
+        },
         f.fixes,
       );
     }
@@ -191,7 +276,15 @@ async function seedPins(page) {
     await local.setSetting("mapView", "satellite");
     let i = 0;
     for (const [lng, lat] of pins) {
-      await db.savePin({ id: crypto.randomUUID(), name: `Pin ${i + 1}`, notes: "", latitude: lat, longitude: lng, createdAt: Date.now() + i * 1000, updatedAt: Date.now() + i * 1000 });
+      await db.savePin({
+        id: crypto.randomUUID(),
+        name: `Pin ${i + 1}`,
+        notes: "",
+        latitude: lat,
+        longitude: lng,
+        createdAt: Date.now() + i * 1000,
+        updatedAt: Date.now() + i * 1000,
+      });
       i++;
     }
   }, PINS);
@@ -204,7 +297,9 @@ async function waitForMapIdle(page) {
         const c = document.querySelector(".map-container");
         const m = c && c.__map;
         if (m) return m.loaded() && m.areTilesLoaded();
-        return !!document.querySelector(".map-container canvas, .map-container .mk-tile-loaded, .mk-map-view");
+        return !!document.querySelector(
+          ".map-container canvas, .map-container .mk-tile-loaded, .mk-map-view",
+        );
       },
       { timeout: 12000 },
     )
@@ -229,7 +324,10 @@ const SHOTS = [
       await page.getByTestId("recording").waitFor({ timeout: 15000 });
       await page.locator(".map-container").first().waitFor({ timeout: 15000 });
       await page.waitForTimeout(9000);
-      await page.getByRole("button", { name: "Follow aircraft" }).click().catch(() => {});
+      await page
+        .getByRole("button", { name: "Follow aircraft" })
+        .click()
+        .catch(() => {});
       await waitForMapIdle(page);
       await page.waitForTimeout(3000);
       await waitForMapIdle(page);
@@ -275,15 +373,30 @@ async function run() {
   const browser = await chromium.launch();
   try {
     const newCapCtx = async () => {
-      const ctx = await browser.newContext({ viewport: { width: APPVP[0], height: APPVP[1] }, deviceScaleFactor: DSF });
-      await ctx.addInitScript(() => localStorage.setItem("wingover.live-view", JSON.stringify({ mapView: "satellite", follow: true, trackUp: false })));
+      const ctx = await browser.newContext({
+        viewport: { width: APPVP[0], height: APPVP[1] },
+        deviceScaleFactor: DSF,
+      });
+      await ctx.addInitScript(() =>
+        localStorage.setItem(
+          "wingover.live-view",
+          JSON.stringify({
+            mapView: "satellite",
+            follow: true,
+            trackUp: false,
+          }),
+        ),
+      );
       return ctx;
     };
     // Recording shot isolated from ground shots — a mock recording's WAL would
     // otherwise finalize into a stray logbook flight (same reason as the phone).
     const capGround = await newCapCtx();
     const capFlight = await newCapCtx();
-    const com = await browser.newContext({ viewport: { width: LOGICAL[0], height: LOGICAL[1] }, deviceScaleFactor: DSF });
+    const com = await browser.newContext({
+      viewport: { width: LOGICAL[0], height: LOGICAL[1] },
+      deviceScaleFactor: DSF,
+    });
     let flightsSeeded = false;
     const pinsSeeded = new Set();
     for (const shot of SHOTS) {
@@ -312,12 +425,18 @@ async function run() {
         if (shot.clip) gpxBody = clipGpx(gpxBody, shot.clip);
         await page.route(
           (url) => url.pathname === "/__mock.gpx",
-          (route) => route.fulfill({ contentType: "application/gpx+xml", body: gpxBody }),
+          (route) =>
+            route.fulfill({
+              contentType: "application/gpx+xml",
+              body: gpxBody,
+            }),
         );
       }
       await page.goto(BASE + shot.url, { waitUntil: "domcontentloaded" });
       await page.addStyleTag({ path: SF_CSS });
-      await page.addStyleTag({ content: shot.flight ? CAPTURE_CSS_FLIGHT : CAPTURE_CSS });
+      await page.addStyleTag({
+        content: shot.flight ? CAPTURE_CSS_FLIGHT : CAPTURE_CSS,
+      });
       await shot.prep(page);
       await page.evaluate(() => document.fonts.ready);
       const raw = await page.screenshot({ type: "png" });
@@ -326,7 +445,10 @@ async function run() {
       const cpage = await com.newPage();
       await cpage.goto(FRAME, { waitUntil: "networkidle" });
       await cpage.evaluate((F) => window.__render(F), {
-        headline: shot.headline, sub: shot.sub ?? "", u: U, screenAr: SCREEN_AR,
+        headline: shot.headline,
+        sub: shot.sub ?? "",
+        u: U,
+        screenAr: SCREEN_AR,
         shot: "data:image/png;base64," + raw.toString("base64"),
       });
       await cpage.evaluate(() => document.fonts.ready);
@@ -339,13 +461,18 @@ async function run() {
     // Reached only if every shot rendered: swap the staged set into fastlane.
     if (!only) {
       for (const f of readdirSync(FASTLANE)) {
-        if (f.startsWith(`${PREFIX}-`) && f.endsWith(".png")) rmSync(join(FASTLANE, f));
+        if (f.startsWith(`${PREFIX}-`) && f.endsWith(".png"))
+          rmSync(join(FASTLANE, f));
       }
-      for (const f of readdirSync(STAGE)) copyFileSync(join(STAGE, f), join(FASTLANE, f));
+      for (const f of readdirSync(STAGE))
+        copyFileSync(join(STAGE, f), join(FASTLANE, f));
     }
   } finally {
     await browser.close();
     if (server) server.kill();
   }
 }
-run().catch((e) => { console.error(e); process.exit(1); });
+run().catch((e) => {
+  console.error(e);
+  process.exit(1);
+});

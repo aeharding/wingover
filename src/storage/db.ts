@@ -449,4 +449,3 @@ export async function deletePin(pinId: string) {
   const doc = await db.get(pinDocId(pinId));
   await db.remove(doc);
 }
-

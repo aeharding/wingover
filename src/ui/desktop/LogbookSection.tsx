@@ -107,7 +107,7 @@ export default function LogbookSection() {
       );
       const next =
         event.key === "ArrowDown"
-          ? flights[index + 1] ?? (index === -1 ? flights[0] : undefined)
+          ? (flights[index + 1] ?? (index === -1 ? flights[0] : undefined))
           : flights[index - 1];
       if (!next) return;
       event.preventDefault();

@@ -126,8 +126,7 @@ export async function appleSubscriptionState(): Promise<
     const payload = JSON.parse(
       atob(base64 + "=".repeat((4 - (base64.length % 4)) % 4)),
     ) as { expiresDate?: number };
-    return payload.expiresDate !== undefined &&
-      payload.expiresDate > Date.now()
+    return payload.expiresDate !== undefined && payload.expiresDate > Date.now()
       ? "active"
       : "expired";
   } catch {
@@ -197,7 +196,9 @@ export async function appleIdentityToken(): Promise<string> {
     const result = await apple.auth.signIn();
     return result.authorization.id_token;
   } catch (error) {
-    if ((error as { error?: string } | null)?.error === "popup_closed_by_user") {
+    if (
+      (error as { error?: string } | null)?.error === "popup_closed_by_user"
+    ) {
       throw new Error("cancelled", { cause: error });
     }
     throw error instanceof Error

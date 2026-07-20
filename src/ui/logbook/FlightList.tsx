@@ -108,19 +108,19 @@ export default function FlightList({
                       A plain slotted div is outside the label's scope
                       class and the fight cannot exist. */}
                   <div className="flight-row">
-                      <div className="flight-row-id">
-                        <h2>{title}</h2>
-                        {sub && <p>{sub}</p>}
+                    <div className="flight-row-id">
+                      <h2>{title}</h2>
+                      {sub && <p>{sub}</p>}
+                    </div>
+                    <div className="flight-row-stats">
+                      <div className="flight-row-duration">
+                        {formatAirtime(flight.stats.durationSeconds)}
                       </div>
-                      <div className="flight-row-stats">
-                        <div className="flight-row-duration">
-                          {formatAirtime(flight.stats.durationSeconds)}
-                        </div>
-                        <div className="flight-row-distance">
-                          {formatDistance(flight.stats.distanceMeters, units)}
-                        </div>
+                      <div className="flight-row-distance">
+                        {formatDistance(flight.stats.distanceMeters, units)}
                       </div>
                     </div>
+                  </div>
                 </IonItem>
                 <IonItemOptions side="end">
                   <IonItemOption

@@ -205,7 +205,11 @@ function RailSync() {
         ) : (
           <IonIcon
             icon={
-              off ? closeCircle : label === "On" ? checkmarkOutline : syncOutline
+              off
+                ? closeCircle
+                : label === "On"
+                  ? checkmarkOutline
+                  : syncOutline
             }
             aria-hidden="true"
           />

@@ -1,8 +1,5 @@
 import { MercatorCoordinate } from "maplibre-gl";
-import type {
-  CustomLayerInterface,
-  Map as MapLibreMap,
-} from "maplibre-gl";
+import type { CustomLayerInterface, Map as MapLibreMap } from "maplibre-gl";
 
 import type { AircraftState } from "../types";
 
@@ -117,7 +114,11 @@ export function createAircraftLayer(
       gl.useProgram(program);
       gl.uniformMatrix4fv(uMatrix, false, new Float32Array(translated));
       gl.bindBuffer(gl.ARRAY_BUFFER, buffer);
-      gl.bufferData(gl.ARRAY_BUFFER, new Float32Array(vertices), gl.DYNAMIC_DRAW);
+      gl.bufferData(
+        gl.ARRAY_BUFFER,
+        new Float32Array(vertices),
+        gl.DYNAMIC_DRAW,
+      );
       gl.enableVertexAttribArray(aPos);
       gl.vertexAttribPointer(aPos, 2, gl.FLOAT, false, 0, 0);
       gl.enable(gl.BLEND);

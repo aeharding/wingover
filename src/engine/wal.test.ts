@@ -13,7 +13,9 @@ describe("WalSession round-trip", () => {
     const session: WalSession = {
       armedAt: 1,
       takeoffIndex: 0,
-      waypoints: [{ id: "a", latitude: 43.03, longitude: -89.4, radiusM: 321.8688 }],
+      waypoints: [
+        { id: "a", latitude: 43.03, longitude: -89.4, radiusM: 321.8688 },
+      ],
       adhocWaypoints: [
         {
           id: "x",

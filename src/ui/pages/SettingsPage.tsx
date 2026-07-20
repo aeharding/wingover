@@ -113,32 +113,37 @@ export default function SettingsPage() {
         {/* Desktop's rail chip IS this row (SYNC-UX.md); saying it twice
             makes two places to glance and one of them stale. */}
         {!isDesktop && (
-        <IonList inset>
-          <IonItem button detail onClick={openSync} data-testid="settings-sync">
-            <IonLabel>Sync</IonLabel>
-            <IonNote
-              slot="end"
-              className={`settings-sync-note ${
-                off
-                  ? "settings-sync-off"
-                  : syncNote === "On"
-                    ? "settings-sync-on"
-                    : syncLapsed
-                      ? "settings-sync-warn"
-                      : ""
-              }`}
+          <IonList inset>
+            <IonItem
+              button
+              detail
+              onClick={openSync}
+              data-testid="settings-sync"
             >
-              {off && <IonIcon icon={closeCircle} aria-hidden="true" />}
-              {!off && syncBusy && (
-                <IonSpinner name="crescent" aria-hidden="true" />
-              )}
-              {!off && !syncBusy && syncNote === "On" && (
-                <IonIcon icon={checkmarkOutline} aria-hidden="true" />
-              )}
-              {syncNote}
-            </IonNote>
-          </IonItem>
-        </IonList>
+              <IonLabel>Sync</IonLabel>
+              <IonNote
+                slot="end"
+                className={`settings-sync-note ${
+                  off
+                    ? "settings-sync-off"
+                    : syncNote === "On"
+                      ? "settings-sync-on"
+                      : syncLapsed
+                        ? "settings-sync-warn"
+                        : ""
+                }`}
+              >
+                {off && <IonIcon icon={closeCircle} aria-hidden="true" />}
+                {!off && syncBusy && (
+                  <IonSpinner name="crescent" aria-hidden="true" />
+                )}
+                {!off && !syncBusy && syncNote === "On" && (
+                  <IonIcon icon={checkmarkOutline} aria-hidden="true" />
+                )}
+                {syncNote}
+              </IonNote>
+            </IonItem>
+          </IonList>
         )}
 
         {/* Recording settings only exist where recording does: on the web
@@ -161,7 +166,11 @@ export default function SettingsPage() {
 
         <div className="settings-list-header">General</div>
         <IonList inset>
-          <IonItem button detail onClick={() => history.push("/settings/units")}>
+          <IonItem
+            button
+            detail
+            onClick={() => history.push("/settings/units")}
+          >
             <IonLabel>Units</IonLabel>
             <IonNote slot="end">
               {units === "metric" ? "Metric" : "Imperial"}

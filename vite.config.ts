@@ -21,7 +21,10 @@ const tauriDevHost = process.env.TAURI_DEV_HOST;
 // alone. GITHUB_SHA is the same value auto-exported on the direct runner, the
 // fallback for the TestFlight build (which only ever builds main). Empty for
 // local dev builds. Sliced to 8 chars.
-const gitSha = (process.env.GIT_SHA ?? process.env.GITHUB_SHA ?? "").slice(0, 8);
+const gitSha = (process.env.GIT_SHA ?? process.env.GITHUB_SHA ?? "").slice(
+  0,
+  8,
+);
 
 export default defineConfig({
   define: {

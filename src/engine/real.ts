@@ -153,7 +153,8 @@ export class GeolocationRecordingEngine implements RecordingEngine {
   // (tests, ancient webviews) recording proceeds unguarded, as before.
   private acquireRecorderLock(): Promise<boolean> {
     if (this.releaseRecorderLock) return Promise.resolve(true);
-    const locks = typeof navigator === "undefined" ? undefined : navigator.locks;
+    const locks =
+      typeof navigator === "undefined" ? undefined : navigator.locks;
     if (!locks) return Promise.resolve(true);
     return new Promise((resolve) => {
       locks

@@ -20,10 +20,10 @@ credential, and is it entitled?_ — and the two rails answer its two halves.
 **Paying and connecting are independent.** Every combination is a real,
 supported person:
 
-|                    | **Logged in**                                          | **Not logged in**                          |
-| ------------------ | ------------------------------------------------------ | ------------------------------------------ |
-| **Subscribed**     | Mainline hosted subscriber — or the **supporter**, self-hosting on principle while paying | Paying, but turned sync off on this device; or a fresh device before restore |
-| **Not subscribed** | Self-hoster (free, forever) — and the **lapsed** subscriber: login persists, entitlement gone → read-only | Fresh install                              |
+|                    | **Logged in**                                                                                             | **Not logged in**                                                            |
+| ------------------ | --------------------------------------------------------------------------------------------------------- | ---------------------------------------------------------------------------- |
+| **Subscribed**     | Mainline hosted subscriber — or the **supporter**, self-hosting on principle while paying                 | Paying, but turned sync off on this device; or a fresh device before restore |
+| **Not subscribed** | Self-hoster (free, forever) — and the **lapsed** subscriber: login persists, entitlement gone → read-only | Fresh install                                                                |
 
 The supporter and lapsed quadrants are the proof of the model. A subscription
 with a self-host login is _support_, and the UI must not treat it as a
@@ -183,18 +183,18 @@ deletion, the one way an account ends.)
 
 ## Onboarding, by person
 
-| Who, where | What happens |
-| --- | --- |
-| New pilot, iOS | Records flights with zero sync UI. After the **first flight saves**, a one-time nudge — "This flight lives only on this phone" — opens the Subscription pitch. Sync is **never** part of first-run onboarding. |
-| New pilot subscribes | Apple's sheet → paid → device auto-connects → interstitial offers the Apple Account link → done. Zero credentials seen. |
-| Subscriber, reinstall/migrated phone | Keychain survives → auto-connects. The best login flow is none; preserve it at all costs. |
-| Subscriber, clean new device | Log In → Use my subscription (or Sign in with Apple, once linked). Never shown a price. |
-| Lapsed subscriber | Row: `Sync — Not subscribed`. The sheet explains (new flights stay local, synced history is safe) and offers Resubscribe. Never locked out (STEERING: paying buys writes, not reads). |
-| Self-hoster, any platform | Log In → Use my own server. Their rows finally tell the truth: `Subscription — · Sync — On`. The `—` is a standing, non-naggy invitation to support. |
-| Supporter (subscribes while self-hosting) | Subscription activates; login untouched (junction 2 guard). |
-| Subscriber wanting desktop | The post-purchase page (or "Use on your computer") links the Apple ID; Sign in with Apple at wingover.app. |
-| Subscriber wanting desktop, later | PWA → Sign in with Apple. The login flow is born on the PWA; iOS only borrows its door. |
-| Web subscriber _(later)_ gets an iPhone | iOS Log In → Sign in with Apple → same status screen. Their subscription is managed on the web; the iOS app never mentions web pricing. |
+| Who, where                                | What happens                                                                                                                                                                                                   |
+| ----------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| New pilot, iOS                            | Records flights with zero sync UI. After the **first flight saves**, a one-time nudge — "This flight lives only on this phone" — opens the Subscription pitch. Sync is **never** part of first-run onboarding. |
+| New pilot subscribes                      | Apple's sheet → paid → device auto-connects → interstitial offers the Apple Account link → done. Zero credentials seen.                                                                                        |
+| Subscriber, reinstall/migrated phone      | Keychain survives → auto-connects. The best login flow is none; preserve it at all costs.                                                                                                                      |
+| Subscriber, clean new device              | Log In → Use my subscription (or Sign in with Apple, once linked). Never shown a price.                                                                                                                        |
+| Lapsed subscriber                         | Row: `Sync — Not subscribed`. The sheet explains (new flights stay local, synced history is safe) and offers Resubscribe. Never locked out (STEERING: paying buys writes, not reads).                          |
+| Self-hoster, any platform                 | Log In → Use my own server. Their rows finally tell the truth: `Subscription — · Sync — On`. The `—` is a standing, non-naggy invitation to support.                                                           |
+| Supporter (subscribes while self-hosting) | Subscription activates; login untouched (junction 2 guard).                                                                                                                                                    |
+| Subscriber wanting desktop                | The post-purchase page (or "Use on your computer") links the Apple ID; Sign in with Apple at wingover.app.                                                                                                     |
+| Subscriber wanting desktop, later         | PWA → Sign in with Apple. The login flow is born on the PWA; iOS only borrows its door.                                                                                                                        |
+| Web subscriber _(later)_ gets an iPhone   | iOS Log In → Sign in with Apple → same status screen. Their subscription is managed on the web; the iOS app never mentions web pricing.                                                                        |
 
 ## Logout, one verb per platform
 
@@ -229,16 +229,16 @@ destructive act — required in-app once linking exists (guideline 5.1.1(v)).
 
 ## App Store constraints this design already satisfies
 
-| Guideline | How |
-| --- | --- |
-| 3.1.1 — IAP for unlocking; restore must exist | Subscribe is IAP; "Use my subscription" + Restore Purchases are the restore |
-| 3.1.3(b) — multiplatform services | Web-subscribed pilots may sign in on iOS because IAP is also offered |
-| 4.8 — login services | SIWA is the only social login; trivially satisfied |
-| 5.1.1 — no forced account creation | Purchase works with zero identity; linking is skippable |
-| 5.1.1(v) — account deletion | In-app, on the Sync sheet, same milestone as linking |
-| Paywall metadata | Price, period, terms, privacy on the pitch |
-| Family Sharing | **Off, deliberately** — identity is the transaction; sharing it is undesigned. Enforced only by an App Store Connect toggle; the store code tolerates a shared originalTransactionId defensively |
-| The login gate | **Our invention; no guideline blesses it.** Refusing a login until a sub stops renewing could read to a reviewer as holding access hostage. Accepted risk: the refusal must offer the refund and manage doors in the same breath, never bare — and the copy gets review-eyes before it ships (Stripe milestone) |
+| Guideline                                     | How                                                                                                                                                                                                                                                                                                             |
+| --------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| 3.1.1 — IAP for unlocking; restore must exist | Subscribe is IAP; "Use my subscription" + Restore Purchases are the restore                                                                                                                                                                                                                                     |
+| 3.1.3(b) — multiplatform services             | Web-subscribed pilots may sign in on iOS because IAP is also offered                                                                                                                                                                                                                                            |
+| 4.8 — login services                          | SIWA is the only social login; trivially satisfied                                                                                                                                                                                                                                                              |
+| 5.1.1 — no forced account creation            | Purchase works with zero identity; linking is skippable                                                                                                                                                                                                                                                         |
+| 5.1.1(v) — account deletion                   | In-app, on the Sync sheet, same milestone as linking                                                                                                                                                                                                                                                            |
+| Paywall metadata                              | Price, period, terms, privacy on the pitch                                                                                                                                                                                                                                                                      |
+| Family Sharing                                | **Off, deliberately** — identity is the transaction; sharing it is undesigned. Enforced only by an App Store Connect toggle; the store code tolerates a shared originalTransactionId defensively                                                                                                                |
+| The login gate                                | **Our invention; no guideline blesses it.** Refusing a login until a sub stops renewing could read to a reviewer as holding access hostage. Accepted risk: the refusal must offer the refund and manage doors in the same breath, never bare — and the copy gets review-eyes before it ships (Stripe milestone) |
 
 ## Phasing
 

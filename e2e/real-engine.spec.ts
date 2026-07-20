@@ -164,9 +164,9 @@ test("real engine: gate, backdated takeoff, reload kill drill, stop", async ({
 
   await page.getByRole("button", { name: "Stop flight" }).click();
   await page.getByRole("button", { name: "Stop", exact: true }).click();
-  await expect(
-    page.getByRole("button", { name: "Start Flight" }),
-  ).toBeVisible({ timeout: 15_000 });
+  await expect(page.getByRole("button", { name: "Start Flight" })).toBeVisible({
+    timeout: 15_000,
+  });
   await page.getByText("Logbook", { exact: true }).click();
   await expect(page.getByText(/1 flights/)).toBeVisible();
   expect(pageErrors).toEqual([]);
@@ -345,7 +345,9 @@ test("in-flight nav: planned distance, tap-select and clear a checkpoint", async
 
   // Idle Fly screen shows the planned-route length.
   await page.getByText("Fly", { exact: true }).click();
-  await expect(page.getByTestId("planned-route")).toContainText("Planned route:");
+  await expect(page.getByTestId("planned-route")).toContainText(
+    "Planned route:",
+  );
 
   // Take off: nav targets the next waypoint, but with nothing SELECTED the
   // clear-checkpoint button is not shown (it is not a "remove next" button).
@@ -383,8 +385,8 @@ test("track-up toggle rotates the camera immediately, not on a glide", async ({
       () =>
         (
           document.querySelector(".map-container") as HTMLElement & {
-          __display?: { course: number };
-        }
+            __display?: { course: number };
+          }
         ).__display?.course ?? 0,
     );
   await expect.poll(readCourse, { timeout: 5000 }).toBeGreaterThan(70);

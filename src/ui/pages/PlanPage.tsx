@@ -172,27 +172,29 @@ export default function PlanPage() {
   // On release of a midpoint handle: insert a new pin between the leg's two
   // ends. Route order is by createdAt (listPins sorts on it), so the new pin
   // takes a timestamp between its neighbors to land in the right spot.
-  const insertPinAfter = useEffectEvent(async (legIndex: number, at: LngLat) => {
-    const before = pins[legIndex];
-    const after = pins[legIndex + 1];
-    if (!before || !after) return;
-    const pin: Pin = {
-      id: crypto.randomUUID(),
-      name: "Pin",
-      notes: "",
-      latitude: at[1],
-      longitude: at[0],
-      createdAt: (before.createdAt + after.createdAt) / 2,
-      updatedAt: Date.now(),
-    };
-    await savePin(pin);
-    setPins((current) => {
-      const index = current.findIndex((p) => p.id === after.id);
-      const next = [...current];
-      next.splice(index < 0 ? next.length : index, 0, pin);
-      return next;
-    });
-  });
+  const insertPinAfter = useEffectEvent(
+    async (legIndex: number, at: LngLat) => {
+      const before = pins[legIndex];
+      const after = pins[legIndex + 1];
+      if (!before || !after) return;
+      const pin: Pin = {
+        id: crypto.randomUUID(),
+        name: "Pin",
+        notes: "",
+        latitude: at[1],
+        longitude: at[0],
+        createdAt: (before.createdAt + after.createdAt) / 2,
+        updatedAt: Date.now(),
+      };
+      await savePin(pin);
+      setPins((current) => {
+        const index = current.findIndex((p) => p.id === after.id);
+        const next = [...current];
+        next.splice(index < 0 ? next.length : index, 0, pin);
+        return next;
+      });
+    },
+  );
 
   function handleReady(next: MapView | null) {
     if (!next) {
@@ -238,7 +240,9 @@ export default function PlanPage() {
       pins.length < 2
         ? ""
         : pins
-            .map((pin) => `${pin.latitude.toFixed(5)},${pin.longitude.toFixed(5)}`)
+            .map(
+              (pin) => `${pin.latitude.toFixed(5)},${pin.longitude.toFixed(5)}`,
+            )
             .join(";"),
     );
     const specs: MarkerSpec[] = pins.map((pin, index) => {
@@ -307,8 +311,8 @@ export default function PlanPage() {
               <div className="plan-pane-rows">
                 {pins.length === 0 ? (
                   <div className="plan-pane-empty">
-                    Long-press the map to drop a pin: launches, LZs, fuel
-                    stops, hazards.
+                    Long-press the map to drop a pin: launches, LZs, fuel stops,
+                    hazards.
                   </div>
                 ) : (
                   pins.map((pin, index) => (
