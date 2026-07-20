@@ -222,7 +222,12 @@ export async function signIn(): Promise<void> {
   const token = await appleIdentityToken();
   if (jws) {
     await connectWithSubscription(jws);
-    await linkAppleAccount(token);
+    // The connect is what backs up flights; linking the Apple ID is the
+    // optional cross-device step. A failure here (e.g. this Apple ID already
+    // logs into a DIFFERENT account) must NOT surface as a sync error on a
+    // screen that already reads "On" — swallow it. The device is synced; it
+    // simply isn't linked, which the connected view shows honestly.
+    await linkAppleAccount(token).catch(() => {});
     return;
   }
   await enable(siwaProvider(API_URL, token));

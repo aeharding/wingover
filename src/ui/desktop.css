@@ -82,8 +82,18 @@
   color: color(display-p3 0 1 0);
 }
 
-.rail-sync.sync-mid :is(ion-icon, ion-spinner) {
+.rail-sync.sync-warn :is(ion-icon, ion-spinner) {
   color: var(--ion-color-warning);
+}
+
+.rail-sync.sync-error :is(ion-icon, ion-spinner) {
+  color: color(display-p3 1 0 0);
+}
+
+/* Transient/quiet states (connecting, paused, dormant): no alarm color, so the
+   chip stops flashing amber on a normal in-flight pause. */
+.rail-sync.sync-neutral :is(ion-icon, ion-spinner) {
+  color: var(--ion-color-medium);
 }
 
 .rail-sync ion-spinner {

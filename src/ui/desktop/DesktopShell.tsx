@@ -33,7 +33,7 @@ import MapProviderPage from "../pages/MapProviderPage";
 import PlanPage from "../pages/PlanPage";
 import SettingsPage from "../pages/SettingsPage";
 import UnitsPage from "../pages/UnitsPage";
-import { describe } from "../sync/describe";
+import { describe, type SyncTone } from "../sync/describe";
 import { useSyncSheet } from "../sync/SyncSheets";
 import { useLogOut } from "../sync/useLogOut";
 import { useCanRecord } from "../useCanRecord";
@@ -48,6 +48,17 @@ import LogbookSection from "./LogbookSection";
  * only the navigation machinery is ours. Phones keep the untouched Ionic
  * tab shell (see App.tsx).
  */
+// Semantic tone → the rail chip's color class. Shared with the Settings row and
+// the sheet via describe(), so all three agree — the chip no longer paints every
+// non-On/Off state (a normal in-flight pause, a dormant account, an error) amber.
+const RAIL_TONE_CLASS: Record<SyncTone, string> = {
+  on: "sync-on",
+  off: "sync-off",
+  warn: "sync-warn",
+  error: "sync-error",
+  neutral: "sync-neutral",
+};
+
 export default function DesktopShell() {
   return (
     <BrowserRouter>
@@ -184,15 +195,14 @@ function RailSync() {
   const { flights } = useFlights();
   const [presentAlert] = useIonAlert();
   const off = status.state === "off";
-  const { label, detail } = describe(status);
+  const { label, detail, tone } = describe(status);
   const active =
     status.state === "connecting" ||
     (status.state === "syncing" && status.active);
-  const tone = off ? "sync-off" : label === "On" ? "sync-on" : "sync-mid";
   return (
     <>
       <button
-        className={`rail-link rail-sync ${tone}`}
+        className={`rail-link rail-sync ${RAIL_TONE_CLASS[tone]}`}
         aria-label={`Sync: ${off ? "Off" : label}`}
         data-testid="rail-sync"
         onClick={(e) => {

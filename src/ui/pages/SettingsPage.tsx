@@ -26,12 +26,23 @@ import {
 } from "../../storage/local";
 import * as sync from "../../sync";
 import { useSettings } from "../settings/SettingsContext";
-import { describe as describeSync } from "../sync/describe";
+import { describe as describeSync, type SyncTone } from "../sync/describe";
 import { useSyncSheet } from "../sync/SyncSheets";
 import { useCanRecord } from "../useCanRecord";
 import { useIsDesktop } from "../useIsDesktop";
 
 import "./SettingsPage.css";
+
+// Semantic tone → the Settings row's note color. Off red, On green, a lapse
+// amber, a problem red; transient states neutral. One map (shared derivation in
+// describe), so the row can never disagree with the sheet or rail on a status.
+const SETTINGS_TONE_CLASS: Record<SyncTone, string> = {
+  on: "settings-sync-on",
+  off: "settings-sync-off",
+  warn: "settings-sync-warn",
+  error: "settings-sync-error",
+  neutral: "",
+};
 
 export default function SettingsPage() {
   const { units } = useSettings();
@@ -46,10 +57,7 @@ export default function SettingsPage() {
   // Everything subscription-shaped lives inside the sheet.
   const off = syncStatus.state === "off";
   const described = describeSync(syncStatus);
-  const syncNote = off ? "Off" : described.label;
-  // A lapse ("Not subscribed", read-only) reads amber here too, not neutral —
-  // the one distinction the copy rules single out, previously only in the sheet.
-  const syncLapsed = described.tone === "sync-state-readonly";
+  const syncNote = described.label;
   const syncBusy =
     syncStatus.state === "connecting" ||
     (syncStatus.state === "syncing" && syncStatus.active);
@@ -123,15 +131,7 @@ export default function SettingsPage() {
               <IonLabel>Sync</IonLabel>
               <IonNote
                 slot="end"
-                className={`settings-sync-note ${
-                  off
-                    ? "settings-sync-off"
-                    : syncNote === "On"
-                      ? "settings-sync-on"
-                      : syncLapsed
-                        ? "settings-sync-warn"
-                        : ""
-                }`}
+                className={`settings-sync-note ${SETTINGS_TONE_CLASS[described.tone]}`}
               >
                 {off && <IonIcon icon={closeCircle} aria-hidden="true" />}
                 {!off && syncBusy && (
