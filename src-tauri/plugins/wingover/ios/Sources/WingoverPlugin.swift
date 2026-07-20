@@ -156,6 +156,9 @@ class WingoverPlugin: Plugin, CLLocationManagerDelegate {
   private var lastError: String?
   // WKWebView.uiDelegate is weak, so the plugin retains ours for the app's life.
   private var newWindowDelegate: NewWindowToBrowserDelegate?
+  // The webview whose <ion-app> the keyboard observers resize; weak because the
+  // webview owns the plugin's lifetime, not the other way around.
+  private weak var keyboardWebview: WKWebView?
 
   // WKWebView raises the keyboard only for focus born of a user gesture; a
   // programmatic focus() lands a caret with no keyboard — which is how the
@@ -213,6 +216,66 @@ class WingoverPlugin: Plugin, CLLocationManagerDelegate {
     let delegate = NewWindowToBrowserDelegate(forwardingTo: webview.uiDelegate)
     newWindowDelegate = delegate
     webview.uiDelegate = delegate
+    installKeyboardResize(webview)
+  }
+
+  //
+  // On-screen keyboard resize
+  //
+  // WKWebView, unlike Safari, never resizes for the keyboard: its scroll view
+  // just slides the whole body up to keep the caret visible, so a field near the
+  // bottom sits behind the keyboard and the layout never reclaims the space. Tauri
+  // ships no keyboard handling and the JS `visualViewport` height doesn't track the
+  // keyboard inside WKWebView (tauri #10631), so the fix has to originate natively.
+  //
+  // This ports Capacitor's `resize: 'ionic'` mode — what Voyager ships — plus
+  // Voyager's own patch on top of it. The plugin sets <ion-app>'s inline height to
+  // (window height - keyboard height) and clears it on hide, leaving `vh`, `100%`,
+  // and the webview frame untouched so fixed overlays (the live map) never reflow.
+  // Voyager's patch drops Capacitor's animation-duration delay (delay:0) and wraps
+  // the write in requestAnimationFrame, so the shrink tracks the keyboard's own
+  // animation instead of snapping a beat behind it (aeharding's "keyboard resize is
+  // slow on iOS" fix). contentInset is zeroed on every event so WKWebView's own
+  // keyboard avoidance can't stack a scroll region on top of the resize.
+  private func installKeyboardResize(_ webview: WKWebView) {
+    keyboardWebview = webview
+    let center = NotificationCenter.default
+    center.addObserver(
+      self, selector: #selector(keyboardWillChange(_:)),
+      name: UIResponder.keyboardWillShowNotification, object: nil)
+    center.addObserver(
+      self, selector: #selector(keyboardWillChange(_:)),
+      name: UIResponder.keyboardWillHideNotification, object: nil)
+  }
+
+  @objc private func keyboardWillChange(_ notification: Notification) {
+    guard let webview = keyboardWebview else { return }
+
+    let hiding = notification.name == UIResponder.keyboardWillHideNotification
+    var keyboardHeight: CGFloat = 0
+    if !hiding,
+      let frame = (notification.userInfo?[UIResponder.keyboardFrameEndUserInfoKey] as? NSValue)?
+        .cgRectValue
+    {
+      keyboardHeight = frame.height
+    }
+
+    // Keep WKWebView's built-in keyboard avoidance from adding a scroll region on
+    // top of the <ion-app> resize — Capacitor's resetScrollView, every event.
+    webview.scrollView.contentInset = .zero
+
+    // The full window height, matching Capacitor's key-window bounds. -1 is the
+    // sentinel that clears the inline height on hide, verbatim from the plugin.
+    let windowHeight = webview.window?.bounds.height ?? UIScreen.main.bounds.height
+    let target = keyboardHeight > 0 ? Int(windowHeight - keyboardHeight) : -1
+    let js =
+      "requestAnimationFrame(() => { var el = document.querySelector('ion-app'); "
+      + "var height = \(target); if (el) { el.style.height = height > -1 ? height + 'px' : null; } })"
+    webview.evaluateJavaScript(js, completionHandler: nil)
+  }
+
+  deinit {
+    NotificationCenter.default.removeObserver(self)
   }
 
   //
