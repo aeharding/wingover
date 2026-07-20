@@ -39,11 +39,24 @@
    sounds like it belongs on. */
 .sync-headline {
   margin: 0 0 1.5rem;
-  font-size: 1.75rem;
+  font-size: 2rem;
   font-weight: 700;
-  line-height: 1.25;
+  line-height: 1.14;
+  letter-spacing: -0.02em;
+  text-wrap: balance;
   color: var(--ion-text-color);
   text-shadow: 0 1px 12px rgba(0, 0, 0, 0.8);
+}
+
+/* Web pitch: the sentence that stands in for the StoreKit-only buy button —
+   what sync is and where to get it. Sits where the buttons would, readable
+   over the hero photo (STEERING: sunlight-readable). */
+.sync-pitch-note {
+  margin: 0 0 1rem;
+  font-size: 1rem;
+  line-height: 1.5;
+  color: var(--ion-text-color);
+  text-shadow: 0 1px 8px rgba(0, 0, 0, 0.8);
 }
 
 /* Centred as a block, left-aligned inside: centred bullets are unreadable,
@@ -94,6 +107,7 @@
 .sync-state-label {
   font-size: 2rem;
   font-weight: 700;
+  letter-spacing: -0.01em;
 }
 
 .sync-state-detail {
@@ -140,7 +154,9 @@
 .sync-login-body ion-button[expand="block"] {
   --padding-top: 1.25rem;
   --padding-bottom: 1.25rem;
+  --border-radius: 14px;
   margin-bottom: 0.75rem;
+  font-weight: 600;
 }
 
 /* Quiet, secondary actions (Restore Purchases, Manage subscription): present
@@ -215,4 +231,11 @@
 
 .settings-sync-on {
   color: color(display-p3 0 1 0);
+}
+
+/* A lapse ("Not subscribed", read-only) reads amber in the row too, not a
+   neutral gray: the one status the copy rules single out (SYNC-UX.md). Never
+   red, because nothing is lost. */
+.settings-sync-warn {
+  color: var(--ion-color-warning);
 }

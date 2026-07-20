@@ -45,7 +45,11 @@ export default function SettingsPage() {
   // dash — it reads as red "⊗ Off": flights live only on this phone.
   // Everything subscription-shaped lives inside the sheet.
   const off = syncStatus.state === "off";
-  const syncNote = off ? "Off" : describeSync(syncStatus).label;
+  const described = describeSync(syncStatus);
+  const syncNote = off ? "Off" : described.label;
+  // A lapse ("Not subscribed", read-only) reads amber here too, not neutral —
+  // the one distinction the copy rules single out, previously only in the sheet.
+  const syncLapsed = described.tone === "sync-state-readonly";
   const syncBusy =
     syncStatus.state === "connecting" ||
     (syncStatus.state === "syncing" && syncStatus.active);
@@ -119,7 +123,9 @@ export default function SettingsPage() {
                   ? "settings-sync-off"
                   : syncNote === "On"
                     ? "settings-sync-on"
-                    : ""
+                    : syncLapsed
+                      ? "settings-sync-warn"
+                      : ""
               }`}
             >
               {off && <IonIcon icon={closeCircle} aria-hidden="true" />}
