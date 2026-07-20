@@ -247,6 +247,196 @@ function byTerm(
   );
 }
 
+// The month-primary + year-companion pair, shared by the pitch and a lapse.
+export function PlanButtons({
+  monthly,
+  yearly,
+  verb,
+  testId,
+  busy,
+  onBuy,
+}: {
+  monthly: sync.StoreProduct;
+  yearly: sync.StoreProduct | undefined;
+  verb: string;
+  testId: string;
+  busy: boolean;
+  onBuy: (term: sync.SubscriptionTerm) => void;
+}) {
+  return (
+    <>
+      <IonButton
+        expand="block"
+        disabled={busy}
+        onClick={() => onBuy("monthly")}
+        data-testid={testId}
+      >
+        {busy ? (
+          <IonSpinner name="crescent" />
+        ) : (
+          `${verb} · ${monthly.displayPrice}/month`
+        )}
+      </IonButton>
+      {yearly && (
+        <IonButton
+          expand="block"
+          fill="outline"
+          disabled={busy}
+          onClick={() => onBuy("yearly")}
+          data-testid={`${testId}-yearly`}
+        >
+          {`${yearly.displayPrice}/year`}
+        </IonButton>
+      )}
+    </>
+  );
+}
+
+// Sign in with Apple: a quiet text link (the iOS pitch) or the white HIG button.
+export function AppleSignInButton({
+  label,
+  onClick,
+  busy,
+  testId,
+  quiet = false,
+}: {
+  label: string;
+  onClick: () => void;
+  busy: boolean;
+  testId: string;
+  quiet?: boolean;
+}) {
+  if (quiet) {
+    return (
+      <IonButton
+        fill="clear"
+        size="small"
+        className="sync-quiet-action"
+        disabled={busy}
+        onClick={onClick}
+        data-testid={testId}
+      >
+        {busy ? <IonSpinner name="crescent" /> : label}
+      </IonButton>
+    );
+  }
+  return (
+    <IonButton
+      expand="block"
+      className="sync-siwa-button"
+      disabled={busy}
+      onClick={onClick}
+      data-testid={testId}
+    >
+      {busy ? (
+        <IonSpinner name="crescent" />
+      ) : (
+        <>
+          <IonIcon slot="start" icon={logoApple} aria-hidden="true" />
+          {label}
+        </>
+      )}
+    </IonButton>
+  );
+}
+
+// Pitch buy CTA: the plans on iOS, a placeholder before products load, or a
+// plain line on the web (no StoreKit, so no button and no price to quote).
+export function SubscribeArea({
+  products,
+  busy,
+  onBuy,
+}: {
+  products: sync.StoreProduct[];
+  busy: boolean;
+  onBuy: (term: sync.SubscriptionTerm) => void;
+}) {
+  const monthly = byTerm(products, "monthly");
+  if (monthly)
+    return (
+      <PlanButtons
+        monthly={monthly}
+        yearly={byTerm(products, "yearly")}
+        verb="Subscribe"
+        testId="sync-subscribe"
+        busy={busy}
+        onBuy={onBuy}
+      />
+    );
+  if (isTauri())
+    return (
+      <IonButton expand="block" disabled data-testid="sync-subscribe">
+        Subscribe (coming soon)
+      </IonButton>
+    );
+  return (
+    <p className="sync-pitch-note" data-testid="sync-web-note">
+      Sync is a subscription, from the Wingover app on your iPhone.
+    </p>
+  );
+}
+
+// A lapse's remedy: the plans, or where to buy when StoreKit can't serve them.
+export function ResubscribeArea({
+  products,
+  busy,
+  onBuy,
+}: {
+  products: sync.StoreProduct[];
+  busy: boolean;
+  onBuy: (term: sync.SubscriptionTerm) => void;
+}) {
+  const monthly = byTerm(products, "monthly");
+  if (monthly)
+    return (
+      <PlanButtons
+        monthly={monthly}
+        yearly={byTerm(products, "yearly")}
+        verb="Resubscribe"
+        testId="sync-resubscribe"
+        busy={busy}
+        onBuy={onBuy}
+      />
+    );
+  if (isTauri())
+    return (
+      <p className="sync-fine-print" data-testid="sync-resubscribe-unavailable">
+        Resubscribing needs the App Store. Check your connection and reopen this
+        screen.
+      </p>
+    );
+  return <p className="sync-fine-print">Resubscribe on your iPhone.</p>;
+}
+
+// Signed in, never subscribed: the plans on iOS, sign-in-on-iPhone on the web.
+export function DormantSubscribe({
+  products,
+  busy,
+  onBuy,
+}: {
+  products: sync.StoreProduct[];
+  busy: boolean;
+  onBuy: (term: sync.SubscriptionTerm) => void;
+}) {
+  const monthly = byTerm(products, "monthly");
+  if (monthly)
+    return (
+      <PlanButtons
+        monthly={monthly}
+        yearly={byTerm(products, "yearly")}
+        verb="Subscribe"
+        testId="sync-subscribe"
+        busy={busy}
+        onBuy={onBuy}
+      />
+    );
+  return (
+    <p className="sync-fine-print" data-testid="sync-signedin-web">
+      Signed in. Subscribe in the iOS app to start syncing.
+    </p>
+  );
+}
+
 function Pitch({
   products,
   busy,
@@ -264,8 +454,6 @@ function Pitch({
   onRestore: () => void;
   onConnected: () => void;
 }) {
-  const monthly = byTerm(products, "monthly");
-  const yearly = byTerm(products, "yearly");
   const native = isTauri();
   return (
     <>
@@ -290,79 +478,20 @@ function Pitch({
 
       {problem && <p className="sync-error-message">{problem}</p>}
 
-      {monthly ? (
-        // iOS: subscribing is the one clear action; the year is a lighter
-        // companion beneath it, not a rival for the tap.
-        <>
-          <IonButton
-            expand="block"
-            disabled={busy}
-            onClick={() => onBuy("monthly")}
-            data-testid="sync-subscribe"
-          >
-            {busy ? (
-              <IonSpinner name="crescent" />
-            ) : (
-              `Subscribe · ${monthly.displayPrice}/month`
-            )}
-          </IonButton>
-          {yearly && (
-            <IonButton
-              expand="block"
-              fill="outline"
-              disabled={busy}
-              onClick={() => onBuy("yearly")}
-              data-testid="sync-subscribe-yearly"
-            >
-              {`${yearly.displayPrice}/year`}
-            </IonButton>
-          )}
-        </>
-      ) : native ? (
-        <IonButton expand="block" disabled data-testid="sync-subscribe">
-          Subscribe (coming soon)
-        </IonButton>
-      ) : (
-        // Web: no StoreKit, so no buy button and no price to quote. Say what it
-        // is and where to get it, rather than a blank screen whose fine print
-        // used to promise an App Store renewal that wasn't on it.
-        <p className="sync-pitch-note" data-testid="sync-web-note">
-          Sync is a subscription, from the Wingover app on your iPhone.
-        </p>
-      )}
+      <SubscribeArea products={products} busy={busy} onBuy={onBuy} />
 
       {/* Sign in is a door, not a place: quiet on iOS (a web-born account
           arriving on a phone), the prominent way back for a subscriber on the
-          web. Either way it keeps the same testid. */}
-      {native ? (
-        <IonButton
-          fill="clear"
-          size="small"
-          className="sync-quiet-action"
-          disabled={busy}
-          onClick={onSignIn}
-          data-testid="sync-signin"
-        >
-          {busy ? <IonSpinner name="crescent" /> : "Have an account? Sign in"}
-        </IonButton>
-      ) : (
-        <IonButton
-          expand="block"
-          className="sync-siwa-button"
-          disabled={busy}
-          onClick={onSignIn}
-          data-testid="sync-signin"
-        >
-          {busy ? (
-            <IonSpinner name="crescent" />
-          ) : (
-            <>
-              <IonIcon slot="start" icon={logoApple} aria-hidden="true" />
-              Already subscribed? Sign in
-            </>
-          )}
-        </IonButton>
-      )}
+          web. Same testid either way. */}
+      <AppleSignInButton
+        quiet={native}
+        label={
+          native ? "Have an account? Sign in" : "Already subscribed? Sign in"
+        }
+        onClick={onSignIn}
+        busy={busy}
+        testId="sync-signin"
+      />
 
       {native && (
         <IonButton
@@ -500,85 +629,24 @@ function Connected({
 
       {/* Resubscribe: the lapse is discovered here, the remedy is a purchase.
           Both plans, matching the pitch, so a lapse never buries the year. */}
-      {lapsed &&
-        (byTerm(products, "monthly") ? (
-          <>
-            <IonButton
-              expand="block"
-              disabled={busy}
-              onClick={() => onBuy("monthly")}
-              data-testid="sync-resubscribe"
-            >
-              {busy ? (
-                <IonSpinner name="crescent" />
-              ) : (
-                `Resubscribe · ${byTerm(products, "monthly")?.displayPrice}/month`
-              )}
-            </IonButton>
-            {byTerm(products, "yearly") && (
-              <IonButton
-                expand="block"
-                fill="outline"
-                disabled={busy}
-                onClick={() => onBuy("yearly")}
-                data-testid="sync-resubscribe-yearly"
-              >
-                {`${byTerm(products, "yearly")?.displayPrice}/year`}
-              </IonButton>
-            )}
-          </>
-        ) : isTauri() ? (
-          <p
-            className="sync-fine-print"
-            data-testid="sync-resubscribe-unavailable"
-          >
-            Resubscribing needs the App Store. Check your connection and
-            reopen this screen.
-          </p>
-        ) : (
-          <p className="sync-fine-print">Resubscribe on your iPhone.</p>
-        ))}
+      {lapsed && (
+        <ResubscribeArea products={products} busy={busy} onBuy={onBuy} />
+      )}
 
       {/* Dormant: signed in, never subscribed — prompted to subscribe
           (SYNC-UX.md). Web checkout replaces the sentence when it exists. */}
-      {dormant &&
-        (byTerm(products, "monthly") ? (
-          <IonButton
-            expand="block"
-            disabled={busy}
-            onClick={() => onBuy("monthly")}
-            data-testid="sync-subscribe"
-          >
-            {busy ? (
-              <IonSpinner name="crescent" />
-            ) : (
-              `Subscribe for ${byTerm(products, "monthly")?.displayPrice}/month`
-            )}
-          </IonButton>
-        ) : (
-          <p className="sync-fine-print" data-testid="sync-signedin-web">
-            Signed in. Subscribe in the iOS app to start syncing.
-          </p>
-        ))}
+      {dormant && (
+        <DormantSubscribe products={products} busy={busy} onBuy={onBuy} />
+      )}
 
       {/* Off + a lapsed or absent sub still deserves a way in. */}
       {off && appleSub !== "active" && (
-        <IonButton
-          expand="block"
-          className="sync-siwa-button"
-          disabled={busy}
+        <AppleSignInButton
+          label="Sign in with Apple"
           onClick={onSignIn}
-          data-testid="sync-signin"
-        >
-          {busy ? (
-            <IonSpinner name="crescent" />
-          ) : (
-            <>
-              <IonIcon slot="start" icon={logoApple} aria-hidden="true" />
-              Sign in with Apple
-            </>
-          )}
-        </IonButton>
+          busy={busy}
+          testId="sync-signin"
+        />
       )}
 
       {!off && (
@@ -736,22 +804,12 @@ function LinkAccountPage({
 
               {problem && <p className="sync-error-message">{problem}</p>}
 
-              <IonButton
-                expand="block"
-                className="sync-siwa-button"
-                disabled={busy}
+              <AppleSignInButton
+                label="Link Apple Account"
                 onClick={link}
-                data-testid="link-page-link"
-              >
-                {busy ? (
-                  <IonSpinner name="crescent" />
-                ) : (
-                  <>
-                    <IonIcon slot="start" icon={logoApple} aria-hidden="true" />
-                    Link Apple Account
-                  </>
-                )}
-              </IonButton>
+                busy={busy}
+                testId="link-page-link"
+              />
               <IonButton
                 fill="clear"
                 size="small"
