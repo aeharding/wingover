@@ -193,10 +193,24 @@ export async function createMapKitMapView(
       const animated = opts?.animate ? true : false;
       // to.padding is ignored: the overscan padding is a MapLibre
       // oversized-container trick and is degenerate on MapKit's normal view.
-      // Each axis independently, instantly (property, not *Animated) when not
-      // animating: center preserves zoom + rotation, cameraDistance preserves
-      // center + rotation. No per-frame region set (that reset track-up to
-      // north and thrashed tiles).
+      // EXPERIMENT 2: set MapKit's private _impl.zoomLevel, then animate the
+      // center — the center animation reportedly adopts the new level as its
+      // target region. Nudged by the app-zoom delta (not assigned absolutely)
+      // so _impl's unknown scale offset cancels out.
+      if (animated && to.center && to.zoom !== undefined) {
+        const impl = (map as unknown as { _impl?: { zoomLevel: number } })
+          ._impl;
+        const delta = to.zoom - projectedZoom();
+        if (impl && Number.isFinite(delta)) {
+          impl.zoomLevel += delta;
+        }
+        map.setCenterAnimated(toCoord(to.center), true);
+        return;
+      }
+      // Otherwise each axis independently, instantly (property, not
+      // *Animated) when not animating: center preserves zoom + rotation,
+      // cameraDistance preserves center + rotation. No per-frame region set
+      // (that reset track-up to north and thrashed tiles).
       if (to.bearing !== undefined) {
         lastBearing = to.bearing;
         const rotation = bearingToRotation(to.bearing);
@@ -528,6 +542,23 @@ export async function createMapKitMapView(
           el.removeEventListener(domType, listener);
           el.removeEventListener("pointercancel", listener);
         };
+      }
+      if (gesture === "rotate") {
+        // MapKit has no continuous rotation event (and whether its
+        // rotation-start/end fire for a programmatic setRotationAnimated is
+        // undocumented), so watch map.rotation per-frame and fire only when
+        // it moved. The loop exists only while a subscriber does — pages
+        // without a compass (and the live map, which never subscribes) pay
+        // nothing.
+        let last = map.rotation;
+        let raf = requestAnimationFrame(function poll() {
+          if (map.rotation !== last) {
+            last = map.rotation;
+            handler({ at: [map.center.longitude, map.center.latitude] });
+          }
+          raf = requestAnimationFrame(poll);
+        });
+        return () => cancelAnimationFrame(raf);
       }
       const type = {
         longpress: "long-press",

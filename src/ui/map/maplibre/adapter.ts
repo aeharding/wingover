@@ -386,6 +386,12 @@ export async function createMapLibreMapView(
           return onNative(["zoomend"], (e) =>
             handler({ at: eventAt(e as MapMouseEvent) }),
           );
+        case "rotate":
+          // Fires per-frame during a rotate gesture or an eased bearing
+          // change, and once for a jumped one.
+          return onNative(["rotate"], (e) =>
+            handler({ at: eventAt(e as MapMouseEvent) }),
+          );
         case "wheel":
           return onNative(["wheel"], (e) => {
             const event = e as MapMouseEvent & {

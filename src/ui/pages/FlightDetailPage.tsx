@@ -47,6 +47,7 @@ import {
 import { getSetting, setSetting } from "../../storage/local";
 import { useFlightDoc } from "../logbook/useFlightDoc";
 import { useFlightDrafts } from "../logbook/useFlightDrafts";
+import CompassButton from "../map/CompassButton";
 import type { MapViewKind } from "../map/config";
 import MapCanvas from "../map/MapCanvas";
 import {
@@ -510,6 +511,7 @@ export default function FlightDetailPage() {
               FlightDetailPage.css). */}
           {!mapFull && <div className="map-tap-layer" onClick={expandMap} />}
           <div className="map-overlay">
+            {map && <CompassButton map={map} />}
             {mapFull && (
               <button
                 className="map-button"

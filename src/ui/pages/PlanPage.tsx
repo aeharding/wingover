@@ -19,6 +19,7 @@ import {
   updatePin,
 } from "../../storage/db";
 import { getSetting, setSetting } from "../../storage/local";
+import CompassButton from "../map/CompassButton";
 import type { MapViewKind } from "../map/config";
 import MapCanvas from "../map/MapCanvas";
 import {
@@ -348,6 +349,7 @@ export default function PlanPage() {
           <div className="plan-map">
             <MapCanvas base={view} onReady={handleReady} />
             <div className="map-overlay">
+              {map && <CompassButton map={map} />}
               <button
                 className="map-button"
                 aria-label="Center on me"

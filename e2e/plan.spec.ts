@@ -60,3 +60,45 @@ test("tap to drop pins, persist across reload, tap to delete", async ({
   await page.getByTestId("pin-marker").click();
   await expect(page.getByTestId("pin-marker")).toHaveCount(0);
 });
+
+test("rotating off north summons the compass; a tap re-norths", async ({
+  page,
+}) => {
+  await page.goto("/?map-style=blank");
+  await page.getByText("Plan", { exact: true }).click();
+
+  const canvas = page.locator(".map-container");
+  await expect(canvas).toBeVisible();
+
+  // North-up: no compass.
+  await expect(page.getByTestId("map-compass")).toHaveCount(0);
+
+  // Rotate the map programmatically (stands in for the two-finger gesture,
+  // which fires the same rotate event). The backend resolves async, so wait
+  // for the adapter to stash the live map on the container first.
+  await page.waitForFunction(() => {
+    const container = document.querySelector(
+      ".map-container",
+    ) as HTMLElement & { __map?: { setBearing(bearing: number): void } };
+    if (!container?.__map) return false;
+    container.__map.setBearing(120);
+    return true;
+  });
+
+  const compass = page.getByTestId("map-compass");
+  await expect(compass).toBeVisible();
+
+  await compass.click();
+  await expect
+    .poll(() =>
+      page.evaluate(() =>
+        (
+          document.querySelector(".map-container") as HTMLElement & {
+            __map?: { getBearing(): number };
+          }
+        ).__map!.getBearing(),
+      ),
+    )
+    .toBe(0);
+  await expect(page.getByTestId("map-compass")).toHaveCount(0);
+});
