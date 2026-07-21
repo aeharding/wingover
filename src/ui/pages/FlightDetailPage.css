@@ -104,13 +104,13 @@
   padding: 0.5rem 0.9rem;
   font-size: 0.9rem;
   font-weight: 600;
-  color: #fff;
-  background: rgba(24, 26, 29, 0.9);
+  color: var(--map-chip-text);
+  background: var(--map-chip-bg);
   border-radius: 999px;
 }
 
 .map-expand-pill:active {
-  background: rgba(60, 64, 70, 0.9);
+  background: var(--map-chip-bg-active);
 }
 
 /* Stat values are the point of the rows — full contrast and lined-up digits,

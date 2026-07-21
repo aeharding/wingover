@@ -37,14 +37,14 @@
   width: 3.25rem;
   height: 3.25rem;
   font-size: 1.5rem;
-  color: #fff;
-  background: rgba(24, 26, 29, 0.9);
+  color: var(--map-chip-text);
+  background: var(--map-chip-bg);
   border: 6px solid transparent;
   border-radius: 12px;
 }
 
 .map-button:active {
-  background: rgba(60, 64, 70, 0.9);
+  background: var(--map-chip-bg-active);
 }
 
 .map-button[data-active="true"] {
@@ -74,7 +74,7 @@
 }
 
 .map-compass-south {
-  fill: color(display-p3 0.85 0.87 0.9);
+  fill: var(--map-compass-south);
 }
 
 /* Attribution rides above the home indicator on phones. */

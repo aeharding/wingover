@@ -442,7 +442,8 @@ body.flight-map-full .seat-card {
 @media (min-width: 992px) {
   .settings-content ion-list.list-inset,
   .settings-content .settings-list-header,
-  .settings-content .settings-helper-text {
+  .settings-content .settings-helper-text,
+  .settings-content ion-header[collapse="condense"] {
     max-width: 640px;
     margin-inline: auto;
   }

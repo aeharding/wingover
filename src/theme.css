@@ -72,6 +72,18 @@
   --ion-color-light-contrast-rgb: 0, 0, 0;
   --ion-color-light-shade: #d7d8da;
   --ion-color-light-tint: #f5f6f9;
+
+  /* Ionic never DECLARES the light-scheme background/text vars — its light
+     defaults live in per-component fallbacks. Any bare var(--ion-background-
+     color) consumer (the sync sheet's hero scrim, the fullscreen map
+     overlay, our ion-toolbar rule) therefore goes invalid-at-computed-value
+     in light and collapses to transparent/fallback. Declare the effective
+     defaults; the dark palette overrides them at :root.ios/:root.md, which
+     outranks plain :root on specificity in the dark scheme. */
+  --ion-background-color: #ffffff;
+  --ion-background-color-rgb: 255, 255, 255;
+  --ion-text-color: #000000;
+  --ion-text-color-rgb: 0, 0, 0;
 }
 
 @media (prefers-color-scheme: dark) {
@@ -183,6 +195,15 @@
      (STEERING). */
   --status-good: color(display-p3 0 0.55 0.1);
   --status-bad: color(display-p3 0.85 0 0);
+
+  /* On-map chips (view toggle, compass, expand pill, distance/legend
+     pills): frosted light over a light basemap, near-black over a dark
+     one. The FLIGHT surface pins these dark (FlyPage.css) — its map is
+     always light with dark chrome, frozen. */
+  --map-chip-bg: rgba(255, 255, 255, 0.88);
+  --map-chip-bg-active: rgba(228, 231, 235, 0.92);
+  --map-chip-text: #1c1e21;
+  --map-compass-south: color(display-p3 0.44 0.47 0.52);
 }
 
 @media (prefers-color-scheme: dark) {
@@ -195,6 +216,10 @@
     --float-card-bg: rgba(13, 15, 18, 0.92);
     --status-good: color(display-p3 0 1 0);
     --status-bad: color(display-p3 1 0 0);
+    --map-chip-bg: rgba(24, 26, 29, 0.9);
+    --map-chip-bg-active: rgba(60, 64, 70, 0.9);
+    --map-chip-text: #fff;
+    --map-compass-south: color(display-p3 0.85 0.87 0.9);
   }
 }
 
