@@ -3,6 +3,23 @@
   inset: 0;
   overflow: hidden;
   background: #000;
+  /* The flight surface never themes — one sunlight-tuned design (STEERING).
+     The ground app follows the system scheme and deepens the accent for
+     light chrome (theme.css); re-pin the flight-tile cyan here so the
+     tiles, map buttons and aircraft read identically in every scheme, on
+     both shells (the desktop renders this surface frameless).
+     --stat-cyan must be re-DECLARED, not just its dependency: a
+     var()-composed custom property substitutes at the element that
+     declares it, so :root's --stat-cyan is already resolved (against the
+     scheme's accent) by the time it inherits down here — re-pinning
+     --wingover-accent alone changes nothing the tiles see. */
+  --wingover-accent: color(display-p3 0.32 0.8 1);
+  --stat-cyan: var(--wingover-accent);
+  /* Base text color, explicit: unstyled text (the armed-state heading)
+     otherwise inherits body's color, which core.css derives from
+     --ion-text-color — black in the light scheme, i.e. invisible on this
+     black surface. The surface owns its text color in both schemes. */
+  color: #fff;
 }
 
 .fly-idle {

@@ -15,12 +15,45 @@
   color: var(--ion-color-medium);
 }
 
-/* iOS dark grouped-table look: the always-dark palette leaves
-   --ion-item-background at pure black, which makes inset cards invisible on
-   the black page. The cell color is the app's own tile shade — Apple's
-   systemGray6 (#1c1c1e) reads too bright against Wingover's near-black
-   surfaces. `.list-inset` (the class Ionic stamps), NOT `[inset]`: React
-   sets the prop as a DOM property, so an attribute selector never matches. */
+/* iOS grouped-table look, both schemes. Light: systemGroupedBackground
+   (#f2f2f7) behind white cells — Ionic's default leaves both white, so the
+   cards vanish. The page-level var also reaches the toolbar (theme.css
+   points it at the page background), matching a native settings bar.
+   Dark: the dark palette leaves --ion-item-background at pure black, so
+   the cards vanish on the black page; the cell color is the app's own
+   tile shade — Apple's systemGray6 (#1c1c1e) reads too bright against
+   Wingover's near-black surfaces. `.list-inset` (the class Ionic stamps),
+   NOT `[inset]`: React sets the prop as a DOM property, so an attribute
+   selector never matches. */
+.settings-page {
+  --ion-background-color: #f2f2f7;
+  --ion-background-color-rgb: 242, 242, 247;
+}
+
 .settings-content ion-list.list-inset {
-  --ion-item-background: var(--wingover-tile);
+  --ion-item-background: #ffffff;
+}
+
+/* Content-level grouped gray for .settings-content hosts that are NOT a
+   .settings-page — the sync modal's self-host form. On the Settings pages
+   this resolves to the same value the page var already provides; in dark
+   it defers back to the ambient background (the page's black, or the
+   modal's step-gray sheet), so only the light scheme actually changes. */
+.settings-content {
+  --background: #f2f2f7;
+}
+
+@media (prefers-color-scheme: dark) {
+  .settings-page {
+    --ion-background-color: #000000;
+    --ion-background-color-rgb: 0, 0, 0;
+  }
+
+  .settings-content {
+    --background: var(--ion-background-color);
+  }
+
+  .settings-content ion-list.list-inset {
+    --ion-item-background: var(--wingover-tile);
+  }
 }

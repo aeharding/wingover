@@ -13,9 +13,11 @@ import "./MapView.css";
 
 interface MapCanvasProps {
   base: MapViewKind;
-  // Dark is the default world (matches the app); the live flight map passes
-  // "light" — full sun is where the dark basemap loses (STEERING).
-  appearance?: MapAppearance;
+  // Required so every new map decides its world consciously: ground pages
+  // pass the system scheme (useSystemAppearance) so the basemap matches
+  // the app; the live flight map is pinned "light" — full sun is where a
+  // dark basemap loses (STEERING).
+  appearance: MapAppearance;
   // The page owns the map's layout, so it says whether the map is placed
   // edge-to-edge (a full-screen or in-flight map, whose bottom sits under the
   // home indicator) — then MapKit insets its Apple/Legal controls off the
@@ -62,7 +64,7 @@ async function createBackend(
 // chunk that loads only when a map is first shown.
 export default function MapCanvas({
   base,
-  appearance = "dark",
+  appearance,
   edgeToEdge = false,
   onReady,
 }: MapCanvasProps) {

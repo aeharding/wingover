@@ -61,6 +61,7 @@ import {
   type MarkerLayer,
   PLAN_LINE_COLOR,
 } from "../map/types";
+import useSystemAppearance from "../map/useSystemAppearance";
 import ViewToggle from "../map/ViewToggle";
 import { useSettings } from "../settings/SettingsContext";
 import { useFlightActions } from "../useFlightActions";
@@ -127,6 +128,7 @@ export default function FlightDetailPage() {
     track,
   );
   const [optionsOpen, setOptionsOpen] = useState(false);
+  const appearance = useSystemAppearance();
   const [view, setView] = useState<MapViewKind>("street");
   const [map, setMap] = useState<MapView | null>(null);
   const [mapFull, setMapFull] = useState(false);
@@ -531,7 +533,12 @@ export default function FlightDetailPage() {
         <div className={`flight-detail-map${mapFull ? " map-full" : ""}`}>
           {/* Edge-to-edge only when expanded to full screen (bottom under the
               home indicator); embedded in the split, it isn't. */}
-          <MapCanvas base={view} onReady={handleReady} edgeToEdge={mapFull} />
+          <MapCanvas
+            base={view}
+            appearance={appearance}
+            onReady={handleReady}
+            edgeToEdge={mapFull}
+          />
           {/* Inline the map is a scroll-through preview: tap anywhere to
               expand, vertical drag scrolls the details through (see
               FlightDetailPage.css). */}

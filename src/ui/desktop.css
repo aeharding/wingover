@@ -18,7 +18,7 @@
   align-items: center;
   gap: 4px;
   padding-top: 10px;
-  border-right: 1px solid rgba(255, 255, 255, 0.09);
+  border-right: 1px solid var(--hairline);
 }
 
 .rail-brand {
@@ -57,16 +57,16 @@
    keeps the stronger active wash. Covers the sync chip too (it shares
    .rail-link). */
 .rail-link:hover {
-  background: rgba(255, 255, 255, 0.04);
+  background: var(--hover-wash);
 }
 
 .rail-link.active {
   color: var(--wingover-accent);
-  background: rgba(255, 255, 255, 0.06);
+  background: var(--active-wash);
 }
 
 /* The sync chip anchors the rail's bottom. Status colors match the phone
-   Settings row (P3 full-saturation, no fallbacks by doctrine). */
+   Settings row (the scheme-aware P3 tokens in theme.css). */
 .rail-sync {
   margin-top: auto;
   margin-bottom: 10px;
@@ -75,11 +75,11 @@
 }
 
 .rail-sync.sync-off ion-icon {
-  color: color(display-p3 1 0 0);
+  color: var(--status-bad);
 }
 
 .rail-sync.sync-on :is(ion-icon, ion-spinner) {
-  color: color(display-p3 0 1 0);
+  color: var(--status-good);
 }
 
 .rail-sync.sync-warn :is(ion-icon, ion-spinner) {
@@ -87,7 +87,7 @@
 }
 
 .rail-sync.sync-error :is(ion-icon, ion-spinner) {
-  color: color(display-p3 1 0 0);
+  color: var(--status-bad);
 }
 
 /* Transient/quiet states (connecting, paused, dormant): no alarm color, so the
@@ -169,7 +169,7 @@
   display: flex;
   flex-direction: column;
   position: relative;
-  border-right: 1px solid rgba(255, 255, 255, 0.09);
+  border-right: 1px solid var(--hairline);
 }
 
 /* The grab strip straddling the pane's edge. Invisible until engaged so
@@ -187,7 +187,7 @@
 
 .pane-resizer:hover,
 .pane-resizer:focus-visible {
-  background: rgba(255, 255, 255, 0.18);
+  background: var(--drag-wash);
   outline: none;
 }
 
@@ -202,7 +202,7 @@
   align-items: center;
   justify-content: space-between;
   padding: 0.6rem 0.5rem 0.5rem 1.1rem;
-  border-bottom: 1px solid rgba(255, 255, 255, 0.09);
+  border-bottom: 1px solid var(--hairline);
 }
 
 .pane-header h1 {
@@ -243,7 +243,7 @@
   align-items: center;
   justify-content: space-between;
   padding: 0.35rem 0.5rem 0.35rem 1.1rem;
-  border-bottom: 1px solid rgba(255, 255, 255, 0.09);
+  border-bottom: 1px solid var(--hairline);
 }
 
 .seat-title {
@@ -276,8 +276,8 @@
   width: 380px;
   max-height: calc(100% - 1.8rem);
   overflow-y: auto;
-  background: rgba(13, 15, 18, 0.92);
-  border: 1px solid rgba(255, 255, 255, 0.1);
+  background: var(--float-card-bg);
+  border: 1px solid var(--hairline);
   border-radius: 14px;
   z-index: 5;
 }
@@ -342,7 +342,7 @@ body.flight-map-full .seat-card {
   justify-content: space-between;
   gap: 0.75rem;
   padding: 0.7rem 1.1rem;
-  border-bottom: 1px solid rgba(255, 255, 255, 0.09);
+  border-bottom: 1px solid var(--hairline);
 }
 
 .flightlist-totals b {
@@ -376,7 +376,7 @@ body.flight-map-full .seat-card {
   width: 300px;
   flex-shrink: 0;
   overflow-y: auto;
-  border-right: 1px solid rgba(255, 255, 255, 0.09);
+  border-right: 1px solid var(--hairline);
   display: flex;
   flex-direction: column;
 }
@@ -395,7 +395,7 @@ body.flight-map-full .seat-card {
   border: 0;
   color: var(--ion-text-color);
   padding: 0.72rem 1.1rem;
-  border-bottom: 1px solid rgba(255, 255, 255, 0.09);
+  border-bottom: 1px solid var(--hairline);
 }
 
 .plan-pane-row .dot {
@@ -432,7 +432,7 @@ body.flight-map-full .seat-card {
 }
 
 .plan-pane-route {
-  border-top: 1px solid rgba(255, 255, 255, 0.09);
+  border-top: 1px solid var(--hairline);
   padding: 0.8rem 1.1rem;
   font-size: 0.9rem;
   font-variant-numeric: tabular-nums;

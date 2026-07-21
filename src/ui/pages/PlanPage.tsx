@@ -31,6 +31,7 @@ import {
   type MarkerSpec,
   PLANNED_COLOR,
 } from "../map/types";
+import useSystemAppearance from "../map/useSystemAppearance";
 import ViewToggle from "../map/ViewToggle";
 import { useSettings } from "../settings/SettingsContext";
 import { useIsDesktop } from "../useIsDesktop";
@@ -71,6 +72,7 @@ function routeCoords(pins: Pin[]): LngLat[] {
 export default function PlanPage() {
   const { units } = useSettings();
   const isDesktop = useIsDesktop();
+  const appearance = useSystemAppearance();
   const [view, setView] = useState<MapViewKind>("street");
   const [pins, setPins] = useState<Pin[]>([]);
   const [map, setMap] = useState<MapView | null>(null);
@@ -347,7 +349,11 @@ export default function PlanPage() {
             </aside>
           )}
           <div className="plan-map">
-            <MapCanvas base={view} onReady={handleReady} />
+            <MapCanvas
+              base={view}
+              appearance={appearance}
+              onReady={handleReady}
+            />
             <div className="map-overlay">
               {map && <CompassButton map={map} />}
               <button
