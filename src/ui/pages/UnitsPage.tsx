@@ -32,7 +32,7 @@ export default function UnitsPage() {
   const { units, setUnits } = useSettings();
 
   return (
-    <IonPage>
+    <IonPage className="settings-page">
       <IonHeader>
         <IonToolbar>
           <IonButtons slot="start">

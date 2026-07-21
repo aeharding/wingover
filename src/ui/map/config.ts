@@ -8,9 +8,10 @@ import { getSetting } from "../../storage/local";
 export type MapViewKind = "street" | "satellite";
 
 // Which world the basemap lives in. Ground screens (logbook, plan, detail,
-// desktop PWA) are dark like the rest of the app; the LIVE flight map is
-// always light — full sun on a leg-mounted phone is the one place the dark
-// map loses. A fixed per-context rule, deliberately not a setting.
+// desktop PWA) follow the system scheme like the rest of the app
+// (useSystemAppearance); the LIVE flight map is always light — full sun on
+// a leg-mounted phone is the one place a dark map loses. A per-context
+// rule, deliberately not a setting.
 export type MapAppearance = "light" | "dark";
 
 // The keyless street fallbacks: OpenFreeMap's hosted styles — free, no
@@ -143,7 +144,7 @@ async function satelliteStyle(
 
 export async function resolveMapStyle(
   view: MapViewKind,
-  appearance: MapAppearance = "dark",
+  appearance: MapAppearance,
 ): Promise<StyleSpecification | string> {
   if (blankStyleRequested()) return BLANK_STYLE;
   const key = await resolveMaptilerKey();

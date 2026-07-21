@@ -4,6 +4,13 @@
   background: #191b1e;
 }
 
+/* The pre-reveal veil matches the basemap's world (map-light follows the
+   map's appearance, not the app scheme), so neither scheme flashes the
+   other's color while tiles load. */
+.map-container.map-light {
+  background: #e2e5e9;
+}
+
 .map-container .maplibregl-canvas {
   opacity: 1;
   transition: opacity 0.25s ease;

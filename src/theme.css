@@ -1,10 +1,160 @@
+/* ── Classic Ionic palette, both schemes ──────────────────────────────────
+   Ionic 8's "accessible" palette recolors every stepped role for on-paper
+   WCAG contrast — its danger (light #c5000f, dark #f24c58 with black
+   glyphs) reads as maroon/washed-out pink where a red should shout. Pin
+   the classic pre-8 defaults instead (the same values Voyager ships).
+   main.tsx imports palettes/dark.system.css, which applies Ionic's dark
+   palette under prefers-color-scheme: dark; these blocks mirror that
+   split and must load after it — both are plain :root, so source order
+   is the tiebreak. All nine roles are pinned in BOTH schemes: once the
+   light block pins a role, the dark block must re-pin it or the light
+   value leaks through. */
+:root {
+  --ion-color-primary: #3880ff;
+  --ion-color-primary-rgb: 56, 128, 255;
+  --ion-color-primary-contrast: #ffffff;
+  --ion-color-primary-contrast-rgb: 255, 255, 255;
+  --ion-color-primary-shade: #3171e0;
+  --ion-color-primary-tint: #4c8dff;
+
+  --ion-color-secondary: #3dc2ff;
+  --ion-color-secondary-rgb: 61, 194, 255;
+  --ion-color-secondary-contrast: #ffffff;
+  --ion-color-secondary-contrast-rgb: 255, 255, 255;
+  --ion-color-secondary-shade: #36abe0;
+  --ion-color-secondary-tint: #50c8ff;
+
+  --ion-color-tertiary: #5260ff;
+  --ion-color-tertiary-rgb: 82, 96, 255;
+  --ion-color-tertiary-contrast: #ffffff;
+  --ion-color-tertiary-contrast-rgb: 255, 255, 255;
+  --ion-color-tertiary-shade: #4854e0;
+  --ion-color-tertiary-tint: #6370ff;
+
+  --ion-color-success: #2dd36f;
+  --ion-color-success-rgb: 45, 211, 111;
+  --ion-color-success-contrast: #ffffff;
+  --ion-color-success-contrast-rgb: 255, 255, 255;
+  --ion-color-success-shade: #28ba62;
+  --ion-color-success-tint: #42d77d;
+
+  --ion-color-warning: #ffc409;
+  --ion-color-warning-rgb: 255, 196, 9;
+  --ion-color-warning-contrast: #000000;
+  --ion-color-warning-contrast-rgb: 0, 0, 0;
+  --ion-color-warning-shade: #e0ac08;
+  --ion-color-warning-tint: #ffca22;
+
+  --ion-color-danger: #eb445a;
+  --ion-color-danger-rgb: 235, 68, 90;
+  --ion-color-danger-contrast: #ffffff;
+  --ion-color-danger-contrast-rgb: 255, 255, 255;
+  --ion-color-danger-shade: #cf3c4f;
+  --ion-color-danger-tint: #ed576b;
+
+  --ion-color-dark: #222428;
+  --ion-color-dark-rgb: 34, 36, 40;
+  --ion-color-dark-contrast: #ffffff;
+  --ion-color-dark-contrast-rgb: 255, 255, 255;
+  --ion-color-dark-shade: #1e2023;
+  --ion-color-dark-tint: #383a3e;
+
+  --ion-color-medium: #92949c;
+  --ion-color-medium-rgb: 146, 148, 156;
+  --ion-color-medium-contrast: #ffffff;
+  --ion-color-medium-contrast-rgb: 255, 255, 255;
+  --ion-color-medium-shade: #808289;
+  --ion-color-medium-tint: #9d9fa6;
+
+  --ion-color-light: #f4f5f8;
+  --ion-color-light-rgb: 244, 245, 248;
+  --ion-color-light-contrast: #000000;
+  --ion-color-light-contrast-rgb: 0, 0, 0;
+  --ion-color-light-shade: #d7d8da;
+  --ion-color-light-tint: #f5f6f9;
+}
+
+@media (prefers-color-scheme: dark) {
+  :root {
+    --ion-color-primary: #428cff;
+    --ion-color-primary-rgb: 66, 140, 255;
+    --ion-color-primary-contrast: #ffffff;
+    --ion-color-primary-contrast-rgb: 255, 255, 255;
+    --ion-color-primary-shade: #3a7be0;
+    --ion-color-primary-tint: #5598ff;
+
+    --ion-color-secondary: #50c8ff;
+    --ion-color-secondary-rgb: 80, 200, 255;
+    --ion-color-secondary-contrast: #ffffff;
+    --ion-color-secondary-contrast-rgb: 255, 255, 255;
+    --ion-color-secondary-shade: #46b0e0;
+    --ion-color-secondary-tint: #62ceff;
+
+    --ion-color-tertiary: #6a64ff;
+    --ion-color-tertiary-rgb: 106, 100, 255;
+    --ion-color-tertiary-contrast: #ffffff;
+    --ion-color-tertiary-contrast-rgb: 255, 255, 255;
+    --ion-color-tertiary-shade: #5d58e0;
+    --ion-color-tertiary-tint: #7974ff;
+
+    --ion-color-success: #2fdf75;
+    --ion-color-success-rgb: 47, 223, 117;
+    --ion-color-success-contrast: #000000;
+    --ion-color-success-contrast-rgb: 0, 0, 0;
+    --ion-color-success-shade: #29c467;
+    --ion-color-success-tint: #44e283;
+
+    --ion-color-warning: #ffd534;
+    --ion-color-warning-rgb: 255, 213, 52;
+    --ion-color-warning-contrast: #000000;
+    --ion-color-warning-contrast-rgb: 0, 0, 0;
+    --ion-color-warning-shade: #e0bb2e;
+    --ion-color-warning-tint: #ffd948;
+
+    --ion-color-danger: #ff4961;
+    --ion-color-danger-rgb: 255, 73, 97;
+    --ion-color-danger-contrast: #ffffff;
+    --ion-color-danger-contrast-rgb: 255, 255, 255;
+    --ion-color-danger-shade: #e04055;
+    --ion-color-danger-tint: #ff5b71;
+
+    --ion-color-dark: #f4f5f8;
+    --ion-color-dark-rgb: 244, 245, 248;
+    --ion-color-dark-contrast: #000000;
+    --ion-color-dark-contrast-rgb: 0, 0, 0;
+    --ion-color-dark-shade: #d7d8da;
+    --ion-color-dark-tint: #f5f6f9;
+
+    --ion-color-medium: #989aa2;
+    --ion-color-medium-rgb: 152, 154, 162;
+    --ion-color-medium-contrast: #000000;
+    --ion-color-medium-contrast-rgb: 0, 0, 0;
+    --ion-color-medium-shade: #86888f;
+    --ion-color-medium-tint: #a2a4ab;
+
+    --ion-color-light: #222428;
+    --ion-color-light-rgb: 34, 36, 40;
+    --ion-color-light-contrast: #ffffff;
+    --ion-color-light-contrast-rgb: 255, 255, 255;
+    --ion-color-light-shade: #1e2023;
+    --ion-color-light-tint: #383a3e;
+  }
+}
+
+/* ── App tokens, per scheme ──────────────────────────────────────────────
+   Light values at :root, dark under the media query — the same split the
+   Ionic palette uses above. The FLIGHT surface never themes (STEERING:
+   one sunlight-tuned design); it re-pins what it consumes (see
+   .fly-page-frame below and .fly-content in FlyPage.css), so these
+   light-scheme values only ever reach ground UI. */
 :root {
   /* The one app cyan (buttons, stats, flown track) — wide-gamut
-     display-p3, the same value as the map's ACCENT_CYAN (types.ts), so
+     display-p3, the same family as the map's ACCENT_CYAN (types.ts), so
      the track, aircraft, markers, buttons and readouts read as ONE cyan.
-     Lightened from 0 0.7 1 for daylight contrast on the flight tiles;
-     everything moved together, because two near-cyans read as a bug. */
-  --wingover-accent: color(display-p3 0.32 0.8 1);
+     The light scheme deepens it: the flight-tile value is tuned for
+     near-black and washes out on white chrome. The track itself keeps
+     ACCENT_CYAN — it sits on a basemap, not on chrome. */
+  --wingover-accent: color(display-p3 0 0.52 0.78);
   --wingover-green: #35e06a;
   --wingover-tile: #111214;
 
@@ -12,61 +162,51 @@
      the pre-flight speed/accuracy/pulse. Far more saturated than sRGB can
      express on the near-black tiles, for glanceable contrast at arm's length
      in daylight (STEERING: sunlight-readable). The build targets iOS/WKWebView
-     on P3 screens, so there is no sRGB fallback by design. */
+     on P3 screens, so there is no sRGB fallback by design. Flight-surface
+     only, so no light-scheme variants exist. */
   --stat-cyan: var(--wingover-accent);
   --stat-green: color(display-p3 0 1 0);
   --stat-yellow: color(display-p3 1 0.95 0);
+
+  /* Ground-chrome washes: hairline borders, hover/active fills, the
+     pane-resizer grab strip, and the desktop floating card. Neutral
+     alphas so they sit on whatever the scheme's background is. */
+  --hairline: rgba(0, 0, 0, 0.12);
+  --hover-wash: rgba(0, 0, 0, 0.045);
+  --active-wash: rgba(0, 0, 0, 0.07);
+  --drag-wash: rgba(0, 0, 0, 0.2);
+  --float-card-bg: rgba(255, 255, 255, 0.92);
+
+  /* Sync status colors (Settings row, desktop rail chip). Dark keeps the
+     full-saturation P3 primaries; light deepens them — pure P3 green on
+     white is invisible. Still display-p3-authored, no sRGB fallbacks
+     (STEERING). */
+  --status-good: color(display-p3 0 0.55 0.1);
+  --status-bad: color(display-p3 0.85 0 0);
 }
 
-/* Ionic 8's "accessible" palette recolors every stepped role for on-paper
-   WCAG contrast — on the always-dark UI its danger (#f24c58 with black
-   text) reads as washed-out pink where a red should shout. Pin the classic
-   pre-8 dark palette instead (the same values Voyager still ships). This
-   block must load after the dark.always.css import in main.tsx: both are
-   plain :root, so source order is the tiebreak. The neutral
-   light/medium/dark trio is identical in v8 and isn't repeated here. */
-:root {
-  --ion-color-primary: #428cff;
-  --ion-color-primary-rgb: 66, 140, 255;
-  --ion-color-primary-contrast: #ffffff;
-  --ion-color-primary-contrast-rgb: 255, 255, 255;
-  --ion-color-primary-shade: #3a7be0;
-  --ion-color-primary-tint: #5598ff;
+@media (prefers-color-scheme: dark) {
+  :root {
+    --wingover-accent: color(display-p3 0.32 0.8 1);
+    --hairline: rgba(255, 255, 255, 0.09);
+    --hover-wash: rgba(255, 255, 255, 0.04);
+    --active-wash: rgba(255, 255, 255, 0.06);
+    --drag-wash: rgba(255, 255, 255, 0.18);
+    --float-card-bg: rgba(13, 15, 18, 0.92);
+    --status-good: color(display-p3 0 1 0);
+    --status-bad: color(display-p3 1 0 0);
+  }
+}
 
-  --ion-color-secondary: #50c8ff;
-  --ion-color-secondary-rgb: 80, 200, 255;
-  --ion-color-secondary-contrast: #ffffff;
-  --ion-color-secondary-contrast-rgb: 255, 255, 255;
-  --ion-color-secondary-shade: #46b0e0;
-  --ion-color-secondary-tint: #62ceff;
-
-  --ion-color-tertiary: #6a64ff;
-  --ion-color-tertiary-rgb: 106, 100, 255;
-  --ion-color-tertiary-contrast: #ffffff;
-  --ion-color-tertiary-contrast-rgb: 255, 255, 255;
-  --ion-color-tertiary-shade: #5d58e0;
-  --ion-color-tertiary-tint: #7974ff;
-
-  --ion-color-success: #2fdf75;
-  --ion-color-success-rgb: 47, 223, 117;
-  --ion-color-success-contrast: #000000;
-  --ion-color-success-contrast-rgb: 0, 0, 0;
-  --ion-color-success-shade: #29c467;
-  --ion-color-success-tint: #44e283;
-
-  --ion-color-warning: #ffd534;
-  --ion-color-warning-rgb: 255, 213, 52;
-  --ion-color-warning-contrast: #000000;
-  --ion-color-warning-contrast-rgb: 0, 0, 0;
-  --ion-color-warning-shade: #e0bb2e;
-  --ion-color-warning-tint: #ffd948;
-
-  --ion-color-danger: #ff4961;
-  --ion-color-danger-rgb: 255, 73, 97;
-  --ion-color-danger-contrast: #ffffff;
-  --ion-color-danger-contrast-rgb: 255, 255, 255;
-  --ion-color-danger-shade: #e04055;
-  --ion-color-danger-tint: #ff5b71;
+/* The flight surface's Ionic frame (pages/FlyPage.tsx), pinned black in
+   both schemes: the surface's own CSS is hardcoded dark already, and this
+   keeps the ion-page chrome around it — route transitions included — from
+   flashing the light scheme through. */
+.fly-page-frame {
+  --ion-background-color: #000000;
+  --ion-background-color-rgb: 0, 0, 0;
+  --ion-text-color: #ffffff;
+  --ion-text-color-rgb: 255, 255, 255;
 }
 
 /* On-screen keyboard: src/tauri-ionic/keyboard.ts adds `keyboard-open` to <html> while

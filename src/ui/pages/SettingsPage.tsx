@@ -111,7 +111,7 @@ export default function SettingsPage() {
   }
 
   return (
-    <IonPage>
+    <IonPage className="settings-page">
       <IonHeader>
         <IonToolbar>
           <IonTitle>Settings</IonTitle>

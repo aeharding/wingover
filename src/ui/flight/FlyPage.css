@@ -3,6 +3,12 @@
   inset: 0;
   overflow: hidden;
   background: #000;
+  /* The flight surface never themes — one sunlight-tuned design (STEERING).
+     The ground app follows the system scheme and deepens the accent for
+     light chrome (theme.css); re-pin the flight-tile cyan here so the
+     tiles, map buttons and aircraft read identically in every scheme, on
+     both shells (the desktop renders this surface frameless). */
+  --wingover-accent: color(display-p3 0.32 0.8 1);
 }
 
 .fly-idle {

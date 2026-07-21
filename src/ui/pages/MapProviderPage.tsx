@@ -54,7 +54,7 @@ export default function MapProviderPage() {
   }
 
   return (
-    <IonPage>
+    <IonPage className="settings-page">
       <IonHeader>
         <IonToolbar>
           <IonButtons slot="start">

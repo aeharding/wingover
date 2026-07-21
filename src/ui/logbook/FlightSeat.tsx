@@ -40,6 +40,7 @@ import {
   type MarkerLayer,
   PLAN_LINE_COLOR,
 } from "../map/types";
+import useSystemAppearance from "../map/useSystemAppearance";
 import ViewToggle from "../map/ViewToggle";
 import { useSettings } from "../settings/SettingsContext";
 import { useFlightActions } from "../useFlightActions";
@@ -80,6 +81,7 @@ export default function FlightSeat({
     track,
   );
   const [optionsOpen, setOptionsOpen] = useState(false);
+  const appearance = useSystemAppearance();
   const [view, setView] = useState<MapViewKind>("street");
   const [map, setMap] = useState<MapView | null>(null);
   const [mapFull, setMapFull] = useState(false);
@@ -254,7 +256,12 @@ export default function FlightSeat({
       <div className="seat-map">
         {/* Edge-to-edge only when expanded to full screen; embedded in the
             desktop split it sits above other UI, so no inset. */}
-        <MapCanvas base={view} onReady={handleReady} edgeToEdge={mapFull} />
+        <MapCanvas
+          base={view}
+          appearance={appearance}
+          onReady={handleReady}
+          edgeToEdge={mapFull}
+        />
         <div className="map-overlay">
           {map && <CompassButton map={map} />}
           <button

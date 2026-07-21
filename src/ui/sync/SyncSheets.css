@@ -14,15 +14,32 @@
    hero always underlays everything. Everything above it (content, both
    headers) is made transparent so it shows through. */
 .sync-modal {
+  /* Scrim stops and text glows, per scheme: the scrim must fade the photo
+     toward the sheet background (white in light, black in dark) and the
+     glow behind the text must match it — a black halo under dark text
+     reads as a smudge. */
+  --hero-scrim-mid: rgba(255, 255, 255, 0.28);
+  --hero-scrim-strong: rgba(255, 255, 255, 0.8);
+  --hero-glow: 0 1px 12px rgba(255, 255, 255, 0.85);
+  --hero-glow-tight: 0 1px 8px rgba(255, 255, 255, 0.85);
   --background:
     linear-gradient(
       to bottom,
       transparent 0%,
-      rgba(0, 0, 0, 0.08) 44%,
-      rgba(0, 0, 0, 0.72) 72%,
+      var(--hero-scrim-mid) 44%,
+      var(--hero-scrim-strong) 72%,
       var(--ion-background-color) 97%
     ),
     url("/sync-hero.jpg") center / cover no-repeat, var(--ion-background-color);
+}
+
+@media (prefers-color-scheme: dark) {
+  .sync-modal {
+    --hero-scrim-mid: rgba(0, 0, 0, 0.08);
+    --hero-scrim-strong: rgba(0, 0, 0, 0.72);
+    --hero-glow: 0 1px 12px rgba(0, 0, 0, 0.8);
+    --hero-glow-tight: 0 1px 8px rgba(0, 0, 0, 0.8);
+  }
 }
 
 /* Transparent so the modal-wrapper hero shows through the whole sheet. */
@@ -72,7 +89,7 @@
   letter-spacing: -0.02em;
   text-wrap: balance;
   color: var(--ion-text-color);
-  text-shadow: 0 1px 12px rgba(0, 0, 0, 0.8);
+  text-shadow: var(--hero-glow);
 }
 
 /* Web pitch: the sentence that stands in for the StoreKit-only buy button —
@@ -83,7 +100,7 @@
   font-size: 1rem;
   line-height: 1.5;
   color: var(--ion-text-color);
-  text-shadow: 0 1px 8px rgba(0, 0, 0, 0.8);
+  text-shadow: var(--hero-glow-tight);
 }
 
 /* Centred as a block, left-aligned inside: centred bullets are unreadable,
@@ -102,7 +119,7 @@
   gap: 0.75rem;
   margin-bottom: 0.75rem;
   color: var(--ion-text-color);
-  text-shadow: 0 1px 8px rgba(0, 0, 0, 0.8);
+  text-shadow: var(--hero-glow-tight);
 }
 
 .sync-reasons ion-icon {
@@ -146,11 +163,11 @@
    trusted everywhere (a bright cloud), and on the plain Log In page the same
    shadow reads as a smudge. */
 .sync-home-body .sync-state-label {
-  text-shadow: 0 1px 12px rgba(0, 0, 0, 0.8);
+  text-shadow: var(--hero-glow);
 }
 
 .sync-home-body .sync-state-detail {
-  text-shadow: 0 1px 8px rgba(0, 0, 0, 0.8);
+  text-shadow: var(--hero-glow-tight);
 }
 
 /* Read-only / Expired is not an error and must not look like one: the pilot's
@@ -172,7 +189,7 @@
 
 /* Over the hero photo — same shadow deal as every other word there. */
 .sync-home-body .sync-error-message {
-  text-shadow: 0 1px 8px rgba(0, 0, 0, 0.8);
+  text-shadow: var(--hero-glow-tight);
 }
 
 /* Gloves-first (STEERING): every block action here is well past the platform
@@ -194,14 +211,24 @@
 }
 
 /* Apple's HIG wants their sign-in button monochrome — never the app's accent
-   color — and the white variant on dark backgrounds. This app imports
-   dark.always.css (sunlight-readable, STEERING), so white it is, always. */
+   color — with the contrast variant per background: black on light, white on
+   dark. */
 .sync-siwa-button {
-  --background: #fff;
-  --background-activated: #e6e6e6;
-  --background-focused: #e6e6e6;
-  --background-hover: #e6e6e6;
-  --color: #000;
+  --background: #000;
+  --background-activated: #333;
+  --background-focused: #333;
+  --background-hover: #333;
+  --color: #fff;
+}
+
+@media (prefers-color-scheme: dark) {
+  .sync-siwa-button {
+    --background: #fff;
+    --background-activated: #e6e6e6;
+    --background-focused: #e6e6e6;
+    --background-hover: #e6e6e6;
+    --color: #000;
+  }
 }
 
 .sync-selfhost-toggle {
@@ -250,14 +277,14 @@
   height: 1em;
 }
 
-/* Full-saturation status colors. P3 support is baseline on every target
-   device, so display-p3 colors never carry sRGB fallbacks (STEERING). */
+/* Status colors: the scheme-aware P3 tokens (theme.css) — full saturation
+   in dark, deepened for light. Never any sRGB fallback (STEERING). */
 .settings-sync-off {
-  color: color(display-p3 1 0 0);
+  color: var(--status-bad);
 }
 
 .settings-sync-on {
-  color: color(display-p3 0 1 0);
+  color: var(--status-good);
 }
 
 /* A lapse ("Not subscribed", read-only) reads amber in the row too, not a
@@ -270,5 +297,5 @@
 /* A real problem (error): red, so the row flags it instead of the neutral gray
    it used to render. */
 .settings-sync-error {
-  color: color(display-p3 1 0 0);
+  color: var(--status-bad);
 }

@@ -3,7 +3,7 @@
   align-items: center;
   justify-content: center;
   height: 100%;
-  color: #9a9fa6;
+  color: var(--ion-color-medium);
   font-size: 1.1rem;
 }
 

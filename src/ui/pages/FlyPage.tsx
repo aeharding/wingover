@@ -8,10 +8,13 @@ import FlyPage from "../flight/FlyPage";
  * the flight folder itself never imports Ionic (enforced by lint), so
  * the frame lives out here in Ionic land. The desktop shell renders
  * src/ui/flight/FlyPage directly, frameless.
+ *
+ * .fly-page-frame (theme.css) pins the frame black in both schemes: the
+ * flight surface is exempt from theming.
  */
 export default function FlyPageFramed() {
   return (
-    <IonPage>
+    <IonPage className="fly-page-frame">
       <FlyPage />
     </IonPage>
   );

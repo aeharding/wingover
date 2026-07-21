@@ -21,6 +21,7 @@ import CompassButton from "../map/CompassButton";
 import type { MapViewKind } from "../map/config";
 import MapCanvas from "../map/MapCanvas";
 import { boundsOf, type Line, type LngLat, type MapView } from "../map/types";
+import useSystemAppearance from "../map/useSystemAppearance";
 import ViewToggle from "../map/ViewToggle";
 import { useIsDesktop } from "../useIsDesktop";
 
@@ -38,6 +39,7 @@ function rampColor(t: number): string {
 export default function AllFlightsMapPage() {
   const history = useHistory();
   const isDesktop = useIsDesktop();
+  const appearance = useSystemAppearance();
   const [view, setView] = useState<MapViewKind>("street");
   const [features, setFeatures] = useState<Feature[]>([]);
   const [map, setMap] = useState<MapView | null>(null);
@@ -144,6 +146,7 @@ export default function AllFlightsMapPage() {
               the desktop shell, where it is not edge-to-edge. */}
           <MapCanvas
             base={view}
+            appearance={appearance}
             onReady={handleReady}
             edgeToEdge={!isDesktop}
           />
