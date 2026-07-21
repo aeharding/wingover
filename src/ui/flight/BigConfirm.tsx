@@ -1,4 +1,4 @@
-import { type ReactNode, useCallback, useEffect, useState } from "react";
+import { type ReactNode, useEffect, useState } from "react";
 
 import "./BigConfirm.css";
 
@@ -21,16 +21,16 @@ export function useBigConfirm(): {
   element: ReactNode;
 } {
   const [pending, setPending] = useState<Pending | null>(null);
-  const close = useCallback(() => setPending(null), []);
+  const close = () => setPending(null);
 
   useEffect(() => {
     if (!pending) return;
     const onKey = (event: KeyboardEvent) => {
-      if (event.key === "Escape") close();
+      if (event.key === "Escape") setPending(null);
     };
     window.addEventListener("keydown", onKey);
     return () => window.removeEventListener("keydown", onKey);
-  }, [pending, close]);
+  }, [pending]);
 
   const element = pending ? (
     <div className="big-confirm" role="presentation" onClick={close}>

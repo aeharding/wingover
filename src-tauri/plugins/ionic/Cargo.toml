@@ -1,0 +1,13 @@
+[package]
+name = "tauri-plugin-ionic"
+description = "Capacitor-compatible runtime behaviors so Ionic apps run natively-smooth on Tauri iOS: keyboard events + webview keyboard handling, accessory-bar removal, programmatic-focus keyboard, and native overscroll"
+version = "0.1.0"
+edition = "2021"
+license = "AGPL-3.0-only"
+links = "tauri-plugin-ionic"
+
+[build-dependencies]
+tauri-plugin = { version = "2", features = ["build"] }
+
+[dependencies]
+tauri = { version = "2", features = ["wry"] }

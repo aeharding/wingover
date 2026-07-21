@@ -5,6 +5,13 @@ pub fn run() {
     let builder = tauri::Builder::default().plugin(tauri_plugin_opener::init());
     #[cfg(mobile)]
     let builder = builder.plugin(tauri_plugin_wingover::init());
+    // The Ionic-on-Tauri compat layer (Capacitor-named keyboard events, webview
+    // keyboard handling) + official haptics, which the web layer bridges to
+    // Ionic's window.Capacitor haptic hooks (src/tauri-ionic/).
+    #[cfg(mobile)]
+    let builder = builder
+        .plugin(tauri_plugin_ionic::init())
+        .plugin(tauri_plugin_haptics::init());
     // WKWebView does NOT reload itself when iOS/macOS kills its content
     // process (memory pressure while backgrounded does this routinely) —
     // without this hook the app stays a dead white view until relaunch.

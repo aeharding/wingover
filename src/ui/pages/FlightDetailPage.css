@@ -1,32 +1,116 @@
 /* Map on top, details below — a split, not an overlay. The old floating card
    covered the track it existed to show, and its title duplicated the header's.
-   vh (not %) because IonContent's scroll host doesn't size against the page. */
-.flight-detail-map {
+   The frame owns the map's height and always stays in the scroll flow. Inline
+   it's a non-interactive preview (see below), so it only needs to tease the
+   track and hand off to Expand — details get the rest of the screen. vh (not %)
+   because IonContent's scroll host doesn't size against the page. */
+.flight-detail-map-frame {
   position: relative;
-  /* The map is the main event — it gets the lion's share of the screen, and
-     the details are what scrolls. */
-  height: 60vh;
-  min-height: 320px;
+  /* svh: stable against the PWA URL bar collapsing/expanding mid-scroll.
+     Roughly half the screen: enough map to read the track shape at a
+     glance, details start above the fold. */
+  height: 46svh;
+  min-height: 300px;
 }
 
-/* Expanded, the map takes the whole content area; the details wait below,
-   unreachable until it shrinks back (scrolling is off while expanded). */
-.flight-detail-map.map-full {
-  height: 100%;
-  min-height: 0;
+/* The map surface fills whichever slot the portal parks it in — the inline
+   frame or the fullscreen overlay. The view-transition-name is what makes
+   the expand/collapse a "magic move": startViewTransition (see the tsx)
+   morphs this element's box between the two layouts. Inert on engines
+   without the API. */
+.flight-detail-map {
+  position: absolute;
+  inset: 0;
+  view-transition-name: flight-map;
 }
 
-/* No bars means the tab bar too — it belongs to the app shell, not this
-   page, so a body class set while the map is expanded reaches out to it. */
-body.flight-map-full ion-tab-bar {
-  display: none;
+/* Snappier than the UA's default morph; the group is the moving box. */
+::view-transition-group(flight-map) {
+  animation-duration: 280ms;
+  animation-timing-function: cubic-bezier(0.32, 0.72, 0, 1);
 }
 
-/* The toggle rides the map box, not the viewport — no home-indicator inset
-   needed this far from the screen bottom (MapView.css adds one for the
-   full-screen maps, which is right again once THIS map is full screen). */
+/* Full screen: a fixed overlay on document.body, OUTSIDE the page scroller
+   and ion-content. That placement does the heavy lifting by construction:
+   the details' layout and scroll position never change (nothing to save or
+   restore), drags anywhere on the overlay have no scrollable ancestor to
+   grab, a status-bar tap's center hit-test finds no ion-content to scroll,
+   and the header/tab bar are simply covered (fixed at BODY level is safe —
+   Ionic's own modals live there; the measured scrollTop corruption was
+   fixed elements toggling INSIDE the momentum scroller). dvh so that when
+   browser fullscreen isn't granted (e.g. iPhone Safari PWA) the overlay
+   tracks the viewport the URL bar actually leaves and the bottom controls
+   stay reachable. touch-action: none is belt-and-braces on top. */
+.flight-detail-map-fullroot {
+  position: fixed;
+  inset: 0;
+  height: 100dvh;
+  /* Above ion-app entirely: ion-app is a stacking context at z-index 0, so
+     EVERY Ionic overlay (alerts, action sheets, toasts — internal z-index
+     20001, but inside that context) paints UNDER this. Nothing on this page
+     can open one while fullscreen (all triggers are covered), but a future
+     global toast/alert would be invisible here — lower this into ion-app if
+     that day comes, at the cost of the statusTap no-op property. */
+  z-index: 1000;
+  touch-action: none;
+  background: var(--ion-background-color, #000);
+}
+
+/* Inline (not full screen), the map is a scroll-through preview: single-finger
+   swipes scroll the details past it instead of panning the map, which would
+   trap the scroll — worst with the keyboard up, when the map can be the whole
+   scrollable area. pointer-events fall through to Ionic's scroller; the controls
+   (view toggle, expand pill) opt back in. Tap the pill to go full screen, where
+   the map pans/zooms normally. Phone-only page (desktop uses a different view). */
+.flight-detail-map:not(.map-full) {
+  pointer-events: none;
+}
+.flight-detail-map:not(.map-full) .map-tap-layer,
+.flight-detail-map:not(.map-full) .map-overlay,
+.flight-detail-map:not(.map-full) .map-expand-pill {
+  pointer-events: auto;
+}
+
+/* Inline, a full-cover layer turns a tap into "expand" while a vertical drag
+   scrolls the details straight through it (touch-action: pan-y). Sits below the
+   controls (z-index 10) so the toggle and pill still win their own taps. */
+.map-tap-layer {
+  position: absolute;
+  inset: 0;
+  z-index: 5;
+  touch-action: pan-y;
+}
+
+/* Inline, the view toggle moves to the top-right, out of the way of the scroll
+   and the centered pill (MapView.css stacks it bottom-right, right again once
+   full screen). No home-indicator inset — the map box is mid-page here. */
 .flight-detail-map:not(.map-full) .map-overlay {
+  top: 0.9rem;
+  bottom: auto;
+}
+
+/* Inline expand affordance: a labelled pill centered at the bottom of the map
+   box (the whole map is a preview now, so the corner icon button wasn't
+   discoverable). Matches .map-button's fill; pill-shaped. */
+.map-expand-pill {
+  position: absolute;
   bottom: 0.9rem;
+  left: 50%;
+  transform: translateX(-50%);
+  z-index: 10;
+  display: flex;
+  align-items: center;
+  gap: 0.35rem;
+  padding: 0.5rem 0.9rem;
+  font-size: 0.9rem;
+  font-weight: 600;
+  color: #fff;
+  background: rgba(24, 26, 29, 0.9);
+  border-radius: 999px;
+}
+
+.map-expand-pill:active {
+  background: rgba(60, 64, 70, 0.9);
 }
 
 /* Stat values are the point of the rows — full contrast and lined-up digits,

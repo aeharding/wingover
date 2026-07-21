@@ -1,5 +1,5 @@
 import { useIonAlert } from "@ionic/react";
-import { useCallback, useState } from "react";
+import { useState } from "react";
 
 import * as sync from "../../sync";
 
@@ -19,51 +19,49 @@ export function useLogOut(): {
   const [presentAlert] = useIonAlert();
   const [busy, setBusy] = useState(false);
 
-  const finish = useCallback(
-    async (onDone?: () => void) => {
-      try {
-        await sync.logOut();
-        onDone?.();
-      } catch (error) {
-        presentAlert({
-          header: "Log out failed",
-          message: String(error),
-          buttons: ["OK"],
-        });
-      }
-    },
-    [presentAlert],
-  );
-
-  const logOut = useCallback(
-    async (onDone?: () => void) => {
-      setBusy(true);
-      try {
-        if (await sync.flushForLogOut()) {
-          await finish(onDone);
-          return;
-        }
-      } finally {
-        setBusy(false);
-      }
+  async function finish(onDone?: () => void) {
+    try {
+      await sync.logOut();
+      onDone?.();
+    } catch (error) {
       presentAlert({
-        header: "Log out?",
-        message:
-          "Some flights on this computer haven't synced yet. Logging out deletes them from this computer. Everything already synced stays on the server and your other devices.",
-        buttons: [
-          { text: "Cancel", role: "cancel" },
-          {
-            text: "Log out",
-            role: "destructive",
-            handler: () => {
-              void finish(onDone);
-            },
-          },
-        ],
+        header: "Log out failed",
+        message: String(error),
+        buttons: ["OK"],
       });
-    },
-    [finish, presentAlert],
-  );
+    }
+  }
+
+  async function logOut(onDone?: () => void) {
+    setBusy(true);
+    // No try/finally: the React Compiler cannot lower a catchless try (it
+    // bails and leaves the whole hook unmemoized). A flush THROW is the
+    // same condition as flushed=false — "cannot prove a clean state"
+    // (offline, lapsed) — so it takes the confirm path below. finish()
+    // never throws (it handles its own failure with an alert).
+    const flushed = await sync.flushForLogOut().catch(() => false);
+    if (flushed) {
+      await finish(onDone);
+      setBusy(false);
+      return;
+    }
+    setBusy(false);
+    presentAlert({
+      header: "Log out?",
+      message:
+        "Some flights on this computer haven't synced yet. Logging out deletes them from this computer. Everything already synced stays on the server and your other devices.",
+      buttons: [
+        { text: "Cancel", role: "cancel" },
+        {
+          text: "Log out",
+          role: "destructive",
+          handler: () => {
+            void finish(onDone);
+          },
+        },
+      ],
+    });
+  }
 
   return { logOut, busy };
 }

@@ -374,6 +374,32 @@ Denies the storekit_current_entitlement command without any pre-configured scope
 <tr>
 <td>
 
+`wingover:allow-storekit-environment`
+
+</td>
+<td>
+
+Enables the storekit_environment command without any pre-configured scope.
+
+</td>
+</tr>
+
+<tr>
+<td>
+
+`wingover:deny-storekit-environment`
+
+</td>
+<td>
+
+Denies the storekit_environment command without any pre-configured scope.
+
+</td>
+</tr>
+
+<tr>
+<td>
+
 `wingover:allow-storekit-manage-subscriptions`
 
 </td>

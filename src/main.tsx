@@ -9,11 +9,18 @@ import { createRoot } from "react-dom/client";
 
 import { stripMintedFlightNames } from "./storage/db";
 import { resume } from "./sync";
+import { installCapacitorShim, installKeyboardLayout } from "./tauri-ionic";
 import App from "./ui/App";
 import { installExternalLinkHandler } from "./ui/externalLinks";
 import { captureLaunchUrl } from "./ui/map/config";
 
 installExternalLinkHandler();
+// Resize <ion-app> and flag html.keyboard-open when tauri-plugin-ionic
+// reports the on-screen keyboard (dormant off-device).
+installKeyboardLayout();
+// window.Capacitor facade → Ionic's built-in haptics (toggles, pickers,
+// refresher) fire through tauri-plugin-haptics. No-op off-device.
+installCapacitorShim();
 // Pin launch-only URL flags before the router can strip the query string.
 captureLaunchUrl();
 // Sync that stops at the end of the session isn't sync. Fire-and-forget: the

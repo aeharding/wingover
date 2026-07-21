@@ -70,6 +70,7 @@ export type Gesture =
   | "longpress" // a press held in place → a geographic point
   | "down" // pointer/touch down (interaction begins)
   | "up" // pointer/touch up / cancel (interaction ends)
+  | "singletap" // a lone tap — NOT the first half of a double-tap zoom
   | "dragstart"
   | "dragend"
   | "zoom" // zoom changed (per-frame while zooming)
