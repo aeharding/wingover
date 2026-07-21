@@ -41,7 +41,8 @@ import {
 } from "../map/types";
 import useMapView from "../map/useMapView";
 import ViewToggle from "../map/ViewToggle";
-import { useSeatReplay } from "../replay/useSeatReplay";
+import { replayAvailable } from "../replay/available";
+import ReplayDock from "../replay/ReplayDock";
 import { useSettings } from "../settings/SettingsContext";
 import { useFlightActions } from "../useFlightActions";
 import { useFlightDoc } from "./useFlightDoc";
@@ -91,7 +92,6 @@ export default function FlightSeat({
   const lineRef = useRef<Line | null>(null);
   const planLineRef = useRef<Line | null>(null);
   const markersRef = useRef<MarkerLayer | null>(null);
-  const replay = useSeatReplay(flight, track, active);
 
   // Full screen means NO chrome: the list pane, seat header and card hide
   // via the body class (see desktop.css), the tab rail goes with it, and
@@ -254,7 +254,6 @@ export default function FlightSeat({
         />
         <div className="map-overlay">
           {map && <CompassButton map={map} />}
-          {replay.button}
           <button
             className="map-button"
             aria-label={mapFull ? "Shrink map" : "Expand map"}
@@ -363,9 +362,13 @@ export default function FlightSeat({
             )}
           </div>
         )}
-        {/* The phone-frame replay card + scrim (renders nothing closed). */}
-        {replay.element}
       </div>
+      {/* The always-docked playback bar: the flight's altitude graph, and
+          scrubbing it previews that moment on the seat map above. Keyed so
+          selection swaps re-bind the feed to the new track. */}
+      {map && flight && replayAvailable(flight, track) && (
+        <ReplayDock key={id} map={map} track={track} />
+      )}
       <IonActionSheet
         isOpen={optionsOpen && active}
         onDidDismiss={() => setOptionsOpen(false)}

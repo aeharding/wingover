@@ -183,7 +183,7 @@ test("the plan page grows a pin pane at desktop width", async ({ page }) => {
   await expect(page.getByText("Long-press the map")).toBeVisible();
 });
 
-test("replay opens as a phone-frame card, plays, expands, and Esc steps out", async ({
+test("the seat docks a playback bar: parked at launch, play animates the seat map", async ({
   page,
 }) => {
   // Record ~20s of flight (500ms wall at 40x) so replay is available.
@@ -199,61 +199,35 @@ test("replay opens as a phone-frame card, plays, expands, and Esc steps out", as
 
   await page.getByTestId("rail-logbook").click();
   await page.locator(".flight-row").first().click();
-  await page.getByTestId("seat-replay").click();
 
-  // A phone-aspect card, not a full-width takeover.
-  const phone = page.locator(".replay-phone");
-  await expect(phone).toBeVisible();
-  const box = (await phone.boundingBox())!;
-  expect(box.height / box.width).toBeGreaterThan(2);
+  // No mode to enter: the bar is simply docked under the seat map, and the
+  // aircraft is parked on the launch point of the SEAT's own map.
+  await expect(page.getByTestId("replay-dock")).toBeVisible();
+  const seatDisplay = () =>
+    page
+      .locator(".seat-map .map-container")
+      .evaluate(
+        (el) =>
+          (el as HTMLElement & { __display?: { lng: number; lat: number } })
+            .__display ?? null,
+      );
+  await expect.poll(seatDisplay).not.toBeNull();
+  const start = (await seatDisplay())!;
 
-  // Play moves the aircraft in the card's OWN map (the seat map idles).
-  await expect
-    .poll(() =>
-      phone
-        .locator(".map-container")
-        .evaluate(
-          (el) =>
-            (el as HTMLElement & { __display?: { lng: number } }).__display ??
-            null,
-        ),
-    )
-    .not.toBeNull();
-  const start = await phone
-    .locator(".map-container")
-    .evaluate(
-      (el) =>
-        (el as HTMLElement & { __display?: { lng: number; lat: number } })
-          .__display!,
-    );
   await page.getByTestId("replay-play").click();
   await expect
     .poll(async () => {
-      const at = await phone
-        .locator(".map-container")
-        .evaluate(
-          (el) =>
-            (el as HTMLElement & { __display?: { lng: number; lat: number } })
-              .__display!,
-        );
-      return at.lng !== start.lng || at.lat !== start.lat;
+      const at = await seatDisplay();
+      return at !== null && (at.lng !== start.lng || at.lat !== start.lat);
     })
     .toBe(true);
 
-  // Expand fills the window; Esc steps back to the card, then closes.
-  await page.getByTestId("replay-expand").click();
-  await expect(phone).toHaveClass(/full/);
-  await page.keyboard.press("Escape");
-  await expect(phone).toBeVisible();
-  await expect(phone).not.toHaveClass(/full/);
-  await page.keyboard.press("Escape");
-  await expect(phone).toBeHidden();
+  // Seat fullscreen keeps the timeline docked.
+  await page.getByTestId("map-expand").click();
+  await expect(page.getByTestId("replay-dock")).toBeVisible();
+  await page.getByTestId("map-expand").click();
 
-  // The scrim click closes too, and the seat under it is untouched.
-  await page.getByTestId("seat-replay").click();
-  await expect(phone).toBeVisible();
-  await page.locator(".replay-scrim").click({ position: { x: 10, y: 10 } });
-  await expect(phone).toBeHidden();
+  // The details card and stats are untouched around it.
   await expect(page.getByText("Max altitude")).toBeVisible();
 });
 

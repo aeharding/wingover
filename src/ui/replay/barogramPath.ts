@@ -16,24 +16,29 @@ export interface BarogramGeometry {
 }
 
 /**
- * Per-CSS-pixel-column min/max altitude over the track, bucketed by TIME
- * (matching the scrubber's linear time axis, and robust to gaps). Min AND
- * max per column so a one-fix altitude spike survives — a per-column
- * average would eat it. Empty columns hold Infinity sentinels.
+ * Per-CSS-pixel-column min/max altitude over the visible time window,
+ * bucketed by TIME (matching the scrubber's linear time axis, and robust
+ * to gaps). Min AND max per column so a one-fix altitude spike survives —
+ * a per-column average would eat it. Empty columns hold Infinity
+ * sentinels. The window defaults to the whole track; a zoomed timeline
+ * passes its visible [w0, w1].
  */
 export function bucketAltitudes(
   track: Fix[],
   cols: number,
+  w0 = track[0]?.timestamp ?? 0,
+  w1 = track[track.length - 1]?.timestamp ?? 0,
 ): { mins: Float64Array; maxs: Float64Array } {
   const mins = new Float64Array(cols).fill(Infinity);
   const maxs = new Float64Array(cols).fill(-Infinity);
   if (track.length === 0 || cols === 0) return { mins, maxs };
-  const t0 = track[0].timestamp;
-  const span = Math.max(1, track[track.length - 1].timestamp - t0);
+  const span = Math.max(1, w1 - w0);
   for (const fix of track) {
+    if (fix.timestamp < w0 || fix.timestamp > w1) continue; // outside window
+    // A fix exactly AT w1 belongs to the last column, not one past it.
     const c = Math.min(
       cols - 1,
-      Math.floor(((fix.timestamp - t0) / span) * cols),
+      Math.floor(((fix.timestamp - w0) / span) * cols),
     );
     if (fix.altitude < mins[c]) mins[c] = fix.altitude;
     if (fix.altitude > maxs[c]) maxs[c] = fix.altitude;
@@ -43,20 +48,23 @@ export function bucketAltitudes(
 
 /**
  * SVG path strings for the altitude profile at a given pixel size. Pure:
- * (track, width, height) in, path data out — the component just drops the
- * results into <path d>. Fewer than 2 fixes (or a degenerate box) renders
- * nothing.
+ * (track, size, window) in, path data out — the component just drops the
+ * results into <path d>. The altitude scale fits the VISIBLE window, so
+ * zooming into a low ridge re-spreads it vertically. Fewer than 2 fixes
+ * (or a degenerate box) renders nothing.
  */
 export function barogramPaths(
   track: Fix[],
   width: number,
   height: number,
+  w0 = track[0]?.timestamp ?? 0,
+  w1 = track[track.length - 1]?.timestamp ?? 0,
 ): BarogramGeometry {
   if (track.length < 2 || width < 2 || height < 2)
     return { area: "", outline: "" };
 
   const cols = Math.floor(width);
-  const { mins, maxs } = bucketAltitudes(track, cols);
+  const { mins, maxs } = bucketAltitudes(track, cols, w0, w1);
 
   let lo = Infinity;
   let hi = -Infinity;

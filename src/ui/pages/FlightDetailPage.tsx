@@ -63,7 +63,8 @@ import {
 } from "../map/types";
 import useMapView from "../map/useMapView";
 import ViewToggle from "../map/ViewToggle";
-import { useFlightReplay } from "../replay/useFlightReplay";
+import { replayAvailable } from "../replay/available";
+import ReplayDock from "../replay/ReplayDock";
 import { useSettings } from "../settings/SettingsContext";
 import { useFlightActions } from "../useFlightActions";
 
@@ -132,7 +133,16 @@ export default function FlightDetailPage() {
   const appearance = useAppearance();
   const [view, changeView] = useMapView();
   const [map, setMap] = useState<MapView | null>(null);
-  const [mapFull, setMapFull] = useState(false);
+  // Fullscreen presentation intent: full, plus whether the replay dock
+  // should auto-play on arrival (the Replay pill) — they change together.
+  const [fullView, setFullView] = useState({ full: false, autoplay: false });
+  const mapFull = fullView.full;
+  // Boolean view of the setter for the module-scoped collapse helper and
+  // the fullscreen listeners; collapsing always clears the autoplay intent.
+  const setMapFull = (full: boolean) =>
+    setFullView((prior) =>
+      full ? { ...prior, full } : { full: false, autoplay: false },
+    );
   // Mirrors mapFull for the async fullscreen grant below: two quick taps
   // can fold the map before the browser grants fullscreen, and the grant
   // callback must see the CURRENT intent, not the one it closed over.
@@ -150,7 +160,7 @@ export default function FlightDetailPage() {
   const lineRef = useRef<Line | null>(null);
   const planLineRef = useRef<Line | null>(null);
   const markersRef = useRef<MarkerLayer | null>(null);
-  const replay = useFlightReplay(flight, track);
+  const replayReady = replayAvailable(flight, track);
 
   // Full screen REPARENTS the map surface (same instance — reverse portal, no
   // remount) into a fixed overlay on document.body. Outside the scroller,
@@ -160,7 +170,7 @@ export default function FlightDetailPage() {
   // status-bar tap's center hit-test finds no ion-content above the overlay,
   // so Ionic's statusTap scroll-to-top is a natural no-op while fullscreen.
   //
-  function expandMap() {
+  function expandMap(autoplay = false) {
     // With the keyboard up, a tap on the map means "get me out of this
     // field" — dismiss and stay put. Expanding under a closing keyboard
     // looks broken and yanks the pilot out of an edit. (keyboard-open is
@@ -169,7 +179,7 @@ export default function FlightDetailPage() {
       (document.activeElement as HTMLElement | null)?.blur();
       return;
     }
-    withMapTransition(() => setMapFull(true));
+    withMapTransition(() => setFullView({ full: true, autoplay }));
   }
 
   const collapseMap = () => collapseMapVia(setMapFull);
@@ -522,70 +532,74 @@ export default function FlightDetailPage() {
           controls. Inline, the map-tap-layer owns tap-to-expand. */}
       <InPortal node={mapPortal}>
         <div className={`flight-detail-map${mapFull ? " map-full" : ""}`}>
-          {/* Edge-to-edge only when expanded to full screen (bottom under the
-              home indicator); embedded in the split, it isn't. */}
-          <MapCanvas
-            base={view}
-            appearance={appearance}
-            onReady={handleReady}
-            edgeToEdge={mapFull}
-          />
-          {/* Inline the map is a scroll-through preview: tap anywhere to
-              expand, vertical drag scrolls the details through (see
-              FlightDetailPage.css). */}
-          {!mapFull && <div className="map-tap-layer" onClick={expandMap} />}
-          <div className="map-overlay">
-            {map && <CompassButton map={map} />}
-            {mapFull && (
-              <button
-                className="map-button"
-                aria-label="Shrink map"
-                data-testid="map-shrink"
-                onClick={collapseMap}
-              >
-                <IonIcon icon={contractOutline} />
-              </button>
+          {/* The map region; fullscreen docks the replay bar below it. */}
+          <div className="detail-map-region">
+            {/* Edge-to-edge only when full screen AND nothing is docked
+                under the map (the dock owns the home indicator then). */}
+            <MapCanvas
+              base={view}
+              appearance={appearance}
+              onReady={handleReady}
+              edgeToEdge={mapFull && !replayReady}
+            />
+            {/* Inline the map is a scroll-through preview: tap anywhere to
+                expand, vertical drag scrolls the details through (see
+                FlightDetailPage.css). */}
+            {!mapFull && (
+              <div className="map-tap-layer" onClick={() => expandMap()} />
             )}
-            {/* Replay without collapsing first; the player overlays this. */}
-            {mapFull && replay.available && (
-              <button
-                className="map-button"
-                aria-label="Replay flight"
-                data-testid="replay-open-full"
-                onClick={replay.open}
-              >
-                <IonIcon icon={playIcon} />
-              </button>
-            )}
-            {map?.supportsSatellite && (
-              <ViewToggle view={view} onChange={changeView} />
-            )}
-          </div>
-          {/* Visible affordances for the preview: replay the flight, or
-              expand the map (the tap layer's labelled twin). */}
-          {!mapFull && (
-            <div className="map-pill-row">
-              {replay.available && (
+            <div className="map-overlay">
+              {map && <CompassButton map={map} />}
+              {mapFull && (
                 <button
-                  className="map-expand-pill"
-                  aria-label="Replay flight"
-                  data-testid="replay-open"
-                  onClick={replay.open}
+                  className="map-button"
+                  aria-label="Shrink map"
+                  data-testid="map-shrink"
+                  onClick={collapseMap}
                 >
-                  <IonIcon icon={playIcon} />
-                  Replay
+                  <IonIcon icon={contractOutline} />
                 </button>
               )}
-              <button
-                className="map-expand-pill"
-                aria-label="Expand map"
-                data-testid="map-expand"
-                onClick={expandMap}
-              >
-                <IonIcon icon={expandOutline} />
-                Expand
-              </button>
+              {map?.supportsSatellite && (
+                <ViewToggle view={view} onChange={changeView} />
+              )}
             </div>
+            {/* Visible affordances for the preview: replay the flight
+                (fullscreen, auto-playing) or just expand the map. */}
+            {!mapFull && (
+              <div className="map-pill-row">
+                {replayReady && (
+                  <button
+                    className="map-expand-pill"
+                    aria-label="Replay flight"
+                    data-testid="replay-open"
+                    onClick={() => expandMap(true)}
+                  >
+                    <IonIcon icon={playIcon} />
+                    Replay
+                  </button>
+                )}
+                <button
+                  className="map-expand-pill"
+                  aria-label="Expand map"
+                  data-testid="map-expand"
+                  onClick={() => expandMap()}
+                >
+                  <IonIcon icon={expandOutline} />
+                  Expand
+                </button>
+              </div>
+            )}
+          </div>
+          {/* The fullscreen flight map IS the replay view: the timeline is
+              always docked (Replay auto-plays; Expand arrives paused). */}
+          {mapFull && replayReady && (
+            <ReplayDock
+              key={id}
+              map={map}
+              track={track}
+              autoplay={fullView.autoplay}
+            />
           )}
         </div>
       </InPortal>
@@ -602,8 +616,6 @@ export default function FlightDetailPage() {
           </div>,
           document.body,
         )}
-      {/* The replay player (body-level overlay; renders nothing closed). */}
-      {replay.element}
     </IonPage>
   );
 }

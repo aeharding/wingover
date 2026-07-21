@@ -1,0 +1,79 @@
+.replay-dock {
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+  padding: 0.6rem 0.75rem calc(0.5rem + env(safe-area-inset-bottom));
+  /* The .map-button fill, as a bar. */
+  background: rgba(24, 26, 29, 0.92);
+}
+
+/* The six in-flight stats: five live readouts here, elapsed time below in
+   the transport (the nav pair needs the live waypoint sequence, which
+   isn't recorded per moment). */
+.replay-readouts {
+  display: flex;
+  justify-content: space-between;
+  gap: 0.6rem;
+  min-width: 0;
+}
+
+.replay-readout {
+  min-width: 0;
+}
+
+.replay-readout .label {
+  font-size: 0.58rem;
+  letter-spacing: 0.05em;
+  text-transform: uppercase;
+  color: #9a9fa6;
+  white-space: nowrap;
+}
+
+.replay-readout .value {
+  font-size: 1.02rem;
+  font-weight: 700;
+  font-variant-numeric: tabular-nums;
+  color: #fff;
+  white-space: nowrap;
+}
+
+.replay-readout.cyan .value {
+  color: var(--stat-cyan);
+}
+
+.replay-readout.green .value {
+  color: var(--stat-green);
+}
+
+.replay-readout.yellow .value {
+  color: var(--stat-yellow);
+}
+
+.replay-transport {
+  display: flex;
+  align-items: center;
+  gap: 0.6rem;
+}
+
+.replay-time {
+  color: #fff;
+  font-size: 1.05rem;
+  font-weight: 600;
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+}
+
+.replay-time-total {
+  color: #9a9fa6;
+}
+
+.replay-transport-spring {
+  flex: 1;
+}
+
+/* The speed control is its label. */
+.replay-speed {
+  font-size: 1.05rem;
+  font-weight: 700;
+  font-variant-numeric: tabular-nums;
+}

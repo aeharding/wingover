@@ -51,6 +51,19 @@ describe("bucketAltitudes", () => {
     expect(maxs[9]).toBe(130);
     expect(maxs[5]).toBe(-Infinity);
   });
+
+  it("a zoomed window sees only its fixes, spread across all columns", () => {
+    const fixes = Array.from({ length: 101 }, (_, i) => fix(i * 1000, i));
+    // Zoom to the middle fifth: 40s..60s.
+    const { mins, maxs } = bucketAltitudes(fixes, 10, 40_000, 60_000);
+    expect(maxs[0]).toBe(41); // 40s and 41s land in column 0
+    expect(mins[0]).toBe(40);
+    expect(maxs[9]).toBe(60); // the window-end fix clamps into the last column
+    // Nothing outside the window leaks in.
+    const seen = [...maxs].filter((v) => v !== -Infinity);
+    expect(Math.max(...seen)).toBeLessThanOrEqual(60);
+    expect(Math.min(...[...mins].filter((v) => v !== Infinity))).toBe(40);
+  });
 });
 
 describe("barogramPaths", () => {

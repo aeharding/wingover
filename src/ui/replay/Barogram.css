@@ -1,6 +1,12 @@
+.barogram-frame {
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+}
+
 .barogram {
   position: relative;
-  height: 64px;
+  height: 72px;
   /* The whole strip is the scrub gesture; nothing scrolls behind it. */
   touch-action: none;
   cursor: pointer;
@@ -73,4 +79,39 @@
 
 .barogram-bubble.visible {
   visibility: visible;
+}
+
+/* Zoomed only: reset back to the whole flight. */
+.barogram-reset {
+  position: absolute;
+  top: 4px;
+  right: 4px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 2rem;
+  height: 2rem;
+  font-size: 1rem;
+  color: #fff;
+  background: rgba(24, 26, 29, 0.9);
+  border: 1px solid rgba(255, 255, 255, 0.18);
+  border-radius: 8px;
+}
+
+/* Zoomed only: which slice of the whole flight is on screen. */
+.barogram-overview {
+  position: relative;
+  height: 4px;
+  border-radius: 2px;
+  background: rgba(255, 255, 255, 0.14);
+  overflow: hidden;
+}
+
+.barogram-overview-window {
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  min-width: 4px;
+  border-radius: 2px;
+  background: var(--wingover-accent);
 }

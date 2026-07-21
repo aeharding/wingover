@@ -35,18 +35,23 @@ export interface ReplayFeed {
 }
 
 /**
- * Drives a recorded track through the replay clock and exposes the state
- * LiveTrackMap already consumes (track prefix + latest). The caller must
- * guarantee at least 2 fixes and remount (key) per flight.
+ * Drives a recorded track through the replay clock and exposes the flown
+ * prefix + the current fix. The caller must guarantee at least 2 fixes
+ * and remount (key) per flight. autoplay starts the clock on mount (the
+ * phone's Replay pill).
  */
-export function useReplayFeed(fixes: Fix[]): ReplayFeed {
+export function useReplayFeed(fixes: Fix[], autoplay = false): ReplayFeed {
   const t0 = fixes[0].timestamp;
   const t1 = fixes[fixes.length - 1].timestamp;
-  const [clock] = useState(() => new ReplayClock(t0, t1));
+  const [clock] = useState(() => {
+    const created = new ReplayClock(t0, t1);
+    if (autoplay) created.play(Date.now());
+    return created;
+  });
   const [state, setState] = useState(() => ({
     index: 1,
     simTime: t0,
-    playing: false,
+    playing: autoplay,
     speed: DEFAULT_REPLAY_SPEED,
   }));
   const wasPlayingRef = useRef(false);

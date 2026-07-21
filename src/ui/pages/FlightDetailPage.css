@@ -22,6 +22,17 @@
   position: absolute;
   inset: 0;
   view-transition-name: flight-map;
+  /* Column so fullscreen can dock the replay bar under the map region. */
+  display: flex;
+  flex-direction: column;
+}
+
+/* The map itself (canvas, controls, pills). Inline it is the whole box;
+   fullscreen the replay dock takes the bottom and this flexes above it. */
+.detail-map-region {
+  position: relative;
+  flex: 1;
+  min-height: 0;
 }
 
 /* Snappier than the UA's default morph; the group is the moving box. */
