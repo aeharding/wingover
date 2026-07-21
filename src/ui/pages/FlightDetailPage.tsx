@@ -21,6 +21,7 @@ import {
   contractOutline,
   ellipsisHorizontal,
   expandOutline,
+  play as playIcon,
 } from "ionicons/icons";
 import {
   type KeyboardEvent as ReactKeyboardEvent,
@@ -62,6 +63,7 @@ import {
 } from "../map/types";
 import useMapView from "../map/useMapView";
 import ViewToggle from "../map/ViewToggle";
+import { useFlightReplay } from "../replay/useFlightReplay";
 import { useSettings } from "../settings/SettingsContext";
 import { useFlightActions } from "../useFlightActions";
 
@@ -148,6 +150,7 @@ export default function FlightDetailPage() {
   const lineRef = useRef<Line | null>(null);
   const planLineRef = useRef<Line | null>(null);
   const markersRef = useRef<MarkerLayer | null>(null);
+  const replay = useFlightReplay(flight, track);
 
   // Full screen REPARENTS the map surface (same instance — reverse portal, no
   // remount) into a fixed overlay on document.body. Outside the scroller,
@@ -543,21 +546,46 @@ export default function FlightDetailPage() {
                 <IonIcon icon={contractOutline} />
               </button>
             )}
+            {/* Replay without collapsing first; the player overlays this. */}
+            {mapFull && replay.available && (
+              <button
+                className="map-button"
+                aria-label="Replay flight"
+                data-testid="replay-open-full"
+                onClick={replay.open}
+              >
+                <IonIcon icon={playIcon} />
+              </button>
+            )}
             {map?.supportsSatellite && (
               <ViewToggle view={view} onChange={changeView} />
             )}
           </div>
-          {/* A visible affordance for the tap-to-expand above. */}
+          {/* Visible affordances for the preview: replay the flight, or
+              expand the map (the tap layer's labelled twin). */}
           {!mapFull && (
-            <button
-              className="map-expand-pill"
-              aria-label="Expand map"
-              data-testid="map-expand"
-              onClick={expandMap}
-            >
-              <IonIcon icon={expandOutline} />
-              Expand
-            </button>
+            <div className="map-pill-row">
+              {replay.available && (
+                <button
+                  className="map-expand-pill"
+                  aria-label="Replay flight"
+                  data-testid="replay-open"
+                  onClick={replay.open}
+                >
+                  <IonIcon icon={playIcon} />
+                  Replay
+                </button>
+              )}
+              <button
+                className="map-expand-pill"
+                aria-label="Expand map"
+                data-testid="map-expand"
+                onClick={expandMap}
+              >
+                <IonIcon icon={expandOutline} />
+                Expand
+              </button>
+            </div>
           )}
         </div>
       </InPortal>
@@ -574,6 +602,8 @@ export default function FlightDetailPage() {
           </div>,
           document.body,
         )}
+      {/* The replay player (body-level overlay; renders nothing closed). */}
+      {replay.element}
     </IonPage>
   );
 }

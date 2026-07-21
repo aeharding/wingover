@@ -1,0 +1,76 @@
+.barogram {
+  position: relative;
+  height: 64px;
+  /* The whole strip is the scrub gesture; nothing scrolls behind it. */
+  touch-action: none;
+  cursor: pointer;
+}
+
+.barogram:focus-visible {
+  outline: 2px solid var(--wingover-accent);
+  outline-offset: 2px;
+  border-radius: 4px;
+}
+
+.barogram-svg {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  display: block;
+}
+
+.barogram-area {
+  fill: var(--wingover-accent);
+  opacity: 0.16;
+}
+
+.barogram-outline {
+  fill: none;
+  stroke: var(--wingover-accent);
+  stroke-width: 1.5;
+}
+
+/* The playhead: positioned by transform only (imperative during a drag). */
+.barogram-playhead {
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  left: 0;
+  width: 2px;
+  margin-left: -1px;
+  background: #fff;
+  pointer-events: none;
+}
+
+.barogram-playhead::before {
+  content: "";
+  position: absolute;
+  top: -1px;
+  left: 50%;
+  transform: translateX(-50%);
+  border-left: 5px solid transparent;
+  border-right: 5px solid transparent;
+  border-top: 6px solid #fff;
+}
+
+/* Elapsed-time bubble, visible only while scrubbing. */
+.barogram-bubble {
+  position: absolute;
+  bottom: calc(100% + 8px);
+  left: 0;
+  padding: 0.25rem 0.55rem;
+  border-radius: 8px;
+  background: rgba(24, 26, 29, 0.95);
+  color: #fff;
+  font-size: 0.9rem;
+  font-weight: 600;
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+  visibility: hidden;
+  pointer-events: none;
+}
+
+.barogram-bubble.visible {
+  visibility: visible;
+}

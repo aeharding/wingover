@@ -67,7 +67,7 @@
 }
 .flight-detail-map:not(.map-full) .map-tap-layer,
 .flight-detail-map:not(.map-full) .map-overlay,
-.flight-detail-map:not(.map-full) .map-expand-pill {
+.flight-detail-map:not(.map-full) .map-pill-row {
   pointer-events: auto;
 }
 
@@ -89,15 +89,21 @@
   bottom: auto;
 }
 
-/* Inline expand affordance: a labelled pill centered at the bottom of the map
-   box (the whole map is a preview now, so the corner icon button wasn't
-   discoverable). Matches .map-button's fill; pill-shaped. */
-.map-expand-pill {
+/* Inline affordances: labelled pills centered at the bottom of the map box
+   (the whole map is a preview now, so corner icon buttons weren't
+   discoverable). Replay sits beside Expand in one row. */
+.map-pill-row {
   position: absolute;
   bottom: 0.9rem;
   left: 50%;
   transform: translateX(-50%);
   z-index: 10;
+  display: flex;
+  gap: 0.6rem;
+}
+
+/* Matches .map-button's fill; pill-shaped. */
+.map-expand-pill {
   display: flex;
   align-items: center;
   gap: 0.35rem;

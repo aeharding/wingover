@@ -69,6 +69,10 @@ interface LiveTrackMapProps {
   // provider re-create) — FlyPage gates the satellite toggle on its
   // supportsSatellite.
   onMapReady?: (map: MapView | null) => void;
+  // Read/write the persisted live-view camera (zoom/center) — the real
+  // in-flight map. Replay passes false: it must never clobber the pilot's
+  // live prefs, and it always opens fresh on the flight.
+  persistView?: boolean;
 }
 
 export default function LiveTrackMap({
@@ -84,6 +88,7 @@ export default function LiveTrackMap({
   onSelectWaypoint,
   onFollowChange,
   onMapReady,
+  persistView = true,
 }: LiveTrackMapProps) {
   const [map, setMap] = useState<MapView | null>(null);
   // Content handles into the abstract map. The committed flown line is a
@@ -201,19 +206,19 @@ export default function LiveTrackMap({
     });
     mapView.on("dragend", (event) => {
       interactingRef.current = false;
-      writeLiveViewState({ center: event.at });
+      if (persistView) writeLiveViewState({ center: event.at });
     });
     mapView.on("dragstart", () => handleDragStart());
     mapView.on("wheel", (event) => handleWheel(event));
     mapView.on("longpress", (event) => handleLongPress(event.at));
     mapView.on("zoomend", () => {
-      writeLiveViewState({ zoom: mapView.camera().zoom });
+      if (persistView) writeLiveViewState({ zoom: mapView.camera().zoom });
     });
 
     const last = track[track.length - 1];
     if (last) {
       positionInitializedRef.current = true;
-      const saved = readLiveViewState();
+      const saved = persistView ? readLiveViewState() : {};
       const center: LngLat =
         !follow && saved.center
           ? saved.center
@@ -283,7 +288,7 @@ export default function LiveTrackMap({
       map.moveTo(
         {
           center: [fix.longitude, fix.latitude],
-          zoom: readLiveViewState().zoom ?? 13,
+          zoom: (persistView ? readLiveViewState().zoom : undefined) ?? 13,
           bearing: trackUp ? fix.course : 0,
           padding: cameraPadding(),
         },
