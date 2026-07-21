@@ -41,8 +41,7 @@ import {
 } from "../map/types";
 import useMapView from "../map/useMapView";
 import ViewToggle from "../map/ViewToggle";
-import { replayAvailable } from "../replay/available";
-import ReplayDock from "../replay/ReplayDock";
+import { useReplayDrawer } from "../replay/useReplayDrawer";
 import { useSettings } from "../settings/SettingsContext";
 import { useFlightActions } from "../useFlightActions";
 import { useFlightDoc } from "./useFlightDoc";
@@ -92,6 +91,9 @@ export default function FlightSeat({
   const lineRef = useRef<Line | null>(null);
   const planLineRef = useRef<Line | null>(null);
   const markersRef = useRef<MarkerLayer | null>(null);
+  // The replay pane slides open under the seat map; closes with a
+  // selection swap or when the section is URL-hidden.
+  const replay = useReplayDrawer(map, track, flight, active);
 
   // Full screen means NO chrome: the list pane, seat header and card hide
   // via the body class (see desktop.css), the tab rail goes with it, and
@@ -253,7 +255,11 @@ export default function FlightSeat({
           edgeToEdge={mapFull}
         />
         <div className="map-overlay">
-          {map && <CompassButton map={map} />}
+          {/* The replay camera buttons replace the compass while the pane
+              is open (track-up owns the bearing then). */}
+          {map && !replay.isOpen && <CompassButton map={map} />}
+          {replay.playButton}
+          {replay.cameraButtons}
           <button
             className="map-button"
             aria-label={mapFull ? "Shrink map" : "Expand map"}
@@ -363,12 +369,8 @@ export default function FlightSeat({
           </div>
         )}
       </div>
-      {/* The always-docked playback bar: the flight's altitude graph, and
-          scrubbing it previews that moment on the seat map above. Keyed so
-          selection swaps re-bind the feed to the new track. */}
-      {map && flight && replayAvailable(flight, track) && (
-        <ReplayDock key={id} map={map} track={track} />
-      )}
+      {/* The replay pane, sliding open in flow under the seat map. */}
+      {replay.drawer}
       <IonActionSheet
         isOpen={optionsOpen && active}
         onDidDismiss={() => setOptionsOpen(false)}

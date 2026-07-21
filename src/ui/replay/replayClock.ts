@@ -48,7 +48,8 @@ export class ReplayClock {
   play(nowWall: number): void {
     // Re-anchor from the current moment so a pause/play round trip is
     // continuous; at the end, play means "again".
-    this.base = this.timeAt(nowWall) >= this.t1 ? this.t0 : this.timeAt(nowWall);
+    this.base =
+      this.timeAt(nowWall) >= this.t1 ? this.t0 : this.timeAt(nowWall);
     this.anchor = nowWall;
   }
 

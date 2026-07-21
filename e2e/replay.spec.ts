@@ -42,9 +42,7 @@ test("the Replay pill opens fullscreen with the dock and auto-plays", async ({
   await expect(page.getByTestId("replay-dock")).toBeVisible();
 
   // Auto-play: the short fixture plays through and holds at the end.
-  await expect
-    .poll(() => sliderFraction(page))
-    .toBeGreaterThanOrEqual(1);
+  await expect.poll(() => sliderFraction(page)).toBeGreaterThanOrEqual(1);
   await expect(page.getByTestId("replay-play")).toHaveAttribute(
     "aria-label",
     "Replay again",
@@ -76,24 +74,27 @@ test("the Replay pill opens fullscreen with the dock and auto-plays", async ({
   await expect(page.getByText("Max altitude")).toBeVisible();
 });
 
-test("Expand arrives paused; play starts the aircraft on the same map", async ({
+test("Expand keeps the map clean; the play button opens the pane playing; stop closes it", async ({
   page,
 }) => {
   await openImportedFlight(page);
 
   await page.getByTestId("map-expand").click();
+  await expect(page.locator(".flight-detail-map-fullroot")).toBeVisible();
+  // No pane, no glyph — just the map, plus a floating play button.
+  await expect(page.getByTestId("replay-dock")).toBeHidden();
+  await expect(page.getByTestId("replay-start")).toBeVisible();
+
+  await page.getByTestId("replay-start").click();
   await expect(page.getByTestId("replay-dock")).toBeVisible();
-  await expect(page.getByTestId("replay-play")).toHaveAttribute(
-    "aria-label",
-    "Play",
-  );
-  expect(await sliderFraction(page)).toBe(0);
-
-  // Paused, the aircraft is parked on the launch point.
+  await expect(page.getByTestId("replay-start")).toBeHidden();
   await expect.poll(() => aircraftDisplay(page)).not.toBeNull();
-
-  await page.getByTestId("replay-play").click();
   await expect.poll(() => sliderFraction(page)).toBeGreaterThan(0);
+
+  // Stop slides the pane away and the play button returns.
+  await page.getByTestId("replay-stop").click();
+  await expect(page.getByTestId("replay-dock")).toBeHidden();
+  await expect(page.getByTestId("replay-start")).toBeVisible();
 });
 
 test("the timeline zooms with the wheel and resets", async ({ page }) => {
@@ -112,6 +113,7 @@ test("the timeline zooms with the wheel and resets", async ({ page }) => {
   await page.locator(".flight-row").click();
   await expect(page.getByText("Max altitude")).toBeVisible();
   await page.getByTestId("map-expand").click();
+  await page.getByTestId("replay-start").click();
 
   const barogram = page.getByTestId("barogram");
   await expect(barogram).toBeVisible();

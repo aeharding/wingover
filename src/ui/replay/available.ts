@@ -10,7 +10,6 @@ export function replayAvailable(flight: Flight | null, track: Fix[]): boolean {
   return (
     flight !== null &&
     track.length >= 2 &&
-    track[track.length - 1].timestamp - track[0].timestamp >=
-      MIN_REPLAY_SPAN_MS
+    track[track.length - 1].timestamp - track[0].timestamp >= MIN_REPLAY_SPAN_MS
   );
 }

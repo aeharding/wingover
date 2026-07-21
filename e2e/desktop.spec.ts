@@ -183,7 +183,7 @@ test("the plan page grows a pin pane at desktop width", async ({ page }) => {
   await expect(page.getByText("Long-press the map")).toBeVisible();
 });
 
-test("the seat docks a playback bar: parked at launch, play animates the seat map", async ({
+test("the seat's play button slides the replay pane open, playing; stop closes it", async ({
   page,
 }) => {
   // Record ~20s of flight (500ms wall at 40x) so replay is available.
@@ -200,9 +200,11 @@ test("the seat docks a playback bar: parked at launch, play animates the seat ma
   await page.getByTestId("rail-logbook").click();
   await page.locator(".flight-row").first().click();
 
-  // No mode to enter: the bar is simply docked under the seat map, and the
-  // aircraft is parked on the launch point of the SEAT's own map.
-  await expect(page.getByTestId("replay-dock")).toBeVisible();
+  // Closed by default: just a floating play button on the seat map.
+  await expect(page.getByTestId("replay-dock")).toBeHidden();
+  await expect(page.getByTestId("replay-start")).toBeVisible();
+
+  // Open: the pane slides up and playback starts on the SEAT's own map.
   const seatDisplay = () =>
     page
       .locator(".seat-map .map-container")
@@ -211,10 +213,11 @@ test("the seat docks a playback bar: parked at launch, play animates the seat ma
           (el as HTMLElement & { __display?: { lng: number; lat: number } })
             .__display ?? null,
       );
+  await page.getByTestId("replay-start").click();
+  await expect(page.getByTestId("replay-dock")).toBeVisible();
+  await expect(page.getByTestId("replay-start")).toBeHidden();
   await expect.poll(seatDisplay).not.toBeNull();
   const start = (await seatDisplay())!;
-
-  await page.getByTestId("replay-play").click();
   await expect
     .poll(async () => {
       const at = await seatDisplay();
@@ -222,12 +225,23 @@ test("the seat docks a playback bar: parked at launch, play animates the seat ma
     })
     .toBe(true);
 
-  // Seat fullscreen keeps the timeline docked.
+  // The fly-page camera controls ride along while open.
+  await expect(page.getByTestId("replay-follow")).toBeVisible();
+  await page.getByTestId("replay-follow").click();
+  await expect(page.getByTestId("replay-follow")).toHaveAttribute(
+    "data-active",
+    "true",
+  );
+
+  // Seat fullscreen keeps the open pane docked.
   await page.getByTestId("map-expand").click();
   await expect(page.getByTestId("replay-dock")).toBeVisible();
   await page.getByTestId("map-expand").click();
 
-  // The details card and stats are untouched around it.
+  // Stop slides it closed; the play button returns; the seat is intact.
+  await page.getByTestId("replay-stop").click();
+  await expect(page.getByTestId("replay-dock")).toBeHidden();
+  await expect(page.getByTestId("replay-start")).toBeVisible();
   await expect(page.getByText("Max altitude")).toBeVisible();
 });
 

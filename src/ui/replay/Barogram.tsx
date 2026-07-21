@@ -145,10 +145,7 @@ export default function Barogram({
   // doctrine): a plain function so the drag handlers can call it.
   function placePlayhead(t: number) {
     const clamped = Math.min(t1, Math.max(t0, t));
-    const x = Math.min(
-      width,
-      Math.max(0, ((clamped - w0) / wspan) * width),
-    );
+    const x = Math.min(width, Math.max(0, ((clamped - w0) / wspan) * width));
     if (playheadRef.current)
       playheadRef.current.style.transform = `translateX(${x}px)`;
     if (bubbleRef.current) {

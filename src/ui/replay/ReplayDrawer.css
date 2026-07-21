@@ -1,0 +1,23 @@
+/* The replay pane slides open IN FLOW: grid-template-rows 0fr → 1fr
+   animates to the dock's natural height, so the map region above is
+   pushed up smoothly (the backends track their container). */
+.replay-drawer {
+  display: grid;
+  grid-template-rows: 0fr;
+  transition: grid-template-rows 300ms cubic-bezier(0.32, 0.72, 0, 1);
+}
+
+.replay-drawer.open {
+  grid-template-rows: 1fr;
+}
+
+.replay-drawer-clip {
+  overflow: hidden;
+  min-height: 0;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .replay-drawer {
+    transition: none;
+  }
+}

@@ -1,4 +1,4 @@
-import { pause, play, refresh } from "ionicons/icons";
+import { pause, play, refresh, stop as stopIcon } from "ionicons/icons";
 
 import type { Fix } from "../../engine/types";
 import {
@@ -13,7 +13,7 @@ import type { MapView } from "../map/types";
 import { useSettings } from "../settings/SettingsContext";
 import Barogram from "./Barogram";
 import { useReplayFeed } from "./useReplayFeed";
-import { useReplayMapDriver } from "./useReplayMapDriver";
+import { type ReplayCamera, useReplayMapDriver } from "./useReplayMapDriver";
 
 import "./ReplayDock.css";
 
@@ -22,21 +22,33 @@ interface ReplayDockProps {
   // it is still loading — the dock renders and drives it once ready.
   map: MapView | null;
   track: Fix[];
-  // Start playing on mount (the phone's Replay pill).
+  // Start playing on mount (the drawer's play button just opened us).
   autoplay?: boolean;
+  // Owned by the drawer hook (the camera buttons live in the host's map
+  // control stack); the driver here consumes it.
+  camera: ReplayCamera;
+  onFollowBroken: () => void;
+  // The transport's stop button: close the pane, tear the glyph down.
+  onStop: () => void;
 }
 
 /**
- * The playback bar docked under a flight map: live readouts, the zoomable
- * barogram scrubber, and transport controls, driving the host map's
- * aircraft glyph. It is the flight's altitude graph even when nothing is
- * playing — scrubbing while paused previews that moment on the map.
- * Mount keyed per flight (the feed binds to one track).
+ * The playback pane docked under a flight map: live readouts, the
+ * zoomable barogram scrubber, and transport controls, driving the host
+ * map's aircraft glyph. Scrubbing while paused previews that moment on
+ * the map. Mount keyed per flight (the feed binds to one track).
  */
-export default function ReplayDock({ map, track, autoplay }: ReplayDockProps) {
+export default function ReplayDock({
+  map,
+  track,
+  autoplay,
+  camera,
+  onFollowBroken,
+  onStop,
+}: ReplayDockProps) {
   const { units } = useSettings();
   const feed = useReplayFeed(track, autoplay);
-  useReplayMapDriver(map, feed.latest);
+  useReplayMapDriver(map, feed.latest, camera, onFollowBroken);
 
   const first = track[0];
   const latest = feed.latest;
@@ -109,6 +121,14 @@ export default function ReplayDock({ map, track, autoplay }: ReplayDockProps) {
           onClick={feed.cycleSpeed}
         >
           {feed.speed}×
+        </button>
+        <button
+          className="map-button"
+          data-testid="replay-stop"
+          aria-label="Stop replay"
+          onClick={onStop}
+        >
+          <NativeIcon icon={stopIcon} />
         </button>
       </div>
     </div>
