@@ -84,6 +84,7 @@ export default function FlightSeat({
   const [mapFull, setMapFull] = useState(false);
   const [cardOpen, setCardOpen] = useState(true);
   const mapFullRef = useRef(false);
+  const wasFullRef = useRef(false);
   const lineRef = useRef<Line | null>(null);
   const planLineRef = useRef<Line | null>(null);
   const markersRef = useRef<MarkerLayer | null>(null);
@@ -154,6 +155,11 @@ export default function FlightSeat({
   }
 
   useEffect(() => {
+    // Collapsing from full screen EASES back to the framed track instead of
+    // jump-cutting (the jump read as a glitchy re-north; a bounds fit is
+    // north-up by construction). Other refit causes stay instant.
+    const collapsing = wasFullRef.current && !mapFull;
+    wasFullRef.current = mapFull;
     if (!map) return;
     if (track.length === 0) {
       // Between selections: blank the previous flight's content.
@@ -210,6 +216,7 @@ export default function FlightSeat({
         padding: mapFull
           ? { top: 56, bottom: 56, left: 56, right: 56 }
           : { top: 56, bottom: 56, left: 56, right: 440 },
+        animate: collapsing,
       });
     }
   }, [track, map, flight?.id, flight?.plannedRoute, mapFull]);

@@ -232,7 +232,10 @@ export async function createMapLibreMapView(
     },
 
     fitBounds(bounds: Bounds, opts) {
-      map.fitBounds(bounds, { padding: opts?.padding, animate: false });
+      map.fitBounds(bounds, {
+        padding: opts?.padding,
+        animate: opts?.animate ?? false,
+      });
     },
 
     zoomRange() {

@@ -180,8 +180,12 @@ export interface MapView {
   // jump / ease / fly; omitted fields hold their current value.
   camera(): Camera;
   moveTo(to: Partial<Camera>, opts?: MoveOptions): void;
-  // Always an instant jump (no caller animates a fit).
-  fitBounds(bounds: Bounds, opts?: { padding?: number | Insets }): void;
+  // Instant by default; animate: true eases to the fit — the
+  // fullscreen-collapse reset.
+  fitBounds(
+    bounds: Bounds,
+    opts?: { padding?: number | Insets; animate?: boolean },
+  ): void;
   zoomRange(): { min: number; max: number };
   // While following, anchor pinch/scroll zoom at the padded center so it
   // never tugs the aircraft toward the cursor. null restores cursor anchor.

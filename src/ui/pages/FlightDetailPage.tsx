@@ -25,6 +25,7 @@ import {
 import {
   type KeyboardEvent as ReactKeyboardEvent,
   useEffect,
+  useEffectEvent,
   useLayoutEffect,
   useRef,
   useState,
@@ -281,6 +282,26 @@ export default function FlightDetailPage() {
     setMap(next);
   }
 
+  // Fit the flown track and the planned pins together, so a plan that
+  // overshoots the track (unreached waypoints) still frames fully. Extra
+  // bottom padding keeps the track clear of the view toggle.
+  const frameFlight = useEffectEvent((animate: boolean) => {
+    if (!map || track.length === 0) return;
+    const bounds = boundsOf([
+      ...track.map((fix): LngLat => [fix.longitude, fix.latitude]),
+      ...(flight?.plannedRoute ?? []).map((coord): LngLat => [
+        coord[0],
+        coord[1],
+      ]),
+    ]);
+    if (bounds) {
+      map.fitBounds(bounds, {
+        padding: { top: 40, bottom: 76, left: 40, right: 40 },
+        animate,
+      });
+    }
+  });
+
   useEffect(() => {
     if (!map || track.length === 0) return;
 
@@ -324,19 +345,19 @@ export default function FlightDetailPage() {
       },
     ]);
 
-    // Fit the flown track and the planned pins together, so a plan that
-    // overshoots the track (unreached waypoints) still frames fully. Extra
-    // bottom padding keeps the track clear of the view toggle.
-    const bounds = boundsOf([
-      ...track.map((fix): LngLat => [fix.longitude, fix.latitude]),
-      ...plannedRoute,
-    ]);
-    if (bounds) {
-      map.fitBounds(bounds, {
-        padding: { top: 40, bottom: 76, left: 40, right: 40 },
-      });
-    }
+    frameFlight(false);
   }, [track, map, flight?.id, flight?.plannedRoute]);
+
+  // Leaving full screen EASES the map back to the framed flight: wherever
+  // the pilot panned, zoomed, or rotated while exploring, the inline
+  // preview returns showing the flight (a bounds fit is north-up by
+  // construction, so this also re-norths and dismisses the compass).
+  const wasFullRef = useRef(false);
+  useEffect(() => {
+    const was = wasFullRef.current;
+    wasFullRef.current = mapFull;
+    if (was && !mapFull) frameFlight(true);
+  }, [mapFull]);
 
   const stats = flight?.stats;
 

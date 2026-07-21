@@ -430,7 +430,7 @@ export async function createMapKitMapView(
             ((inset.right - inset.left) / 2) * (region.span.longitudeDelta / w),
         );
       }
-      map.setRegionAnimated(region, false);
+      map.setRegionAnimated(region, opts?.animate ?? false);
     },
 
     zoomRange() {
