@@ -164,6 +164,12 @@ export async function createMapKitMapView(
     }
   })();
 
+  // The camera-bearing debug hook the other adapters expose (maplibre stashes
+  // its whole map) — so tests and manual driving can observe rotation here too.
+  (container as HTMLElement & { __map?: { getBearing(): number } }).__map = {
+    getBearing: () => rotationToBearing(map.rotation),
+  };
+
   const emap = map as unknown as EventTargetLike;
 
   function eventAt(e: MapKitEvent): LngLat {
@@ -198,6 +204,24 @@ export async function createMapKitMapView(
     if (!Number.isFinite(dpx) || dpx < 1e-6) return 3;
     return Math.log2((360 * dpx) / (256 * 0.02));
   }
+
+  // MapKit force-locks rotation below zoom 7 (its camera constraint
+  // re-derives isRotationLocked from the zoom on every change): a twist
+  // there rubber-bands to ±30° and snaps back to north on release, which
+  // reads as a glitch, not a rule. Keep the rotate GESTURE off entirely
+  // while the camera is in the locked range, so the map never teases a
+  // rotation it won't keep. Programmatic rotation (track-up, the compass
+  // tap) is a separate surface and stays untouched. Boundary verified
+  // empirically: a twist at projectedZoom 6.9 snaps back, 7.05 sticks —
+  // MapKit's internal zoom is the same 256-tile web-mercator scale.
+  const ROTATION_UNLOCK_ZOOM = 7;
+  function syncRotationGesture() {
+    const enabled = projectedZoom() >= ROTATION_UNLOCK_ZOOM;
+    if (map.isRotationEnabled !== enabled) map.isRotationEnabled = enabled;
+  }
+  syncRotationGesture();
+  emap.addEventListener("zoom-end", syncRotationGesture);
+  emap.addEventListener("region-change-end", syncRotationGesture);
 
   const view: MapView = {
     el: container,
