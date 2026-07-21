@@ -132,7 +132,6 @@ export default function FlightDetailPage() {
   // callback must see the CURRENT intent, not the one it closed over.
   const mapFullRef = useRef(false);
   const contentRef = useRef<HTMLIonContentElement>(null);
-  const expandedAtRef = useRef(0);
   // The map surface lives in this portal so full screen can REPARENT it (same
   // React and DOM instance — no map re-init) between the inline frame and a
   // fixed overlay on document.body. Lazy useState = create-once (this is
@@ -174,27 +173,10 @@ export default function FlightDetailPage() {
       (document.activeElement as HTMLElement | null)?.blur();
       return;
     }
-    expandedAtRef.current = performance.now();
     withMapTransition(() => setMapFull(true));
   }
 
   const collapseMap = () => collapseMapVia(setMapFull);
-
-  // Full screen: a lone tap on the map collapses it. The map's own gesture
-  // (not a DOM click) so pans, pinches, double-tap zooms, and taps on
-  // annotations/controls never collapse. The freshness check drops the second
-  // tap of a double-tap on the PREVIEW, which lands after the first already
-  // expanded — without it that tap folds the map right back down. 800ms: the
-  // adapters DELAY dispatch by their double-tap window (~300ms), so the guard
-  // must cover a human double-tap gap (~350ms) PLUS that delay.
-  useEffect(() => {
-    if (!map) return;
-    return map.on("singletap", () => {
-      if (!mapFullRef.current) return;
-      if (performance.now() - expandedAtRef.current < 800) return;
-      collapseMapVia(setMapFull);
-    });
-  }, [map]);
 
   // Native only: the keyboard's return key reads "Done" (enterkeyhint on the
   // inputs below) and pressing it closes the keyboard. Single-line fields have

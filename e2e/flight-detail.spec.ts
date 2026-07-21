@@ -90,7 +90,9 @@ test("flight detail shows stats, exports GPX, and deletes", async ({
   await expect(page.getByText("No flights yet.")).toBeVisible();
 });
 
-test("map preview expands on tap and collapses on tap", async ({ page }) => {
+test("map preview expands on tap and collapses via the shrink button", async ({
+  page,
+}) => {
   await openImportedFlight(page);
   const fullroot = page.locator(".flight-detail-map-fullroot");
 
@@ -98,17 +100,10 @@ test("map preview expands on tap and collapses on tap", async ({ page }) => {
   // map surface reparents into a body-level overlay (covering the bars).
   await page.locator(".map-tap-layer").click();
   await expect(fullroot).toBeVisible();
-  await expect(page.getByTestId("map-shrink")).toBeVisible();
   await expect(page.getByTestId("map-expand")).toBeHidden();
 
-  // Tap the map again → collapse. A lone tap only registers after the
-  // double-tap window (a fast second tap means zoom), and taps landing
-  // within 800ms of expanding are dropped as the tail of a preview
-  // double-tap — so wait clear of the guard, like a human would.
-  await page.waitForTimeout(900);
-  await page
-    .locator(".flight-detail-map")
-    .click({ position: { x: 180, y: 300 } });
+  // The shrink button is the one way back (map taps pan/zoom, never exit).
+  await page.getByTestId("map-shrink").click();
   await expect(fullroot).toBeHidden();
   await expect(page.getByTestId("map-expand")).toBeVisible();
 });
@@ -142,11 +137,9 @@ test.describe("scrolled details", () => {
     // untouched by construction.
     expect(await detailScrollTop(page)).toBe(before);
 
-    // Collapse: still exactly where we were. mouse.click skips actionability
-    // (the fullscreen map covers the viewport anyway); the wait clears the
-    // single-tap double-tap guards — see the tap test above.
-    await page.waitForTimeout(900);
-    await page.mouse.click(180, 300);
+    // Collapse via the shrink button (it lives in the fixed overlay, not the
+    // scroller, so its locator click cannot auto-scroll anything).
+    await page.getByTestId("map-shrink").click();
     await expect(page.locator(".flight-detail-map-fullroot")).toBeHidden();
     await expect.poll(() => detailScrollTop(page)).toBe(before);
   });
