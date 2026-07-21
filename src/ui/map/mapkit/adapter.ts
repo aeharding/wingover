@@ -77,6 +77,27 @@ function featuresOf(
 
 const toCoord = (p: LngLat) => new mapkit.Coordinate(p[1], p[0]);
 
+// The slivers of MapKit's private implementation that moveTo's atomic camera
+// path touches (see the impl capture in createMapKitMapView). Member names
+// are original source names — Apple's build minifies locals, not class
+// members — but still private: every access must stay optional so a future
+// restructure degrades to the public fallback instead of throwing.
+interface PrivateCamera {
+  zoom: number;
+  center: unknown;
+  copy(): PrivateCamera;
+}
+interface PrivateMapImpl {
+  camera?: PrivateCamera;
+  _visibleMapRect?: unknown;
+  _mapNode?: { cameraAnimation?: { cancel(): void } | null };
+  setCameraAnimated?(camera: PrivateCamera, animated: boolean): void;
+  _offsetCenterWithPaddingAndRotation?(
+    point: unknown,
+    direction: number,
+  ): unknown;
+}
+
 function measureSafeAreaBottom(): number {
   const probe = document.createElement("div");
   probe.style.cssText =
@@ -111,6 +132,37 @@ export async function createMapKitMapView(
   // The bearing the app last asked for. The glyph is oriented against this
   // (heading − lastBearing → 0 in track-up), so it holds pointing up.
   let lastBearing = 0;
+
+  // mapkit.Map hides its real implementation behind a Symbol-keyed accessor:
+  // map._(key) type-checks the key, then returns the impl from a WeakMap
+  // keyed on the map alone. The key leaks through one wrapped call, and the
+  // impl unlocks the one move the public API cannot express — an ATOMIC
+  // animated camera set (moveTo). Null when the surface doesn't match, so
+  // callers fall back to public setters.
+  const impl = ((): PrivateMapImpl | null => {
+    const proto = Object.getPrototypeOf(map) as {
+      _?: (key: unknown) => unknown;
+    };
+    const accessor = proto._;
+    if (typeof accessor !== "function") return null;
+    let key: unknown;
+    proto._ = function (k: unknown) {
+      key = k;
+      return accessor.call(this, k);
+    };
+    try {
+      void map.center;
+    } finally {
+      proto._ = accessor;
+    }
+    try {
+      return key !== undefined
+        ? ((accessor.call(map, key) ?? null) as PrivateMapImpl | null)
+        : null;
+    } catch {
+      return null;
+    }
+  })();
 
   const emap = map as unknown as EventTargetLike;
 
@@ -193,18 +245,59 @@ export async function createMapKitMapView(
       const animated = opts?.animate ? true : false;
       // to.padding is ignored: the overscan padding is a MapLibre
       // oversized-container trick and is degenerate on MapKit's normal view.
-      // EXPERIMENT 2: set MapKit's private _impl.zoomLevel, then animate the
-      // center — the center animation reportedly adopts the new level as its
-      // target region. Nudged by the app-zoom delta (not assigned absolutely)
-      // so _impl's unknown scale offset cancels out.
-      if (animated && to.center && to.zoom !== undefined) {
-        const impl = (map as unknown as { _impl?: { zoomLevel: number } })
-          ._impl;
+      // Animated center+zoom must travel as ONE camera tween. The public API
+      // can't say that: MapKit runs a single camera animation, and an
+      // *animated* zoom issued during an in-flight pan is applied instantly
+      // then overwritten by the pan's next frame — the locate button's old
+      // pans-on-tap-1, zooms-on-tap-2 symptom. The captured impl's
+      // setCameraAnimated IS the internal atomic set: one camera carrying
+      // center+zoom+rotation, so rotation survives (only the region APIs
+      // hard-zero it; MapKit itself force-locks rotation below zoom 7).
+      // Zoom moves by delta so the camera's native level scale never needs
+      // calibrating, and mid-tween the delta self-corrects (projectedZoom
+      // reads the live mid-animation state the copied camera starts from).
+      if (
+        animated &&
+        to.center &&
+        to.zoom !== undefined &&
+        to.bearing === undefined
+      ) {
         const delta = to.zoom - projectedZoom();
-        if (impl && Number.isFinite(delta)) {
-          impl.zoomLevel += delta;
+        const camera = impl?.camera;
+        const point = (
+          toCoord(to.center) as Coordinate & { toMapPoint?(): unknown }
+        ).toMapPoint?.();
+        if (
+          impl?.setCameraAnimated &&
+          camera &&
+          point !== undefined &&
+          Number.isFinite(delta)
+        ) {
+          const target = camera.copy();
+          target.center =
+            impl._offsetCenterWithPaddingAndRotation?.(point, -1) || point;
+          target.zoom += delta;
+          // A still-running tween would instant-apply-and-stomp this move
+          // (MapKit's in-flight branch); kill it so a retarget wins. Nulling
+          // mirrors cameraAnimationDidEnd — cancel() alone leaves the dead
+          // animation in place, which keeps the in-flight branch live.
+          const node = impl._mapNode;
+          if (node?.cameraAnimation) {
+            node.cameraAnimation.cancel();
+            node.cameraAnimation = null;
+          }
+          delete impl._visibleMapRect;
+          impl.setCameraAnimated(target, true);
+        } else {
+          // Private surface went missing (Apple restructured): ride the one
+          // public composition path — a NON-animated zoom set during an
+          // in-flight animation is folded into it (cameraAnimation
+          // .additiveZoom). Degrades to an instant zoom when already
+          // centered, since then no pan tween starts to fold into.
+          const dist = map.cameraDistance * Math.pow(2, -delta);
+          map.setCenterAnimated(toCoord(to.center), true);
+          if (Number.isFinite(dist) && dist > 0) map.cameraDistance = dist;
         }
-        map.setCenterAnimated(toCoord(to.center), true);
         return;
       }
       // Otherwise each axis independently, instantly (property, not
