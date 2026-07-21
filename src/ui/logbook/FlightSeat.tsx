@@ -91,8 +91,6 @@ export default function FlightSeat({
   const planLineRef = useRef<Line | null>(null);
   const markersRef = useRef<MarkerLayer | null>(null);
 
-
-
   // Full screen means NO chrome: the list pane, seat header and card hide
   // via the body class (see desktop.css), the tab rail goes with it, and
   // the PWA sheds browser chrome via the Fullscreen API. Reversed in

@@ -149,8 +149,6 @@ export default function FlightDetailPage() {
   const planLineRef = useRef<Line | null>(null);
   const markersRef = useRef<MarkerLayer | null>(null);
 
-
-
   // Full screen REPARENTS the map surface (same instance — reverse portal, no
   // remount) into a fixed overlay on document.body. Outside the scroller,
   // nothing about the details layout or scroll position ever changes: no

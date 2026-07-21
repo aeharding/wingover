@@ -77,7 +77,6 @@ export default function AllFlightsMapPage() {
     load();
   }, []);
 
-
   function handleReady(next: MapView | null) {
     if (!next) {
       // Provider re-create destroyed the view; drop it and every handle.

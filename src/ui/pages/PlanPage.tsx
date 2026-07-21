@@ -107,7 +107,6 @@ export default function PlanPage() {
     [],
   );
 
-
   async function addPin(point: LngLat) {
     const now = Date.now();
     const pin: Pin = {
