@@ -334,6 +334,50 @@ body.flight-map-full .seat-card {
   display: none;
 }
 
+/* ── replay: the phone-frame player card over the seat ────────────────── */
+.replay-scrim {
+  position: absolute;
+  inset: 0;
+  /* Over the seat card (5) and map chrome (10). */
+  z-index: 20;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: rgba(0, 0, 0, 0.55);
+}
+
+/* Phone-aspect: watch exactly what the phone showed in flight. The player
+   inside (.replay-player, absolute inset 0) fills whatever this frames. */
+.replay-phone {
+  position: relative;
+  aspect-ratio: 9 / 19.5;
+  height: min(88%, 800px);
+  border-radius: 24px;
+  overflow: hidden;
+  border: 1px solid rgba(255, 255, 255, 0.14);
+  box-shadow: 0 24px 80px rgba(0, 0, 0, 0.6);
+  background: #000;
+}
+
+/* Tile values size by VIEWPORT width (Tile.css clamps on vw), which reads
+   huge inside a ~300px card and clips; pin to the phone scale there.
+   Fullscreen goes back to the viewport-sized clamp. */
+.replay-phone:not(.full) .tile .value {
+  font-size: 1.45rem;
+}
+
+/* Expanded: the card becomes the window (covers the rail by z-index;
+   browser fullscreen rides along on the PWA). */
+.replay-phone.full {
+  position: fixed;
+  inset: 0;
+  height: auto;
+  aspect-ratio: auto;
+  border-radius: 0;
+  border: none;
+  z-index: 1000;
+}
+
 /* ── the totals strip (list pane header) ──────────────────────────────── */
 .flightlist-totals {
   /* Content-sized columns, spread apart: equal thirds overflowed the

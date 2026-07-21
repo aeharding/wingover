@@ -4,11 +4,8 @@ import { createPortal } from "react-dom";
 import { isTauri } from "../../engine/platform";
 import type { Fix } from "../../engine/types";
 import type { Flight } from "../../storage/db";
+import { replayAvailable } from "./available";
 import ReplayPlayer from "./ReplayPlayer";
-
-// Shorter than this there is nothing to watch (and the 11-second e2e
-// fixture must stay replayable).
-const MIN_REPLAY_SPAN_MS = 10_000;
 
 /**
  * Phone host glue for the replay player: open/close state, the body-level
@@ -55,11 +52,7 @@ export function useFlightReplay(
     };
   }, [replaying]);
 
-  const available =
-    flight !== null &&
-    track.length >= 2 &&
-    track[track.length - 1].timestamp - track[0].timestamp >=
-      MIN_REPLAY_SPAN_MS;
+  const available = replayAvailable(flight, track);
 
   return {
     available,

@@ -183,6 +183,80 @@ test("the plan page grows a pin pane at desktop width", async ({ page }) => {
   await expect(page.getByText("Long-press the map")).toBeVisible();
 });
 
+test("replay opens as a phone-frame card, plays, expands, and Esc steps out", async ({
+  page,
+}) => {
+  // Record ~20s of flight (500ms wall at 40x) so replay is available.
+  await page.goto("/?mock-speed=40&map-style=blank");
+  await page.getByRole("button", { name: "Start Flight" }).click();
+  await expect(page.getByTestId("recording")).toBeVisible({ timeout: 10_000 });
+  await page.waitForTimeout(500);
+  await page.getByRole("button", { name: "Stop flight" }).click();
+  await page.getByRole("button", { name: "Stop", exact: true }).click();
+  await expect(
+    page.getByRole("button", { name: "Start Flight" }),
+  ).toBeVisible();
+
+  await page.getByTestId("rail-logbook").click();
+  await page.locator(".flight-row").first().click();
+  await page.getByTestId("seat-replay").click();
+
+  // A phone-aspect card, not a full-width takeover.
+  const phone = page.locator(".replay-phone");
+  await expect(phone).toBeVisible();
+  const box = (await phone.boundingBox())!;
+  expect(box.height / box.width).toBeGreaterThan(2);
+
+  // Play moves the aircraft in the card's OWN map (the seat map idles).
+  await expect
+    .poll(() =>
+      phone
+        .locator(".map-container")
+        .evaluate(
+          (el) =>
+            (el as HTMLElement & { __display?: { lng: number } }).__display ??
+            null,
+        ),
+    )
+    .not.toBeNull();
+  const start = await phone
+    .locator(".map-container")
+    .evaluate(
+      (el) =>
+        (el as HTMLElement & { __display?: { lng: number; lat: number } })
+          .__display!,
+    );
+  await page.getByTestId("replay-play").click();
+  await expect
+    .poll(async () => {
+      const at = await phone
+        .locator(".map-container")
+        .evaluate(
+          (el) =>
+            (el as HTMLElement & { __display?: { lng: number; lat: number } })
+              .__display!,
+        );
+      return at.lng !== start.lng || at.lat !== start.lat;
+    })
+    .toBe(true);
+
+  // Expand fills the window; Esc steps back to the card, then closes.
+  await page.getByTestId("replay-expand").click();
+  await expect(phone).toHaveClass(/full/);
+  await page.keyboard.press("Escape");
+  await expect(phone).toBeVisible();
+  await expect(phone).not.toHaveClass(/full/);
+  await page.keyboard.press("Escape");
+  await expect(phone).toBeHidden();
+
+  // The scrim click closes too, and the seat under it is untouched.
+  await page.getByTestId("seat-replay").click();
+  await expect(phone).toBeVisible();
+  await page.locator(".replay-scrim").click({ position: { x: 10, y: 10 } });
+  await expect(phone).toBeHidden();
+  await expect(page.getByText("Max altitude")).toBeVisible();
+});
+
 test("the record opt-in shows Fly live, and turning it off hides it", async ({
   page,
 }) => {
