@@ -8,11 +8,15 @@
 
 /* Begin PBXBuildFile section */
 		449215DFA3CDA1C5A3B0B2A2 /* KeyboardUITests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 22DB13B9C175E57F653AB12F /* KeyboardUITests.swift */; };
+		B3386D01478AA888D8F6AB96 /* WaypointUITests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 99769A119DB8D370DA210A4D /* WaypointUITests.swift */; };
+		BFD8186EE03846F55F744AA6 /* RecordingUITests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 06DCB8F2BE3B5BAD54CF6ABE /* RecordingUITests.swift */; };
 /* End PBXBuildFile section */
 
 /* Begin PBXFileReference section */
+		06DCB8F2BE3B5BAD54CF6ABE /* RecordingUITests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = RecordingUITests.swift; sourceTree = "<group>"; };
 		22DB13B9C175E57F653AB12F /* KeyboardUITests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = KeyboardUITests.swift; sourceTree = "<group>"; };
 		5CA7473121684A571DD2E2FF /* WingoverUITests.xctest */ = {isa = PBXFileReference; includeInIndex = 0; lastKnownFileType = wrapper.cfbundle; path = WingoverUITests.xctest; sourceTree = BUILT_PRODUCTS_DIR; };
+		99769A119DB8D370DA210A4D /* WaypointUITests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = WaypointUITests.swift; sourceTree = "<group>"; };
 /* End PBXFileReference section */
 
 /* Begin PBXGroup section */
@@ -20,6 +24,8 @@
 			isa = PBXGroup;
 			children = (
 				22DB13B9C175E57F653AB12F /* KeyboardUITests.swift */,
+				06DCB8F2BE3B5BAD54CF6ABE /* RecordingUITests.swift */,
+				99769A119DB8D370DA210A4D /* WaypointUITests.swift */,
 			);
 			path = Tests;
 			sourceTree = "<group>";
@@ -96,6 +102,8 @@
 			buildActionMask = 2147483647;
 			files = (
 				449215DFA3CDA1C5A3B0B2A2 /* KeyboardUITests.swift in Sources */,
+				BFD8186EE03846F55F744AA6 /* RecordingUITests.swift in Sources */,
+				B3386D01478AA888D8F6AB96 /* WaypointUITests.swift in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};

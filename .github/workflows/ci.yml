@@ -110,13 +110,11 @@ jobs:
           xcrun simctl install "$UDID" src-tauri/gen/apple/build/arm64-sim/Wingover.app
           echo "UDID=$UDID" >> "$GITHUB_ENV"
       - name: Run XCUITests
-        # -collect-test-diagnostics never is load-bearing: a failing run
-        # otherwise embeds the sim's full logarchive in the xcresult
-        # (multi-GB; it has filled a disk).
-        run: >
-          xcodebuild test -project ios-tests/WingoverUITests.xcodeproj
-          -scheme WingoverUITests -destination "id=$UDID"
-          -collect-test-diagnostics never
+        # run.sh owns the test-side setup shared with local runs: location
+        # permission pre-grant, the simulated-flight location scenario, and
+        # xcodebuild flags (-collect-test-diagnostics never is load-bearing —
+        # a failing run otherwise embeds a multi-GB logarchive).
+        run: ios-tests/run.sh "$UDID"
       - name: Screenshot on failure
         if: failure()
         run: xcrun simctl io "$UDID" screenshot ios-sim-failure.png || true
