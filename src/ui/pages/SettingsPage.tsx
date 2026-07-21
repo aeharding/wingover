@@ -118,6 +118,15 @@ export default function SettingsPage() {
         </IonToolbar>
       </IonHeader>
       <IonContent className="settings-content">
+        {/* Native iOS large-title collapse, same as the sync sheet: the big
+            title rides the content and condenses into the toolbar on
+            scroll. The toolbar blends because its --background is the page
+            var (theme.css). */}
+        <IonHeader collapse="condense">
+          <IonToolbar>
+            <IonTitle size="large">Settings</IonTitle>
+          </IonToolbar>
+        </IonHeader>
         {/* Desktop's rail chip IS this row (SYNC-UX.md); saying it twice
             makes two places to glance and one of them stale. */}
         {!isDesktop && (
