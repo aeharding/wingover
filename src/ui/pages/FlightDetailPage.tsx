@@ -22,7 +22,19 @@ import {
   ellipsisHorizontal,
   expandOutline,
 } from "ionicons/icons";
-import { useEffect, useRef, useState } from "react";
+import {
+  type KeyboardEvent as ReactKeyboardEvent,
+  useEffect,
+  useLayoutEffect,
+  useRef,
+  useState,
+} from "react";
+import { createPortal, flushSync } from "react-dom";
+import {
+  createHtmlPortalNode,
+  InPortal,
+  OutPortal,
+} from "react-reverse-portal";
 import { useParams } from "react-router";
 
 import { isTauri } from "../../engine/platform";
@@ -59,6 +71,42 @@ function endpointMarker(className: string, testId: string): HTMLElement {
   return element;
 }
 
+// The expand/collapse toggle animates as a "magic move": the map surface
+// carries a view-transition-name (FlightDetailPage.css), so
+// startViewTransition morphs its box between the inline frame and the
+// overlay. flushSync makes React commit inside the transition callback,
+// where the API needs the new DOM. Progressive: engines without the API
+// (< iOS 18) jump-cut, and reduced-motion users keep the cut on purpose.
+// Also deliberately NOT animated: every path that crosses a real
+// browser-fullscreen boundary (grant landing mid-expand, exitFullscreen
+// collapse, Esc) — a viewport resize aborts an active view transition per
+// spec, and animating across one would be jank anyway. On Tauri (no
+// Fullscreen API) every toggle animates.
+function withMapTransition(update: () => void) {
+  if (
+    !document.startViewTransition ||
+    window.matchMedia("(prefers-reduced-motion: reduce)").matches
+  ) {
+    update();
+    return;
+  }
+  document.startViewTransition(() => {
+    flushSync(update);
+  });
+}
+
+// PWA under real browser fullscreen: leave fullscreen FIRST and let the
+// page's fullscreenchange handler fold the map once the exit lands.
+// Elsewhere (Tauri, no Fullscreen API, grant denied) fold immediately.
+// Module-scoped over the setter so effects can call it with honest deps.
+function collapseMapVia(setMapFull: (value: boolean) => void) {
+  if (document.fullscreenElement) {
+    void document.exitFullscreen().catch(() => setMapFull(false));
+  } else {
+    withMapTransition(() => setMapFull(false));
+  }
+}
+
 /**
  * The PHONE flight page: map on top, details scrolling below. Desktop
  * renders the logbook split instead (DesktopShell → LogbookSection →
@@ -84,6 +132,16 @@ export default function FlightDetailPage() {
   // callback must see the CURRENT intent, not the one it closed over.
   const mapFullRef = useRef(false);
   const contentRef = useRef<HTMLIonContentElement>(null);
+  const expandedAtRef = useRef(0);
+  // The map surface lives in this portal so full screen can REPARENT it (same
+  // React and DOM instance — no map re-init) between the inline frame and a
+  // fixed overlay on document.body. Lazy useState = create-once (this is
+  // instantiation, not memoization — not a job for the compiler).
+  const [mapPortal] = useState(() =>
+    createHtmlPortalNode({
+      attributes: { style: "position:absolute;inset:0" },
+    }),
+  );
   const lineRef = useRef<Line | null>(null);
   const planLineRef = useRef<Line | null>(null);
   const markersRef = useRef<MarkerLayer | null>(null);
@@ -99,15 +157,95 @@ export default function FlightDetailPage() {
     setSetting("mapView", value);
   }
 
-  // Full screen means NO bars: the header and tab bar go (the body class
-  // hides ion-tab-bar, which lives outside this page), and on the PWA the
-  // Fullscreen API sheds the browser chrome too. Everything reverses in
-  // the cleanup, so navigating away while expanded can't strand a hidden
-  // tab bar or a fullscreened document.
+  // Full screen REPARENTS the map surface (same instance — reverse portal, no
+  // remount) into a fixed overlay on document.body. Outside the scroller,
+  // nothing about the details layout or scroll position ever changes: no
+  // save/restore, no clamp races, and drags on the overlay can't reach the
+  // page scroller (its scrollable ancestors are body/html). Bonus guard: a
+  // status-bar tap's center hit-test finds no ion-content above the overlay,
+  // so Ionic's statusTap scroll-to-top is a natural no-op while fullscreen.
+  //
+  function expandMap() {
+    // With the keyboard up, a tap on the map means "get me out of this
+    // field" — dismiss and stay put. Expanding under a closing keyboard
+    // looks broken and yanks the pilot out of an edit. (keyboard-open is
+    // native-only; on the PWA the tap expands as usual.)
+    if (document.documentElement.classList.contains("keyboard-open")) {
+      (document.activeElement as HTMLElement | null)?.blur();
+      return;
+    }
+    expandedAtRef.current = performance.now();
+    withMapTransition(() => setMapFull(true));
+  }
+
+  const collapseMap = () => collapseMapVia(setMapFull);
+
+  // Full screen: a lone tap on the map collapses it. The map's own gesture
+  // (not a DOM click) so pans, pinches, double-tap zooms, and taps on
+  // annotations/controls never collapse. The freshness check drops the second
+  // tap of a double-tap on the PREVIEW, which lands after the first already
+  // expanded — without it that tap folds the map right back down. 800ms: the
+  // adapters DELAY dispatch by their double-tap window (~300ms), so the guard
+  // must cover a human double-tap gap (~350ms) PLUS that delay.
   useEffect(() => {
+    if (!map) return;
+    return map.on("singletap", () => {
+      if (!mapFullRef.current) return;
+      if (performance.now() - expandedAtRef.current < 800) return;
+      collapseMapVia(setMapFull);
+    });
+  }, [map]);
+
+  // Native only: the keyboard's return key reads "Done" (enterkeyhint on the
+  // inputs below) and pressing it closes the keyboard. Single-line fields have
+  // nothing else for Enter to do, and the accessory bar with its own Done is
+  // hidden globally. On the PWA, Enter keeps the browser's default behavior.
+  function blurOnEnter(event: ReactKeyboardEvent<HTMLIonInputElement>) {
+    if (!isTauri() || event.key !== "Enter") return;
+    // A CJK keyboard's Return first commits the composition — that keystroke
+    // must not steal the keyboard mid-word.
+    if (event.nativeEvent.isComposing) return;
+    (document.activeElement as HTMLElement | null)?.blur();
+  }
+
+  // Native only: ease a focused field into view above the keyboard. (Ionic's
+  // scroll assist is switched off under Tauri — see App.tsx — so this is the
+  // only scroller; with the map as a scroll-through preview a field can sit
+  // low or behind the keyboard. On the PWA the webview doesn't resize for the
+  // keyboard and Ionic's assist owns the job, so this would fight it.)
+  useEffect(() => {
+    if (!isTauri()) return;
+    const content = contentRef.current;
+    if (!content) return;
+    let timer = 0;
+    const onFocusIn = (event: FocusEvent) => {
+      const field = (event.target as HTMLElement | null)?.closest(
+        "ion-input, ion-textarea",
+      );
+      if (!field) return;
+      // Let the keyboard open and <ion-app> resize first, then center the field
+      // in the space that's left. The timer is cleared on refocus/unmount so a
+      // field blurred within the window isn't pointlessly centered.
+      window.clearTimeout(timer);
+      timer = window.setTimeout(() => {
+        field.scrollIntoView({ behavior: "smooth", block: "center" });
+      }, 300);
+    };
+    content.addEventListener("focusin", onFocusIn);
+    return () => {
+      window.clearTimeout(timer);
+      content.removeEventListener("focusin", onFocusIn);
+    };
+  }, []);
+
+  // Full screen means NO bars — the body-level overlay simply COVERS the
+  // header and tab bar (their layout never changes, so neither does the
+  // scroller's). On the PWA the Fullscreen API sheds the browser chrome too;
+  // it reverses in the cleanup, so navigating away while expanded can't
+  // strand a fullscreened document.
+  useLayoutEffect(() => {
     mapFullRef.current = mapFull;
     if (!mapFull) return;
-    document.body.classList.add("flight-map-full");
     if (!isTauri()) {
       void document.documentElement
         .requestFullscreen?.()
@@ -127,7 +265,6 @@ export default function FlightDetailPage() {
     };
     document.addEventListener("fullscreenchange", onFullscreenChange);
     return () => {
-      document.body.classList.remove("flight-map-full");
       document.removeEventListener("fullscreenchange", onFullscreenChange);
       if (document.fullscreenElement) {
         void document.exitFullscreen().catch(() => {});
@@ -222,64 +359,49 @@ export default function FlightDetailPage() {
 
   return (
     <IonPage>
-      {!mapFull && (
-        <IonHeader>
-          <IonToolbar>
-            <IonButtons slot="start">
-              <IonBackButton defaultHref="/logbook" />
-            </IonButtons>
-            {/* The when, not the name — the name is the editable field below,
+      {/* Always mounted; the fullscreen overlay simply covers it (never
+          conditionally render it — a remounting Stencil ion-header sizes
+          async, and the late layout clamps the scroll position). */}
+      <IonHeader>
+        <IonToolbar>
+          <IonButtons slot="start">
+            <IonBackButton defaultHref="/logbook" />
+          </IonButtons>
+          {/* The when, not the name — the name is the editable field below,
                 and printing it twice an inch apart read as a bug. */}
-            <IonTitle>
-              {flight
-                ? new Date(flight.startedAt).toLocaleString(undefined, {
-                    month: "short",
-                    day: "numeric",
-                    year: "numeric",
-                    hour: "numeric",
-                    minute: "2-digit",
-                  })
-                : "Flight"}
-            </IonTitle>
-            <IonButtons slot="end">
-              <IonButton
-                aria-label="Options"
-                data-testid="detail-options"
-                onClick={() => setOptionsOpen(true)}
-              >
-                <IonIcon slot="icon-only" icon={ellipsisHorizontal} />
-              </IonButton>
-            </IonButtons>
-          </IonToolbar>
-        </IonHeader>
-      )}
-      <IonContent ref={contentRef} scrollY={!mapFull}>
+          <IonTitle>
+            {flight
+              ? new Date(flight.startedAt).toLocaleString(undefined, {
+                  month: "short",
+                  day: "numeric",
+                  year: "numeric",
+                  hour: "numeric",
+                  minute: "2-digit",
+                })
+              : "Flight"}
+          </IonTitle>
+          <IonButtons slot="end">
+            <IonButton
+              aria-label="Options"
+              data-testid="detail-options"
+              onClick={() => setOptionsOpen(true)}
+            >
+              <IonIcon slot="icon-only" icon={ellipsisHorizontal} />
+            </IonButton>
+          </IonButtons>
+        </IonToolbar>
+      </IonHeader>
+      {/* scrollY stays on even full screen: the map overlay covers the details
+          and eats the touches, so nothing scrolls behind it anyway, and toggling
+          overflow off/on is what was resetting the scroll position on collapse. */}
+      <IonContent ref={contentRef}>
         {/* Map and details split the screen instead of a card floating over
             the track — nothing overlaps the flight, and the stats get room
-            to breathe below. Expandable to full screen. */}
-        <div className={`flight-detail-map${mapFull ? " map-full" : ""}`}>
-          {/* Edge-to-edge only when expanded to full screen (bottom under the
-              home indicator); embedded in the split, it isn't. */}
-          <MapCanvas base={view} onReady={handleReady} edgeToEdge={mapFull} />
-          <div className="map-overlay">
-            <button
-              className="map-button"
-              aria-label={mapFull ? "Shrink map" : "Expand map"}
-              data-testid="map-expand"
-              onClick={() => {
-                // The map is the first child of the scroll area, so top is
-                // where full screen is — without this, expanding while
-                // scrolled down shows the middle of the details instead.
-                if (!mapFull) void contentRef.current?.scrollToTop();
-                setMapFull(!mapFull);
-              }}
-            >
-              <IonIcon icon={mapFull ? contractOutline : expandOutline} />
-            </button>
-            {map?.supportsSatellite && (
-              <ViewToggle view={view} onChange={changeView} />
-            )}
-          </div>
+            to breathe below. The frame only reserves the space; the map
+            surface itself lives in mapPortal and is reparented here (inline)
+            or into the body-level overlay below (full screen). */}
+        <div className="flight-detail-map-frame">
+          {!mapFull && <OutPortal node={mapPortal} />}
         </div>
         {flight && stats && (
           <>
@@ -296,6 +418,8 @@ export default function FlightDetailPage() {
                     setDraft("name", event.detail.value ?? "")
                   }
                   onIonBlur={commit}
+                  enterkeyhint="done"
+                  onKeyDown={blurOnEnter}
                 />
               </IonItem>
               <IonItem>
@@ -310,6 +434,8 @@ export default function FlightDetailPage() {
                     setDraft("launch", event.detail.value ?? "")
                   }
                   onIonBlur={commit}
+                  enterkeyhint="done"
+                  onKeyDown={blurOnEnter}
                 />
               </IonItem>
               <IonItem>
@@ -387,6 +513,62 @@ export default function FlightDetailPage() {
           ]}
         />
       </IonContent>
+      {/* The one true map surface. Full screen: a single tap on the map
+          collapses it — via the map's own singletap gesture (MapKit's
+          single-tap / a debounced MapLibre click), which never fires for
+          pans, pinches, double-tap zooms, or taps on annotations and
+          controls. Inline, the map-tap-layer owns tap-to-expand. */}
+      <InPortal node={mapPortal}>
+        <div className={`flight-detail-map${mapFull ? " map-full" : ""}`}>
+          {/* Edge-to-edge only when expanded to full screen (bottom under the
+              home indicator); embedded in the split, it isn't. */}
+          <MapCanvas base={view} onReady={handleReady} edgeToEdge={mapFull} />
+          {/* Inline the map is a scroll-through preview: tap anywhere to
+              expand, vertical drag scrolls the details through (see
+              FlightDetailPage.css). */}
+          {!mapFull && <div className="map-tap-layer" onClick={expandMap} />}
+          <div className="map-overlay">
+            {mapFull && (
+              <button
+                className="map-button"
+                aria-label="Shrink map"
+                data-testid="map-shrink"
+                onClick={collapseMap}
+              >
+                <IonIcon icon={contractOutline} />
+              </button>
+            )}
+            {map?.supportsSatellite && (
+              <ViewToggle view={view} onChange={changeView} />
+            )}
+          </div>
+          {/* A visible affordance for the tap-to-expand above. */}
+          {!mapFull && (
+            <button
+              className="map-expand-pill"
+              aria-label="Expand map"
+              data-testid="map-expand"
+              onClick={expandMap}
+            >
+              <IonIcon icon={expandOutline} />
+              Expand
+            </button>
+          )}
+        </div>
+      </InPortal>
+      {/* Full screen: a fixed overlay on document.body — OUTSIDE the page
+          scroller (so scroll position and layout are untouched by
+          construction, and drags on the overlay have nothing scrollable to
+          grab) and outside ion-content (so a status-bar tap's center
+          hit-test finds nothing to scroll). It covers the header and tab
+          bar rather than hiding them. */}
+      {mapFull &&
+        createPortal(
+          <div className="flight-detail-map-fullroot">
+            <OutPortal node={mapPortal} />
+          </div>,
+          document.body,
+        )}
     </IonPage>
   );
 }

@@ -2,7 +2,6 @@ import { IonModal } from "@ionic/react";
 import {
   createContext,
   type ReactNode,
-  useCallback,
   useContext,
   useState,
 } from "react";
@@ -33,12 +32,14 @@ export function SyncSheetsProvider({ children }: { children: ReactNode }) {
   // Resolved at present time, not at mount: a live flight sheds the whole nav
   // shell — router outlet included — and a stale ref would present against a
   // detached element. Null just means a plain full-screen modal.
-  const present = useCallback(() => {
+  // Plain functions: the React Compiler stabilizes them, context value
+  // included.
+  const present = () => {
     setPresenting(document.querySelector<HTMLElement>("ion-router-outlet"));
     setOpen(true);
-  }, []);
+  };
 
-  const close = useCallback(() => setOpen(false), []);
+  const close = () => setOpen(false);
 
   return (
     <SyncSheetContext.Provider value={present}>

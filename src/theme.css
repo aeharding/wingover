@@ -18,6 +18,22 @@
   --stat-yellow: color(display-p3 1 0.95 0);
 }
 
+/* On-screen keyboard: src/tauri-ionic/keyboard.ts adds `keyboard-open` to <html> while
+   the keyboard is up (off the native plugin's keyboard events). The bottom safe
+   area (home indicator) sits behind the keyboard then, so the inset is dead
+   space —
+   collapse it to 0. We override --safe-area-inset-bottom (not --ion-safe-area-
+   bottom): Ionic derives every component's inset from it, since it defines
+   `--ion-safe-area-bottom: var(--safe-area-inset-bottom, env(safe-area-inset-
+   bottom))`, so zeroing the upstream var flows through to all of them (and to
+   anything else on the same convention). This is Voyager's useKeyboardOpen +
+   `.keyboardOpen` pattern, done once at the root. iOS keeps
+   env(safe-area-inset-bottom) at ~34 under the keyboard, so nothing native
+   does this for us. */
+html.keyboard-open {
+  --safe-area-inset-bottom: 0px;
+}
+
 /* Native iOS look: the nav bar shares the page background (Ionic's default
    is the slightly-lighter step-50 gray, which reads as a third gray next to
    the black page and the systemGray6 grouped cells). The hairline border
@@ -36,4 +52,16 @@ ion-tab-button {
 
 .tab-bar-hidden {
   display: none;
+}
+
+/* clearInput's ✕ only while editing — UITextField's clearButtonMode =
+   .whileEditing, which Ionic doesn't offer as a prop (the button renders
+   whenever the field has a value). ion-input is scoped, not shadow, and its
+   host carries has-focus, so plain CSS reaches in. visibility (not display)
+   matches Ionic's own empty-value treatment: the space stays reserved, so
+   text doesn't shift when focus toggles it. !important: Ionic's own
+   `:host(.has-value) .input-clear-icon { visibility: visible }` lands at
+   (0,4,0) specificity once scoped-class-compiled — unbeatable politely. */
+ion-input:not(.has-focus) .input-clear-icon {
+  visibility: hidden !important;
 }

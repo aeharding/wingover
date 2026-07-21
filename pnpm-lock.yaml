@@ -23,6 +23,9 @@ importers:
       '@tauri-apps/plugin-geolocation':
         specifier: ^2.3.2
         version: 2.3.2
+      '@tauri-apps/plugin-haptics':
+        specifier: ^2.3.2
+        version: 2.3.2
       '@tauri-apps/plugin-opener':
         specifier: ^2.5.4
         version: 2.5.4
@@ -44,6 +47,9 @@ importers:
       react-dom:
         specifier: ^19.2.0
         version: 19.2.7(react@19.2.7)
+      react-reverse-portal:
+        specifier: ^2.3.0
+        version: 2.3.0(react-dom@19.2.7(react@19.2.7))(react@19.2.7)
       react-router:
         specifier: ^5.3.4
         version: 5.3.4(react@19.2.7)
@@ -1453,6 +1459,9 @@ packages:
 
   '@tauri-apps/plugin-geolocation@2.3.2':
     resolution: {integrity: sha512-ONCwav1monafjeO8/JdXtRlbhZ3xgAdBYxo/62qgw99u9+y6xGsohy3avZgFZsBHA0JVNe1uJnMi+vfT5ZSFUA==}
+
+  '@tauri-apps/plugin-haptics@2.3.2':
+    resolution: {integrity: sha512-TqvBR5JoPodDQWPXsNymmyqp37dOpunZOdVVbx5xOAxki7rVwiCMvoEPdtJQNIrU+dQDfkQYZ2oDBVOu4hf+ig==}
 
   '@tauri-apps/plugin-opener@2.5.4':
     resolution: {integrity: sha512-1HnPkb+AmgO29HBazm4uPLKB+r7zzcTBW1d0fyYp1uP+jwtpoiNDGKMMzz58SFp49nOIrxdE3aUJtT57lfO9CQ==}
@@ -2990,6 +2999,12 @@ packages:
 
   react-is@16.13.1:
     resolution: {integrity: sha512-24e6ynE2H+OKt4kqsOvNd8kBpV65zoxbA4BVsEOB3ARVWQki/DHzaUoC5KuON/BiccDaCCTZBuOcfZs70kR8bQ==}
+
+  react-reverse-portal@2.3.0:
+    resolution: {integrity: sha512-kvbPfLPKg6Y3S6tVq83us2RghvDpOS4GcJxbI7cZ0V0tuzUaSzblRIhVnKLOucfqF4lN/i9oWvEmpEi6bAOYlQ==}
+    peerDependencies:
+      react: ^16.0.0 || ^17.0.0 || ^18.0.0 || ^19.0.0
+      react-dom: ^16.0.0 || ^17.0.0 || ^18.0.0 || ^19.0.0
 
   react-router-dom@5.3.4:
     resolution: {integrity: sha512-m4EqFMHv/Ih4kpcBCONHbkT68KoAeHN4p3lAGoNryfHi0dMy0kCzEZakiKRsvg5wHZ/JLrLW8o8KomWiz/qbYQ==}
@@ -4954,6 +4969,10 @@ snapshots:
     dependencies:
       '@tauri-apps/api': 2.11.1
 
+  '@tauri-apps/plugin-haptics@2.3.2':
+    dependencies:
+      '@tauri-apps/api': 2.11.1
+
   '@tauri-apps/plugin-opener@2.5.4':
     dependencies:
       '@tauri-apps/api': 2.11.1
@@ -6604,6 +6623,11 @@ snapshots:
       scheduler: 0.27.0
 
   react-is@16.13.1: {}
+
+  react-reverse-portal@2.3.0(react-dom@19.2.7(react@19.2.7))(react@19.2.7):
+    dependencies:
+      react: 19.2.7
+      react-dom: 19.2.7(react@19.2.7)
 
   react-router-dom@5.3.4(react@19.2.7):
     dependencies:

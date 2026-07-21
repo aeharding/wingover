@@ -463,6 +463,18 @@
           "markdownDescription": "Denies the storekit_current_entitlement command without any pre-configured scope."
         },
         {
+          "description": "Enables the storekit_environment command without any pre-configured scope.",
+          "type": "string",
+          "const": "allow-storekit-environment",
+          "markdownDescription": "Enables the storekit_environment command without any pre-configured scope."
+        },
+        {
+          "description": "Denies the storekit_environment command without any pre-configured scope.",
+          "type": "string",
+          "const": "deny-storekit-environment",
+          "markdownDescription": "Denies the storekit_environment command without any pre-configured scope."
+        },
+        {
           "description": "Enables the storekit_manage_subscriptions command without any pre-configured scope.",
           "type": "string",
           "const": "allow-storekit-manage-subscriptions",

@@ -19,6 +19,7 @@ import { useEffect, useSyncExternalStore } from "react";
 import { Redirect, Route } from "react-router-dom";
 
 import { engine } from "../engine";
+import { isTauri } from "../engine/platform";
 import DesktopShell from "./desktop/DesktopShell";
 import FlightSurface from "./flight/FlyPage";
 import AllFlightsMapPage from "./pages/AllFlightsMapPage";
@@ -36,7 +37,27 @@ import { useIsDesktop } from "./useIsDesktop";
 
 import "./desktop.css";
 
-setupIonicReact({ mode: "ios" });
+setupIonicReact({
+  mode: "ios",
+  // Ionic's input scroll assist is UA-gated, so it also engages inside the
+  // Tauri WKWebView — where it fights the native keyboard plumbing: it clones
+  // the focused input and scrolls to a hard-coded 290px keyboard estimate
+  // after a 1s timeout (it never gets the Capacitor keyboard events it waits
+  // for). Native resizes <ion-app> for real (src/tauri-ionic/keyboard.ts) and
+  // pages scroll the focused field themselves, so switch it off there. The
+  // PWA keeps it — no webview resize happens there, the assist IS the
+  // mechanism. Of Ionic's other iOS input shims, hideCaretOnScroll stays ON
+  // deliberately (WKWebView's native caret layer lags scrolling; hiding it
+  // mid-scroll is Capacitor's shipped behavior) and inputBlurring defaults
+  // off in Ionic 8.
+  scrollAssist: !isTauri(),
+  // Tapping the status bar scrolls the visible content to top, like every
+  // native app. tauri-plugin-ionic dispatches Capacitor's `statusTap` window
+  // event; this opts in Ionic's built-in handler for it (its default is
+  // hybrid-only, which Tauri isn't in Ionic's eyes). Off on the PWA — no
+  // native event source exists there.
+  statusTap: isTauri(),
+});
 
 export default function App() {
   useEffect(() => {

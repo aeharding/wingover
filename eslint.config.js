@@ -23,6 +23,21 @@ export default defineConfig(
     rules: {
       // >5 useState in one component = state that wants a hook/object.
       "wingover/max-usestate": "error",
+      // The React Compiler memoizes automatically — manual memoization is
+      // noise here. For one-time instantiation use useState(() => ...).
+      "no-restricted-imports": [
+        "error",
+        {
+          paths: [
+            {
+              name: "react",
+              importNames: ["useCallback", "useMemo"],
+              message:
+                "The React Compiler memoizes automatically. For one-time instantiation use useState(() => ...).",
+            },
+          ],
+        },
+      ],
     },
   },
   {
@@ -85,6 +100,16 @@ export default defineConfig(
       "no-restricted-imports": [
         "error",
         {
+          // Flat-config rule entries REPLACE the base layer, so the manual-
+          // memoization ban must ride along here too.
+          paths: [
+            {
+              name: "react",
+              importNames: ["useCallback", "useMemo"],
+              message:
+                "The React Compiler memoizes automatically. For one-time instantiation use useState(() => ...).",
+            },
+          ],
           patterns: [
             {
               group: ["react", "react-dom", "react-dom/*", "@ionic/*"],
@@ -105,6 +130,16 @@ export default defineConfig(
       "no-restricted-imports": [
         "error",
         {
+          // Flat-config rule entries REPLACE the base layer, so the manual-
+          // memoization ban must ride along here too.
+          paths: [
+            {
+              name: "react",
+              importNames: ["useCallback", "useMemo"],
+              message:
+                "The React Compiler memoizes automatically. For one-time instantiation use useState(() => ...).",
+            },
+          ],
           patterns: [
             {
               group: ["@ionic/*"],

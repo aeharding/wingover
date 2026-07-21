@@ -1,5 +1,5 @@
 import { useIonAlert } from "@ionic/react";
-import { useCallback, useState } from "react";
+import { useState } from "react";
 
 import * as sync from "../../sync";
 
@@ -19,51 +19,49 @@ export function useLogOut(): {
   const [presentAlert] = useIonAlert();
   const [busy, setBusy] = useState(false);
 
-  const finish = useCallback(
-    async (onDone?: () => void) => {
-      try {
-        await sync.logOut();
-        onDone?.();
-      } catch (error) {
-        presentAlert({
-          header: "Log out failed",
-          message: String(error),
-          buttons: ["OK"],
-        });
-      }
-    },
-    [presentAlert],
-  );
-
-  const logOut = useCallback(
-    async (onDone?: () => void) => {
-      setBusy(true);
-      try {
-        if (await sync.flushForLogOut()) {
-          await finish(onDone);
-          return;
-        }
-      } finally {
-        setBusy(false);
-      }
+  async function finish(onDone?: () => void) {
+    try {
+      await sync.logOut();
+      onDone?.();
+    } catch (error) {
       presentAlert({
-        header: "Log out?",
-        message:
-          "Some flights on this computer haven't synced yet. Logging out deletes them from this computer. Everything already synced stays on the server and your other devices.",
-        buttons: [
-          { text: "Cancel", role: "cancel" },
-          {
-            text: "Log out",
-            role: "destructive",
-            handler: () => {
-              void finish(onDone);
-            },
-          },
-        ],
+        header: "Log out failed",
+        message: String(error),
+        buttons: ["OK"],
       });
-    },
-    [finish, presentAlert],
-  );
+    }
+  }
+
+  async function logOut(onDone?: () => void) {
+    setBusy(true);
+    try {
+      if (await sync.flushForLogOut()) {
+        await finish(onDone);
+        return;
+      }
+    } catch (error) {
+      // Not handling — the React Compiler cannot lower a try/finally WITHOUT
+      // a catch (it bails and leaves this whole hook unmemoized).
+      throw error;
+    } finally {
+      setBusy(false);
+    }
+    presentAlert({
+      header: "Log out?",
+      message:
+        "Some flights on this computer haven't synced yet. Logging out deletes them from this computer. Everything already synced stays on the server and your other devices.",
+      buttons: [
+        { text: "Cancel", role: "cancel" },
+        {
+          text: "Log out",
+          role: "destructive",
+          handler: () => {
+            void finish(onDone);
+          },
+        },
+      ],
+    });
+  }
 
   return { logOut, busy };
 }

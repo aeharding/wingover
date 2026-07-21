@@ -14,8 +14,7 @@
       {
         "title": "Wingover",
         "width": 420,
-        "height": 860,
-        "userAgent": "WingoverApp/1.0"
+        "height": 860
       }
     ],
     "security": {

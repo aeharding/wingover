@@ -2,6 +2,7 @@ import type { Annotation, Coordinate, PolylineOverlay } from "apple-mapkit";
 import type { Feature } from "geojson";
 
 import type { MapAppearance, MapViewKind } from "../config";
+import { createTapInterpreter } from "../tapInterpreter";
 import type {
   Aircraft,
   AircraftState,
@@ -113,6 +114,7 @@ export async function createMapKitMapView(
   let lastBearing = 0;
 
   const emap = map as unknown as EventTargetLike;
+
   function eventAt(e: MapKitEvent): LngLat {
     if (e.coordinate) return [e.coordinate.longitude, e.coordinate.latitude];
     if (e.pointOnPage) {
@@ -526,6 +528,56 @@ export async function createMapKitMapView(
         return () => {
           el.removeEventListener(domType, listener);
           el.removeEventListener("pointercancel", listener);
+        };
+      }
+      if (gesture === "singletap") {
+        // MapKit disambiguates natively: single-tap never fires for the taps
+        // of a double-tap zoom. But it DOES fire for a tap that lands while
+        // the map is coasting — that tap is "stop the inertia", not a tap,
+        // and MapKit attaches no flag to tell them apart. Detect it instead:
+        // a pointerdown during an active scroll (scroll-start seen, scroll-end
+        // pending) marks the stop; the single-tap that follows (~350ms later,
+        // after the double-tap window) is swallowed.
+        // Shared tap semantics (stop-taps, double-taps) live in the
+        // interpreter — see tapInterpreter.ts for why each rule exists.
+        // MapKit's single-tap is natively double-tap-disambiguated, so
+        // delivery is immediate.
+        let tapAt: LngLat = [map.center.longitude, map.center.latitude];
+        const interpreter = createTapInterpreter({
+          deliverDelayMs: 0,
+          onTap: () => handler({ at: tapAt }),
+        });
+        const onScrollStart = () => interpreter.scrollStart();
+        const onScrollEnd = () => interpreter.scrollEnd();
+        const onTap = (e: MapKitEvent) => {
+          tapAt = eventAt(e);
+          interpreter.tap();
+        };
+        // The down feed for stop-tap correlation. Deliberately NOT a
+        // capture-phase consumer that swallows the sequence: MapKit must
+        // receive every touch so a finger landing on a coasting map can
+        // stop it AND flow straight into a drag/pinch, exactly like Apple
+        // Maps (a swallowing version shipped briefly and made the map
+        // untouchable during inertia). The cost: MapKit itself still counts
+        // a stop-tap, so two very fast taps right after stopping a fling
+        // can read as its double-tap zoom. Unpreventable without eating the
+        // touches.
+        const onDown = () => interpreter.down();
+        container.addEventListener("pointerdown", onDown);
+        emap.addEventListener("scroll-start", onScrollStart);
+        emap.addEventListener("scroll-end", onScrollEnd);
+        // Zoom coasts too (pinch-fling): a tap stopping one is a stop-tap.
+        emap.addEventListener("zoom-start", onScrollStart);
+        emap.addEventListener("zoom-end", onScrollEnd);
+        emap.addEventListener("single-tap", onTap);
+        return () => {
+          interpreter.dispose();
+          container.removeEventListener("pointerdown", onDown);
+          emap.removeEventListener("scroll-start", onScrollStart);
+          emap.removeEventListener("scroll-end", onScrollEnd);
+          emap.removeEventListener("zoom-start", onScrollStart);
+          emap.removeEventListener("zoom-end", onScrollEnd);
+          emap.removeEventListener("single-tap", onTap);
         };
       }
       const type = {
