@@ -12,8 +12,9 @@ vi.mock("../../storage/db", () => ({
 
 const { updateFlight } = await import("../../storage/db");
 
-(globalThis as { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT =
-  true;
+(
+  globalThis as { IS_REACT_ACT_ENVIRONMENT?: boolean }
+).IS_REACT_ACT_ENVIRONMENT = true;
 
 const baseFlight: Flight = {
   id: "f1",
