@@ -1,10 +1,5 @@
 import { IonModal } from "@ionic/react";
-import {
-  createContext,
-  type ReactNode,
-  useContext,
-  useState,
-} from "react";
+import { createContext, type ReactNode, useContext, useState } from "react";
 
 import { SyncSheet } from "./SyncSheet";
 

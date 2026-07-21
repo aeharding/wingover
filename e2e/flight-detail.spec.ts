@@ -178,7 +178,5 @@ test("name and launch fields hint a Done return key", async ({ page }) => {
 
   // enterkeyhint reaches the native inputs so the iOS keyboard shows ✓/Done
   // (the Enter-to-blur handler itself is Tauri-only).
-  await expect(
-    page.locator('ion-input[enterkeyhint="done"]'),
-  ).toHaveCount(2);
+  await expect(page.locator('ion-input[enterkeyhint="done"]')).toHaveCount(2);
 });
