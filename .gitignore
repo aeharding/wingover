@@ -11,3 +11,7 @@ playwright-report/
 .env.*
 !.env.example
 .claude
+
+# Build-materialized Tauri iOS API (tauri-plugin build.rs copies it in;
+# version-coupled to the tauri crate — never committed)
+src-tauri/plugins/*/.tauri/
