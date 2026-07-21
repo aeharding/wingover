@@ -8,7 +8,6 @@ import {
   resolveMapStyle,
   resolveMaptilerKey,
 } from "../config";
-import { createTapInterpreter } from "../tapInterpreter";
 import type {
   Aircraft,
   AircraftState,
@@ -367,46 +366,6 @@ export async function createMapLibreMapView(
           return onNative(["mousedown", "touchstart"], (e) =>
             handler({ at: eventAt(e as MapMouseEvent) }),
           );
-        case "singletap": {
-          // Shared tap semantics (stop-taps, double-taps) live in the
-          // interpreter — see tapInterpreter.ts for why each rule exists.
-          // MapLibre has no disambiguated tap event, so each click is held
-          // for the double-tap window; the cancel signal for a TOUCH
-          // double-tap is the second finger-down (iOS WebKit dispatches no
-          // dblclick for touch, and MapLibre's zoom handler preventDefaults
-          // the second tap's click away — the DOM dblclick cancel only ever
-          // fires for desktop mice).
-          let tapAt: LngLat = [map.getCenter().lng, map.getCenter().lat];
-          const interpreter = createTapInterpreter({
-            deliverDelayMs: 300,
-            onTap: () => handler({ at: tapAt }),
-          });
-          const offMoveStart = onNative(["movestart"], () =>
-            interpreter.scrollStart(),
-          );
-          const offMoveEnd = onNative(["moveend"], () =>
-            interpreter.scrollEnd(),
-          );
-          const offClick = onNative(["click"], (e) => {
-            tapAt = eventAt(e as MapMouseEvent);
-            interpreter.tap();
-          });
-          const offDbl = onNative(["dblclick"], () => interpreter.doubleTap());
-          // Down feed only — never swallow the touches: MapLibre must see
-          // them so a finger on a coasting map stops it and flows into a
-          // drag/pinch (see the mapkit adapter for the history).
-          const offDown = onNative(["mousedown", "touchstart"], () =>
-            interpreter.down(),
-          );
-          return () => {
-            interpreter.dispose();
-            offDown();
-            offMoveStart();
-            offMoveEnd();
-            offClick();
-            offDbl();
-          };
-        }
         case "up":
           return onNative(["mouseup", "touchend", "touchcancel"], (e) =>
             handler({ at: eventAt(e as MapMouseEvent) }),

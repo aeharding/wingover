@@ -80,7 +80,6 @@ export function createFakeMapView(container: HTMLElement): MapView {
     longpress: new Set(),
     down: new Set(),
     up: new Set(),
-    singletap: new Set(),
     dragstart: new Set(),
     dragend: new Set(),
     zoom: new Set(),
@@ -93,7 +92,6 @@ export function createFakeMapView(container: HTMLElement): MapView {
   const centerEvent = (): GestureEvent => ({ at: center });
 
   let pressTimer: ReturnType<typeof setTimeout> | undefined;
-  let tapTimer: ReturnType<typeof setTimeout> | undefined;
   let pressAt: { x: number; y: number } | null = null;
   let dragging = false;
 
@@ -106,12 +104,6 @@ export function createFakeMapView(container: HTMLElement): MapView {
     const point = localPoint(e);
     pressAt = point;
     dragging = false;
-    // Parity with the real adapters: a second down while a singletap is
-    // pending delivery means double-tap — cancel the pending tap.
-    if (tapTimer !== undefined) {
-      clearTimeout(tapTimer);
-      tapTimer = undefined;
-    }
     fire("down", centerEvent());
     clearTimeout(pressTimer);
     pressTimer = setTimeout(() => {
@@ -132,15 +124,7 @@ export function createFakeMapView(container: HTMLElement): MapView {
       fire("dragstart", centerEvent());
     }
   };
-  const endPress = (event?: Event) => {
-    // A clean tap: released (not CANCELED — a canceled gesture is
-    // definitionally not a tap) while the long-press timer was still
-    // pending (short) and without ever crossing into a drag.
-    const tapped =
-      event?.type !== "pointercancel" &&
-      pressAt !== null &&
-      pressTimer !== undefined &&
-      !dragging;
+  const endPress = () => {
     clearTimeout(pressTimer);
     pressTimer = undefined;
     pressAt = null;
@@ -148,19 +132,6 @@ export function createFakeMapView(container: HTMLElement): MapView {
     if (dragging) {
       dragging = false;
       fire("dragend", centerEvent());
-    }
-    if (tapped) {
-      // Same double-tap window as the real adapters: a second tap inside it
-      // cancels the pending singletap (that pair means zoom, not tap).
-      if (tapTimer !== undefined) {
-        clearTimeout(tapTimer);
-        tapTimer = undefined;
-      } else {
-        tapTimer = setTimeout(() => {
-          tapTimer = undefined;
-          fire("singletap", centerEvent());
-        }, 300);
-      }
     }
   };
   const onWheel = (e: WheelEvent) => {
@@ -203,7 +174,6 @@ export function createFakeMapView(container: HTMLElement): MapView {
     setEdgeToEdge() {},
     destroy() {
       clearTimeout(pressTimer);
-      clearTimeout(tapTimer);
       container.removeEventListener("pointerdown", onPointerDown);
       container.removeEventListener("pointermove", onPointerMove);
       container.removeEventListener("pointerup", endPress);
