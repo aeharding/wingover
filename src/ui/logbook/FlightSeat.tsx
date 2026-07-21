@@ -27,6 +27,7 @@ import {
   formatSpeed,
 } from "../../flight/format";
 import { getSetting, setSetting } from "../../storage/local";
+import { afterNextFrame } from "../map/afterFrame";
 import CompassButton from "../map/CompassButton";
 import type { MapViewKind } from "../map/config";
 import MapCanvas from "../map/MapCanvas";
@@ -84,6 +85,7 @@ export default function FlightSeat({
   const [mapFull, setMapFull] = useState(false);
   const [cardOpen, setCardOpen] = useState(true);
   const mapFullRef = useRef(false);
+  const wasFullRef = useRef(false);
   const lineRef = useRef<Line | null>(null);
   const planLineRef = useRef<Line | null>(null);
   const markersRef = useRef<MarkerLayer | null>(null);
@@ -154,6 +156,11 @@ export default function FlightSeat({
   }
 
   useEffect(() => {
+    // Collapsing from full screen EASES back to the framed track instead of
+    // jump-cutting (the jump read as a glitchy re-north; a bounds fit is
+    // north-up by construction). Other refit causes stay instant.
+    const collapsing = wasFullRef.current && !mapFull;
+    wasFullRef.current = mapFull;
     if (!map) return;
     if (track.length === 0) {
       // Between selections: blank the previous flight's content.
@@ -200,7 +207,11 @@ export default function FlightSeat({
       ...track.map((fix): LngLat => [fix.longitude, fix.latitude]),
       ...plannedRoute,
     ]);
-    if (bounds) {
+    if (!bounds) return;
+    // The fullscreen toggle resizes the map's container in this same
+    // commit; fit only after the backend has adopted the new size (see
+    // afterNextFrame) so the bounds math uses the real viewport.
+    return afterNextFrame(() => {
       map.fitBounds(bounds, {
         // Right padding clears the OPEN card, always: collapsing must not
         // jump the camera around — it just reveals more of the map that
@@ -210,8 +221,9 @@ export default function FlightSeat({
         padding: mapFull
           ? { top: 56, bottom: 56, left: 56, right: 56 }
           : { top: 56, bottom: 56, left: 56, right: 440 },
+        animate: collapsing,
       });
-    }
+    });
   }, [track, map, flight?.id, flight?.plannedRoute, mapFull]);
 
   const stats = flight?.stats;

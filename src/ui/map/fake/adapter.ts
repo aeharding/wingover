@@ -199,6 +199,13 @@ export function createFakeMapView(container: HTMLElement): MapView {
 
     fitBounds(bounds: Bounds) {
       const [sw, ne] = bounds;
+      // A bounds fit is north-up by construction on the real backends (the
+      // fullscreen-collapse reset relies on it to dismiss the compass) —
+      // keep the contract here too.
+      if (bearing !== 0) {
+        bearing = 0;
+        fire("rotate", centerEvent());
+      }
       center = [(sw[0] + ne[0]) / 2, (sw[1] + ne[1]) / 2];
       const { w } = size();
       const spanLng = Math.max(Math.abs(ne[0] - sw[0]), 1e-4);

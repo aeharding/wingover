@@ -430,7 +430,7 @@ export async function createMapKitMapView(
             ((inset.right - inset.left) / 2) * (region.span.longitudeDelta / w),
         );
       }
-      map.setRegionAnimated(region, false);
+      map.setRegionAnimated(region, opts?.animate ?? false);
     },
 
     zoomRange() {
@@ -708,9 +708,17 @@ export async function createMapKitMapView(
         // nothing.
         let last = map.rotation;
         let raf = requestAnimationFrame(function poll() {
-          if (map.rotation !== last) {
-            last = map.rotation;
-            handler({ at: [map.center.longitude, map.center.latitude] });
+          // A provider/appearance swap destroys the map before React has
+          // unmounted the subscriber (MapCanvas destroys, then notifies
+          // null); reading a destroyed map's rotation throws. Fold the
+          // loop instead of surfacing one TypeError per swap.
+          try {
+            if (map.rotation !== last) {
+              last = map.rotation;
+              handler({ at: [map.center.longitude, map.center.latitude] });
+            }
+          } catch {
+            return;
           }
           raf = requestAnimationFrame(poll);
         });

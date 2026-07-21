@@ -246,6 +246,97 @@ test("flight detail draws the track even when the map style loads slowly", async
   expect(pageErrors).toEqual([]);
 });
 
+test("leaving fullscreen eases the flight map back to its framing", async ({
+  page,
+}) => {
+  // Record a short mock flight, then open its detail page (blank style:
+  // hermetic, real MapLibre camera).
+  await page.goto("/?mock-speed=40&map-style=blank");
+  await page.getByRole("button", { name: "Start Flight" }).click();
+  await expect(page.getByTestId("recording")).toBeVisible({ timeout: 10_000 });
+  await page.waitForTimeout(500);
+  await page.getByRole("button", { name: "Stop flight" }).click();
+  await page.getByRole("button", { name: "Stop", exact: true }).click();
+  await expect(
+    page.getByRole("button", { name: "Start Flight" }),
+  ).toBeVisible();
+
+  await page.getByText("Logbook", { exact: true }).click();
+  await page.locator(".flight-row").click();
+  await expect(page.getByTestId("launch-marker")).toBeVisible({
+    timeout: 10_000,
+  });
+
+  interface Cam {
+    lng: number;
+    lat: number;
+    zoom: number;
+    bearing: number;
+  }
+  const camera = (): Promise<Cam> =>
+    page.evaluate(() => {
+      const m = (
+        document.querySelector(".map-container") as HTMLElement & {
+          __map?: {
+            getCenter(): { lng: number; lat: number };
+            getZoom(): number;
+            getBearing(): number;
+          };
+        }
+      ).__map!;
+      const c = m.getCenter();
+      return {
+        lng: c.lng,
+        lat: c.lat,
+        zoom: m.getZoom(),
+        bearing: m.getBearing(),
+      };
+    });
+  await page.waitForTimeout(400);
+  const framed = await camera();
+
+  await page.getByTestId("map-expand").click();
+  await expect(page.getByTestId("map-shrink")).toBeVisible();
+
+  // Wander far off while full screen: pan away, zoom out, rotate.
+  await page.evaluate(() => {
+    const m = (
+      document.querySelector(".map-container") as HTMLElement & {
+        __map?: {
+          getCenter(): { lng: number; lat: number };
+          jumpTo(o: {
+            center: [number, number];
+            zoom: number;
+            bearing: number;
+          }): void;
+        };
+      }
+    ).__map!;
+    const c = m.getCenter();
+    m.jumpTo({ center: [c.lng + 3, c.lat - 2], zoom: 5, bearing: 120 });
+  });
+  const wandered = await camera();
+  expect(Math.abs(wandered.lng - framed.lng)).toBeGreaterThan(1);
+
+  // Collapse: the map EASES back to the framed flight — same center and
+  // zoom as the original fit, north-up again.
+  await page.getByTestId("map-shrink").click();
+  await expect
+    .poll(
+      async () => {
+        const c = await camera();
+        return (
+          Math.abs(c.lng - framed.lng) < 0.02 &&
+          Math.abs(c.lat - framed.lat) < 0.02 &&
+          Math.abs(c.zoom - framed.zoom) < 0.2 &&
+          Math.abs(c.bearing) < 0.5
+        );
+      },
+      { timeout: 10_000 },
+    )
+    .toBe(true);
+});
+
 test("the unsnapped compass realigns north, instantly", async ({ page }) => {
   await page.goto("/?mock-speed=40&map=maplibre");
   await page.getByRole("button", { name: "Start Flight" }).click();
