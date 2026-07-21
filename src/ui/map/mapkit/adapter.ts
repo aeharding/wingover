@@ -260,8 +260,12 @@ export async function createMapKitMapView(
       const target = camera.copy();
       target.center =
         impl._offsetCenterWithPaddingAndRotation?.(point, -1) || point;
-      target.zoom += delta;
-      if (!Number.isFinite(target.zoom)) return false;
+      // Validate BEFORE assigning: the camera's zoom setter launders
+      // garbage (`this._zoom = e || 3`), so a post-assignment isFinite
+      // check would read back a plausible 3 and animate to continental.
+      const zoom = target.zoom + delta;
+      if (!Number.isFinite(zoom)) return false;
+      target.zoom = zoom;
       // A still-running tween would instant-apply-and-stomp this move
       // (MapKit's in-flight branch), so retire it first — through MapKit's
       // OWN end path. cancel() only stops the ticking, and hand-nulling
@@ -273,6 +277,10 @@ export async function createMapKitMapView(
         if (!node.cameraAnimationDidEnd) return false;
         node.cameraAnimation.cancel();
         node.cameraAnimationDidEnd();
+        // DidEnd's suspended-gesture-zoom replay can spawn a fresh tween;
+        // launching ours into it would hit the instant-stomp branch, while
+        // the fallback composes with a live tween correctly (additiveZoom).
+        if (node.cameraAnimation) return false;
       }
       delete impl._visibleMapRect;
       impl.setCameraAnimated(target, true);
