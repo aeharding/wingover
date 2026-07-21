@@ -27,6 +27,7 @@ import {
   formatSpeed,
 } from "../../flight/format";
 import { getSetting, setSetting } from "../../storage/local";
+import CompassButton from "../map/CompassButton";
 import type { MapViewKind } from "../map/config";
 import MapCanvas from "../map/MapCanvas";
 import {
@@ -243,6 +244,7 @@ export default function FlightSeat({
             desktop split it sits above other UI, so no inset. */}
         <MapCanvas base={view} onReady={handleReady} edgeToEdge={mapFull} />
         <div className="map-overlay">
+          {map && <CompassButton map={map} />}
           <button
             className="map-button"
             aria-label={mapFull ? "Shrink map" : "Expand map"}

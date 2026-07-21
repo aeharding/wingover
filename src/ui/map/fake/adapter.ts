@@ -84,6 +84,7 @@ export function createFakeMapView(container: HTMLElement): MapView {
     dragend: new Set(),
     zoom: new Set(),
     zoomend: new Set(),
+    rotate: new Set(),
     wheel: new Set(),
   };
   function fire(gesture: Gesture, event: GestureEvent) {
@@ -188,7 +189,10 @@ export function createFakeMapView(container: HTMLElement): MapView {
 
     moveTo(to: Partial<Camera>) {
       if (to.center) center = to.center;
-      if (to.bearing !== undefined) bearing = to.bearing;
+      if (to.bearing !== undefined && to.bearing !== bearing) {
+        bearing = to.bearing;
+        fire("rotate", centerEvent());
+      }
       if (to.zoom !== undefined) setZoom(to.zoom);
       repositionMarkers();
     },

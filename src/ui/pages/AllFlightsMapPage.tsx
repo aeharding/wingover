@@ -17,6 +17,7 @@ import { useHistory } from "react-router-dom";
 
 import { getTrack, listFlights } from "../../storage/db";
 import { getSetting, setSetting } from "../../storage/local";
+import CompassButton from "../map/CompassButton";
 import type { MapViewKind } from "../map/config";
 import MapCanvas from "../map/MapCanvas";
 import { boundsOf, type Line, type LngLat, type MapView } from "../map/types";
@@ -151,6 +152,7 @@ export default function AllFlightsMapPage() {
             <div className="legend-bar" />
           </div>
           <div className="map-overlay">
+            {map && <CompassButton map={map} />}
             {map?.supportsSatellite && (
               <ViewToggle view={view} onChange={changeView} />
             )}

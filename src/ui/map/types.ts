@@ -74,6 +74,7 @@ export type Gesture =
   | "dragend"
   | "zoom" // zoom changed (per-frame while zooming)
   | "zoomend"
+  | "rotate" // bearing changed — gesture or programmatic; read camera().bearing
   | "wheel"; // raw wheel/trackpad — hijackable for custom zoom
 
 export interface GestureEvent {

@@ -77,6 +77,30 @@ function featuresOf(
 
 const toCoord = (p: LngLat) => new mapkit.Coordinate(p[1], p[0]);
 
+// The slivers of MapKit's private implementation that moveTo's atomic camera
+// path touches (see the impl capture in createMapKitMapView). Member names
+// are original source names — Apple's build minifies locals, not class
+// members — but still private: every access must stay optional so a future
+// restructure degrades to the public fallback instead of throwing.
+interface PrivateCamera {
+  zoom: number;
+  center: unknown;
+  copy(): PrivateCamera;
+}
+interface PrivateMapImpl {
+  camera?: PrivateCamera;
+  _visibleMapRect?: unknown;
+  _mapNode?: {
+    cameraAnimation?: { cancel(): void } | null;
+    cameraAnimationDidEnd?(): void;
+  };
+  setCameraAnimated?(camera: PrivateCamera, animated: boolean): void;
+  _offsetCenterWithPaddingAndRotation?(
+    point: unknown,
+    direction: number,
+  ): unknown;
+}
+
 function measureSafeAreaBottom(): number {
   const probe = document.createElement("div");
   probe.style.cssText =
@@ -112,6 +136,43 @@ export async function createMapKitMapView(
   // (heading − lastBearing → 0 in track-up), so it holds pointing up.
   let lastBearing = 0;
 
+  // mapkit.Map hides its real implementation behind a Symbol-keyed accessor:
+  // map._(key) type-checks the key, then returns the impl from a WeakMap
+  // keyed on the map alone. The key leaks through one wrapped call, and the
+  // impl unlocks the one move the public API cannot express — an ATOMIC
+  // animated camera set (moveTo). Null when the surface doesn't match, so
+  // callers fall back to public setters.
+  const impl = ((): PrivateMapImpl | null => {
+    const proto = Object.getPrototypeOf(map) as {
+      _?: (key: unknown) => unknown;
+    };
+    const accessor = proto._;
+    if (typeof accessor !== "function") return null;
+    let key: unknown;
+    proto._ = function (k: unknown) {
+      key = k;
+      return accessor.call(this, k);
+    };
+    try {
+      void map.center;
+    } finally {
+      proto._ = accessor;
+    }
+    try {
+      return key !== undefined
+        ? ((accessor.call(map, key) ?? null) as PrivateMapImpl | null)
+        : null;
+    } catch {
+      return null;
+    }
+  })();
+
+  // The camera-bearing debug hook the other adapters expose (maplibre stashes
+  // its whole map) — so tests and manual driving can observe rotation here too.
+  (container as HTMLElement & { __map?: { getBearing(): number } }).__map = {
+    getBearing: () => rotationToBearing(map.rotation),
+  };
+
   const emap = map as unknown as EventTargetLike;
 
   function eventAt(e: MapKitEvent): LngLat {
@@ -134,7 +195,10 @@ export async function createMapKitMapView(
   // distance↔zoom constant can't be calibrated against that stale span).
   // Projected longitude is linear in Web Mercator, so pixels-per-degree maps
   // straight to the app's 256-tile zoom, matching the ZoomControl's bounds.
-  function projectedZoom(): number {
+  // Null when the projection is degenerate (pre-layout, hidden container):
+  // a made-up number folded into camera-delta math would land the camera at
+  // an absolute wrong zoom, so callers must skip zoom work instead.
+  function projectedZoom(): number | null {
     const c = map.center;
     const p0 = map.convertCoordinateToPointOnPage(
       new mapkit.Coordinate(c.latitude, c.longitude),
@@ -143,8 +207,87 @@ export async function createMapKitMapView(
       new mapkit.Coordinate(c.latitude, c.longitude + 0.02),
     );
     const dpx = Math.abs(p1.x - p0.x);
-    if (!Number.isFinite(dpx) || dpx < 1e-6) return 3;
+    if (!Number.isFinite(dpx) || dpx < 1e-6) return null;
     return Math.log2((360 * dpx) / (256 * 0.02));
+  }
+
+  // MapKit force-locks rotation below zoom 7 (its camera constraint
+  // re-derives isRotationLocked from the zoom on every change): a twist
+  // there rubber-bands to ±30° and snaps back to north on release, which
+  // reads as a glitch, not a rule. Keep the rotate GESTURE off entirely
+  // while the camera is in the locked range, so the map never teases a
+  // rotation it won't keep. Programmatic rotation (track-up, the compass
+  // tap) is a separate surface and stays untouched. Boundary verified
+  // empirically: a twist at projectedZoom 6.9 snaps back, 7.05 sticks —
+  // MapKit's internal zoom is the same 256-tile web-mercator scale.
+  const ROTATION_UNLOCK_ZOOM = 7;
+  function syncRotationGesture() {
+    const zoom = projectedZoom();
+    if (zoom === null) return;
+    const enabled = zoom >= ROTATION_UNLOCK_ZOOM;
+    if (map.isRotationEnabled !== enabled) map.isRotationEnabled = enabled;
+  }
+  syncRotationGesture();
+  emap.addEventListener("zoom-end", syncRotationGesture);
+  emap.addEventListener("region-change-end", syncRotationGesture);
+
+  // Animated center+zoom as ONE camera tween, via the captured impl. The
+  // public API can't express it: MapKit runs a single camera animation, and
+  // an *animated* zoom issued during an in-flight pan is applied instantly
+  // then overwritten by the pan's next frame — the locate button's old
+  // pans-on-tap-1, zooms-on-tap-2 symptom. The internal setCameraAnimated
+  // tweens one camera carrying center+zoom+rotation, so rotation survives
+  // (only the region APIs hard-zero it). Zoom moves by delta so the
+  // camera's native level scale never needs calibrating, and mid-tween the
+  // delta self-corrects (projectedZoom reads the live mid-animation state
+  // the copied camera starts from). False = the private surface didn't
+  // carry the move (missing member, degenerate delta, or a throw); the
+  // caller falls back to public setters.
+  function atomicPanZoom(center: LngLat, delta: number): boolean {
+    const camera = impl?.camera;
+    const point = (
+      toCoord(center) as Coordinate & { toMapPoint?(): unknown }
+    ).toMapPoint?.();
+    if (
+      !impl?.setCameraAnimated ||
+      !camera?.copy ||
+      point === undefined ||
+      !Number.isFinite(delta)
+    ) {
+      return false;
+    }
+    try {
+      const target = camera.copy();
+      target.center =
+        impl._offsetCenterWithPaddingAndRotation?.(point, -1) || point;
+      // Validate BEFORE assigning: the camera's zoom setter launders
+      // garbage (`this._zoom = e || 3`), so a post-assignment isFinite
+      // check would read back a plausible 3 and animate to continental.
+      const zoom = target.zoom + delta;
+      if (!Number.isFinite(zoom)) return false;
+      target.zoom = zoom;
+      // A still-running tween would instant-apply-and-stomp this move
+      // (MapKit's in-flight branch), so retire it first — through MapKit's
+      // OWN end path. cancel() only stops the ticking, and hand-nulling
+      // node.cameraAnimation skips the stop bookkeeping DidEnd performs
+      // (cameraDidStopRotating et al): cancelling a rotating tween that way
+      // leaves _rotating latched and region-change-end starved forever.
+      const node = impl._mapNode;
+      if (node?.cameraAnimation) {
+        if (!node.cameraAnimationDidEnd) return false;
+        node.cameraAnimation.cancel();
+        node.cameraAnimationDidEnd();
+        // DidEnd's suspended-gesture-zoom replay can spawn a fresh tween;
+        // launching ours into it would hit the instant-stomp branch, while
+        // the fallback composes with a live tween correctly (additiveZoom).
+        if (node.cameraAnimation) return false;
+      }
+      delete impl._visibleMapRect;
+      impl.setCameraAnimated(target, true);
+      return true;
+    } catch {
+      return false;
+    }
   }
 
   const view: MapView = {
@@ -183,7 +326,9 @@ export async function createMapKitMapView(
     camera(): Camera {
       return {
         center: [map.center.longitude, map.center.latitude],
-        zoom: projectedZoom(),
+        // Pre-layout the projection has no answer; 3 (the construction-time
+        // continental view) is the least-wrong report.
+        zoom: projectedZoom() ?? 3,
         bearing: rotationToBearing(map.rotation),
         padding: ZERO_INSETS,
       };
@@ -193,10 +338,32 @@ export async function createMapKitMapView(
       const animated = opts?.animate ? true : false;
       // to.padding is ignored: the overscan padding is a MapLibre
       // oversized-container trick and is degenerate on MapKit's normal view.
-      // Each axis independently, instantly (property, not *Animated) when not
-      // animating: center preserves zoom + rotation, cameraDistance preserves
-      // center + rotation. No per-frame region set (that reset track-up to
-      // north and thrashed tiles).
+      // Animated center+zoom rides ONE internal camera tween — see
+      // atomicPanZoom for the whole story.
+      if (
+        animated &&
+        to.center &&
+        to.zoom !== undefined &&
+        to.bearing === undefined
+      ) {
+        const zoom = projectedZoom();
+        const delta = zoom === null ? NaN : to.zoom - zoom;
+        if (!atomicPanZoom(to.center, delta)) {
+          // Private surface went missing (Apple restructured): ride the one
+          // public composition path — a NON-animated zoom set during an
+          // in-flight animation is folded into it (cameraAnimation
+          // .additiveZoom). Degrades to an instant zoom when already
+          // centered, since then no pan tween starts to fold into.
+          const dist = map.cameraDistance * Math.pow(2, -delta);
+          map.setCenterAnimated(toCoord(to.center), true);
+          if (Number.isFinite(dist) && dist > 0) map.cameraDistance = dist;
+        }
+        return;
+      }
+      // Otherwise each axis independently, instantly (property, not
+      // *Animated) when not animating: center preserves zoom + rotation,
+      // cameraDistance preserves center + rotation. No per-frame region set
+      // (that reset track-up to north and thrashed tiles).
       if (to.bearing !== undefined) {
         lastBearing = to.bearing;
         const rotation = bearingToRotation(to.bearing);
@@ -214,8 +381,11 @@ export async function createMapKitMapView(
         // Relative zoom: scale cameraDistance by the zoom delta. No absolute
         // calibration — MapKit's region↔distance mapping is unreliable, but
         // cameraDistance is linear in the visible scale, so a ratio is exact.
+        const zoom = projectedZoom();
         const dist =
-          map.cameraDistance * Math.pow(2, projectedZoom() - to.zoom);
+          zoom === null
+            ? NaN
+            : map.cameraDistance * Math.pow(2, zoom - to.zoom);
         if (Number.isFinite(dist) && dist > 0) {
           if (animated) map.setCameraDistanceAnimated(dist, true);
           else map.cameraDistance = dist;
@@ -528,6 +698,23 @@ export async function createMapKitMapView(
           el.removeEventListener(domType, listener);
           el.removeEventListener("pointercancel", listener);
         };
+      }
+      if (gesture === "rotate") {
+        // MapKit has no continuous rotation event (and whether its
+        // rotation-start/end fire for a programmatic setRotationAnimated is
+        // undocumented), so watch map.rotation per-frame and fire only when
+        // it moved. The loop exists only while a subscriber does — pages
+        // without a compass (and the live map, which never subscribes) pay
+        // nothing.
+        let last = map.rotation;
+        let raf = requestAnimationFrame(function poll() {
+          if (map.rotation !== last) {
+            last = map.rotation;
+            handler({ at: [map.center.longitude, map.center.latitude] });
+          }
+          raf = requestAnimationFrame(poll);
+        });
+        return () => cancelAnimationFrame(raf);
       }
       const type = {
         longpress: "long-press",
