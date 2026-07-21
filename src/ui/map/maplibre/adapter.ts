@@ -232,9 +232,17 @@ export async function createMapLibreMapView(
     },
 
     fitBounds(bounds: Bounds, opts) {
+      // A fit issued in the same frame the container resized would compute
+      // against the old transform (maplibre adopts a resize via its own
+      // ResizeObserver, which runs after React's effects). Sync first —
+      // resize() is a no-op when the size is unchanged.
+      map.resize();
+      // maplibre's default animated fit is a flyTo whose duration scales
+      // with distance — a collapse from a far wander flew for ~5s. Bound it.
       map.fitBounds(bounds, {
         padding: opts?.padding,
         animate: opts?.animate ?? false,
+        maxDuration: 800,
       });
     },
 

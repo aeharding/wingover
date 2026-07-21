@@ -27,6 +27,7 @@ import {
   formatSpeed,
 } from "../../flight/format";
 import { getSetting, setSetting } from "../../storage/local";
+import { afterNextFrame } from "../map/afterFrame";
 import CompassButton from "../map/CompassButton";
 import type { MapViewKind } from "../map/config";
 import MapCanvas from "../map/MapCanvas";
@@ -206,7 +207,11 @@ export default function FlightSeat({
       ...track.map((fix): LngLat => [fix.longitude, fix.latitude]),
       ...plannedRoute,
     ]);
-    if (bounds) {
+    if (!bounds) return;
+    // The fullscreen toggle resizes the map's container in this same
+    // commit; fit only after the backend has adopted the new size (see
+    // afterNextFrame) so the bounds math uses the real viewport.
+    return afterNextFrame(() => {
       map.fitBounds(bounds, {
         // Right padding clears the OPEN card, always: collapsing must not
         // jump the camera around — it just reveals more of the map that
@@ -218,7 +223,7 @@ export default function FlightSeat({
           : { top: 56, bottom: 56, left: 56, right: 440 },
         animate: collapsing,
       });
-    }
+    });
   }, [track, map, flight?.id, flight?.plannedRoute, mapFull]);
 
   const stats = flight?.stats;

@@ -48,6 +48,7 @@ import {
 import { getSetting, setSetting } from "../../storage/local";
 import { useFlightDoc } from "../logbook/useFlightDoc";
 import { useFlightDrafts } from "../logbook/useFlightDrafts";
+import { afterNextFrame } from "../map/afterFrame";
 import CompassButton from "../map/CompassButton";
 import type { MapViewKind } from "../map/config";
 import MapCanvas from "../map/MapCanvas";
@@ -356,7 +357,11 @@ export default function FlightDetailPage() {
   useEffect(() => {
     const was = wasFullRef.current;
     wasFullRef.current = mapFull;
-    if (was && !mapFull) frameFlight(true);
+    if (!(was && !mapFull)) return;
+    // Collapse just resized the map's container; frame only after the
+    // backend has adopted the new size (see afterNextFrame) or the fit
+    // computes bounds against the fullscreen dimensions.
+    return afterNextFrame(() => frameFlight(true));
   }, [mapFull]);
 
   const stats = flight?.stats;

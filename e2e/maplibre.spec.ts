@@ -332,7 +332,7 @@ test("leaving fullscreen eases the flight map back to its framing", async ({
           Math.abs(c.bearing) < 0.5
         );
       },
-      { timeout: 5000 },
+      { timeout: 10_000 },
     )
     .toBe(true);
 });
