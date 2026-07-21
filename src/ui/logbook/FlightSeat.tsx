@@ -254,9 +254,12 @@ export default function FlightSeat({
           onReady={handleReady}
           edgeToEdge={mapFull}
         />
-        <div className="map-overlay">
+        <div
+          className={replay.isOpen ? "map-overlay replay-grid" : "map-overlay"}
+        >
           {/* The replay camera buttons replace the compass while the pane
-              is open (track-up owns the bearing then). */}
+              is open (track-up owns the bearing then), leading the 2×2
+              grid like the in-flight cluster. */}
           {map && !replay.isOpen && <CompassButton map={map} />}
           {replay.playButton}
           {replay.cameraButtons}

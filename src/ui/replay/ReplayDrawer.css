@@ -21,3 +21,12 @@
     transition: none;
   }
 }
+
+/* While the pane is open, the host's map controls square up 2×2 — the
+   in-flight cluster's shape (FlyPage .flight-controls-grid): everything
+   in one thumb's reach instead of a tall column over the pane. */
+.map-overlay.replay-grid {
+  display: grid;
+  grid-template-columns: repeat(2, auto);
+  gap: 0.6rem;
+}

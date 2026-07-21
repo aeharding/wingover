@@ -546,10 +546,16 @@ export default function FlightDetailPage() {
             {!mapFull && (
               <div className="map-tap-layer" onClick={() => expandMap()} />
             )}
-            <div className="map-overlay">
+            <div
+              className={
+                replay.isOpen ? "map-overlay replay-grid" : "map-overlay"
+              }
+            >
               {/* The replay camera buttons replace the compass while the
-                  pane is open (track-up owns the bearing then). */}
+                  pane is open (track-up owns the bearing then), leading
+                  the 2×2 grid like the in-flight cluster. */}
               {map && !replay.isOpen && <CompassButton map={map} />}
+              {replay.cameraButtons}
               {mapFull && (
                 <button
                   className="map-button"
@@ -561,7 +567,6 @@ export default function FlightDetailPage() {
                 </button>
               )}
               {mapFull && replay.playButton}
-              {replay.cameraButtons}
               {map?.supportsSatellite && (
                 <ViewToggle view={view} onChange={changeView} />
               )}
