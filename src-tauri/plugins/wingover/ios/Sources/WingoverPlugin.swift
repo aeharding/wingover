@@ -251,6 +251,24 @@ class WingoverPlugin: Plugin, CLLocationManagerDelegate {
   @objc public func speak(_ invoke: Invoke) throws {
     let args = try invoke.parseArgs(SpeakArgs.self)
     DispatchQueue.main.async {
+      // UI-test seam: announcements are audio-only (AVSpeechSynthesizer is
+      // invisible to the accessibility tree), so when XCUITest launches the
+      // app with this variable set (ios-tests/, via launchEnvironment), every
+      // utterance is also appended here for the test runner to read off the
+      // simulator's filesystem. Production launches never carry the variable.
+      if ProcessInfo.processInfo.environment["WINGOVER_UITEST_SPEAK_LOG"] != nil {
+        let log = FileManager.default.temporaryDirectory
+          .appendingPathComponent("speak.log")
+        if let data = (args.text + "\n").data(using: .utf8) {
+          if let handle = try? FileHandle(forWritingTo: log) {
+            handle.seekToEndOfFile()
+            handle.write(data)
+            try? handle.close()
+          } else {
+            try? data.write(to: log)
+          }
+        }
+      }
       // Duck the pilot's music for the utterance; deactivating with
       // notification lets it swell back afterward.
       let session = AVAudioSession.sharedInstance()
