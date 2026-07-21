@@ -26,10 +26,9 @@ import {
   formatDistance,
   formatSpeed,
 } from "../../flight/format";
-import { getSetting, setSetting } from "../../storage/local";
+import { useAppearance } from "../appTheme";
 import { afterNextFrame } from "../map/afterFrame";
 import CompassButton from "../map/CompassButton";
-import type { MapViewKind } from "../map/config";
 import MapCanvas from "../map/MapCanvas";
 import {
   ACCENT_CYAN,
@@ -40,7 +39,7 @@ import {
   type MarkerLayer,
   PLAN_LINE_COLOR,
 } from "../map/types";
-import useSystemAppearance from "../map/useSystemAppearance";
+import useMapView from "../map/useMapView";
 import ViewToggle from "../map/ViewToggle";
 import { useSettings } from "../settings/SettingsContext";
 import { useFlightActions } from "../useFlightActions";
@@ -81,8 +80,8 @@ export default function FlightSeat({
     track,
   );
   const [optionsOpen, setOptionsOpen] = useState(false);
-  const appearance = useSystemAppearance();
-  const [view, setView] = useState<MapViewKind>("street");
+  const appearance = useAppearance();
+  const [view, changeView] = useMapView();
   const [map, setMap] = useState<MapView | null>(null);
   const [mapFull, setMapFull] = useState(false);
   const [cardOpen, setCardOpen] = useState(true);
@@ -92,16 +91,7 @@ export default function FlightSeat({
   const planLineRef = useRef<Line | null>(null);
   const markersRef = useRef<MarkerLayer | null>(null);
 
-  useEffect(() => {
-    getSetting("mapView").then((value) => {
-      if (value === "street" || value === "satellite") setView(value);
-    });
-  }, [id]);
 
-  function changeView(value: MapViewKind) {
-    setView(value);
-    setSetting("mapView", value);
-  }
 
   // Full screen means NO chrome: the list pane, seat header and card hide
   // via the body class (see desktop.css), the tab rail goes with it, and

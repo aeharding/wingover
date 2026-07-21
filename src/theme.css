@@ -3,12 +3,15 @@
    WCAG contrast — its danger (light #c5000f, dark #f24c58 with black
    glyphs) reads as maroon/washed-out pink where a red should shout. Pin
    the classic pre-8 defaults instead (the same values Voyager ships).
-   main.tsx imports palettes/dark.system.css, which applies Ionic's dark
-   palette under prefers-color-scheme: dark; these blocks mirror that
-   split and must load after it — both are plain :root, so source order
-   is the tiebreak. All nine roles are pinned in BOTH schemes: once the
-   light block pins a role, the dark block must re-pin it or the light
-   value leaks through. */
+   Dark is CLASS-driven, not media-driven: main.tsx imports
+   palettes/dark.class.css and appTheme.ts stamps `ion-palette-dark` on
+   <html> (system scheme OR the global satellite view — Apple Maps' dark-
+   around-imagery behavior). Every dark block in this app keys off that
+   class, so the palette can never disagree with the theme decision.
+   :root.ion-palette-dark ties Ionic's .ion-palette-dark.ios on
+   specificity and this file loads after, so source order settles it. All
+   nine roles are pinned in BOTH schemes: once the light block pins a
+   role, the dark block must re-pin it or the light value leaks through. */
 :root {
   --ion-color-primary: #3880ff;
   --ion-color-primary-rgb: 56, 128, 255;
@@ -78,84 +81,88 @@
      color) consumer (the sync sheet's hero scrim, the fullscreen map
      overlay, our ion-toolbar rule) therefore goes invalid-at-computed-value
      in light and collapses to transparent/fallback. Declare the effective
-     defaults; the dark palette overrides them at :root.ios/:root.md, which
-     outranks plain :root on specificity in the dark scheme. */
+     defaults; the dark palette overrides them at .ion-palette-dark.ios/.md,
+     which outranks plain :root on specificity while the class is on. */
   --ion-background-color: #ffffff;
   --ion-background-color-rgb: 255, 255, 255;
   --ion-text-color: #000000;
   --ion-text-color-rgb: 0, 0, 0;
+
+  /* Native UI (scrollbars, form controls) follows the app's palette, not
+     the OS scheme — satellite can force dark on a light system. */
+  color-scheme: light;
 }
 
-@media (prefers-color-scheme: dark) {
-  :root {
-    --ion-color-primary: #428cff;
-    --ion-color-primary-rgb: 66, 140, 255;
-    --ion-color-primary-contrast: #ffffff;
-    --ion-color-primary-contrast-rgb: 255, 255, 255;
-    --ion-color-primary-shade: #3a7be0;
-    --ion-color-primary-tint: #5598ff;
+:root.ion-palette-dark {
+  color-scheme: dark;
 
-    --ion-color-secondary: #50c8ff;
-    --ion-color-secondary-rgb: 80, 200, 255;
-    --ion-color-secondary-contrast: #ffffff;
-    --ion-color-secondary-contrast-rgb: 255, 255, 255;
-    --ion-color-secondary-shade: #46b0e0;
-    --ion-color-secondary-tint: #62ceff;
+  --ion-color-primary: #428cff;
+  --ion-color-primary-rgb: 66, 140, 255;
+  --ion-color-primary-contrast: #ffffff;
+  --ion-color-primary-contrast-rgb: 255, 255, 255;
+  --ion-color-primary-shade: #3a7be0;
+  --ion-color-primary-tint: #5598ff;
 
-    --ion-color-tertiary: #6a64ff;
-    --ion-color-tertiary-rgb: 106, 100, 255;
-    --ion-color-tertiary-contrast: #ffffff;
-    --ion-color-tertiary-contrast-rgb: 255, 255, 255;
-    --ion-color-tertiary-shade: #5d58e0;
-    --ion-color-tertiary-tint: #7974ff;
+  --ion-color-secondary: #50c8ff;
+  --ion-color-secondary-rgb: 80, 200, 255;
+  --ion-color-secondary-contrast: #ffffff;
+  --ion-color-secondary-contrast-rgb: 255, 255, 255;
+  --ion-color-secondary-shade: #46b0e0;
+  --ion-color-secondary-tint: #62ceff;
 
-    --ion-color-success: #2fdf75;
-    --ion-color-success-rgb: 47, 223, 117;
-    --ion-color-success-contrast: #000000;
-    --ion-color-success-contrast-rgb: 0, 0, 0;
-    --ion-color-success-shade: #29c467;
-    --ion-color-success-tint: #44e283;
+  --ion-color-tertiary: #6a64ff;
+  --ion-color-tertiary-rgb: 106, 100, 255;
+  --ion-color-tertiary-contrast: #ffffff;
+  --ion-color-tertiary-contrast-rgb: 255, 255, 255;
+  --ion-color-tertiary-shade: #5d58e0;
+  --ion-color-tertiary-tint: #7974ff;
 
-    --ion-color-warning: #ffd534;
-    --ion-color-warning-rgb: 255, 213, 52;
-    --ion-color-warning-contrast: #000000;
-    --ion-color-warning-contrast-rgb: 0, 0, 0;
-    --ion-color-warning-shade: #e0bb2e;
-    --ion-color-warning-tint: #ffd948;
+  --ion-color-success: #2fdf75;
+  --ion-color-success-rgb: 47, 223, 117;
+  --ion-color-success-contrast: #000000;
+  --ion-color-success-contrast-rgb: 0, 0, 0;
+  --ion-color-success-shade: #29c467;
+  --ion-color-success-tint: #44e283;
 
-    --ion-color-danger: #ff4961;
-    --ion-color-danger-rgb: 255, 73, 97;
-    --ion-color-danger-contrast: #ffffff;
-    --ion-color-danger-contrast-rgb: 255, 255, 255;
-    --ion-color-danger-shade: #e04055;
-    --ion-color-danger-tint: #ff5b71;
+  --ion-color-warning: #ffd534;
+  --ion-color-warning-rgb: 255, 213, 52;
+  --ion-color-warning-contrast: #000000;
+  --ion-color-warning-contrast-rgb: 0, 0, 0;
+  --ion-color-warning-shade: #e0bb2e;
+  --ion-color-warning-tint: #ffd948;
 
-    --ion-color-dark: #f4f5f8;
-    --ion-color-dark-rgb: 244, 245, 248;
-    --ion-color-dark-contrast: #000000;
-    --ion-color-dark-contrast-rgb: 0, 0, 0;
-    --ion-color-dark-shade: #d7d8da;
-    --ion-color-dark-tint: #f5f6f9;
+  --ion-color-danger: #ff4961;
+  --ion-color-danger-rgb: 255, 73, 97;
+  --ion-color-danger-contrast: #ffffff;
+  --ion-color-danger-contrast-rgb: 255, 255, 255;
+  --ion-color-danger-shade: #e04055;
+  --ion-color-danger-tint: #ff5b71;
 
-    --ion-color-medium: #989aa2;
-    --ion-color-medium-rgb: 152, 154, 162;
-    --ion-color-medium-contrast: #000000;
-    --ion-color-medium-contrast-rgb: 0, 0, 0;
-    --ion-color-medium-shade: #86888f;
-    --ion-color-medium-tint: #a2a4ab;
+  --ion-color-dark: #f4f5f8;
+  --ion-color-dark-rgb: 244, 245, 248;
+  --ion-color-dark-contrast: #000000;
+  --ion-color-dark-contrast-rgb: 0, 0, 0;
+  --ion-color-dark-shade: #d7d8da;
+  --ion-color-dark-tint: #f5f6f9;
 
-    --ion-color-light: #222428;
-    --ion-color-light-rgb: 34, 36, 40;
-    --ion-color-light-contrast: #ffffff;
-    --ion-color-light-contrast-rgb: 255, 255, 255;
-    --ion-color-light-shade: #1e2023;
-    --ion-color-light-tint: #383a3e;
-  }
+  --ion-color-medium: #989aa2;
+  --ion-color-medium-rgb: 152, 154, 162;
+  --ion-color-medium-contrast: #000000;
+  --ion-color-medium-contrast-rgb: 0, 0, 0;
+  --ion-color-medium-shade: #86888f;
+  --ion-color-medium-tint: #a2a4ab;
+
+  --ion-color-light: #222428;
+  --ion-color-light-rgb: 34, 36, 40;
+  --ion-color-light-contrast: #ffffff;
+  --ion-color-light-contrast-rgb: 255, 255, 255;
+  --ion-color-light-shade: #1e2023;
+  --ion-color-light-tint: #383a3e;
 }
 
 /* ── App tokens, per scheme ──────────────────────────────────────────────
-   Light values at :root, dark under the media query — the same split the
-   Ionic palette uses above. The FLIGHT surface never themes (STEERING:
+   Light values at :root, dark under .ion-palette-dark — the same split
+   the Ionic palette uses above. The FLIGHT surface never themes (STEERING:
    one sunlight-tuned design); it re-pins what it consumes (see
    .fly-page-frame below and .fly-content in FlyPage.css), so these
    light-scheme values only ever reach ground UI. */
@@ -206,21 +213,19 @@
   --map-compass-south: color(display-p3 0.44 0.47 0.52);
 }
 
-@media (prefers-color-scheme: dark) {
-  :root {
-    --wingover-accent: color(display-p3 0.32 0.8 1);
-    --hairline: rgba(255, 255, 255, 0.09);
-    --hover-wash: rgba(255, 255, 255, 0.04);
-    --active-wash: rgba(255, 255, 255, 0.06);
-    --drag-wash: rgba(255, 255, 255, 0.18);
-    --float-card-bg: rgba(13, 15, 18, 0.92);
-    --status-good: color(display-p3 0 1 0);
-    --status-bad: color(display-p3 1 0 0);
-    --map-chip-bg: rgba(24, 26, 29, 0.9);
-    --map-chip-bg-active: rgba(60, 64, 70, 0.9);
-    --map-chip-text: #fff;
-    --map-compass-south: color(display-p3 0.85 0.87 0.9);
-  }
+:root.ion-palette-dark {
+  --wingover-accent: color(display-p3 0.32 0.8 1);
+  --hairline: rgba(255, 255, 255, 0.09);
+  --hover-wash: rgba(255, 255, 255, 0.04);
+  --active-wash: rgba(255, 255, 255, 0.06);
+  --drag-wash: rgba(255, 255, 255, 0.18);
+  --float-card-bg: rgba(13, 15, 18, 0.92);
+  --status-good: color(display-p3 0 1 0);
+  --status-bad: color(display-p3 1 0 0);
+  --map-chip-bg: rgba(24, 26, 29, 0.9);
+  --map-chip-bg-active: rgba(60, 64, 70, 0.9);
+  --map-chip-text: #fff;
+  --map-compass-south: color(display-p3 0.85 0.87 0.9);
 }
 
 /* The flight surface's Ionic frame (pages/FlyPage.tsx), pinned black in

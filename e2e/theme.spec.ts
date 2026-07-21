@@ -1,7 +1,11 @@
 import { expect, test } from "@playwright/test";
 
-// Playwright emulates prefers-color-scheme: light by default; emulateMedia
-// flips it live, which is exactly how the OS delivers a theme change.
+// Playwright emulates prefers-color-scheme: light by default. The palette
+// is CLASS-driven (appTheme.ts stamps ion-palette-dark on <html> from the
+// system scheme OR the global satellite view), so a flip lands one JS
+// listener after emulateMedia — assertions on the flipped state poll.
+
+const html = (page: import("@playwright/test").Page) => page.locator("html");
 
 test("classic palette and Ionic base vars follow the system scheme", async ({
   page,
@@ -26,6 +30,7 @@ test("classic palette and Ionic base vars follow the system scheme", async ({
   expect(await rootVar("--ion-text-color")).toBe("#000000");
 
   await page.emulateMedia({ colorScheme: "dark" });
+  await expect(html(page)).toHaveClass(/ion-palette-dark/);
   expect(await rootVar("--ion-color-danger")).toBe("#ff4961");
   expect(await rootVar("--ion-background-color")).toBe("#000000");
 });
@@ -37,12 +42,35 @@ test("ground map restyles live when the scheme flips", async ({ page }) => {
   // Light scheme -> light basemap (map-light also styles the attribution).
   await expect(page.locator(".map-container")).toHaveClass(/map-light/);
 
-  // The OS theme flips mid-session: useSystemAppearance re-renders and
-  // MapCanvas re-creates the backend — no reload involved.
+  // The OS theme flips mid-session: appTheme re-renders and MapCanvas
+  // re-creates the backend — no reload involved.
   await page.emulateMedia({ colorScheme: "dark" });
   await expect(page.locator(".map-container")).not.toHaveClass(/map-light/, {
     timeout: 10_000,
   });
+});
+
+test("satellite forces the dark palette app-wide", async ({ page }) => {
+  await page.goto("/?map-style=blank");
+  await expect(html(page)).not.toHaveClass(/ion-palette-dark/);
+
+  // The street/satellite choice is ONE global persistent setting; flip it
+  // the way any ground map's toggle does and the whole app goes dark —
+  // imagery is a dark surface (the Apple Maps behavior).
+  const setMapView = (value: string) =>
+    page.evaluate(async (view) => {
+      const specifier = "/src/storage/local.ts";
+      const local = (await import(/* @vite-ignore */ specifier)) as {
+        setSetting(key: string, value: string): Promise<void>;
+      };
+      await local.setSetting("mapView", view as string);
+    }, value);
+
+  await setMapView("satellite");
+  await expect(html(page)).toHaveClass(/ion-palette-dark/);
+
+  await setMapView("street");
+  await expect(html(page)).not.toHaveClass(/ion-palette-dark/);
 });
 
 test("the in-flight surface renders identically in both schemes", async ({
@@ -83,13 +111,25 @@ test("the in-flight surface renders identically in both schemes", async ({
   expect(light.chipBg).toBe("rgba(24, 26, 29, 0.9)");
 
   await page.emulateMedia({ colorScheme: "dark" });
+  await expect(html(page)).toHaveClass(/ion-palette-dark/);
   expect(await probes()).toEqual(light);
 });
 
-test("settings shows the native large-title header", async ({ page }) => {
+test("settings shows the large-title header on a grouped page", async ({
+  page,
+}) => {
   await page.goto("/?map-style=blank");
   await page.locator("#tab-button-settings").click();
   await expect(
     page.locator('.settings-content ion-title[size="large"]'),
   ).toHaveText("Settings");
+  // The page ELEMENT paints the grouped gray: with the large-title
+  // pattern the toolbar background sits at opacity 0 at rest, so an
+  // unpainted page would show body's white through it as a strip.
+  const pageBg = await page.evaluate(
+    () =>
+      getComputedStyle(document.querySelector(".settings-page")!)
+        .backgroundColor,
+  );
+  expect(pageBg).toBe("rgb(242, 242, 247)");
 });

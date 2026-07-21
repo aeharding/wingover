@@ -122,57 +122,58 @@
 
 /* The IDLE splash themes with the app (the one part of this surface that
    does): the icon's sunset, day-side — pale sky easing into the same warm
-   horizon, so the two splashes read as dawn/dusk of one artwork. Armed
-   and recording states below stay frozen: they are the in-flight UI. */
-@media (prefers-color-scheme: light) {
-  .fly-idle {
-    color: #23262b;
-    background: linear-gradient(
-      180deg,
-      #e8eef7 0%,
-      #edeadf 45%,
-      #f6e7cd 75%,
-      #f3d8ae 100%
-    );
-  }
+   horizon, so the two splashes read as dawn/dusk of one artwork. Keyed on
+   the palette CLASS being absent (appTheme.ts), not prefers-color-scheme:
+   satellite forces the class on and the splash goes dusk with the rest of
+   the chrome. Armed and recording states below stay frozen: they are the
+   in-flight UI. */
+:root:not(.ion-palette-dark) .fly-idle {
+  color: #23262b;
+  background: linear-gradient(
+    180deg,
+    #e8eef7 0%,
+    #edeadf 45%,
+    #f6e7cd 75%,
+    #f3d8ae 100%
+  );
+}
 
-  .fly-idle h1 {
-    color: #23262b;
-    /* Lifted off the sky, plus the same faint warm halo. */
-    text-shadow:
-      0 1px 2px rgba(255, 255, 255, 0.7),
-      0 0 46px rgba(255, 173, 95, 0.4);
-  }
+:root:not(.ion-palette-dark) .fly-idle h1 {
+  color: #23262b;
+  /* Lifted off the sky, plus the same faint warm halo. */
+  text-shadow:
+    0 1px 2px rgba(255, 255, 255, 0.7),
+    0 0 46px rgba(255, 173, 95, 0.4);
+}
 
-  /* The motifs flip to deeper ambers: the near-white warm fills that read
-     on the night sky vanish against the day one. */
-  .idle-star {
-    fill: #d3922f;
-  }
+/* The motifs flip to deeper ambers: the near-white warm fills that read
+   on the night sky vanish against the day one. */
+:root:not(.ion-palette-dark) .idle-star {
+  fill: #d3922f;
+}
 
-  .idle-sun {
-    fill: #eda32f;
-    opacity: 0.22;
-  }
+:root:not(.ion-palette-dark) .idle-sun {
+  fill: #eda32f;
+  opacity: 0.22;
+}
 
-  .idle-cloud {
-    fill: #c98f3f;
-  }
+:root:not(.ion-palette-dark) .idle-cloud {
+  fill: #c98f3f;
+}
 
-  .idle-lines path {
-    stroke: #bd8434;
-    opacity: 0.14;
-  }
+:root:not(.ion-palette-dark) .idle-lines path {
+  stroke: #bd8434;
+  opacity: 0.14;
+}
 
-  .idle-canopy {
-    fill: #c98f3f;
-    stroke: #c98f3f;
-  }
+:root:not(.ion-palette-dark) .idle-canopy {
+  fill: #c98f3f;
+  stroke: #c98f3f;
+}
 
-  .planned-route {
-    color: rgba(43, 48, 55, 0.78);
-    text-shadow: none;
-  }
+:root:not(.ion-palette-dark) .planned-route {
+  color: rgba(43, 48, 55, 0.78);
+  text-shadow: none;
 }
 
 .start-button {

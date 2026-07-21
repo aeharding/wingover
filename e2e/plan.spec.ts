@@ -1,10 +1,13 @@
 import { expect, test } from "@playwright/test";
 import type { Page } from "@playwright/test";
 
-test.beforeEach(async ({ page }) => {
+test.beforeEach(async ({ page, baseURL }) => {
   await page.route("**/*", (route) => {
     const url = route.request().url();
-    if (url.startsWith("http://localhost:5173")) return route.continue();
+    // Offline guard: only the app's own dev server answers (keyed to the
+    // configured baseURL, not a hard-coded port, so alternate local
+    // runners work). Everything else — tiles, fonts, telemetry — aborts.
+    if (baseURL && url.startsWith(baseURL)) return route.continue();
     return route.abort();
   });
 });

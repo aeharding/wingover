@@ -18,9 +18,8 @@ import {
   savePin,
   updatePin,
 } from "../../storage/db";
-import { getSetting, setSetting } from "../../storage/local";
+import { useAppearance } from "../appTheme";
 import CompassButton from "../map/CompassButton";
-import type { MapViewKind } from "../map/config";
 import MapCanvas from "../map/MapCanvas";
 import {
   boundsOf,
@@ -31,7 +30,7 @@ import {
   type MarkerSpec,
   PLANNED_COLOR,
 } from "../map/types";
-import useSystemAppearance from "../map/useSystemAppearance";
+import useMapView from "../map/useMapView";
 import ViewToggle from "../map/ViewToggle";
 import { useSettings } from "../settings/SettingsContext";
 import { useIsDesktop } from "../useIsDesktop";
@@ -72,8 +71,8 @@ function routeCoords(pins: Pin[]): LngLat[] {
 export default function PlanPage() {
   const { units } = useSettings();
   const isDesktop = useIsDesktop();
-  const appearance = useSystemAppearance();
-  const [view, setView] = useState<MapViewKind>("street");
+  const appearance = useAppearance();
+  const [view, changeView] = useMapView();
   const [pins, setPins] = useState<Pin[]>([]);
   const [map, setMap] = useState<MapView | null>(null);
   const lineRef = useRef<Line | null>(null);
@@ -88,9 +87,6 @@ export default function PlanPage() {
 
   function loadPlan() {
     listPins().then(setPins);
-    getSetting("mapView").then((value) => {
-      if (value === "street" || value === "satellite") setView(value);
-    });
   }
 
   // Will-enter for the phone shell; a mount effect for the desktop shell
@@ -111,10 +107,6 @@ export default function PlanPage() {
     [],
   );
 
-  function changeView(value: MapViewKind) {
-    setView(value);
-    setSetting("mapView", value);
-  }
 
   async function addPin(point: LngLat) {
     const now = Date.now();

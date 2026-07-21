@@ -104,6 +104,16 @@ export default function MapCanvas({
     };
   }, []);
 
+  // An appearance flip (scheme change, satellite forcing dark) re-creates
+  // the backend below — re-veil so the swap hides behind the loading
+  // cover, the same as a provider re-create. Render-phase adjustment (the
+  // sanctioned adjusting-state-when-props-change form), not an effect.
+  const [veiledAppearance, setVeiledAppearance] = useState(appearance);
+  if (veiledAppearance !== appearance) {
+    setVeiledAppearance(appearance);
+    setRevealed(false);
+  }
+
   useEffect(() => {
     let cancelled = false;
     let view: MapView | undefined;
