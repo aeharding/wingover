@@ -56,8 +56,10 @@ jobs:
       - run: rustup target add aarch64-apple-ios
       - uses: swatinem/rust-cache@v2
         with:
-          workspaces: src-tauri/plugins/wingover
-      - name: Compile the native plugin, Swift and all
+          workspaces: |
+            src-tauri/plugins/wingover
+            src-tauri/plugins/ionic
+      - name: Compile the native plugins, Swift and all
         env:
           # Xcode always exports this; a bare cargo build does not, and
           # tauri-utils then hands swift-rs a default of "13.0" — Package.swift's
@@ -70,3 +72,57 @@ jobs:
           cargo build --locked \
             --manifest-path src-tauri/plugins/wingover/Cargo.toml \
             --target aarch64-apple-ios
+          cargo build --locked \
+            --manifest-path src-tauri/plugins/ionic/Cargo.toml \
+            --target aarch64-apple-ios
+
+  # The behaviors no browser test can reach: the REAL WKWebView + REAL iOS
+  # keyboard, driven by XCUITest (ios-tests/ — a standalone runner with no
+  # host app; it launches the installed sim build by bundle id, sidestepping
+  # the generated project entirely; see the ios job's comment for why).
+  # WKWebView content is fully visible to XCUITest's accessibility tree, so
+  # the assertions read Ionic's tabs and inputs directly.
+  ios-sim:
+    name: iOS simulator tests
+    runs-on: macos-26
+    steps:
+      - uses: actions/checkout@v7
+      - uses: pnpm/action-setup@v6
+      - uses: actions/setup-node@v6
+        with:
+          node-version-file: .tool-versions
+          cache: pnpm
+      - run: rustup target add aarch64-apple-ios-sim
+      - uses: swatinem/rust-cache@v2
+        with:
+          workspaces: src-tauri
+      - run: pnpm install --frozen-lockfile
+      - name: Build the simulator app
+        run: pnpm exec tauri ios build --target aarch64-sim --debug --ci
+      - name: Boot a simulator and install the app
+        run: |
+          # Real software keyboard, or the keyboard assertions test nothing.
+          defaults write com.apple.iphonesimulator ConnectHardwareKeyboard -bool false
+          DEVTYPE=$(xcrun simctl list devicetypes | grep -oE "iPhone 1[0-9][^(]*" | tail -1 | xargs)
+          UDID=$(xcrun simctl create uitest "$DEVTYPE")
+          xcrun simctl boot "$UDID"
+          xcrun simctl bootstatus "$UDID" -b
+          xcrun simctl install "$UDID" src-tauri/gen/apple/build/arm64-sim/Wingover.app
+          echo "UDID=$UDID" >> "$GITHUB_ENV"
+      - name: Run XCUITests
+        # -collect-test-diagnostics never is load-bearing: a failing run
+        # otherwise embeds the sim's full logarchive in the xcresult
+        # (multi-GB; it has filled a disk).
+        run: >
+          xcodebuild test -project ios-tests/WingoverUITests.xcodeproj
+          -scheme WingoverUITests -destination "id=$UDID"
+          -collect-test-diagnostics never
+      - name: Screenshot on failure
+        if: failure()
+        run: xcrun simctl io "$UDID" screenshot ios-sim-failure.png || true
+      - uses: actions/upload-artifact@v7
+        if: failure()
+        with:
+          name: ios-sim-failure
+          path: ios-sim-failure.png
+          retention-days: 7
