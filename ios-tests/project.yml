@@ -1,0 +1,28 @@
+# Standalone XCUITest runner (WebDriverAgent model): a ui-testing bundle with
+# NO host app — tests launch the already-installed Wingover by bundle id.
+# Deliberately separate from src-tauri/gen/apple: tauri regenerates that
+# project, and driving its xcodebuild re-enters the xcode-script panic
+# (see ci.yml). Regenerate with `xcodegen` here after editing; the generated
+# .xcodeproj is committed (same policy as gen/apple) so CI needs no xcodegen.
+name: WingoverUITests
+options:
+  bundleIdPrefix: app.wingover.tests
+  deploymentTarget:
+    iOS: "16.0"
+targets:
+  WingoverUITests:
+    type: bundle.ui-testing
+    platform: iOS
+    sources: [Tests]
+    settings:
+      base:
+        PRODUCT_BUNDLE_IDENTIFIER: app.wingover.tests.uitests
+        GENERATE_INFOPLIST_FILE: true
+schemes:
+  WingoverUITests:
+    build:
+      targets:
+        WingoverUITests: all
+    test:
+      targets:
+        - WingoverUITests
