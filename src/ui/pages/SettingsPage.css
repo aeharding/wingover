@@ -34,10 +34,23 @@
   --ion-item-background: #ffffff;
 }
 
+/* Content-level grouped gray for .settings-content hosts that are NOT a
+   .settings-page — the sync modal's self-host form. On the Settings pages
+   this resolves to the same value the page var already provides; in dark
+   it defers back to the ambient background (the page's black, or the
+   modal's step-gray sheet), so only the light scheme actually changes. */
+.settings-content {
+  --background: #f2f2f7;
+}
+
 @media (prefers-color-scheme: dark) {
   .settings-page {
     --ion-background-color: #000000;
     --ion-background-color-rgb: 0, 0, 0;
+  }
+
+  .settings-content {
+    --background: var(--ion-background-color);
   }
 
   .settings-content ion-list.list-inset {

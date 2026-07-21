@@ -95,7 +95,12 @@ export function SelfHostPage({
           </IonButtons>
         </IonToolbar>
       </IonHeader>
-      <IonContent>
+      {/* settings-content: the grouped-card (inset list) treatment, same as
+          the Settings pages — in light mode the cells vanish without it
+          (white on white). Content-level only: the page var (.settings-page)
+          would also repaint this sheet's DARK background, which must keep
+          the modal's step-gray. */}
+      <IonContent className="settings-content">
         {problem && (
           <p className="sync-error-message sync-form-problem">{problem}</p>
         )}
