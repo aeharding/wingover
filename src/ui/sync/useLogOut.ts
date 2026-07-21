@@ -34,18 +34,18 @@ export function useLogOut(): {
 
   async function logOut(onDone?: () => void) {
     setBusy(true);
-    try {
-      if (await sync.flushForLogOut()) {
-        await finish(onDone);
-        return;
-      }
-    } catch (error) {
-      // Not handling — the React Compiler cannot lower a try/finally WITHOUT
-      // a catch (it bails and leaves this whole hook unmemoized).
-      throw error;
-    } finally {
+    // No try/finally: the React Compiler cannot lower a catchless try (it
+    // bails and leaves the whole hook unmemoized). A flush THROW is the
+    // same condition as flushed=false — "cannot prove a clean state"
+    // (offline, lapsed) — so it takes the confirm path below. finish()
+    // never throws (it handles its own failure with an alert).
+    const flushed = await sync.flushForLogOut().catch(() => false);
+    if (flushed) {
+      await finish(onDone);
       setBusy(false);
+      return;
     }
+    setBusy(false);
     presentAlert({
       header: "Log out?",
       message:
