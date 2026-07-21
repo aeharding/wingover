@@ -47,7 +47,9 @@ export function useFlightDrafts(
 
   function commit() {
     if (!flight) return;
-    const name = drafts.name.trim() || flight.name;
+    // An empty name is a real state (flightTitle falls back to launch,
+    // then date), so clearing the field must stick rather than revert.
+    const name = drafts.name.trim();
     const launchName = drafts.launch.trim() || undefined;
     const notes = drafts.notes;
     // Dropping the edits re-derives from the (possibly updated) flight.
