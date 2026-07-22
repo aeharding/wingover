@@ -3,7 +3,8 @@ import type { Fix } from "../../engine/types";
 // Replay compresses recorded time onto the wall clock exactly like the
 // dev GPX mock (engine/gpxSource.ts): simTime advances at `speed` recorded
 // seconds per wall second. Same vocabulary as ?mock-speed on purpose.
-export const REPLAY_SPEEDS: readonly number[] = [10, 30, 60];
+// 1x is real time — reliving a moment exactly as it played out.
+export const REPLAY_SPEEDS: readonly number[] = [1, 10, 30, 60];
 export const DEFAULT_REPLAY_SPEED = 30;
 
 /**

@@ -231,24 +231,12 @@
   padding: 2.5rem 1.25rem;
 }
 
-/* ── the flight seat: header bar, then the map IS the seat ────────────── */
+/* ── the flight seat: the map IS the seat, edge to edge to the top; the
+   title, date, and options live in the floating card ─────────────────── */
 .flight-seat {
   display: flex;
   flex-direction: column;
   height: 100%;
-}
-
-.seat-header {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  padding: 0.35rem 0.5rem 0.35rem 1.1rem;
-  border-bottom: 1px solid var(--hairline);
-}
-
-.seat-title {
-  font-weight: 600;
-  font-size: 0.95rem;
 }
 
 .seat-map {
@@ -291,15 +279,20 @@
   --background: transparent;
 }
 
+/* The whole row toggles the card (see the tsx); the chevron is the
+   labelled control, the rest of the row its generous hit area. */
 .seat-card-header {
   display: flex;
   align-items: center;
-  justify-content: space-between;
   gap: 0.5rem;
   padding: 0.7rem 0.5rem 0.5rem 1rem;
+  cursor: pointer;
 }
 
 .seat-card-title {
+  /* The title owns the slack: the options + collapse buttons sit
+     together at the right edge instead of space-between floating them. */
+  flex: 1;
   font-weight: 700;
   font-size: 1.02rem;
   min-width: 0;
@@ -329,7 +322,6 @@
 /* ── full screen: nothing but the map ─────────────────────────────────── */
 body.flight-map-full .desktop-rail,
 body.flight-map-full .logbook-pane,
-body.flight-map-full .seat-header,
 body.flight-map-full .seat-card {
   display: none;
 }

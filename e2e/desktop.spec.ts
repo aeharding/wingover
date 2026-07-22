@@ -60,7 +60,7 @@ test("the logbook splits: list stays while the flight shows", async ({
   await expect(page.getByText("Airtime")).toBeVisible();
   await expect(page.getByText("Max altitude")).toBeVisible();
   // No back button in the split; the list IS the navigation.
-  await expect(page.locator("ion-back-button")).toHaveCount(0);
+  await expect(page.locator("#root ion-back-button")).toHaveCount(0);
 });
 
 test("selection swaps the seat without remounting the list or the map", async ({
@@ -238,11 +238,177 @@ test("the seat's play button slides the replay pane open, playing; stop closes i
   await expect(page.getByTestId("replay-dock")).toBeVisible();
   await page.getByTestId("map-expand").click();
 
-  // Stop slides it closed; the play button returns; the seat is intact.
+  // Stop PARKS the replay in place: the pane stays, playback rewinds to
+  // the start, and the aircraft glyph leaves the map.
+  await page.getByTestId("replay-stop").click();
+  await expect(page.getByTestId("replay-dock")).toBeVisible();
+  await expect(page.getByTestId("replay-play")).toHaveAttribute(
+    "aria-label",
+    "Play",
+  );
+  await expect(page.getByTestId("replay-time")).toContainText("0:00 /");
+  // Parked = no cursors: the graph keeps its shape, the playhead is gone,
+  // and the camera locks retire with the glyph (following nothing would
+  // pin the zoom anchor to an empty point).
+  await expect(page.locator(".barogram-playhead")).toHaveCount(0);
+  await expect(page.getByTestId("replay-follow")).toBeHidden();
+  await expect(page.getByTestId("replay-trackup")).toBeHidden();
+
+  // Parked, the stop button IS the collapse chevron: pressing it again
+  // slides the pane away and the play button returns.
+  await expect(page.getByTestId("replay-stop")).toHaveAttribute(
+    "aria-label",
+    "Hide replay",
+  );
   await page.getByTestId("replay-stop").click();
   await expect(page.getByTestId("replay-dock")).toBeHidden();
   await expect(page.getByTestId("replay-start")).toBeVisible();
   await expect(page.getByText("Max altitude")).toBeVisible();
+});
+
+test("the open replay pane survives flight switches and reloads", async ({
+  page,
+}) => {
+  await page.goto("/?mock-speed=40&map-style=blank");
+  for (let i = 0; i < 2; i++) {
+    await page.getByRole("button", { name: "Start Flight" }).click();
+    await expect(page.getByTestId("recording")).toBeVisible({
+      timeout: 10_000,
+    });
+    await page.waitForTimeout(400);
+    await page.getByRole("button", { name: "Stop flight" }).click();
+    await page.getByRole("button", { name: "Stop", exact: true }).click();
+    await expect(
+      page.getByRole("button", { name: "Start Flight" }),
+    ).toBeVisible();
+  }
+  await page.getByTestId("rail-logbook").click();
+  await page.locator(".flight-row").first().click();
+  await page.getByTestId("replay-start").click();
+  await expect(page.getByTestId("replay-dock")).toBeVisible();
+
+  // Arrow to the other flight: the pane stays, rebound to the new track
+  // (no close, no re-slide, no play button flashing back) — but PARKED,
+  // never auto-playing a flight the pilot didn't press play on.
+  const firstUrl = page.url();
+  await page.keyboard.press("ArrowDown");
+  await expect(page).not.toHaveURL(firstUrl);
+  await expect(page.getByTestId("replay-dock")).toBeVisible();
+  await expect(page.getByTestId("replay-start")).toBeHidden();
+  await expect(page.getByTestId("replay-play")).toHaveAttribute(
+    "aria-label",
+    "Play",
+  );
+
+  // And BACK to the play-button flight: still parked — the original
+  // autoplay intent must not re-arm on the round trip (a playing clock
+  // under a parked pane is an invisible, contradictory state).
+  await page.keyboard.press("ArrowUp");
+  await expect(page).toHaveURL(firstUrl);
+  await expect(page.getByTestId("replay-play")).toHaveAttribute(
+    "aria-label",
+    "Play",
+  );
+  await expect(page.locator(".barogram-playhead")).toHaveCount(0);
+
+  // Speed is a device preference too: bump it before the reload.
+  await expect(page.getByTestId("replay-speed")).toHaveText("30×");
+  await page.getByTestId("replay-speed").click();
+  await expect(page.getByTestId("replay-speed")).toHaveText("60×");
+
+  // A reload brings the pane back already open — paused, not auto-playing,
+  // still at the chosen speed.
+  await page.reload();
+  await expect(page.getByTestId("replay-dock")).toBeVisible();
+  await expect(page.getByTestId("replay-play")).toHaveAttribute(
+    "aria-label",
+    "Play",
+  );
+  await expect(page.getByTestId("replay-speed")).toHaveText("60×");
+
+  // Collapse forgets the preference: closed now, still closed on reload.
+  await page.getByTestId("replay-collapse").click();
+  await expect(page.getByTestId("replay-dock")).toBeHidden();
+  await page.reload();
+  await expect(page.getByTestId("replay-start")).toBeVisible();
+  await expect(page.getByTestId("replay-dock")).toBeHidden();
+
+  // Deleting the seated flight moves to its neighbor, not the bare list.
+  const urlBefore = page.url();
+  await page.getByTestId("detail-options").click();
+  await page.getByRole("button", { name: "Delete flight" }).click();
+  await page.getByRole("button", { name: "Delete", exact: true }).click();
+  await expect(page).not.toHaveURL(urlBefore);
+  await expect(page).toHaveURL(/\/logbook\/recorded-/);
+  await expect(page.getByText("Max altitude")).toBeVisible();
+});
+
+test("the seat trims a flight from the options sheet", async ({ page }) => {
+  // ~360s of sim time in ~1.5s wall: enough recording to clip.
+  await page.goto("/?mock-speed=240&map-style=blank");
+  await page.getByRole("button", { name: "Start Flight" }).click();
+  await expect(page.getByTestId("recording")).toBeVisible({ timeout: 10_000 });
+  await page.waitForTimeout(1500);
+  await page.getByRole("button", { name: "Stop flight" }).click();
+  await page.getByRole("button", { name: "Stop", exact: true }).click();
+  await expect(
+    page.getByRole("button", { name: "Start Flight" }),
+  ).toBeVisible();
+
+  await page.getByTestId("rail-logbook").click();
+  await page.locator(".flight-row").first().click();
+
+  // Prime a live player first: open the pane, pause, park the playhead
+  // mid-flight. The clip editors must borrow and RETURN this player.
+  await page.getByTestId("replay-start").click();
+  await expect(page.getByTestId("replay-dock")).toBeVisible();
+  await page.getByTestId("replay-play").click(); // pause
+  const chart = (await page.getByTestId("barogram").boundingBox())!;
+  const y = chart.y + chart.height / 2;
+  await page.mouse.move(chart.x + chart.width * 0.5, y);
+  await page.mouse.down();
+  await page.mouse.up();
+  await expect(page.locator(".barogram-playhead")).toHaveCount(1);
+
+  // The sheet slides the clip editor open under the seat map, the cut
+  // preset from that exact spot.
+  await page.getByTestId("detail-options").click();
+  await page.getByRole("button", { name: "Trim end" }).click();
+  await expect(page.getByTestId("clip-dock")).toBeVisible();
+  await expect(page.getByTestId("clip-mark-end")).toBeAttached();
+
+  // Cancel: the borrowed player comes back exactly — same position, and
+  // the playhead (the live glyph state) restored, not parked.
+  await page.getByTestId("clip-cancel").click();
+  await expect(page.getByTestId("clip-dock")).toBeHidden();
+  await expect(page.getByTestId("replay-dock")).toBeVisible();
+  await expect(page.getByTestId("replay-time")).not.toContainText("0:00 /");
+  await expect(page.locator(".barogram-playhead")).toHaveCount(1);
+
+  // Back in: scrub the cut to half so the trim below is deterministic.
+  await page.getByTestId("detail-options").click();
+  await page.getByRole("button", { name: "Trim end" }).click();
+  const total = () =>
+    page.getByTestId("barogram").getAttribute("aria-valuemax").then(Number);
+  const before = await total();
+  await page.mouse.move(chart.x + chart.width * 0.9, y);
+  await page.mouse.down();
+  await page.mouse.move(chart.x + chart.width * 0.5, y, { steps: 8 });
+  await page.mouse.up();
+
+  // The Ionic confirm can retreat before it commits.
+  await page.getByTestId("clip-apply").click();
+  const alert = page.locator("ion-alert:not(.overlay-hidden)");
+  await expect(alert).toContainText("Trim the end?");
+  await alert.getByRole("button", { name: "Cancel" }).click();
+  await expect(alert).toHaveCount(0);
+  await page.getByTestId("clip-apply").click();
+  await alert.getByRole("button", { name: "Trim" }).click();
+
+  // Exit into parked playback of the shorter recording; still one flight.
+  await expect(page.getByTestId("replay-dock")).toBeVisible();
+  await expect.poll(total).toBeLessThan(before - 30);
+  await expect(page.locator(".flight-row")).toHaveCount(1);
 });
 
 test("the record opt-in shows Fly live, and turning it off hides it", async ({

@@ -41,27 +41,26 @@
   animation-timing-function: cubic-bezier(0.32, 0.72, 0, 1);
 }
 
-/* Full screen: a fixed overlay on document.body, OUTSIDE the page scroller
-   and ion-content. That placement does the heavy lifting by construction:
-   the details' layout and scroll position never change (nothing to save or
-   restore), drags anywhere on the overlay have no scrollable ancestor to
-   grab, a status-bar tap's center hit-test finds no ion-content to scroll,
-   and the header/tab bar are simply covered (fixed at BODY level is safe —
-   Ionic's own modals live there; the measured scrollTop corruption was
-   fixed elements toggling INSIDE the momentum scroller). dvh so that when
-   browser fullscreen isn't granted (e.g. iPhone Safari PWA) the overlay
-   tracks the viewport the URL bar actually leaves and the bottom controls
-   stay reachable. touch-action: none is belt-and-braces on top. */
+/* Full screen: a fixed overlay portaled INTO ion-app, outside the page
+   scroller and ion-content. That placement does the heavy lifting by
+   construction: the details' layout and scroll position never change
+   (nothing to save or restore), drags anywhere on the overlay have no
+   scrollable ancestor to grab, a status-bar tap's center hit-test finds no
+   ion-content to scroll (the overlay's ancestry never enters one), and the
+   header/tab bar are simply covered. Inside ion-app rather than body ON
+   PURPOSE: ion-app is a stacking context, so Ionic overlays (internal
+   z-index 20001) paint ABOVE this — the clip editor's confirm alert
+   presents over the fullscreen pane; body-level, every alert/toast was
+   invisible under it. dvh so that when browser fullscreen isn't granted
+   (e.g. iPhone Safari PWA) the overlay tracks the viewport the URL bar
+   actually leaves and the bottom controls stay reachable. touch-action:
+   none is belt-and-braces on top. */
 .flight-detail-map-fullroot {
   position: fixed;
   inset: 0;
   height: 100dvh;
-  /* Above ion-app entirely: ion-app is a stacking context at z-index 0, so
-     EVERY Ionic overlay (alerts, action sheets, toasts — internal z-index
-     20001, but inside that context) paints UNDER this. Nothing on this page
-     can open one while fullscreen (all triggers are covered), but a future
-     global toast/alert would be invisible here — lower this into ion-app if
-     that day comes, at the cost of the statusTap no-op property. */
+  /* Above the page, the header and the tab bar; below Ionic's overlay
+     range (20001) within the shared ion-app stacking context. */
   z-index: 1000;
   touch-action: none;
   background: var(--ion-background-color, #000);
@@ -78,7 +77,7 @@
 }
 .flight-detail-map:not(.map-full) .map-tap-layer,
 .flight-detail-map:not(.map-full) .map-overlay,
-.flight-detail-map:not(.map-full) .map-pill-row {
+.flight-detail-map:not(.map-full) .map-expand-pill {
   pointer-events: auto;
 }
 
@@ -100,21 +99,15 @@
   bottom: auto;
 }
 
-/* Inline affordances: labelled pills centered at the bottom of the map box
-   (the whole map is a preview now, so corner icon buttons weren't
-   discoverable). Replay sits beside Expand in one row. */
-.map-pill-row {
+/* Inline expand affordance: a labelled pill centered at the bottom of the map
+   box (the whole map is a preview now, so the corner icon button wasn't
+   discoverable). Matches .map-button's fill; pill-shaped. */
+.map-expand-pill {
   position: absolute;
   bottom: 0.9rem;
   left: 50%;
   transform: translateX(-50%);
   z-index: 10;
-  display: flex;
-  gap: 0.6rem;
-}
-
-/* Matches .map-button's fill; pill-shaped. */
-.map-expand-pill {
   display: flex;
   align-items: center;
   gap: 0.35rem;

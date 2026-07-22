@@ -55,6 +55,21 @@ export function useFlightDoc(id: string): {
     [id],
   );
 
+  // The track itself can now change under an open view too: a destructive
+  // trim/split rewrites it locally, and sync can pull a track in after its
+  // flight doc arrived. Re-read so the map and replay rebind in place.
+  useEffect(
+    () =>
+      onDocsChanged("track", () => {
+        void getTrack(id).then((track) => {
+          setLoaded((prior) =>
+            prior?.id === id ? { ...prior, track } : prior,
+          );
+        });
+      }),
+    [id],
+  );
+
   const current = loaded?.id === id ? loaded : null;
   return {
     flight: current?.flight ?? loaded?.flight ?? null,

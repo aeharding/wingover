@@ -16,6 +16,28 @@ import {
 // playing.
 const TICK_MS = 100;
 
+// Playback speed is a device preference (the pane-open/pane-width
+// precedent): the feed rebuilds on every flight switch and pane reopen,
+// so without this the speed snapped back to the default each time.
+const SPEED_KEY = "wingover.replaySpeed";
+
+function storedSpeed(): number {
+  try {
+    const value = Number(localStorage.getItem(SPEED_KEY));
+    return REPLAY_SPEEDS.includes(value) ? value : DEFAULT_REPLAY_SPEED;
+  } catch {
+    return DEFAULT_REPLAY_SPEED;
+  }
+}
+
+function rememberSpeed(speed: number): void {
+  try {
+    localStorage.setItem(SPEED_KEY, String(speed));
+  } catch {
+    return;
+  }
+}
+
 export interface ReplayFeed {
   // The prefix of the recording that has "happened" — LiveTrackMap's track.
   track: Fix[];
@@ -28,6 +50,8 @@ export interface ReplayFeed {
   totalSeconds: number;
   togglePlay: () => void;
   seek: (t: number) => void;
+  // Media-stop: halt AND rewind to the start (pause keeps the position).
+  stop: () => void;
   // Scrubbing pauses the clock and resumes on release if it was playing.
   beginScrub: () => void;
   endScrub: () => void;
@@ -38,21 +62,30 @@ export interface ReplayFeed {
  * Drives a recorded track through the replay clock and exposes the flown
  * prefix + the current fix. The caller must guarantee at least 2 fixes
  * and remount (key) per flight. autoplay starts the clock on mount (the
- * phone's Replay pill).
+ * phone's Replay pill); initialAt seeds the position (timeline
+ * continuity across dock swaps — clamped into this track's range, which
+ * also absorbs a position left beyond a fresh trim's new edge).
  */
-export function useReplayFeed(fixes: Fix[], autoplay = false): ReplayFeed {
+export function useReplayFeed(
+  fixes: Fix[],
+  autoplay = false,
+  initialAt: number | null = null,
+): ReplayFeed {
   const t0 = fixes[0].timestamp;
   const t1 = fixes[fixes.length - 1].timestamp;
+  const seededAt =
+    initialAt === null ? t0 : Math.min(t1, Math.max(t0, initialAt));
   const [clock] = useState(() => {
-    const created = new ReplayClock(t0, t1);
+    const created = new ReplayClock(t0, t1, storedSpeed());
+    created.seek(seededAt, Date.now());
     if (autoplay) created.play(Date.now());
     return created;
   });
   const [state, setState] = useState(() => ({
-    index: 1,
-    simTime: t0,
+    index: cursorFor(fixes, seededAt),
+    simTime: seededAt,
     playing: autoplay,
-    speed: DEFAULT_REPLAY_SPEED,
+    speed: clock.speed,
   }));
   const wasPlayingRef = useRef(false);
 
@@ -82,17 +115,32 @@ export function useReplayFeed(fixes: Fix[], autoplay = false): ReplayFeed {
     return () => clearInterval(timer);
   }, [state.playing]);
 
-  // Backgrounded mid-replay: hold the moment rather than racing ahead on a
-  // throttled timer.
-  const holdWhileHidden = useEffectEvent(() => {
-    if (document.visibilityState === "hidden" && clock.playing) {
-      clock.pause(Date.now());
+  // Backgrounded mid-replay: FREEZE the moment rather than racing ahead on
+  // a throttled timer (the wall-anchored clock would leap on return), then
+  // resume on the way back if it was playing — a quick tab switch never
+  // costs the pilot their place or a press.
+  const resumeOnVisibleRef = useRef(false);
+
+  const syncVisibility = useEffectEvent(() => {
+    const now = Date.now();
+    if (document.visibilityState === "hidden") {
+      if (!clock.playing) return;
+      resumeOnVisibleRef.current = true;
+      clock.pause(now);
+      sync();
+      return;
+    }
+    if (!resumeOnVisibleRef.current) return;
+    resumeOnVisibleRef.current = false;
+    // Never auto-RESTART: play() at the end would wrap to the beginning.
+    if (!clock.atEnd(now)) {
+      clock.play(now);
       sync();
     }
   });
 
   useEffect(() => {
-    const onVisibility = () => holdWhileHidden();
+    const onVisibility = () => syncVisibility();
     document.addEventListener("visibilitychange", onVisibility);
     return () => document.removeEventListener("visibilitychange", onVisibility);
   }, []);
@@ -106,6 +154,13 @@ export function useReplayFeed(fixes: Fix[], autoplay = false): ReplayFeed {
 
   function seek(t: number) {
     clock.seek(t, Date.now());
+    sync();
+  }
+
+  function stop() {
+    const now = Date.now();
+    clock.pause(now);
+    clock.seek(t0, now);
     sync();
   }
 
@@ -124,7 +179,9 @@ export function useReplayFeed(fixes: Fix[], autoplay = false): ReplayFeed {
 
   function cycleSpeed() {
     const at = REPLAY_SPEEDS.indexOf(clock.speed);
-    clock.setSpeed(REPLAY_SPEEDS[(at + 1) % REPLAY_SPEEDS.length], Date.now());
+    const next = REPLAY_SPEEDS[(at + 1) % REPLAY_SPEEDS.length];
+    clock.setSpeed(next, Date.now());
+    rememberSpeed(next);
     sync();
   }
 
@@ -139,6 +196,7 @@ export function useReplayFeed(fixes: Fix[], autoplay = false): ReplayFeed {
     totalSeconds: (t1 - t0) / 1000,
     togglePlay,
     seek,
+    stop,
     beginScrub,
     endScrub,
     cycleSpeed,

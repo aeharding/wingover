@@ -2,9 +2,14 @@
   display: flex;
   flex-direction: column;
   gap: 0.5rem;
-  padding: 0.6rem 0.75rem calc(0.5rem + env(safe-area-inset-bottom));
-  /* The .map-button fill, as a bar. */
-  background: rgba(24, 26, 29, 0.92);
+  /* Top padding clears the drawer pull's lower half (it straddles the
+     pane's top edge, dipping ~0.9rem in) — on a phone the pull is
+     centered right over the middle readout's label. */
+  padding: 1.1rem 0.75rem calc(0.5rem + env(safe-area-inset-bottom));
+  /* SOLID: the pane overlays nothing (it sits in flow below the map),
+     and a translucent fill only made the drawer pull composite to a
+     mismatched shade. Shares --replay-pane-bg with the drawer pull. */
+  background: var(--replay-pane-bg);
 }
 
 /* The six in-flight stats: five live readouts here, elapsed time below in
@@ -25,7 +30,7 @@
   font-size: 0.58rem;
   letter-spacing: 0.05em;
   text-transform: uppercase;
-  color: #9a9fa6;
+  color: var(--replay-muted);
   white-space: nowrap;
 }
 
@@ -33,20 +38,20 @@
   font-size: 1.02rem;
   font-weight: 700;
   font-variant-numeric: tabular-nums;
-  color: #fff;
+  color: var(--replay-ink);
   white-space: nowrap;
 }
 
 .replay-readout.cyan .value {
-  color: var(--stat-cyan);
+  color: var(--replay-cyan);
 }
 
 .replay-readout.green .value {
-  color: var(--stat-green);
+  color: var(--replay-green);
 }
 
 .replay-readout.yellow .value {
-  color: var(--stat-yellow);
+  color: var(--replay-yellow);
 }
 
 .replay-transport {
@@ -56,7 +61,7 @@
 }
 
 .replay-time {
-  color: #fff;
+  color: var(--replay-ink);
   font-size: 1.05rem;
   font-weight: 600;
   font-variant-numeric: tabular-nums;
@@ -64,7 +69,7 @@
 }
 
 .replay-time-total {
-  color: #9a9fa6;
+  color: var(--replay-muted);
 }
 
 .replay-transport-spring {

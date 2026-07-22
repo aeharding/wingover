@@ -11,6 +11,7 @@ import {
   inheritedLaunchName,
   listFlights,
   listPins,
+  rewriteFlightTrack,
   saveFlight,
   savePin,
   stripMintedFlightNames,
@@ -189,6 +190,82 @@ describe("storage", () => {
     expect(await getSetting("maptilerKey")).toBe("abc123");
   });
 });
+describe("rewriteFlightTrack", () => {
+  it("replaces the stored track and stats in place", async () => {
+    const fixes = new FlightSimulator(21, 0).fixesUpTo(120);
+    const flight = makeFlight(fixes);
+    await saveFlight(flight, fixes);
+    const revBefore = (await syncedDb().get(`track:${flight.id}`))._rev;
+
+    const trimmed = fixes.slice(30, 90);
+    await rewriteFlightTrack(flight.id, trimmed, computeStats(trimmed));
+
+    const track = await getTrack(flight.id);
+    expect(track).toHaveLength(60);
+    expect(track[0]).toEqual(fixes[30]);
+    expect((await getFlight(flight.id))?.stats.durationSeconds).toBe(
+      (trimmed[59].timestamp - trimmed[0].timestamp) / 1000,
+    );
+    // A legitimate revision of the same doc, not a delete/recreate.
+    expect((await syncedDb().get(`track:${flight.id}`))._rev).not.toBe(
+      revBefore,
+    );
+  });
+
+  it("outlives a finalization retry re-saving the full recording", async () => {
+    // The crash-window retry (WAL still holding the flight) re-runs
+    // saveFlight with the ORIGINAL fixes. The 409-tolerated track put must
+    // keep the clipped doc — resurrecting cut fixes would undo the pilot's
+    // deliberate edit.
+    const fixes = new FlightSimulator(22, 0).fixesUpTo(120);
+    const flight = makeFlight(fixes);
+    await saveFlight(flight, fixes);
+    const trimmed = fixes.slice(0, 60);
+    await rewriteFlightTrack(flight.id, trimmed, computeStats(trimmed));
+
+    await saveFlight(flight, fixes).catch(() => {
+      // The flight doc re-put conflicts too; only the track outcome matters.
+    });
+    expect(await getTrack(flight.id)).toHaveLength(60);
+  });
+
+  it("gives a pre-split flight its first track doc and drops the legacy attachment", async () => {
+    const fixes = new FlightSimulator(23, 0).fixesUpTo(120);
+    const flight = makeFlight(fixes);
+    await saveFlight(flight, fixes);
+
+    // Reshape into the legacy layout: track attached to the flight doc,
+    // no track: doc at all.
+    const db = syncedDb();
+    const gzipped = await db.getAttachment(
+      `track:${flight.id}`,
+      "track.json.gz",
+    );
+    await db.remove(await db.get(`track:${flight.id}`));
+    const flightDoc = await db.get(`flight:${flight.id}`);
+    await db.putAttachment(
+      `flight:${flight.id}`,
+      "track.json.gz",
+      flightDoc._rev,
+      gzipped as Blob,
+      "application/gzip",
+    );
+    expect(await getTrack(flight.id)).toHaveLength(120);
+
+    const trimmed = fixes.slice(30, 90);
+    await rewriteFlightTrack(flight.id, trimmed, computeStats(trimmed));
+
+    expect(await getTrack(flight.id)).toHaveLength(60);
+    // Destructive means GONE: the legacy attachment must not survive as a
+    // shadow copy of the cut fixes.
+    const after = await db.get<{ _attachments?: unknown }>(
+      `flight:${flight.id}`,
+      { attachments: false },
+    );
+    expect(after._attachments).toBeUndefined();
+  });
+});
+
 describe("stripMintedFlightNames", () => {
   it("strips exactly the minted default name, never a pilot's", async () => {
     const fixes = new FlightSimulator(7, 0).fixesUpTo(60);

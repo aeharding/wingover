@@ -31,8 +31,9 @@ import "./LiveTrackMap.css";
 // than interpolated frame-by-frame in JS.
 
 // The live map is always light; the shared PLAN_LINE_COLOR grey is tuned
-// for the dark ground maps and washes out here.
-const LIVE_PLAN_LINE_COLOR = "#5c6470";
+// for the dark ground maps and washes out here. (Nudged a shade brighter
+// than the original #5c6470 so it reads between waypoints on satellite.)
+const LIVE_PLAN_LINE_COLOR = "#68707c";
 
 // The planned route reference: a static grey line from launch through every
 // planned pin, plus numbered markers for the ACTIVE nav sequence (green =

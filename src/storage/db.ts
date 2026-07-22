@@ -151,8 +151,12 @@ export async function saveFlight(flight: Flight, fixes: Fix[]) {
     });
   } catch (error) {
     // Already there: a retry after the track landed but the metadata didn't.
-    // A track is immutable, so the existing one is the same bytes — throwing
-    // here would wedge the retry that is supposed to rescue the flight.
+    // The existing doc is either the same bytes (a plain finalization retry)
+    // or a version the pilot has since deliberately trimmed
+    // (rewriteFlightTrack — the one sanctioned way a track is ever revised).
+    // Either way the stored doc wins: clobbering it could resurrect cut
+    // fixes, and throwing would wedge the retry that is supposed to rescue
+    // the flight.
     if ((error as { status?: number }).status !== 409) throw error;
   }
   await db.put({
@@ -318,6 +322,53 @@ export async function updateFlight(
 ) {
   const doc = await db.get<FlightDoc>(flightDocId(flightId));
   await db.put({ ...doc, ...changes, updatedAt: Date.now() });
+}
+
+/**
+ * Destructive clip (trim, or one half of a split): replace the stored
+ * track with the given fixes and the stats recomputed from them. The
+ * track doc gets a legitimate new revision — the one sanctioned
+ * exception to write-once (see saveFlight's 409 note). Flights from
+ * before the metadata/track split get their first track: doc here, and
+ * the superseded full-track attachment on the flight doc is dropped in
+ * the same pass: destructive means the cut fixes are gone, not shadowed.
+ *
+ * Track first, then metadata: a failure between the two leaves a
+ * clipped track under stale stats — which a re-clip repairs — never a
+ * flight that looks lost.
+ */
+export async function rewriteFlightTrack(
+  flightId: string,
+  fixes: Fix[],
+  stats: FlightStats,
+) {
+  let rev: string | undefined;
+  try {
+    rev = (await db.get(trackDocId(flightId)))._rev;
+  } catch (error) {
+    // Only a genuine 404 means "pre-split flight, no track doc yet" (write
+    // it fresh). A transient/other read error must NOT be misread as
+    // absent — that would omit _rev and 409 the put, failing the clip
+    // loudly (fail-safe: no data loss) rather than silently overwriting.
+    if ((error as { status?: number }).status !== 404) throw error;
+    rev = undefined;
+  }
+  await db.put({
+    _id: trackDocId(flightId),
+    ...(rev ? { _rev: rev } : {}),
+    _attachments: {
+      [TRACK_ATTACHMENT]: {
+        content_type: "application/gzip",
+        data: await gzip(JSON.stringify(fixes)),
+      },
+    },
+  });
+  const doc = await db.get<FlightDoc & { _attachments?: unknown }>(
+    flightDocId(flightId),
+  );
+  // Putting without _attachments drops any legacy full-track attachment.
+  delete doc._attachments;
+  await db.put({ ...doc, stats, updatedAt: Date.now() });
 }
 
 /**

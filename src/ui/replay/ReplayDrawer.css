@@ -2,9 +2,79 @@
    animates to the dock's natural height, so the map region above is
    pushed up smoothly (the backends track their container). */
 .replay-drawer {
+  position: relative;
   display: grid;
   grid-template-rows: 0fr;
   transition: grid-template-rows 300ms cubic-bezier(0.32, 0.72, 0, 1);
+
+  /* Pane tokens, per scheme (the app doctrine: light at the base, dark
+     re-pinned under the class — appTheme.ts). The pane is a GROUND
+     surface, so it follows the app palette; the flight-only stat colors
+     have no light variants by design, so the readout accents get
+     deepened equivalents here (pure P3 green/yellow vanish on white).
+     The bump (below) and the dock share --replay-pane-bg so the pull
+     always composites seamlessly. */
+  --replay-pane-bg: #eef0f3;
+  --replay-ink: #1c1e21;
+  --replay-muted: #6f7580;
+  --replay-cyan: var(--wingover-accent);
+  --replay-green: color(display-p3 0 0.55 0.1);
+  --replay-yellow: color(display-p3 0.72 0.52 0);
+}
+
+:root.ion-palette-dark .replay-drawer {
+  --replay-pane-bg: #17191c;
+  --replay-ink: #fff;
+  --replay-muted: #9a9fa6;
+  --replay-cyan: var(--stat-cyan);
+  --replay-green: var(--stat-green);
+  --replay-yellow: var(--stat-yellow);
+}
+
+/* The drawer pull, centered ON the pane's top edge (outside the clip so
+   the slide never crops it). The visible shape is the svg bump anchored
+   to the button's top half; the bottom half of the hit box lies over the
+   pane (already the same solid), so the whole thing reads as the pane
+   surface swelling up. The bump is drawn with cubic Béziers (see the
+   tsx) for continuous curvature. Stops + collapses. */
+.replay-collapse-tab {
+  position: absolute;
+  top: 0;
+  left: 50%;
+  /* Base (opening's first frame, and the whole closing slide): submerged
+     a full button-height below the edge, invisible inside the pane — so
+     collapsing SINKS the handle instead of popping it out of existence,
+     and opening emerges it. .open lifts it to straddle the edge. */
+  transform: translate(-50%, 50%);
+  transition: transform 300ms cubic-bezier(0.32, 0.72, 0, 1);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 4.5rem;
+  height: 2.5rem;
+  font-size: 0.9rem;
+  color: var(--replay-muted);
+  background: none;
+  border: 0;
+  z-index: 10;
+}
+
+.replay-drawer.open .replay-collapse-tab {
+  transform: translate(-50%, -50%);
+}
+
+.replay-collapse-bump {
+  position: absolute;
+  left: 0;
+  /* The rect skirt (see the svg) dips 1px into the pane; the curve's
+     tangent baseline lands exactly on the button center = the pane
+     edge. Height = headroom + bump + skirt (20 viewBox units at 1px). */
+  bottom: calc(50% - 1px);
+  width: 4.5rem;
+  height: calc(1.1875rem + 1px);
+  display: block;
+  fill: var(--replay-pane-bg);
+  shape-rendering: geometricprecision;
 }
 
 .replay-drawer.open {
@@ -17,16 +87,8 @@
 }
 
 @media (prefers-reduced-motion: reduce) {
-  .replay-drawer {
+  .replay-drawer,
+  .replay-collapse-tab {
     transition: none;
   }
-}
-
-/* While the pane is open, the host's map controls square up 2×2 — the
-   in-flight cluster's shape (FlyPage .flight-controls-grid): everything
-   in one thumb's reach instead of a tall column over the pane. */
-.map-overlay.replay-grid {
-  display: grid;
-  grid-template-columns: repeat(2, auto);
-  gap: 0.6rem;
 }

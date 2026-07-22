@@ -1,6 +1,4 @@
 import {
-  IonActionSheet,
-  IonButton,
   IonIcon,
   IonInput,
   IonItem,
@@ -8,6 +6,7 @@ import {
   IonList,
   IonNote,
   IonTextarea,
+  useIonActionSheet,
 } from "@ionic/react";
 import {
   chevronDownOutline,
@@ -16,11 +15,11 @@ import {
   ellipsisHorizontal,
   expandOutline,
 } from "ionicons/icons";
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useEffectEvent, useRef, useState } from "react";
 
 import { isTauri } from "../../engine/platform";
+import { splitAvailable, trimAvailable } from "../../flight/clip";
 import {
-  flightTitle,
   formatAirtime,
   formatAltitude,
   formatDistance,
@@ -80,7 +79,12 @@ export default function FlightSeat({
     setFlight,
     track,
   );
-  const [optionsOpen, setOptionsOpen] = useState(false);
+  // The CONTROLLER hook, not a controlled <IonActionSheet isOpen>: each
+  // present makes a fresh overlay. The controlled form desynced when the
+  // sheet was reopened while the previous dismissal was still animating
+  // (clip flows do exactly that): the late onDidDismiss stamped the open
+  // flag false over the new request and the sheet went permanently mute.
+  const [presentOptions, dismissOptions] = useIonActionSheet();
   const appearance = useAppearance();
   const [view, changeView] = useMapView();
   const [map, setMap] = useState<MapView | null>(null);
@@ -91,9 +95,63 @@ export default function FlightSeat({
   const lineRef = useRef<Line | null>(null);
   const planLineRef = useRef<Line | null>(null);
   const markersRef = useRef<MarkerLayer | null>(null);
+  const skipArrivalFrameRef = useRef(false);
   // The replay pane slides open under the seat map; closes with a
   // selection swap or when the section is URL-hidden.
   const replay = useReplayDrawer(map, track, flight, active);
+
+  // The sheet portals outside the section's subtree; if the section goes
+  // URL-hidden while it is up, it must fold with it.
+  useEffect(() => {
+    if (!active) void dismissOptions();
+  }, [active, dismissOptions]);
+
+  async function openOptions() {
+    // The previous sheet may still be tearing down (the clip flows reopen
+    // fast, and a busy frame stretches the dismiss animation); presenting
+    // into its cleanup gets the new sheet silently destroyed with it.
+    await dismissOptions();
+    await presentOptions({
+      buttons: [
+        {
+          text: "Export GPX",
+          handler: () => {
+            if (flight) exportFlight(flight);
+          },
+        },
+        // The clip editors open in the pane under the seat map. Each
+        // trim end is its own errand (usually it is one or the other).
+        ...(trimAvailable(track)
+          ? [
+              {
+                text: "Trim start",
+                handler: () => replay.beginClip("trim-start"),
+              },
+              {
+                text: "Trim end",
+                handler: () => replay.beginClip("trim-end"),
+              },
+            ]
+          : []),
+        ...(splitAvailable(track)
+          ? [
+              {
+                text: "Split flight",
+                handler: () => replay.beginClip("split"),
+              },
+            ]
+          : []),
+        {
+          text: "Delete flight",
+          role: "destructive",
+          handler: () => {
+            if (flight) confirmDeleteFlight(flight, onDeleted);
+          },
+        },
+        { text: "Cancel", role: "cancel" },
+      ],
+    });
+  }
 
   // Full screen means NO chrome: the list pane, seat header and card hide
   // via the body class (see desktop.css), the tab rail goes with it, and
@@ -134,6 +192,10 @@ export default function FlightSeat({
       setMap(null);
       return;
     }
+    // A re-created map that inherited its camera (appearance flip) must
+    // not be re-framed on arrival; one skip only — the next content
+    // change (selection switch, clip rewrite) frames as always.
+    skipArrivalFrameRef.current = next.restoredCamera === true;
     planLineRef.current = next.line({
       color: PLAN_LINE_COLOR,
       width: 3,
@@ -148,6 +210,23 @@ export default function FlightSeat({
     markersRef.current = next.markers();
     setMap(next);
   }
+
+  // Draw-along replay owns the track line while active: the driver draws
+  // the flown prefix, so the full line here goes blank. An Effect Event
+  // shared by the main content effect AND the toggle effect below, so
+  // toggling never re-frames the camera.
+  const applyTrackVisibility = useEffectEvent(() => {
+    if (!map || track.length === 0) return;
+    lineRef.current?.set(
+      replay.trackHidden
+        ? []
+        : track.map((fix): LngLat => [fix.longitude, fix.latitude]),
+    );
+  });
+
+  useEffect(() => {
+    applyTrackVisibility();
+  }, [replay.trackHidden]);
 
   useEffect(() => {
     // Collapsing from full screen EASES back to the framed track instead of
@@ -164,9 +243,7 @@ export default function FlightSeat({
       return;
     }
 
-    lineRef.current?.set(
-      track.map((fix): LngLat => [fix.longitude, fix.latitude]),
-    );
+    applyTrackVisibility();
 
     const launch = track[0];
     const landing = track[track.length - 1];
@@ -202,6 +279,10 @@ export default function FlightSeat({
       ...plannedRoute,
     ]);
     if (!bounds) return;
+    if (skipArrivalFrameRef.current) {
+      skipArrivalFrameRef.current = false;
+      return;
+    }
     // The fullscreen toggle resizes the map's container in this same
     // commit; fit only after the backend has adopted the new size (see
     // afterNextFrame) so the bounds math uses the real viewport.
@@ -224,27 +305,8 @@ export default function FlightSeat({
 
   return (
     <div className="flight-seat">
-      <div className="seat-header">
-        <div className="seat-title">
-          {flight
-            ? new Date(flight.startedAt).toLocaleString(undefined, {
-                month: "short",
-                day: "numeric",
-                year: "numeric",
-                hour: "numeric",
-                minute: "2-digit",
-              })
-            : ""}
-        </div>
-        <IonButton
-          fill="clear"
-          aria-label="Options"
-          data-testid="detail-options"
-          onClick={() => setOptionsOpen(true)}
-        >
-          <IonIcon slot="icon-only" icon={ellipsisHorizontal} />
-        </IonButton>
-      </div>
+      {/* No header bar: the map runs to the top of the seat; the title,
+          date, and options live in the floating card. */}
       <div className="seat-map">
         {/* Edge-to-edge only when expanded to full screen; embedded in the
             desktop split it sits above other UI, so no inset. */}
@@ -254,31 +316,72 @@ export default function FlightSeat({
           onReady={handleReady}
           edgeToEdge={mapFull}
         />
-        <div
-          className={replay.isOpen ? "map-overlay replay-grid" : "map-overlay"}
-        >
-          {/* The replay camera buttons replace the compass while the pane
-              is open (track-up owns the bearing then), leading the 2×2
-              grid like the in-flight cluster. */}
+        <div className="map-overlay">
+          {/* North reset floats above the cluster; hidden while replay
+              owns the bearing. */}
           {map && !replay.isOpen && <CompassButton map={map} />}
-          {replay.playButton}
-          {replay.cameraButtons}
-          <button
-            className="map-button"
-            aria-label={mapFull ? "Shrink map" : "Expand map"}
-            data-testid="map-expand"
-            onClick={() => setMapFull(!mapFull)}
-          >
-            <IonIcon icon={mapFull ? contractOutline : expandOutline} />
-          </button>
-          {map?.supportsSatellite && (
-            <ViewToggle view={view} onChange={changeView} />
-          )}
+          {/* The app-wide cluster cells (.map-cluster), MIRRORED for the
+              seat's bottom-LEFT anchor: the edge column (follow/play
+              over the exit verb) hugs the left edge, compass and globe
+              sit inboard. Empty cells render nothing and the tracks
+              collapse — no state leaves buttons floating off the
+              anchor. */}
+          <div className="map-cluster">
+            {(replay.followButton ?? replay.playButton) && (
+              <div className="map-cell-tl">
+                {replay.followButton ?? replay.playButton}
+              </div>
+            )}
+            {replay.trackUpButton && (
+              <div className="map-cell-tr">{replay.trackUpButton}</div>
+            )}
+            <div className="map-cell-bl">
+              <button
+                className="map-button"
+                aria-label={mapFull ? "Shrink map" : "Expand map"}
+                data-testid="map-expand"
+                onClick={() => setMapFull(!mapFull)}
+              >
+                <IonIcon icon={mapFull ? contractOutline : expandOutline} />
+              </button>
+            </div>
+            {map?.supportsSatellite && (
+              <div className="map-cell-br">
+                <ViewToggle view={view} onChange={changeView} />
+              </div>
+            )}
+          </div>
         </div>
         {flight && stats && (
           <div className={`seat-card${cardOpen ? "" : " collapsed"}`}>
-            <div className="seat-card-header">
-              <div className="seat-card-title">{flightTitle(flight)}</div>
+            <div
+              className="seat-card-header"
+              onClick={(event) => {
+                // The whole title row is the collapse toggle; the buttons
+                // in it keep their own jobs.
+                if ((event.target as HTMLElement).closest("button")) return;
+                setCardOpen(!cardOpen);
+              }}
+            >
+              {/* The WHEN as the header: the name is already the editable
+                  field below and the highlighted row in the list. */}
+              <div className="seat-card-title">
+                {new Date(flight.startedAt).toLocaleString(undefined, {
+                  month: "short",
+                  day: "numeric",
+                  year: "numeric",
+                  hour: "numeric",
+                  minute: "2-digit",
+                })}
+              </div>
+              <button
+                className="seat-card-collapse"
+                aria-label="Options"
+                data-testid="detail-options"
+                onClick={openOptions}
+              >
+                <IonIcon icon={ellipsisHorizontal} />
+              </button>
               <button
                 className="seat-card-collapse"
                 aria-label={cardOpen ? "Collapse details" : "Expand details"}
@@ -374,26 +477,6 @@ export default function FlightSeat({
       </div>
       {/* The replay pane, sliding open in flow under the seat map. */}
       {replay.drawer}
-      <IonActionSheet
-        isOpen={optionsOpen && active}
-        onDidDismiss={() => setOptionsOpen(false)}
-        buttons={[
-          {
-            text: "Export GPX",
-            handler: () => {
-              if (flight) exportFlight(flight);
-            },
-          },
-          {
-            text: "Delete flight",
-            role: "destructive",
-            handler: () => {
-              if (flight) confirmDeleteFlight(flight, onDeleted);
-            },
-          },
-          { text: "Cancel", role: "cancel" },
-        ]}
-      />
     </div>
   );
 }
