@@ -8,7 +8,7 @@
    (flex: 1; a shrink-to-fit row would follow its own title width and
    wobble the metric column), carry the item's vertical rhythm, and set
    its own type, since Ionic's label typography no longer reaches here. */
-.flight-row {
+.flightRow {
   display: flex;
   align-items: center;
   gap: 0.75rem;
@@ -19,14 +19,14 @@
   margin-inline-end: 8px;
 }
 
-.flight-row-id {
+.flightRowId {
   flex: 1;
   min-width: 0;
 }
 
 /* Long names and launch sites give way; the metric column never moves. */
-.flight-row-id h2,
-.flight-row-id p {
+.flightRowId h2,
+.flightRowId p {
   margin: 0;
   overflow: hidden;
   text-overflow: ellipsis;
@@ -35,31 +35,31 @@
 
 /* Matches what ion-label's ios typography gave these before the row
    moved out of it: 17px titles, 14px muted sub line. */
-.flight-row-id h2 {
+.flightRowId h2 {
   font-size: 1.0625rem;
   font-weight: 500;
   line-height: 1.4;
 }
 
-.flight-row-id p {
+.flightRowId p {
   font-size: 0.875rem;
   line-height: 1.4;
   color: var(--ion-color-medium);
 }
 
-.flight-row-stats {
+.flightRowStats {
   flex-shrink: 0;
   text-align: right;
   font-variant-numeric: tabular-nums;
 }
 
-.flight-row-duration {
+.flightRowDuration {
   /* Regular weight: full contrast against the muted distance is enough
      hierarchy. Bold here made every row shout. */
   font-weight: 400;
 }
 
-.flight-row-distance {
+.flightRowDistance {
   font-size: 0.82rem;
   color: var(--ion-color-medium);
 }
