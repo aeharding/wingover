@@ -67,5 +67,27 @@ shouldn't. This mirrors Voyager's `theme/*.css` + `globalCssOverrides.css`.
 
 ## Status
 
-This PR: toolchain plus the `NativeIcon` pilot. The full component migration
-lands next as the architecture pass above.
+DONE. 33 modules, one plain file: `theme.css` (the `:root` token/palette/
+Ionic-variable layer — the one thing modules can't and shouldn't scope).
+Conventions the migration settled on:
+
+- **Short names**: scoping is the module's job, so it's `styles.sun`,
+  `styles.row`, `styles.button` — never `styles.idleSun` or
+  `styles.flightRowId`.
+- **Cross-module selectors import the class**: `@value button from
+"./map.module.css";` then `.controls :global(.button)` — the compiled
+  selector carries the _other module's_ hash. Never hard-code a global
+  string for a class a module owns.
+- **`:global()` only for classes we don't own**: the palette class
+  (`.ion-palette-dark`), Ionic-stamped classes (`.list-inset`), library
+  DOM (`.maplibregl-*`, `.mk-*`), and app-level body state
+  (`body.flight-map-full`).
+- **Variant props over reach-ins**: a host never styles another
+  component's internals by descendant selector; the component exposes a
+  variant (`<ReplayDock seat>`) or takes a placement `className`
+  (`<LiveTrackMap className={styles.liveMap}>`).
+- **Types**: `pnpm generate:csstypes` (typed-css-modules) writes a
+  committed `*.module.css.d.ts` per module; a missed or renamed class is
+  a tsc error.
+- **Tests/harness**: e2e and `e2e/inset-probe.mjs` locate by
+  `data-testid`/roles only — hashed class names never appear in tests.
