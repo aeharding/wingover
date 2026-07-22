@@ -1,4 +1,4 @@
-.pin-marker {
+.pin {
   padding: 0;
   background: none;
   border: none;
@@ -10,8 +10,9 @@
    top, so it consumes the bottom inset (the overlay + distance pill would
    otherwise float a home-indicator's height too high). Scoped to the tab
    shell, so the desktop plan — no tab bar, bottom AT the device edge — keeps
-   it. */
-ion-tabs .plan-map {
+   it. (.plan-map itself is still a global class: desktop.css lays it out in
+   the split; it modularizes with the desktop-shell batch.) */
+:global(ion-tabs) :global(.plan-map) {
   --ion-safe-area-bottom: 0px;
 }
 
@@ -20,12 +21,12 @@ ion-tabs .plan-map {
    coordinate; the inner dot translates onto that origin (a larger, invisible
    touch/drag target), and its ::before is the visible bump. Rendered on every
    backend (MapKit draws this element as a custom annotation). */
-.midpoint-handle {
+.midpoint {
   width: 0;
   height: 0;
 }
 
-.midpoint-handle-dot {
+.midpointDot {
   position: absolute;
   left: 0;
   top: 0;
@@ -37,7 +38,7 @@ ion-tabs .plan-map {
   height: 26px;
 }
 
-.midpoint-handle-dot::before {
+.midpointDot::before {
   content: "";
   width: 6px;
   height: 6px;
@@ -48,7 +49,7 @@ ion-tabs .plan-map {
 /* Total route length, for planning — a readable pill at the bottom center,
    clear of the top-right map controls and the tab bar below. Tapping it opens
    the route sheet (delete all), so it takes pointer events and a tap state. */
-.plan-distance {
+.distance {
   position: absolute;
   left: 50%;
   bottom: calc(1rem + var(--ion-safe-area-bottom));
@@ -67,6 +68,6 @@ ion-tabs .plan-map {
   cursor: pointer;
 }
 
-.plan-distance:active {
+.distance:active {
   opacity: 0.7;
 }

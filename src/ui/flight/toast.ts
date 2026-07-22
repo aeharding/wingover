@@ -1,4 +1,4 @@
-import "./toast.css";
+import styles from "./toast.module.css";
 
 /**
  * Imperative, body-level, framework-free toast. It must outlive the
@@ -9,12 +9,12 @@ import "./toast.css";
  */
 export function showToast(message: string): void {
   const el = document.createElement("div");
-  el.className = "fly-toast";
+  el.className = styles.toast;
   el.setAttribute("role", "status");
   el.textContent = message;
   document.body.appendChild(el);
   setTimeout(() => {
-    el.classList.add("fly-toast-out");
+    el.classList.add(styles.out);
     setTimeout(() => el.remove(), 400);
   }, 2000);
 }

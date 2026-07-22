@@ -1,4 +1,4 @@
-.all-flights-map {
+.root {
   position: absolute;
   inset: 0;
   /* An opaque back-button header sits above the map (both platforms), so it
@@ -10,11 +10,11 @@
 /* On the phone the tab bar sits below the map and owns the home indicator;
    the map's bottom is the tab bar's top. Scoped to the tab shell so the
    desktop all-flights (no tab bar, bottom AT the device edge) keeps it. */
-ion-tabs .all-flights-map {
+:global(ion-tabs) .root {
   --ion-safe-area-bottom: 0px;
 }
 
-.composite-legend {
+.legend {
   position: absolute;
   left: calc(0.9rem + var(--ion-safe-area-left));
   bottom: calc(3.2rem + var(--ion-safe-area-bottom));
@@ -26,7 +26,7 @@ ion-tabs .all-flights-map {
   border-radius: 8px;
 }
 
-.legend-bar {
+.bar {
   height: 6px;
   width: 120px;
   margin-top: 4px;

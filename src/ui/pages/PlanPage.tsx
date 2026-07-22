@@ -37,7 +37,7 @@ import ViewToggle from "../map/ViewToggle";
 import { useSettings } from "../settings/SettingsContext";
 import { useIsDesktop } from "../useIsDesktop";
 
-import "./PlanPage.css";
+import styles from "./PlanPage.module.css";
 
 // The plan's pins ARE the planned waypoints, so the route + pins are green to
 // match how they read in flight (see PLANNED_COLOR).
@@ -54,10 +54,10 @@ function pinSvg(color: string, label: string): string {
 // bump. Rendered on every backend.
 function handleEl(): HTMLElement {
   const wrapper = document.createElement("div");
-  wrapper.className = "midpoint-handle";
+  wrapper.className = styles.midpoint;
   wrapper.setAttribute("aria-hidden", "true");
   const dot = document.createElement("div");
-  dot.className = "midpoint-handle-dot";
+  dot.className = styles.midpointDot;
   wrapper.appendChild(dot);
   return wrapper;
 }
@@ -283,7 +283,7 @@ export default function PlanPage() {
       // Route order (1, 2, 3…): shows the sequence and thus the direction.
       const label = String(index + 1);
       const element = document.createElement("button");
-      element.className = "pin-marker";
+      element.className = styles.pin;
       element.setAttribute("aria-label", `Pin ${label}`);
       element.setAttribute("data-testid", "pin-marker");
       element.setAttribute("data-lat", String(pin.latitude));
@@ -414,7 +414,7 @@ export default function PlanPage() {
                   #118's canonical form; keeps the sim-only iOS test green). */}
               {routeMeters > 0 && (
                 <button
-                  className="plan-distance"
+                  className={styles.distance}
                   data-testid="plan-distance"
                   onClick={openRouteSheet}
                 >

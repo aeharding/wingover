@@ -1,7 +1,7 @@
 /* The touch zone: a generous strip down the right edge of the screen, far
    taller than the visible gauge, so a thumb can grab the edge well above or
    below the slider and still drag. It stops short of the button cluster. */
-.zoom-strip {
+.strip {
   position: absolute;
   right: 0;
   top: 25%;
@@ -16,8 +16,10 @@
 
 /* The gauge is purely an indicator (the whole strip takes the touch), so it
    never intercepts pointers. It is short — floating between the stats and
-   the buttons — and hidden at rest, fading in only while dragging. */
-.zoom-gauge {
+   the buttons — and hidden at rest, fading in only while dragging. The
+   dragging state rides the strip's data-active attribute (the same one the
+   e2e asserts), not a second class. */
+.gauge {
   position: relative;
   height: min(27vh, 215px);
   width: 1.2rem;
@@ -26,12 +28,12 @@
   transition: opacity 0.1s ease;
 }
 
-.zoom-strip.active .zoom-gauge {
+.strip[data-active="true"] .gauge {
   opacity: 1;
 }
 
 /* The rail runs down the very right edge of the screen. */
-.zoom-gauge-rail {
+.rail {
   position: absolute;
   top: 0;
   bottom: 0;
@@ -45,7 +47,7 @@
    points at the current zoom on the edge rail (top = fully out, bottom =
    fully in). The drop-shadow gives it an outline so it reads over any
    basemap. Positioned along the rail by inline `top`. */
-.zoom-gauge-thumb {
+.thumb {
   position: absolute;
   right: 0;
   width: 1.65rem;
@@ -58,14 +60,14 @@
   filter: drop-shadow(0 0 1.5px rgba(0, 0, 0, 0.7));
 }
 
-.zoom-gauge-thumb svg {
+.thumb svg {
   display: block;
   width: 100%;
   height: 100%;
   overflow: visible;
 }
 
-.zoom-gauge-thumb path {
+.thumb path {
   fill: #f2f5f8;
   stroke: #f2f5f8;
   stroke-width: 18;

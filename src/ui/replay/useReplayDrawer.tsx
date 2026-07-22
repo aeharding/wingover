@@ -23,7 +23,7 @@ import ClipDock, { type ClipMode } from "./ClipDock";
 import ReplayDock from "./ReplayDock";
 import { rememberPosition } from "./timelineMemory";
 
-import "./ReplayDrawer.css";
+import styles from "./ReplayDrawer.module.css";
 
 // closed → opening (mounted at 0fr) → open (1fr, the slide runs) →
 // closing (back to 0fr) → closed (unmount tears the aircraft down).
@@ -422,7 +422,9 @@ export function useReplayDrawer(
       available && held && isOpen ? (
         <div
           className={
-            session.phase === "open" ? "replay-drawer open" : "replay-drawer"
+            session.phase === "open"
+              ? `${styles.drawer} ${styles.open}`
+              : styles.drawer
           }
           onTransitionEnd={(event) => {
             if (
@@ -440,16 +442,12 @@ export function useReplayDrawer(
               varies CONTINUOUSLY (tangent circular arcs are only G1: the
               curvature steps at every junction read as kinks). */}
           <button
-            className="replay-collapse-tab"
+            className={styles.tab}
             aria-label="Hide replay"
             data-testid="replay-collapse"
             onClick={collapse}
           >
-            <svg
-              className="replay-collapse-bump"
-              viewBox="0 0 72 20"
-              aria-hidden="true"
-            >
+            <svg className={styles.bump} viewBox="0 0 72 20" aria-hidden="true">
               {/* The curve's tangent BASELINE (y=21) sits exactly ON the
                   pane edge (anchoring it lower was the source of every
                   junction artifact); the rect skirt below (y=21..22)
@@ -462,7 +460,7 @@ export function useReplayDrawer(
             </svg>
             <NativeIcon icon={chevronDownOutline} />
           </button>
-          <div className="replay-drawer-clip">
+          <div className={styles.clip}>
             {/* Keys carry the track's span: a clip rewriting the track
                 under the open pane remounts the dock against the new
                 recording (the feed/handles bind their track at mount). */}

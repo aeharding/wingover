@@ -93,7 +93,7 @@ const scenarios = {
     flight: true,
     async after(p) {
       await p
-        .locator(".flight-row")
+        .locator('[data-testid="flight-row"]')
         .first()
         .click()
         .catch(() => {});
@@ -117,15 +117,13 @@ const scenarios = {
     flight: true,
     async after(p) {
       await p
-        .locator(".flight-row")
+        .locator('[data-testid="flight-row"]')
         .first()
         .click()
         .catch(() => {});
       await p.waitForTimeout(900);
       await p
-        .locator(
-          "[data-testid=detail-play], .map-cell-tl button, .map-cluster button",
-        )
+        .locator('[data-testid="replay-start"]')
         .first()
         .click()
         .catch(() => {});
@@ -145,13 +143,13 @@ const scenarios = {
     flight: true,
     async after(p) {
       await p
-        .locator(".flight-row")
+        .locator('[data-testid="flight-row"]')
         .first()
         .click()
         .catch(() => {});
       await p.waitForTimeout(900);
       await p
-        .locator(".map-cell-tl button, .map-cluster button")
+        .locator('[data-testid="replay-start"]')
         .first()
         .click()
         .catch(() => {});
@@ -200,9 +198,9 @@ const scenarios = {
       await p.waitForTimeout(800);
     },
     specs: {
-      probe: ".all-flights-map .map-inset-probe",
-      overlay: ".all-flights-map .map-overlay",
-      legend: ".composite-legend",
+      probe: '[data-testid="all-flights-map"] .map-inset-probe',
+      overlay: '[data-testid="all-flights-map"] .map-overlay',
+      legend: '[data-testid="composite-legend"]',
       header: ".desktop-main ion-toolbar",
     },
   },
@@ -238,7 +236,7 @@ const scenarios = {
     flight: true,
     async after(p) {
       await p
-        .locator(".flight-row")
+        .locator('[data-testid="flight-row"]')
         .first()
         .click()
         .catch(() => {});
@@ -257,7 +255,7 @@ const scenarios = {
     flight: true,
     async after(p) {
       await p
-        .locator(".flight-row")
+        .locator('[data-testid="flight-row"]')
         .first()
         .click()
         .catch(() => {});
@@ -280,7 +278,7 @@ const scenarios = {
     flight: true,
     async after(p) {
       await p
-        .locator(".flight-row")
+        .locator('[data-testid="flight-row"]')
         .first()
         .click()
         .catch(() => {});
@@ -292,7 +290,7 @@ const scenarios = {
         .catch(() => {});
       await p.waitForTimeout(900);
       await p
-        .locator(".map-cell-tr button, .map-cluster button")
+        .locator('[data-testid="replay-start"]')
         .first()
         .click()
         .catch(() => {});
@@ -310,7 +308,7 @@ const scenarios = {
     specs: {
       probe: ".plan-map .map-inset-probe",
       overlay: ".plan-map .map-overlay",
-      pill: ".plan-distance",
+      pill: '[data-testid="plan-distance"]',
     },
   },
   "m-settings": {
@@ -332,9 +330,9 @@ const scenarios = {
       await p.waitForTimeout(800);
     },
     specs: {
-      probe: ".all-flights-map .map-inset-probe",
-      overlay: ".all-flights-map .map-overlay",
-      legend: ".composite-legend",
+      probe: '[data-testid="all-flights-map"] .map-inset-probe',
+      overlay: '[data-testid="all-flights-map"] .map-overlay',
+      legend: '[data-testid="composite-legend"]',
       header: "ion-header ion-toolbar",
     },
   },

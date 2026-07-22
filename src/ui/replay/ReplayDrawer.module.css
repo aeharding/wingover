@@ -1,7 +1,7 @@
 /* The replay pane slides open IN FLOW: grid-template-rows 0fr → 1fr
    animates to the dock's natural height, so the map region above is
    pushed up smoothly (the backends track their container). */
-.replay-drawer {
+.drawer {
   position: relative;
   display: grid;
   grid-template-rows: 0fr;
@@ -22,7 +22,7 @@
   --replay-yellow: color(display-p3 0.72 0.52 0);
 }
 
-:root.ion-palette-dark .replay-drawer {
+:global(:root.ion-palette-dark) .drawer {
   --replay-pane-bg: #17191c;
   --replay-ink: #fff;
   --replay-muted: #9a9fa6;
@@ -37,7 +37,7 @@
    pane (already the same solid), so the whole thing reads as the pane
    surface swelling up. The bump is drawn with cubic Béziers (see the
    tsx) for continuous curvature. Stops + collapses. */
-.replay-collapse-tab {
+.tab {
   position: absolute;
   top: 0;
   left: 50%;
@@ -59,11 +59,11 @@
   z-index: 10;
 }
 
-.replay-drawer.open .replay-collapse-tab {
+.drawer.open .tab {
   transform: translate(-50%, -50%);
 }
 
-.replay-collapse-bump {
+.bump {
   position: absolute;
   left: 0;
   /* The rect skirt (see the svg) dips 1px into the pane; the curve's
@@ -77,18 +77,18 @@
   shape-rendering: geometricprecision;
 }
 
-.replay-drawer.open {
+.drawer.open {
   grid-template-rows: 1fr;
 }
 
-.replay-drawer-clip {
+.clip {
   overflow: hidden;
   min-height: 0;
 }
 
 @media (prefers-reduced-motion: reduce) {
-  .replay-drawer,
-  .replay-collapse-tab {
+  .drawer,
+  .tab {
     transition: none;
   }
 }
