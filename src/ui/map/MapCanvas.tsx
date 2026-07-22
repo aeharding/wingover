@@ -225,12 +225,14 @@ export default function MapCanvas({
       left: parseFloat(style.paddingLeft) || 0,
     };
     viewRef.current?.setInsets(insetsRef.current);
-    // Mirror what was pushed, for tests and devtools: the CSS side of the
-    // model is probeable from CSS, but whether the JS bridge actually fired
-    // (the bug class: a reparent swallowing the observer event) is only
-    // visible here.
-    const { top, right, bottom, left } = insetsRef.current;
-    probe.setAttribute("data-insets", `${top},${right},${bottom},${left}`);
+    // Mirror what was pushed on the container's debug handle (the __map /
+    // __display convention): whether the JS bridge actually fired — the bug
+    // class here was a swallowed observer event — is invisible to CSS
+    // measurement, and a DOM attribute would be a test concern mutating
+    // production markup on every read.
+    const container = containerRef.current as
+      (HTMLElement & { __insets?: Insets }) | null;
+    if (container) container.__insets = { ...insetsRef.current };
   });
 
   // One mechanism: a ResizeObserver — on the PROBES, not the container.

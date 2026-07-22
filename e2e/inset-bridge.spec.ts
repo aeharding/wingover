@@ -7,8 +7,8 @@ import { expect, type Page, test } from "@playwright/test";
 // in the same commit as the consume-class change, and a style-observer
 // built on transition events sees nothing for changes applied across a
 // DOM move — the CSS side updates, the JS side goes stale until the next
-// in-place change (rotation). data-insets on the probe mirrors what was
-// actually pushed.
+// in-place change (rotation). The container's __insets debug handle (the
+// __map convention) mirrors what was actually pushed.
 
 async function recordQuickFlight(page: Page) {
   await page.goto("/?mock-speed=40&map-style=blank");
@@ -42,24 +42,30 @@ test("the fullscreen toggle re-feeds the basemap inset bridge", async ({
   await page.getByText("Logbook", { exact: true }).click();
   await page.getByTestId("flight-row").click();
 
-  const probe = page
+  const container = page
     .getByTestId("flight-detail-map")
-    .getByTestId("map-inset-probe");
+    .getByTestId("map-container");
+  const insets = () =>
+    container.evaluate(
+      (el) => (el as HTMLElement & { __insets?: object }).__insets,
+    );
 
   // Inline the map is a boxed mid-page preview: every edge is covered by
   // page chrome (consume-all), so the bridge must have pushed zeros.
-  await expect(probe).toHaveAttribute("data-insets", "0,0,0,0");
+  await expect.poll(insets).toEqual({ top: 0, right: 0, bottom: 0, left: 0 });
 
   // Expand: the surface reparents into the body-level fullroot and the
   // region stops consuming — all four device edges are now the map's.
   await page.getByTestId("map-expand").click();
   await expect(page.getByTestId("flight-detail-map-fullroot")).toBeVisible();
-  await expect(probe).toHaveAttribute("data-insets", "11,22,33,44");
+  await expect
+    .poll(insets)
+    .toEqual({ top: 11, right: 22, bottom: 33, left: 44 });
 
   // And back: the inline preview consumes everything again.
   await page.getByTestId("map-shrink").click();
   await expect(page.getByTestId("flight-detail-map-fullroot")).toBeHidden();
-  await expect(probe).toHaveAttribute("data-insets", "0,0,0,0");
+  await expect.poll(insets).toEqual({ top: 0, right: 0, bottom: 0, left: 0 });
 });
 
 test("closing the replay pane restores the bottom inset without a box change", async ({
@@ -81,22 +87,32 @@ test("closing the replay pane restores the bottom inset without a box change", a
   });
   await page.getByText("Logbook", { exact: true }).click();
   await page.getByTestId("flight-row").click();
-  const probe = page
+  const container = page
     .getByTestId("flight-detail-map")
-    .getByTestId("map-inset-probe");
+    .getByTestId("map-container");
+  const insets = () =>
+    container.evaluate(
+      (el) => (el as HTMLElement & { __insets?: object }).__insets,
+    );
 
   await page.getByTestId("map-expand").click();
-  await expect(probe).toHaveAttribute("data-insets", "11,22,33,44");
+  await expect
+    .poll(insets)
+    .toEqual({ top: 11, right: 22, bottom: 33, left: 44 });
 
   // Open the replay pane: it owns the home indicator, the map consumes it.
   await page.getByTestId("replay-start").click();
   await expect(page.getByTestId("replay-dock")).toBeVisible();
-  await expect(probe).toHaveAttribute("data-insets", "11,22,0,44");
+  await expect
+    .poll(insets)
+    .toEqual({ top: 11, right: 22, bottom: 0, left: 44 });
 
   // Collapse: the bottom edge is the map's again.
   await page.getByTestId("replay-collapse").click();
   await expect(page.getByTestId("replay-dock")).toBeHidden();
-  await expect(probe).toHaveAttribute("data-insets", "11,22,33,44");
+  await expect
+    .poll(insets)
+    .toEqual({ top: 11, right: 22, bottom: 33, left: 44 });
 });
 
 test("a sum-preserving left/right swap still re-feeds the bridge", async ({
@@ -116,12 +132,18 @@ test("a sum-preserving left/right swap still re-feeds the bridge", async ({
   });
   await page.getByText("Logbook", { exact: true }).click();
   await page.getByTestId("flight-row").click();
-  const probe = page
+  const container = page
     .getByTestId("flight-detail-map")
-    .getByTestId("map-inset-probe");
+    .getByTestId("map-container");
+  const insets = () =>
+    container.evaluate(
+      (el) => (el as HTMLElement & { __insets?: object }).__insets,
+    );
 
   await page.getByTestId("map-expand").click();
-  await expect(probe).toHaveAttribute("data-insets", "11,22,33,44");
+  await expect
+    .poll(insets)
+    .toEqual({ top: 11, right: 22, bottom: 33, left: 44 });
 
   await page.addStyleTag({
     content: `:root {
@@ -129,5 +151,7 @@ test("a sum-preserving left/right swap still re-feeds the bridge", async ({
       --safe-area-inset-left: 22px;
     }`,
   });
-  await expect(probe).toHaveAttribute("data-insets", "11,44,33,22");
+  await expect
+    .poll(insets)
+    .toEqual({ top: 11, right: 44, bottom: 33, left: 22 });
 });
