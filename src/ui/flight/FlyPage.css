@@ -129,6 +129,18 @@
   --border-width: 0;
 }
 
+/* The iOS large-title (collapse=condense) toolbar needs its OWN transparency
+   rule. theme.css's document-scope `ion-toolbar { --background: var(
+   --ion-background-color) }` (the native nav-bar look) outranks the condense
+   toolbar's shadow-DOM transparency, and for the condense toolbar specifically
+   the plain `.fly-page-frame ion-toolbar` above does not clear it — so the big
+   "Wingover" title renders on a black band over the sky. Same condense-scoped
+   fix the sync hero needs (SyncSheets.css). Desktop renders FlyPage frameless,
+   so this only ever showed on the phone. */
+.fly-page-frame ion-header[collapse="condense"] ion-toolbar {
+  --background: transparent;
+}
+
 .fly-page-frame ion-title {
   color: #fff;
 }
