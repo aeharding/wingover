@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest";
 
 import { FlightSimulator } from "../engine/simulator";
-import { computeStats } from "../flight/stats";
+import { computeStats, EMPTY_STATS } from "../flight/stats";
 import {
   deleteAllPins,
   deleteFlight,
@@ -78,6 +78,23 @@ describe("storage", () => {
     const olderIndex = listed.findIndex((f) => f.id === older.id);
     const newerIndex = listed.findIndex((f) => f.id === newer.id);
     expect(newerIndex).toBeLessThan(olderIndex);
+  });
+
+  it("fills in stats for a flight doc that predates or omits the field", async () => {
+    // A doc replicated from an older app version (or a partial/foreign write)
+    // can lack stats. Our Flight type says stats is required, so the boundary
+    // must default it rather than let LogbookPage crash reading
+    // flight.stats.distanceMeters. (sync.spec seeds exactly such a doc.)
+    const id = `pre-stats-${crypto.randomUUID()}`;
+    await syncedDb().put({
+      _id: `flight:${id}`,
+      name: "recorded on an old version",
+      startedAt: 1000,
+    });
+
+    const flight = (await listFlights()).find((f) => f.id === id);
+    expect(flight).toBeDefined();
+    expect(flight!.stats).toEqual(EMPTY_STATS);
   });
 
   it("updates metadata without touching the track", async () => {
