@@ -3,6 +3,7 @@ import { describe, expect, it } from "vitest";
 import { FlightSimulator } from "../engine/simulator";
 import { computeStats } from "../flight/stats";
 import {
+  deleteAllPins,
   deleteFlight,
   deletePin,
   type Flight,
@@ -163,6 +164,30 @@ describe("storage", () => {
 
     await deletePin(pin.id);
     expect((await listPins()).map((p) => p.id)).not.toContain(pin.id);
+  });
+
+  it("deleteAllPins clears the whole route and no-ops when empty", async () => {
+    await deleteAllPins();
+    expect(await listPins()).toHaveLength(0);
+    // No-op on an already-empty route (must not throw).
+    await deleteAllPins();
+
+    const now = Date.now();
+    for (let i = 0; i < 4; i++) {
+      await savePin({
+        id: crypto.randomUUID(),
+        name: `Pin ${i}`,
+        notes: "",
+        latitude: 33 + i,
+        longitude: -112,
+        createdAt: now + i,
+        updatedAt: now + i,
+      });
+    }
+    expect(await listPins()).toHaveLength(4);
+
+    await deleteAllPins();
+    expect(await listPins()).toHaveLength(0);
   });
 
   it("round-trips settings", async () => {

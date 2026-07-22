@@ -454,14 +454,35 @@ export async function deletePin(pinId: string) {
 // sequential removes) so a many-pin route wipes as a single feed event, not a
 // flicker of the line shedding a pin at a time.
 export async function deleteAllPins() {
-  const result = await db.allDocs({
+  const result = await db.allDocs<PinDoc>({
+    include_docs: true,
     startkey: "pin:",
     endkey: "pin:￰",
   });
-  const deletions = result.rows.map((row) => ({
-    _id: row.id,
-    _rev: row.value.rev,
-    _deleted: true,
-  }));
-  if (deletions.length > 0) await db.bulkDocs(deletions);
+  const deletions = result.rows.flatMap((row) =>
+    row.doc ? [{ ...row.doc, _deleted: true }] : [],
+  );
+  if (deletions.length === 0) return;
+  const responses = await db.bulkDocs(deletions);
+  // bulkDocs reports a per-doc 409 as a result entry, not a throw: a pin whose
+  // _rev moved under a concurrent replicated pull between the read and the
+  // write is otherwise silently skipped, and then blinks back on the feed.
+  // Re-fetch the live rev for each conflict and delete again so the clear is
+  // total; a doc that a concurrent pull already deleted (get rejects) is
+  // simply gone. One retry pass — a second concurrent write in that window is
+  // vanishingly unlikely and would just leave a pin the user can tap-delete.
+  const conflicts = responses.flatMap((r) =>
+    "error" in r && r.error && r.id ? [r.id] : [],
+  );
+  if (conflicts.length === 0) return;
+  const retries = await Promise.all(
+    conflicts.map((id) =>
+      db.get<PinDoc>(id).then(
+        (doc) => ({ ...doc, _deleted: true }),
+        () => null,
+      ),
+    ),
+  );
+  const live = retries.filter((doc) => doc !== null);
+  if (live.length > 0) await db.bulkDocs(live);
 }
