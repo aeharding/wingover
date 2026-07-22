@@ -1,0 +1,89 @@
+/* The contained-crash panel. One page's render error degrades to this
+   instead of unmounting the whole app to a white screen. Two looks: the
+   ground panel themes with the app (light/dark tokens), the flight panel
+   is pinned dark like the in-flight dialog (BigConfirm) — it can appear
+   over a sunlit map and must never flash the light scheme. */
+.panel {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  box-sizing: border-box;
+  min-height: 100%;
+  padding: 2rem 1.5rem;
+  text-align: center;
+  color: var(--ion-text-color);
+  background: var(--ion-background-color);
+}
+
+.card {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 1.25rem;
+  width: 100%;
+  max-width: 22rem;
+}
+
+.message {
+  margin: 0;
+  font-size: 1.25rem;
+  font-weight: 600;
+}
+
+.note {
+  margin: 0;
+  font-size: 1rem;
+  opacity: 0.8;
+}
+
+/* Stock-adjacent: the app primary, so the retry reads as the one action. */
+.retry {
+  min-width: 12rem;
+  min-height: 48px;
+  padding: 0 1.5rem;
+  border: 0;
+  border-radius: 12px;
+  font-size: 1.05rem;
+  font-weight: 600;
+  color: var(--ion-color-primary-contrast);
+  background: var(--ion-color-primary);
+
+  &:active {
+    background: var(--ion-color-primary-shade);
+  }
+}
+
+/* Flight variant — the in-flight button/dialog language (BigConfirm):
+   solid dark surface, big type, one gloves-first target. Pinned in both
+   schemes; the flight surface is exempt from theming (STEERING). */
+.flight {
+  color: #fff;
+  background: #000;
+
+  .card {
+    max-width: 26rem;
+  }
+
+  .message {
+    font-size: 1.6rem;
+    font-weight: 700;
+  }
+
+  .note {
+    font-size: 1.15rem;
+    opacity: 0.85;
+  }
+
+  .retry {
+    width: 100%;
+    min-height: 76px;
+    border-radius: 14px;
+    font-size: 1.35rem;
+    color: #fff;
+    background: #333;
+
+    &:active {
+      background: #2a2a2a;
+    }
+  }
+}
