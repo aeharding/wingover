@@ -5,13 +5,13 @@
      owns the top edge — the map starts at the header's bottom, not the
      status bar, and must not inset the top again. */
   --ion-safe-area-top: 0px;
-}
 
-/* On the phone the tab bar sits below the map and owns the home indicator;
-   the map's bottom is the tab bar's top. Scoped to the tab shell so the
-   desktop all-flights (no tab bar, bottom AT the device edge) keeps it. */
-ion-tabs .root {
-  --ion-safe-area-bottom: 0px;
+  /* On the phone the tab bar sits below the map and owns the home indicator;
+     the map's bottom is the tab bar's top. Scoped to the tab shell so the
+     desktop all-flights (no tab bar, bottom AT the device edge) keeps it. */
+  ion-tabs & {
+    --ion-safe-area-bottom: 0px;
+  }
 }
 
 .legend {

@@ -38,6 +38,11 @@
      transparent toolbar is covered the way the Ionic docs do it instead:
      the content is fullscreen and paints its own --background under the
      bar. */
+
+  :root:global(.ion-palette-dark) & {
+    --ion-background-color: #000000;
+    --ion-background-color-rgb: 0, 0, 0;
+  }
 }
 
 .content ion-list:global(.list-inset) {
@@ -51,41 +56,34 @@
    sheet), so only the light scheme actually changes. */
 .content {
   --background: #f2f2f7;
-}
 
-:root:global(.ion-palette-dark) .page {
-  --ion-background-color: #000000;
-  --ion-background-color-rgb: 0, 0, 0;
-}
+  :root:global(.ion-palette-dark) & {
+    --background: var(--ion-background-color);
+  }
 
-:root:global(.ion-palette-dark) .content {
-  --background: var(--ion-background-color);
-}
+  :root:global(.ion-palette-dark) & ion-list:global(.list-inset) {
+    --ion-item-background: var(--wingover-tile);
+  }
 
-:root:global(.ion-palette-dark) .content ion-list:global(.list-inset) {
-  --ion-item-background: var(--wingover-tile);
-}
-
-/* Desktop: a centered column, not a stretched phone (moved from the shell —
-   this is the family's own desktop presentation). */
-@media (min-width: 992px) {
-  /* The list is a centered column, inboard of both device edges, so its
-     ion-items must not inset off the notch (left is already 0 from
-     .desktop-main; this clears the right). Desktop-only: on the phone the
-     settings list is full-bleed and SHOULD clear the notch, so no consume. */
-  .content {
+  /* Desktop: a centered column, not a stretched phone (moved from the shell —
+     this is the family's own desktop presentation). */
+  @media (min-width: 992px) {
+    /* The list is a centered column, inboard of both device edges, so its
+       ion-items must not inset off the notch (left is already 0 from
+       .desktop-main; this clears the right). Desktop-only: on the phone the
+       settings list is full-bleed and SHOULD clear the notch, so no consume. */
     --ion-safe-area-right: 0px;
-  }
 
-  .content ion-list:global(.list-inset),
-  .content .listHeader,
-  .content .helperText,
-  .content ion-header[collapse="condense"] {
-    max-width: 640px;
-    margin-inline: auto;
-  }
+    ion-list:global(.list-inset),
+    .listHeader,
+    .helperText,
+    ion-header[collapse="condense"] {
+      max-width: 640px;
+      margin-inline: auto;
+    }
 
-  .content .listHeader {
-    padding-left: 32px;
+    .listHeader {
+      padding-left: 32px;
+    }
   }
 }

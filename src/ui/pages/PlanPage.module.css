@@ -5,20 +5,20 @@
   line-height: 0;
 }
 
-/* On the phone the plan map lives in the tab shell, where the tab bar sits
-   below it and owns the home indicator; the map's bottom is the tab bar's
-   top, so it consumes the bottom inset (the overlay + distance pill would
-   otherwise float a home-indicator's height too high). Scoped to the tab
-   shell, so the desktop plan — no tab bar, bottom AT the device edge — keeps
-   it. */
-ion-tabs .map {
-  --ion-safe-area-bottom: 0px;
-}
-
 .map {
   position: relative;
   flex: 1;
   min-width: 0;
+
+  /* On the phone the plan map lives in the tab shell, where the tab bar sits
+     below it and owns the home indicator; the map's bottom is the tab bar's
+     top, so it consumes the bottom inset (the overlay + distance pill would
+     otherwise float a home-indicator's height too high). Scoped to the tab
+     shell, so the desktop plan — no tab bar, bottom AT the device edge — keeps
+     it. */
+  ion-tabs & {
+    --ion-safe-area-bottom: 0px;
+  }
 }
 
 /* Midpoint insert handle — a small dot the exact color of the route line, so
@@ -41,14 +41,14 @@ ion-tabs .map {
   justify-content: center;
   width: 26px;
   height: 26px;
-}
 
-.midpointDot::before {
-  content: "";
-  width: 6px;
-  height: 6px;
-  border-radius: 50%;
-  background: var(--wingover-green);
+  &::before {
+    content: "";
+    width: 6px;
+    height: 6px;
+    border-radius: 50%;
+    background: var(--wingover-green);
+  }
 }
 
 /* Total route length, for planning — a readable pill at the bottom center,
@@ -71,10 +71,10 @@ ion-tabs .map {
   font-weight: 600;
   white-space: nowrap;
   cursor: pointer;
-}
 
-.distance:active {
-  opacity: 0.7;
+  &:active {
+    opacity: 0.7;
+  }
 }
 
 /* ── plan: wrapper at every width; the pane joins on desktop ──────────── */
@@ -114,33 +114,33 @@ ion-tabs .map {
   color: var(--ion-text-color);
   padding: 0.72rem 1.1rem;
   border-bottom: 1px solid var(--hairline);
-}
 
-.row .dot {
-  flex-shrink: 0;
-  width: 22px;
-  height: 22px;
-  border-radius: 50%;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  font-size: 0.7rem;
-  font-weight: 700;
-  color: #000;
-  background: var(--wingover-green);
-  margin-top: 2px;
-}
+  .dot {
+    flex-shrink: 0;
+    width: 22px;
+    height: 22px;
+    border-radius: 50%;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 0.7rem;
+    font-weight: 700;
+    color: #000;
+    background: var(--wingover-green);
+    margin-top: 2px;
+  }
 
-.row h3 {
-  margin: 0 0 1px;
-  font-size: 0.92rem;
-  font-weight: 600;
-}
+  h3 {
+    margin: 0 0 1px;
+    font-size: 0.92rem;
+    font-weight: 600;
+  }
 
-.row p {
-  margin: 0;
-  font-size: 0.78rem;
-  color: var(--ion-color-medium);
+  p {
+    margin: 0;
+    font-size: 0.78rem;
+    color: var(--ion-color-medium);
+  }
 }
 
 .paneEmpty {
@@ -169,8 +169,8 @@ ion-tabs .map {
   font-weight: 600;
   color: var(--ion-color-danger);
   cursor: pointer;
-}
 
-.clear:hover {
-  text-decoration: underline;
+  &:hover {
+    text-decoration: underline;
+  }
 }

@@ -20,15 +20,23 @@
   --replay-cyan: var(--wingover-accent);
   --replay-green: color(display-p3 0 0.55 0.1);
   --replay-yellow: color(display-p3 0.72 0.52 0);
-}
 
-:root:global(.ion-palette-dark) .drawer {
-  --replay-pane-bg: #17191c;
-  --replay-ink: #fff;
-  --replay-muted: #9a9fa6;
-  --replay-cyan: var(--stat-cyan);
-  --replay-green: var(--stat-green);
-  --replay-yellow: var(--stat-yellow);
+  :root:global(.ion-palette-dark) & {
+    --replay-pane-bg: #17191c;
+    --replay-ink: #fff;
+    --replay-muted: #9a9fa6;
+    --replay-cyan: var(--stat-cyan);
+    --replay-green: var(--stat-green);
+    --replay-yellow: var(--stat-yellow);
+  }
+
+  &.open {
+    grid-template-rows: 1fr;
+  }
+
+  @media (prefers-reduced-motion: reduce) {
+    transition: none;
+  }
 }
 
 /* The drawer pull, centered ON the pane's top edge (outside the clip so
@@ -57,10 +65,14 @@
   background: none;
   border: 0;
   z-index: 10;
-}
 
-.drawer.open .tab {
-  transform: translate(-50%, -50%);
+  .drawer.open & {
+    transform: translate(-50%, -50%);
+  }
+
+  @media (prefers-reduced-motion: reduce) {
+    transition: none;
+  }
 }
 
 .bump {
@@ -77,18 +89,7 @@
   shape-rendering: geometricprecision;
 }
 
-.drawer.open {
-  grid-template-rows: 1fr;
-}
-
 .clip {
   overflow: hidden;
   min-height: 0;
-}
-
-@media (prefers-reduced-motion: reduce) {
-  .drawer,
-  .tab {
-    transition: none;
-  }
 }

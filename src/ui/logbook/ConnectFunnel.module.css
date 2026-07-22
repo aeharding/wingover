@@ -5,12 +5,12 @@
   flex-direction: column;
   gap: 0.3rem;
   text-align: center;
-}
 
-.funnel h2 {
-  font-size: 1.15rem;
-  font-weight: 700;
-  margin: 0 0 0.2rem;
+  h2 {
+    font-size: 1.15rem;
+    font-weight: 700;
+    margin: 0 0 0.2rem;
+  }
 }
 
 .sub {

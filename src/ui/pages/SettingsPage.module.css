@@ -5,11 +5,11 @@
   display: inline-flex;
   align-items: center;
   gap: 0.3em;
-}
 
-.note ion-spinner {
-  width: 1em;
-  height: 1em;
+  ion-spinner {
+    width: 1em;
+    height: 1em;
+  }
 }
 
 /* Status colors: the scheme-aware P3 tokens (theme.css) — full saturation

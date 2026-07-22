@@ -4,36 +4,39 @@
   display: flex;
   flex-direction: column;
   height: 100%;
-}
 
-/* Full screen hides the rail (body.flight-map-full), so the whole seat — the
-   map AND the scrub docked below it — reaches the device left edge again:
-   take back the left inset that the shell's main zeroed for embedded content.
-   On the seat (not just the map), so the scrub, a sibling of the map,
-   restores too. var(...,env()) not bare env() so the harness (which injects
-   the upstream var) can verify it, same as everything else in the model. */
-:global(body.flight-map-full) .root {
-  --ion-safe-area-left: var(--safe-area-inset-left, env(safe-area-inset-left));
+  /* Full screen hides the rail (body.flight-map-full), so the whole seat — the
+     map AND the scrub docked below it — reaches the device left edge again:
+     take back the left inset that the shell's main zeroed for embedded content.
+     On the seat (not just the map), so the scrub, a sibling of the map,
+     restores too. var(...,env()) not bare env() so the harness (which injects
+     the upstream var) can verify it, same as everything else in the model. */
+  :global(body.flight-map-full) & {
+    --ion-safe-area-left: var(
+      --safe-area-inset-left,
+      env(safe-area-inset-left)
+    );
+  }
 }
 
 .map {
   position: relative;
   flex: 1;
   min-height: 0;
-}
 
-/* Map chrome sits bottom-LEFT in the seat: the card owns the right
-   column, and a grown Notes field must never sit under the expand
-   button's hitbox. Raised above MapKit's Apple logo + Legal strip, which
-   is a license surface, not decoration. Scoped under .map ON PURPOSE: the
-   element also wears the map contract's .overlay, and a same-element
-   single-class tie is decided by bundle emission order (prod emitted the
-   contract later and un-did this override; dev order masked it). The
-   local ancestor restores the old .seat-map .map-overlay determinism. */
-.map .overlay {
-  right: auto;
-  left: calc(0.9rem + var(--ion-safe-area-left));
-  bottom: calc(2.6rem + var(--ion-safe-area-bottom));
+  /* Map chrome sits bottom-LEFT in the seat: the card owns the right
+     column, and a grown Notes field must never sit under the expand
+     button's hitbox. Raised above MapKit's Apple logo + Legal strip, which
+     is a license surface, not decoration. Scoped under .map ON PURPOSE: the
+     element also wears the map contract's .overlay, and a same-element
+     single-class tie is decided by bundle emission order (prod emitted the
+     contract later and un-did this override; dev order masked it). The
+     local ancestor restores the old .seat-map .map-overlay determinism. */
+  .overlay {
+    right: auto;
+    left: calc(0.9rem + var(--ion-safe-area-left));
+    bottom: calc(2.6rem + var(--ion-safe-area-bottom));
+  }
 }
 
 /* The floating details card floats against the seat's top-right — both
@@ -62,19 +65,24 @@
   border: 1px solid var(--hairline);
   border-radius: 14px;
   z-index: 5;
-}
 
-:global(body.flight-map-full) .card {
-  display: none;
-}
+  :global(body.flight-map-full) & {
+    display: none;
+  }
 
-.card ion-list {
-  background: transparent;
-  padding-top: 0;
-}
+  ion-list {
+    background: transparent;
+    padding-top: 0;
+  }
 
-.card ion-item {
-  --background: transparent;
+  ion-item {
+    --background: transparent;
+  }
+
+  &.collapsed {
+    width: auto;
+    max-width: 380px;
+  }
 }
 
 /* The whole row toggles the card (see the tsx); the chevron is the
@@ -110,9 +118,4 @@
   color: var(--ion-color-medium);
   background: none;
   border: 0;
-}
-
-.card.collapsed {
-  width: auto;
-  max-width: 380px;
 }

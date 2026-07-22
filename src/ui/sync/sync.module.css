@@ -34,38 +34,38 @@
       var(--ion-background-color) 97%
     ),
     url("/sync-hero.jpg") center / cover no-repeat, var(--ion-background-color);
-}
 
-:root:global(.ion-palette-dark) .modal {
-  --hero-scrim-mid: rgba(0, 0, 0, 0.08);
-  --hero-scrim-strong: rgba(0, 0, 0, 0.72);
-  --hero-glow: 0 1px 12px rgba(0, 0, 0, 0.8);
-  --hero-glow-tight: 0 1px 8px rgba(0, 0, 0, 0.8);
+  :root:global(.ion-palette-dark) & {
+    --hero-scrim-mid: rgba(0, 0, 0, 0.08);
+    --hero-scrim-strong: rgba(0, 0, 0, 0.72);
+    --hero-glow: 0 1px 12px rgba(0, 0, 0, 0.8);
+    --hero-glow-tight: 0 1px 8px rgba(0, 0, 0, 0.8);
+  }
 }
 
 /* Transparent so the modal-wrapper hero shows through the whole sheet. */
 .homeContent {
   --background: transparent;
-}
 
-/* Flex the scroll container so the condensed header takes its natural height
-   and the body fills exactly what's left. min-height:100% on the body instead
-   would stack with the header and push the last control off-screen. */
-.homeContent::part(scroll) {
-  display: flex;
-  flex-direction: column;
-}
+  /* Flex the scroll container so the condensed header takes its natural height
+     and the body fills exactly what's left. min-height:100% on the body instead
+     would stack with the header and push the last control off-screen. */
+  &::part(scroll) {
+    display: flex;
+    flex-direction: column;
+  }
 
-/* theme.css sets `ion-toolbar { --background: var(--ion-background-color) }`
-   globally for the native-iOS nav bar. That document-scope rule outranks the
-   color=" " transparency hack (a normal declaration in the outer tree beats
-   the component's shadow-DOM :host(.ion-color) rule), so the condensed toolbar
-   renders opaque and hides the hero. Re-clear it here so the photo reads
-   behind the large title. The pinned fade header keeps its background: at rest
-   it fades to transparent (hero shows through), and it fades back in as a
-   solid bar as the title scrolls away, the native iOS behavior. */
-.homeContent ion-header[collapse="condense"] ion-toolbar {
-  --background: transparent;
+  /* theme.css sets `ion-toolbar { --background: var(--ion-background-color) }`
+     globally for the native-iOS nav bar. That document-scope rule outranks the
+     color=" " transparency hack (a normal declaration in the outer tree beats
+     the component's shadow-DOM :host(.ion-color) rule), so the condensed toolbar
+     renders opaque and hides the hero. Re-clear it here so the photo reads
+     behind the large title. The pinned fade header keeps its background: at rest
+     it fades to transparent (hero shows through), and it fades back in as a
+     solid bar as the title scrolls away, the native iOS behavior. */
+  ion-header[collapse="condense"] ion-toolbar {
+    --background: transparent;
+  }
 }
 
 .homeBody {
@@ -77,6 +77,22 @@
   text-align: center;
   padding: 2rem 1.5rem;
   box-sizing: border-box;
+
+  /* Shadows only over the photo — on the Subscription sheet the scrim can't be
+     trusted everywhere (a bright cloud), and on the plain Log In page the same
+     shadow reads as a smudge. */
+  .stateLabel {
+    text-shadow: var(--hero-glow);
+  }
+
+  .stateDetail {
+    text-shadow: var(--hero-glow-tight);
+  }
+
+  /* Over the hero photo — same shadow deal as every other word there. */
+  .errorMessage {
+    text-shadow: var(--hero-glow-tight);
+  }
 }
 
 /* --ion-text-color, NOT --ion-color-light: the dark palette redefines the
@@ -112,21 +128,21 @@
   padding: 0;
   display: inline-block;
   text-align: left;
-}
 
-.reasons li {
-  display: flex;
-  align-items: center;
-  gap: 0.75rem;
-  margin-bottom: 0.75rem;
-  color: var(--ion-text-color);
-  text-shadow: var(--hero-glow-tight);
-}
+  li {
+    display: flex;
+    align-items: center;
+    gap: 0.75rem;
+    margin-bottom: 0.75rem;
+    color: var(--ion-text-color);
+    text-shadow: var(--hero-glow-tight);
+  }
 
-.reasons ion-icon {
-  font-size: 1.375rem;
-  color: var(--ion-color-primary);
-  flex-shrink: 0;
+  ion-icon {
+    font-size: 1.375rem;
+    color: var(--ion-color-primary);
+    flex-shrink: 0;
+  }
 }
 
 /* The Log In sheet is a plain page — no photo, no scrim. It shares the state
@@ -160,25 +176,18 @@
   font-size: 0.875rem;
 }
 
-/* Shadows only over the photo — on the Subscription sheet the scrim can't be
-   trusted everywhere (a bright cloud), and on the plain Log In page the same
-   shadow reads as a smudge. */
-.homeBody .stateLabel {
-  text-shadow: var(--hero-glow);
-}
-
-.homeBody .stateDetail {
-  text-shadow: var(--hero-glow-tight);
-}
-
 /* Read-only / Expired is not an error and must not look like one: the pilot's
    flights are all still there. Amber, not red. */
-.stateReadonly .stateLabel {
-  color: var(--ion-color-warning);
+.stateReadonly {
+  .stateLabel {
+    color: var(--ion-color-warning);
+  }
 }
 
-.stateError .stateLabel {
-  color: var(--ion-color-danger);
+.stateError {
+  .stateLabel {
+    color: var(--ion-color-danger);
+  }
 }
 
 .errorMessage {
@@ -186,11 +195,6 @@
   font-size: 0.875rem;
   word-break: break-word;
   margin: 0 0 1rem;
-}
-
-/* Over the hero photo — same shadow deal as every other word there. */
-.homeBody .errorMessage {
-  text-shadow: var(--hero-glow-tight);
 }
 
 /* Gloves-first (STEERING): every block action here is well past the platform
@@ -220,14 +224,14 @@
   --background-focused: #333;
   --background-hover: #333;
   --color: #fff;
-}
 
-:root:global(.ion-palette-dark) .siwaButton {
-  --background: #fff;
-  --background-activated: #e6e6e6;
-  --background-focused: #e6e6e6;
-  --background-hover: #e6e6e6;
-  --color: #000;
+  :root:global(.ion-palette-dark) & {
+    --background: #fff;
+    --background-activated: #e6e6e6;
+    --background-focused: #e6e6e6;
+    --background-hover: #e6e6e6;
+    --color: #000;
+  }
 }
 
 /* Plain CSS, not ion-padding: this app imports only core/normalize/structure/
@@ -253,8 +257,8 @@
   font-size: 0.8125rem;
   line-height: 1.4;
   margin-top: 0.5rem;
-}
 
-.finePrint a {
-  color: inherit;
+  a {
+    color: inherit;
+  }
 }

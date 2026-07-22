@@ -17,15 +17,15 @@
   font-size: 1rem;
   font-weight: 600;
   white-space: nowrap;
-}
 
-.button:disabled {
-  opacity: 0.4;
-}
+  &:disabled {
+    opacity: 0.4;
+  }
 
-.button.accent {
-  color: var(--replay-yellow);
-  border-color: var(--replay-yellow);
+  &.accent {
+    color: var(--replay-yellow);
+    border-color: var(--replay-yellow);
+  }
 }
 
 /* The live kept-window preview, centered between the buttons. */

@@ -98,6 +98,13 @@ Conventions the migration settled on:
   verification of cascade behavior must run against the PROD bundle
   (`vite build` + preview or a computed-style harness), never the dev
   server.
+- **Nesting**: modules use native CSS nesting (`&`), which Vite lowers to
+  flat rules. Two provable edges: a fold is only byte-equivalent when the
+  parent is a simple compound (a complex parent desugars via `:is()` — the
+  one such case, `.lines path`, stays flat on purpose); and `@value`
+  cross-imports currently make Vite re-emit the imported module's CSS once
+  per importer (byte-identical duplicates, harmless because ties are banned,
+  ~2.5KB pre-gzip; known quirk, revisit on Vite upgrades).
 - **Types**: `pnpm generate:csstypes` (typed-css-modules) writes a
   committed `*.module.css.d.ts` per module; a missed or renamed class is
   a tsc error.

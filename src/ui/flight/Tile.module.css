@@ -25,19 +25,19 @@
   white-space: nowrap;
   min-width: 0;
   overflow: hidden;
-}
 
-/* In-flight stat values in wide-gamut display-p3 (see --stat-* in theme.css). */
-.cyan .value {
-  color: var(--stat-cyan);
-}
+  /* In-flight stat values in wide-gamut display-p3 (see --stat-* in theme.css). */
+  .cyan & {
+    color: var(--stat-cyan);
+  }
 
-.green .value {
-  color: var(--stat-green);
-}
+  .green & {
+    color: var(--stat-green);
+  }
 
-.yellow .value {
-  color: var(--stat-yellow);
+  .yellow & {
+    color: var(--stat-yellow);
+  }
 }
 
 .wide {

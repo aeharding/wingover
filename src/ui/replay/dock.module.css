@@ -38,9 +38,9 @@
 .seat {
   padding-inline: calc(1.1rem + var(--ion-safe-area-left))
     calc(1.1rem + var(--ion-safe-area-right));
-}
 
-.seat .readouts {
-  justify-content: flex-start;
-  gap: 2.2rem;
+  .readouts {
+    justify-content: flex-start;
+    gap: 2.2rem;
+  }
 }

@@ -22,29 +22,29 @@
 .identity {
   flex: 1;
   min-width: 0;
-}
 
-/* Long names and launch sites give way; the metric column never moves. */
-.identity h2,
-.identity p {
-  margin: 0;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-}
+  /* Long names and launch sites give way; the metric column never moves. */
+  h2,
+  p {
+    margin: 0;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
 
-/* Matches what ion-label's ios typography gave these before the row
-   moved out of it: 17px titles, 14px muted sub line. */
-.identity h2 {
-  font-size: 1.0625rem;
-  font-weight: 500;
-  line-height: 1.4;
-}
+  /* Matches what ion-label's ios typography gave these before the row
+     moved out of it: 17px titles, 14px muted sub line. */
+  h2 {
+    font-size: 1.0625rem;
+    font-weight: 500;
+    line-height: 1.4;
+  }
 
-.identity p {
-  font-size: 0.875rem;
-  line-height: 1.4;
-  color: var(--ion-color-medium);
+  p {
+    font-size: 0.875rem;
+    line-height: 1.4;
+    color: var(--ion-color-medium);
+  }
 }
 
 .stats {

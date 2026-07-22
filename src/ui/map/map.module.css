@@ -32,28 +32,73 @@
   position: absolute;
   inset: 0;
   background: #191b1e;
-}
 
-/* The pre-reveal veil matches the basemap's world (light follows the
-   map's appearance, not the app scheme), so neither scheme flashes the
-   other's color while tiles load. */
-.container.light {
-  background: #e2e5e9;
-}
+  /* The pre-reveal veil matches the basemap's world (light follows the
+     map's appearance, not the app scheme), so neither scheme flashes the
+     other's color while tiles load. */
+  &.light {
+    background: #e2e5e9;
+  }
 
-/* MapKit builds its view inside our container; make it fill the box. */
-.container :global(.mk-map-view) {
-  position: absolute;
-  inset: 0;
-}
+  /* MapKit builds its view inside our container; make it fill the box. */
+  :global(.mk-map-view) {
+    position: absolute;
+    inset: 0;
+  }
 
-.container :global(.maplibregl-canvas) {
-  opacity: 1;
-  transition: opacity 0.25s ease;
-}
+  :global(.maplibregl-canvas) {
+    opacity: 1;
+    transition: opacity 0.25s ease;
+  }
 
-.container.loading :global(.maplibregl-canvas) {
-  opacity: 0;
+  &.loading :global(.maplibregl-canvas) {
+    opacity: 0;
+  }
+
+  /* Attribution (bottom-left) rides off the home indicator and, in
+     landscape, the notch — from the SAME var(--ion-safe-area-*) the
+     buttons use (the container is a descendant of .surface, so it
+     inherits the cascaded, already-consumed values), so the MapLibre logo
+     and the buttons can never disagree, exactly like the MapKit logo (which
+     takes the same numbers via setInsets, read off the probe). */
+  :global(.maplibregl-ctrl-bottom-left) {
+    margin-bottom: var(--ion-safe-area-bottom);
+    margin-left: var(--ion-safe-area-left);
+  }
+
+  :global(.maplibregl-ctrl-attrib) {
+    box-sizing: border-box;
+    max-width: calc(100vw - 6rem);
+    white-space: normal;
+    line-height: 1.4;
+    font-size: 0.68rem;
+    color: rgba(235, 238, 242, 0.8);
+    background: none;
+    text-shadow: 0 0 3px rgba(0, 0, 0, 0.9);
+  }
+
+  :global(.maplibregl-ctrl-attrib) a {
+    color: rgba(235, 238, 242, 0.92);
+  }
+
+  /* The live map is light; white credit text vanishes there, and the OSM
+     attribution is a license obligation, not decoration. */
+  &.light :global(.maplibregl-ctrl-attrib) {
+    color: rgba(35, 40, 46, 0.85);
+    text-shadow: 0 0 3px rgba(255, 255, 255, 0.9);
+  }
+
+  &.light :global(.maplibregl-ctrl-attrib) a {
+    color: rgba(35, 40, 46, 0.95);
+  }
+
+  &.light :global(.maplibregl-ctrl-attrib) summary {
+    filter: opacity(0.7);
+  }
+
+  :global(.maplibregl-ctrl-attrib) summary {
+    filter: invert(1) opacity(0.85);
+  }
 }
 
 /* Right-anchored by default, off the map's resolved insets via the shared
@@ -81,58 +126,13 @@
   background: var(--map-chip-bg);
   border: 6px solid transparent;
   border-radius: 12px;
-}
 
-.button:active {
-  background: var(--map-chip-bg-active);
-}
+  &:active {
+    background: var(--map-chip-bg-active);
+  }
 
-.button[data-active="true"] {
-  color: var(--wingover-accent);
-  border-color: var(--wingover-accent);
-}
-
-/* Attribution (bottom-left) rides off the home indicator and, in
-   landscape, the notch — from the SAME var(--ion-safe-area-*) the
-   buttons use (the container is a descendant of .surface, so it
-   inherits the cascaded, already-consumed values), so the MapLibre logo
-   and the buttons can never disagree, exactly like the MapKit logo (which
-   takes the same numbers via setInsets, read off the probe). */
-.container :global(.maplibregl-ctrl-bottom-left) {
-  margin-bottom: var(--ion-safe-area-bottom);
-  margin-left: var(--ion-safe-area-left);
-}
-
-.container :global(.maplibregl-ctrl-attrib) {
-  box-sizing: border-box;
-  max-width: calc(100vw - 6rem);
-  white-space: normal;
-  line-height: 1.4;
-  font-size: 0.68rem;
-  color: rgba(235, 238, 242, 0.8);
-  background: none;
-  text-shadow: 0 0 3px rgba(0, 0, 0, 0.9);
-}
-
-.container :global(.maplibregl-ctrl-attrib) a {
-  color: rgba(235, 238, 242, 0.92);
-}
-
-/* The live map is light; white credit text vanishes there, and the OSM
-   attribution is a license obligation, not decoration. */
-.container.light :global(.maplibregl-ctrl-attrib) {
-  color: rgba(35, 40, 46, 0.85);
-  text-shadow: 0 0 3px rgba(255, 255, 255, 0.9);
-}
-
-.container.light :global(.maplibregl-ctrl-attrib) a {
-  color: rgba(35, 40, 46, 0.95);
-}
-
-.container.light :global(.maplibregl-ctrl-attrib) summary {
-  filter: opacity(0.7);
-}
-
-.container :global(.maplibregl-ctrl-attrib) summary {
-  filter: invert(1) opacity(0.85);
+  &[data-active="true"] {
+    color: var(--wingover-accent);
+    border-color: var(--wingover-accent);
+  }
 }

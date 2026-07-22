@@ -27,6 +27,31 @@
   /* Column so fullscreen can dock the replay bar under the map region. */
   display: flex;
   flex-direction: column;
+
+  /* Inline (not full screen), the map is a scroll-through preview: single-finger
+     swipes scroll the details past it instead of panning the map, which would
+     trap the scroll — worst with the keyboard up, when the map can be the whole
+     scrollable area. pointer-events fall through to Ionic's scroller; the controls
+     (view toggle, expand pill) opt back in. Tap the pill to go full screen, where
+     the map pans/zooms normally. Phone-only page (desktop uses a different view). */
+  &:not(.full) {
+    pointer-events: none;
+
+    .tapLayer,
+    :global(.overlay),
+    .expandPill {
+      pointer-events: auto;
+    }
+
+    /* Inline, the view toggle moves to the top-right, out of the way of the scroll
+       and the centered pill (MapView.css stacks it bottom-right, right again once
+       full screen). No home-indicator inset — the map box is mid-page here (and
+       the region is consume-all anyway, so the safe-area vars already read 0). */
+    :global(.overlay) {
+      top: 0.9rem;
+      bottom: auto;
+    }
+  }
 }
 
 /* The map itself (canvas, controls, pills). Inline it is the whole box;
@@ -68,21 +93,6 @@
   background: var(--ion-background-color, #000);
 }
 
-/* Inline (not full screen), the map is a scroll-through preview: single-finger
-   swipes scroll the details past it instead of panning the map, which would
-   trap the scroll — worst with the keyboard up, when the map can be the whole
-   scrollable area. pointer-events fall through to Ionic's scroller; the controls
-   (view toggle, expand pill) opt back in. Tap the pill to go full screen, where
-   the map pans/zooms normally. Phone-only page (desktop uses a different view). */
-.map:not(.full) {
-  pointer-events: none;
-}
-.map:not(.full) .tapLayer,
-.map:not(.full) :global(.overlay),
-.map:not(.full) .expandPill {
-  pointer-events: auto;
-}
-
 /* Inline, a full-cover layer turns a tap into "expand" while a vertical drag
    scrolls the details straight through it (touch-action: pan-y). Sits below the
    controls (z-index 10) so the toggle and pill still win their own taps. */
@@ -91,15 +101,6 @@
   inset: 0;
   z-index: 5;
   touch-action: pan-y;
-}
-
-/* Inline, the view toggle moves to the top-right, out of the way of the scroll
-   and the centered pill (MapView.css stacks it bottom-right, right again once
-   full screen). No home-indicator inset — the map box is mid-page here (and
-   the region is consume-all anyway, so the safe-area vars already read 0). */
-.map:not(.full) :global(.overlay) {
-  top: 0.9rem;
-  bottom: auto;
 }
 
 /* Inline expand affordance: a labelled pill centered at the bottom of the map
@@ -120,8 +121,8 @@
   color: var(--map-chip-text);
   background: var(--map-chip-bg);
   border-radius: 999px;
-}
 
-.expandPill:active {
-  background: var(--map-chip-bg-active);
+  &:active {
+    background: var(--map-chip-bg-active);
+  }
 }

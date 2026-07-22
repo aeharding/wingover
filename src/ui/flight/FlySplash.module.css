@@ -32,11 +32,34 @@
     #281824 70%,
     #2d1e13 100%
   );
+
+  /* Day sky: blue does not blend straight into amber (RGB crosses a gray dead
+     zone that split the sky into two slabs) — a near-white HAZE stop between
+     them is how a real sky does it. The warmth RADIATES from the sun via the
+     .glow radial below; this base keeps only a gentle amber floor. */
+  :root:not(:global(.ion-palette-dark)) & {
+    background: linear-gradient(
+      180deg,
+      #c8ddf3 0%,
+      #dbe7f4 38%,
+      #edf1f1 64%,
+      #eeeadd 86%,
+      #ece2cc 100%
+    );
+  }
 }
 
 .star {
   fill: #ffdfac;
   opacity: 0.5;
+
+  /* The motifs flip to deeper ambers: the near-white warm fills that read on
+     the night sky vanish against the day one. */
+  :root:not(:global(.ion-palette-dark)) & {
+    fill: #d3922f;
+    /* Softer than the night stars' 0.5: daylight motes, not beacons. */
+    opacity: 0.32;
+  }
 }
 
 /* At dusk the disc is the MOON: cool silver against the purples, more
@@ -45,11 +68,31 @@
 .sun {
   fill: #e9eef6;
   opacity: 0.3;
+
+  /* The sun seen THROUGH the wing (the blurred, canopy-clipped copy), both
+     schemes: brighter than the bare disc because the blur spreads its energy —
+     it must still read as the light source. */
+  &.sunVeiled {
+    opacity: 0.26;
+  }
+
+  :root:not(:global(.ion-palette-dark)) &.sunVeiled {
+    opacity: 0.5;
+  }
+
+  :root:not(:global(.ion-palette-dark)) & {
+    fill: #eda32f;
+    opacity: 0.22;
+  }
 }
 
 .cloud {
   fill: #ffdfac;
   opacity: 0.14;
+
+  :root:not(:global(.ion-palette-dark)) & {
+    fill: #c98f3f;
+  }
 }
 
 /* The icon's fanned flight-path curves — recolored warm so they read on the
@@ -60,6 +103,11 @@
   opacity: 0.08;
 }
 
+:root:not(:global(.ion-palette-dark)) .lines path {
+  stroke: #bd8434;
+  opacity: 0.14;
+}
+
 .canopy {
   fill: #ffefd3;
   stroke: #ffefd3;
@@ -67,21 +115,11 @@
   stroke-linejoin: round;
   stroke-linecap: round;
   opacity: 0.09;
-}
 
-/* Day sky: blue does not blend straight into amber (RGB crosses a gray dead
-   zone that split the sky into two slabs) — a near-white HAZE stop between
-   them is how a real sky does it. The warmth RADIATES from the sun via the
-   .glow radial below; this base keeps only a gentle amber floor. */
-:root:not(:global(.ion-palette-dark)) .splash {
-  background: linear-gradient(
-    180deg,
-    #c8ddf3 0%,
-    #dbe7f4 38%,
-    #edf1f1 64%,
-    #eeeadd 86%,
-    #ece2cc 100%
-  );
+  :root:not(:global(.ion-palette-dark)) & {
+    fill: #c98f3f;
+    stroke: #c98f3f;
+  }
 }
 
 /* The disc's radial glow, both schemes: daylight gets the sun's golden
@@ -91,6 +129,10 @@
    mounted, so switching tabs never replays it). */
 .glow {
   animation: glow-in 10s cubic-bezier(0.16, 1, 0.3, 1) both;
+
+  @media (prefers-reduced-motion: reduce) {
+    animation: none;
+  }
 }
 
 @keyframes glow-in {
@@ -99,86 +141,42 @@
   }
 }
 
-@media (prefers-reduced-motion: reduce) {
-  .glow {
-    animation: none;
-  }
-}
-
 .glowCore {
   stop-color: #d7dfeb;
   stop-opacity: 0.11;
+
+  :root:not(:global(.ion-palette-dark)) & {
+    stop-color: #ffcf70;
+    stop-opacity: 0.68;
+  }
 }
 
 .glowMid {
   stop-color: #aeb9c9;
   stop-opacity: 0.05;
+
+  :root:not(:global(.ion-palette-dark)) & {
+    stop-color: #ffd98c;
+    stop-opacity: 0.42;
+  }
 }
 
 .glowFringe {
   stop-color: #8b95a6;
   stop-opacity: 0.02;
+
+  :root:not(:global(.ion-palette-dark)) & {
+    stop-color: #f8dcab;
+    stop-opacity: 0.2;
+  }
 }
 
 .glowEnd {
   stop-color: #8b95a6;
   stop-opacity: 0;
-}
 
-:root:not(:global(.ion-palette-dark)) .glowCore {
-  stop-color: #ffcf70;
-  stop-opacity: 0.68;
-}
-
-:root:not(:global(.ion-palette-dark)) .glowMid {
-  stop-color: #ffd98c;
-  stop-opacity: 0.42;
-}
-
-:root:not(:global(.ion-palette-dark)) .glowFringe {
-  stop-color: #f8dcab;
-  stop-opacity: 0.2;
-}
-
-:root:not(:global(.ion-palette-dark)) .glowEnd {
-  stop-color: #f8dcab;
-  stop-opacity: 0;
-}
-
-/* The sun seen THROUGH the wing (the blurred, canopy-clipped copy), both
-   schemes: brighter than the bare disc because the blur spreads its energy —
-   it must still read as the light source. */
-.sun.sunVeiled {
-  opacity: 0.26;
-}
-
-:root:not(:global(.ion-palette-dark)) .sun.sunVeiled {
-  opacity: 0.5;
-}
-
-/* The motifs flip to deeper ambers: the near-white warm fills that read on
-   the night sky vanish against the day one. */
-:root:not(:global(.ion-palette-dark)) .star {
-  fill: #d3922f;
-  /* Softer than the night stars' 0.5: daylight motes, not beacons. */
-  opacity: 0.32;
-}
-
-:root:not(:global(.ion-palette-dark)) .sun {
-  fill: #eda32f;
-  opacity: 0.22;
-}
-
-:root:not(:global(.ion-palette-dark)) .cloud {
-  fill: #c98f3f;
-}
-
-:root:not(:global(.ion-palette-dark)) .lines path {
-  stroke: #bd8434;
-  opacity: 0.14;
-}
-
-:root:not(:global(.ion-palette-dark)) .canopy {
-  fill: #c98f3f;
-  stroke: #c98f3f;
+  :root:not(:global(.ion-palette-dark)) & {
+    stop-color: #f8dcab;
+    stop-opacity: 0;
+  }
 }

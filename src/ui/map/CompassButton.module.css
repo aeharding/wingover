@@ -3,6 +3,10 @@
    the map leaves north — the scale-in sells "appeared because you rotated". */
 .compass {
   animation: in 0.15s ease-out;
+
+  svg {
+    display: block;
+  }
 }
 
 @keyframes in {
@@ -10,10 +14,6 @@
     opacity: 0;
     transform: scale(0.85);
   }
-}
-
-.compass svg {
-  display: block;
 }
 
 .north {

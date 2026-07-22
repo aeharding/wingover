@@ -18,16 +18,16 @@
   font-variant-numeric: tabular-nums;
   color: var(--replay-ink);
   white-space: nowrap;
-}
 
-.cyan .value {
-  color: var(--replay-cyan);
-}
+  .cyan & {
+    color: var(--replay-cyan);
+  }
 
-.green .value {
-  color: var(--replay-green);
-}
+  .green & {
+    color: var(--replay-green);
+  }
 
-.yellow .value {
-  color: var(--replay-yellow);
+  .yellow & {
+    color: var(--replay-yellow);
+  }
 }
