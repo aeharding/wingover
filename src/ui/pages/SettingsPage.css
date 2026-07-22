@@ -63,3 +63,40 @@
 :root.ion-palette-dark .settings-content ion-list.list-inset {
   --ion-item-background: var(--wingover-tile);
 }
+
+/* The sync row's "⊗ Off" note: icon and word on one optical line. (These
+   style THIS page's row — SettingsPage.tsx's SETTINGS_TONE_CLASS — not the
+   sync sheet, which derives its own tones in SyncConnection.) */
+.settings-sync-note {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.3em;
+}
+
+.settings-sync-note ion-spinner {
+  width: 1em;
+  height: 1em;
+}
+
+/* Status colors: the scheme-aware P3 tokens (theme.css) — full saturation
+   in dark, deepened for light. Never any sRGB fallback (STEERING). */
+.settings-sync-off {
+  color: var(--status-bad);
+}
+
+.settings-sync-on {
+  color: var(--status-good);
+}
+
+/* A lapse ("Not subscribed", read-only) reads amber in the row too, not a
+   neutral gray: the one status the copy rules single out (SYNC-UX.md). Never
+   red, because nothing is lost. */
+.settings-sync-warn {
+  color: var(--ion-color-warning);
+}
+
+/* A real problem (error): red, so the row flags it instead of the neutral gray
+   it used to render. */
+.settings-sync-error {
+  color: var(--status-bad);
+}

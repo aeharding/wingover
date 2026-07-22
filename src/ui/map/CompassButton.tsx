@@ -2,6 +2,8 @@ import { useSyncExternalStore } from "react";
 
 import type { MapView } from "./types";
 
+import styles from "./CompassButton.module.css";
+
 // Off north by less than this and the compass doesn't exist — an invisible
 // rotation shouldn't summon a button.
 const SHOW_DEG = 1;
@@ -32,7 +34,7 @@ export default function CompassButton({ map }: CompassButtonProps) {
 
   return (
     <button
-      className="map-button map-compass"
+      className={`map-button ${styles.compass}`}
       aria-label="Point north"
       data-testid="map-compass"
       onClick={() => map.moveTo({ bearing: 0 }, { animate: true })}
@@ -44,8 +46,8 @@ export default function CompassButton({ map }: CompassButtonProps) {
         aria-hidden="true"
         style={{ transform: `rotate(${-bearing}deg)` }}
       >
-        <polygon className="map-compass-north" points="0,-11 3.2,0 -3.2,0" />
-        <polygon className="map-compass-south" points="0,11 3.2,0 -3.2,0" />
+        <polygon className={styles.north} points="0,-11 3.2,0 -3.2,0" />
+        <polygon className={styles.south} points="0,11 3.2,0 -3.2,0" />
       </svg>
     </button>
   );

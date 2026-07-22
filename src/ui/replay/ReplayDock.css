@@ -18,46 +18,14 @@
   background: var(--replay-pane-bg);
 }
 
-/* The six in-flight stats: five live readouts here, elapsed time below in
-   the transport (the nav pair needs the live waypoint sequence, which
-   isn't recorded per moment). */
+/* The six in-flight stats: five live readouts here (Readout.module.css),
+   elapsed time below in the transport (the nav pair needs the live waypoint
+   sequence, which isn't recorded per moment). */
 .replay-readouts {
   display: flex;
   justify-content: space-between;
   gap: 0.6rem;
   min-width: 0;
-}
-
-.replay-readout {
-  min-width: 0;
-}
-
-.replay-readout .label {
-  font-size: 0.58rem;
-  letter-spacing: 0.05em;
-  text-transform: uppercase;
-  color: var(--replay-muted);
-  white-space: nowrap;
-}
-
-.replay-readout .value {
-  font-size: 1.02rem;
-  font-weight: 700;
-  font-variant-numeric: tabular-nums;
-  color: var(--replay-ink);
-  white-space: nowrap;
-}
-
-.replay-readout.cyan .value {
-  color: var(--replay-cyan);
-}
-
-.replay-readout.green .value {
-  color: var(--replay-green);
-}
-
-.replay-readout.yellow .value {
-  color: var(--replay-yellow);
 }
 
 .replay-transport {

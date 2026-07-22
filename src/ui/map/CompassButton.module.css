@@ -1,0 +1,28 @@
+/* The ground-map compass (CompassButton.tsx). Rides the shared .map-button
+   chrome; these rules are only the compass-specific parts. It pops in when
+   the map leaves north — the scale-in sells "appeared because you rotated". */
+.compass {
+  animation: in 0.15s ease-out;
+}
+
+@keyframes in {
+  from {
+    opacity: 0;
+    transform: scale(0.85);
+  }
+}
+
+.compass svg {
+  display: block;
+}
+
+.north {
+  fill: color(display-p3 1 0.32 0.27);
+}
+
+/* Themed: near-white on the ground app's dark chrome, re-pinned by the
+   flight surface's frozen palette (FlyPage.css) — the token, not the fill,
+   is what varies. */
+.south {
+  fill: var(--map-compass-south);
+}
