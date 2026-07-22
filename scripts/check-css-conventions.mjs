@@ -85,11 +85,13 @@ for (const f of plain) {
 // ── per-module checks ────────────────────────────────────────────────────
 const stripComments = (s) => s.replace(/\/\*[\s\S]*?\*\//g, "");
 const valueImportsOf = (text) => {
-  const map = new Map(); // name -> import path
+  // local name -> { original, from } (aliases: `@value x as y` binds y
+  // locally while the target declares x).
+  const map = new Map();
   for (const m of text.matchAll(
     /@value\s+([\w-]+)(?:\s+as\s+([\w-]+))?\s+from\s+["']([^"']+)["']/g,
   )) {
-    map.set(m[2] ?? m[1], m[3]);
+    map.set(m[2] ?? m[1], { original: m[1], from: m[3] });
   }
   return map;
 };
@@ -99,23 +101,33 @@ for (const f of modules) {
   const values = valueImportsOf(text);
 
   // ── 3. value-imports resolve and declare the class ──
-  for (const [name, from] of values) {
+  for (const [local, { original, from }] of values) {
     const target = resolve(dirname(f), from);
     if (!existsSync(target)) {
       violations.push(
-        `${rel(f)}: @value ${name} from "${from}" — file not found`,
+        `${rel(f)}: @value ${local} from "${from}" — file not found`,
       );
       continue;
     }
     const targetText = stripComments(readFileSync(target, "utf8"));
-    if (!new RegExp(`\\.${name}\\b`).test(targetText)) {
+    // (?![\w-]) not \b: a word boundary sits at a hyphen, so .foo would
+    // wrongly match a lone .foo-bar declaration.
+    if (!new RegExp(`\\.${original}(?![\\w-])`).test(targetText)) {
       violations.push(
-        `${rel(f)}: @value ${name} from "${from}" — ${rel(target)} declares no .${name}`,
+        `${rel(f)}: @value ${original} from "${from}" — ${rel(target)} declares no .${original}`,
       );
     }
   }
 
   // ── 2. :global discipline ──
+  // The switch/block forms (`:global .x`, `:global { ... }`) would bypass
+  // the scan below; the convention permits only the function form.
+  for (const m of text.matchAll(/:global(?!\()/g)) {
+    const line = text.slice(0, m.index).split("\n").length;
+    violations.push(
+      `${rel(f)}:${line}: bare :global switch/block form — use :global(.x) so the discipline check can see it`,
+    );
+  }
   for (const m of text.matchAll(/:global\(([^)]+)\)/g)) {
     for (const cls of m[1].matchAll(/\.([a-zA-Z][\w-]*)/g)) {
       const name = cls[1];
@@ -145,13 +157,26 @@ for (const f of dts) {
 }
 
 // ── 5. module-used ──
-const allSourceText = sources.map((f) => readFileSync(f, "utf8")).join("\n");
-const allModuleText = modules
-  .map((f) => stripComments(readFileSync(f, "utf8")))
-  .join("\n");
+// Resolve REAL import specifiers (ts/tsx `from "..."` with comments stripped,
+// plus module @value froms) to absolute paths — basename matching both missed
+// same-named modules in different dirs and was fooled by comments.
+const stripTsComments = (s) =>
+  s.replace(/\/\*[\s\S]*?\*\//g, "").replace(/^\s*\/\/.*$/gm, "");
+const imported = new Set();
+for (const s of sources) {
+  const text = stripTsComments(readFileSync(s, "utf8"));
+  for (const m of text.matchAll(/from\s+["']([^"']+\.module\.css)["']/g)) {
+    imported.add(resolve(dirname(s), m[1]));
+  }
+}
 for (const f of modules) {
-  const base = f.split("/").pop();
-  if (!allSourceText.includes(base) && !allModuleText.includes(base)) {
+  const text = stripComments(readFileSync(f, "utf8"));
+  for (const m of text.matchAll(/@value[^"']+["']([^"']+)["']/g)) {
+    imported.add(resolve(dirname(f), m[1]));
+  }
+}
+for (const f of modules) {
+  if (!imported.has(f)) {
     violations.push(
       `${rel(f)}: imported by nothing (no ts/tsx import, no @value) — dead file?`,
     );
