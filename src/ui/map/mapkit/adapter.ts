@@ -305,6 +305,13 @@ export async function createMapKitMapView(
       map.mapType = baseToMapType(base);
     },
 
+    setAppearance(next) {
+      // colorScheme is a live MapKit property; flipping it re-creates
+      // nothing and the camera stays exactly where the pilot left it.
+      map.colorScheme =
+        next === "light" ? mapkit.ColorScheme.Light : mapkit.ColorScheme.Dark;
+    },
+
     // The Apple logo + Legal link are a license surface; inset them off the
     // home indicator only when the page places this map edge-to-edge (bottom
     // really under the indicator). Embedded maps pass false, so the controls

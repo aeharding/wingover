@@ -213,6 +213,8 @@ export function createFakeMapView(container: HTMLElement): MapView {
       repositionMarkers();
     },
 
+    setAppearance() {},
+
     zoomRange() {
       return { min: 2, max: 20 };
     },

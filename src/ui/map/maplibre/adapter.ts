@@ -73,6 +73,7 @@ export async function createMapLibreMapView(
   initialBase: MapViewKind,
   appearance: MapAppearance,
 ): Promise<MapView> {
+  let currentBase = initialBase;
   const style = await resolveMapStyle(initialBase, appearance);
   // Decided once at creation: satellite here costs MapTiler quota, so it
   // exists only on the pilot's own key. A key added in Settings takes
@@ -202,7 +203,16 @@ export async function createMapLibreMapView(
     // MapView.css, so there is nothing to set on the map itself.
     setEdgeToEdge() {},
     setBaseMap(base) {
+      currentBase = base;
       void resolveMapStyle(base, appearance).then((next) => map.setStyle(next));
+    },
+    setAppearance(next) {
+      // Restyle in place — the content registry re-adds overlays on the
+      // style swap exactly as it does for setBaseMap.
+      appearance = next;
+      void resolveMapStyle(currentBase, appearance).then((style2) =>
+        map.setStyle(style2),
+      );
     },
 
     destroy() {

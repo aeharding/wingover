@@ -77,6 +77,7 @@ export default function PlanPage() {
   const [map, setMap] = useState<MapView | null>(null);
   const lineRef = useRef<Line | null>(null);
   const markersRef = useRef<MarkerLayer | null>(null);
+  const skipArrivalFrameRef = useRef(false);
 
   // Total route length = sum of the legs between consecutive pins, for
   // planning (matches the idle Fly screen's "Planned route").
@@ -206,6 +207,9 @@ export default function PlanPage() {
     });
     markersRef.current = next.markers();
     next.on("longpress", (event) => addPin(event.at));
+    // A re-created map that inherited its camera (appearance flip) must
+    // not re-run the initial framing — the pilot's place survives.
+    skipArrivalFrameRef.current = next.restoredCamera === true;
     setMap(next);
   }
 
@@ -223,7 +227,12 @@ export default function PlanPage() {
   });
 
   useEffect(() => {
-    if (map) frameInitial(map);
+    if (!map) return;
+    if (skipArrivalFrameRef.current) {
+      skipArrivalFrameRef.current = false;
+      return;
+    }
+    frameInitial(map);
   }, [map]);
 
   useEffect(() => {

@@ -104,23 +104,25 @@ export default function MapCanvas({
     };
   }, []);
 
-  // An appearance flip (scheme change, satellite forcing dark) re-creates
-  // the backend below — re-veil so the swap hides behind the loading
-  // cover, the same as a provider re-create. Render-phase adjustment (the
-  // sanctioned adjusting-state-when-props-change form), not an effect.
-  const [veiledAppearance, setVeiledAppearance] = useState(appearance);
-  if (veiledAppearance !== appearance) {
-    setVeiledAppearance(appearance);
-    setRevealed(false);
-  }
+  // The camera of the view a re-create tore down, carried to its
+  // successor: an appearance flip (scheme change, satellite forcing
+  // dark) or provider swap must not cost the pilot their place on the
+  // map — the regression was every toggle snapping back to the fit.
+  const preservedCameraRef = useRef<ReturnType<MapView["camera"]> | null>(null);
+  const appearanceRef = useRef(appearance);
 
   useEffect(() => {
+    // Captured once: the container node is stable across an epoch
+    // re-create (React reuses the same div), and the cleanup reads it
+    // (the ref-in-cleanup lint wants a local).
+    const container = containerRef.current;
     let cancelled = false;
     let view: MapView | undefined;
     (async () => {
-      if (!containerRef.current) return;
+      if (!container) return;
       const createdWith = baseRef.current;
-      view = await createBackend(containerRef.current, createdWith, appearance);
+      const createdAppearance = appearanceRef.current;
+      view = await createBackend(container, createdWith, createdAppearance);
       if (cancelled) {
         view.destroy();
         return;
@@ -129,12 +131,24 @@ export default function MapCanvas({
       // Apply the current edge-to-edge inset to the fresh map (and to one
       // re-created by a provider swap); the effect below keeps it in sync.
       view.setEdgeToEdge(edgeToEdgeRef.current);
-      // The base can move while createBackend is in flight (pages load the
-      // persisted view async, and the base effect no-ops on a null
-      // viewRef): a satellite pilot refreshing the page got a street map
-      // under a satellite toggle. Apply the latest base the effect
-      // recorded, only when it actually moved.
+      // Restore the predecessor's camera BEFORE anyone sees the view, and
+      // mark it so pages skip their arrival refit (see MapView.types).
+      const preserved = preservedCameraRef.current;
+      if (preserved) {
+        preservedCameraRef.current = null;
+        view.moveTo(preserved, { animate: false });
+        view.restoredCamera = true;
+      }
+      // The base and appearance can both move while createBackend is in
+      // flight (pages load the persisted view async; the OS scheme can
+      // cross its sunset switch, or a satellite toggle fire, during the
+      // hundreds-of-ms load): the per-prop effects no-op on a null
+      // viewRef, so re-apply the latest the effects recorded, only when
+      // it actually moved. (Without the appearance line a map created
+      // mid-flip baked in the stale scheme until the next change.)
       if (baseRef.current !== createdWith) view.setBaseMap(baseRef.current);
+      if (appearanceRef.current !== createdAppearance)
+        view.setAppearance(appearanceRef.current);
       notifyReady(view);
       void view.ready.then(() => {
         if (!cancelled) setRevealed(true);
@@ -143,17 +157,43 @@ export default function MapCanvas({
 
     return () => {
       cancelled = true;
+      // Preserve the camera for the successor ONLY from a laid-out map —
+      // a re-create fires on EVERY mounted instance, and the ones in
+      // hidden tabs (a provider/key change comes from the Settings tab,
+      // so the map tabs are display:none, 0×0) read a bogus camera:
+      // MapKit derives zoom from the live projection, which collapses to
+      // the continental fallback with no viewport. Skipping the hidden
+      // capture leaves preservedCameraRef null, so the successor takes no
+      // camera and the page reframes on next view — its pre-change
+      // behavior, and the pilot was not looking at that tab anyway. A
+      // visible re-create (the only one that would visibly snap) still
+      // preserves. Backend-agnostic: MapLibre's stored zoom would have
+      // survived a hidden read, but the rule stays about visibility, not
+      // backend.
+      if (view && (container?.clientWidth ?? 0) > 0) {
+        preservedCameraRef.current = view.camera();
+      }
       view?.destroy();
       viewRef.current = null;
       // The parent's copy is now a landmine; take it away (see props).
       notifyReady(null);
     };
-  }, [epoch, appearance]);
+  }, [epoch]);
 
   useEffect(() => {
     baseRef.current = base;
     viewRef.current?.setBaseMap(base);
   }, [base]);
+
+  // Live appearance: the scheme flip (or satellite forcing dark) restyles
+  // the EXISTING backend — MapKit's colorScheme and MapLibre's setStyle
+  // are both in-place operations — so the pilot's camera never moves at
+  // all. Re-creates are reserved for the provider/key paths above, where
+  // the camera-preservation hand-off covers the gap.
+  useEffect(() => {
+    appearanceRef.current = appearance;
+    viewRef.current?.setAppearance(appearance);
+  }, [appearance]);
 
   // Live edge-to-edge: a fullscreen toggle (a logbook entry map expanding to
   // full screen) flips this without tearing the map down. Ref-mirrored so the
