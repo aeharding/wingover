@@ -63,9 +63,20 @@ final class WaypointUITests: XCTestCase {
     return nil
   }
 
-  // The pill renders as sibling texts: "Route:" then the length. Nil while
-  // fewer than two pins exist.
+  // Proof a route exists (i.e. the long-presses dropped pins). Nil while
+  // fewer than two pins exist, so no pill renders.
+  //
+  // The pill became a <button> (a tap opens the clear-route sheet), and
+  // WKWebView flattens a button's text into ONE Button whose label is the
+  // whole string, e.g. "Route: 5.2 km" — no child StaticTexts. Match that
+  // button. Fall back to the older exposure (sibling "Route:" + length
+  // StaticTexts, as a plain <div> gave) so the probe survives either tree.
   private func routeValue(_ app: XCUIApplication) -> String? {
+    if let pill = app.buttons.allElementsBoundByIndex.first(where: {
+      $0.label.hasPrefix("Route:")
+    }) {
+      return pill.label
+    }
     let texts = app.staticTexts.allElementsBoundByIndex
     guard let index = texts.firstIndex(where: { $0.label == "Route:" }),
       index + 1 < texts.count
