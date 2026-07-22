@@ -94,6 +94,8 @@ export function useReplayDrawer(
   // URL-hidden desktop section): the pane folds away with it, and comes
   // back with it if it was wanted open.
   enabled = true,
+  // The desktop seat hosts the drawer with its own dock presentation.
+  seat = false,
 ): {
   available: boolean;
   isOpen: boolean;
@@ -473,6 +475,7 @@ export function useReplayDrawer(
                 timelineKey={held.flight.id}
                 onCancel={endClip}
                 onApply={applyClip}
+                seat={seat}
               />
             ) : (
               <ReplayDock
@@ -490,6 +493,7 @@ export function useReplayDrawer(
                 hideAhead={hideAhead}
                 onToggleHideAhead={toggleHideAhead}
                 onCollapse={collapse}
+                seat={seat}
               />
             )}
           </div>

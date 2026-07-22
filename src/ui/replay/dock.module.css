@@ -1,4 +1,10 @@
-.replay-dock {
+/* The dock family's shared chassis: the playback dock and the clip dock are
+   siblings in the drawer, one frame + readout row between them. Hosts pick
+   the presentation by prop, never by reaching into descendants from outside
+   (the old desktop.css .flight-seat overrides live here as the .seat
+   variant — same-file, visible in the family's contract). */
+
+.dock {
   display: flex;
   flex-direction: column;
   gap: 0.5rem;
@@ -18,41 +24,23 @@
   background: var(--replay-pane-bg);
 }
 
-/* The six in-flight stats: five live readouts here (Readout.module.css),
-   elapsed time below in the transport (the nav pair needs the live waypoint
-   sequence, which isn't recorded per moment). */
-.replay-readouts {
+/* The in-flight stats row: live readouts (Readout.module.css); elapsed time
+   sits below in the transport. */
+.readouts {
   display: flex;
   justify-content: space-between;
   gap: 0.6rem;
   min-width: 0;
 }
 
-.replay-transport {
-  display: flex;
-  align-items: center;
-  gap: 0.6rem;
+/* The desktop seat's presentation: wider inline gutters, and the readouts
+   pack left at a fixed rhythm instead of stretching across the pane. */
+.seat {
+  padding-inline: calc(1.1rem + var(--ion-safe-area-left))
+    calc(1.1rem + var(--ion-safe-area-right));
 }
 
-.replay-time {
-  color: var(--replay-ink);
-  font-size: 1.05rem;
-  font-weight: 600;
-  font-variant-numeric: tabular-nums;
-  white-space: nowrap;
-}
-
-.replay-time-total {
-  color: var(--replay-muted);
-}
-
-.replay-transport-spring {
-  flex: 1;
-}
-
-/* The speed control is its label. */
-.replay-speed {
-  font-size: 1.05rem;
-  font-weight: 700;
-  font-variant-numeric: tabular-nums;
+.seat .readouts {
+  justify-content: flex-start;
+  gap: 2.2rem;
 }

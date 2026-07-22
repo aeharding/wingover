@@ -132,7 +132,7 @@ const scenarios = {
     specs: {
       seatProbe: ".seat-map .map-inset-probe",
       seatMapOverlay: ".seat-map .map-overlay",
-      scrub: ".replay-dock",
+      scrub: '[data-testid="replay-dock"]',
     },
   },
   "d-logbook-full-replay": {
@@ -164,7 +164,7 @@ const scenarios = {
     specs: {
       seatProbe: ".seat-map .map-inset-probe",
       seatMapOverlay: ".seat-map .map-overlay",
-      scrub: ".replay-dock",
+      scrub: '[data-testid="replay-dock"]',
     },
   },
   "d-plan": {
@@ -299,7 +299,7 @@ const scenarios = {
     specs: {
       probe: ".flight-detail-map .map-inset-probe",
       overlay: ".flight-detail-map .map-overlay",
-      scrub: ".replay-dock",
+      scrub: '[data-testid="replay-dock"]',
     },
   },
   "m-plan": {

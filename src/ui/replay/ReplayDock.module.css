@@ -1,0 +1,30 @@
+/* The playback dock's own row: transport controls under the readouts.
+   Chassis (frame + readout row) in dock.module.css. */
+.transport {
+  display: flex;
+  align-items: center;
+  gap: 0.6rem;
+}
+
+.time {
+  color: var(--replay-ink);
+  font-size: 1.05rem;
+  font-weight: 600;
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+}
+
+.timeTotal {
+  color: var(--replay-muted);
+}
+
+.spring {
+  flex: 1;
+}
+
+/* The speed control is its label. */
+.speed {
+  font-size: 1.05rem;
+  font-weight: 700;
+  font-variant-numeric: tabular-nums;
+}

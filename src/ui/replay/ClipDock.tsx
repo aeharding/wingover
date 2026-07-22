@@ -36,7 +36,8 @@ import {
 } from "./timelineMemory";
 import { useReplayMapDriver } from "./useReplayMapDriver";
 
-import "./ClipDock.css";
+import chassis from "./dock.module.css";
+import styles from "./ClipDock.module.css";
 
 // One cut point per mode (per Alex: a trim is usually one end or the
 // other, so each end is its own errand and the whole editor is a single
@@ -60,6 +61,8 @@ interface ClipDockProps {
   // The chosen cut time. Resolves once the rewrite landed; a rejection
   // re-enables the controls (the clip visibly did not apply).
   onApply: (cut: number) => Promise<void>;
+  // The desktop seat's presentation (dock.module.css .seat variant).
+  seat?: boolean;
 }
 
 /**
@@ -79,6 +82,7 @@ export default function ClipDock({
   timelineKey,
   onCancel,
   onApply,
+  seat = false,
 }: ClipDockProps) {
   const { units } = useSettings();
   const [presentAlert] = useIonAlert();
@@ -247,8 +251,11 @@ export default function ClipDock({
   const trim = mode !== "split";
 
   return (
-    <div className="replay-dock clip-dock" data-testid="clip-dock">
-      <div className="replay-readouts">
+    <div
+      className={seat ? `${chassis.dock} ${chassis.seat}` : chassis.dock}
+      data-testid="clip-dock"
+    >
+      <div className={chassis.readouts}>
         <Readout
           label="Above launch"
           accent="cyan"
@@ -305,20 +312,20 @@ export default function ClipDock({
               : undefined
         }
       />
-      <div className="clip-transport">
+      <div className={styles.transport}>
         <button
-          className="clip-button"
+          className={styles.button}
           data-testid="clip-cancel"
           disabled={busy}
           onClick={onCancel}
         >
           Cancel
         </button>
-        <div className="clip-preview" data-testid="clip-preview">
+        <div className={styles.preview} data-testid="clip-preview">
           {preview}
         </div>
         <button
-          className="clip-button accent"
+          className={`${styles.button} ${styles.accent}`}
           data-testid="clip-apply"
           disabled={!canApply || busy}
           onClick={() =>

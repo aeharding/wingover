@@ -99,7 +99,7 @@ export default function FlightSeat({
   const skipArrivalFrameRef = useRef(false);
   // The replay pane slides open under the seat map; closes with a
   // selection swap or when the section is URL-hidden.
-  const replay = useReplayDrawer(map, track, flight, active);
+  const replay = useReplayDrawer(map, track, flight, active, true);
 
   // The sheet portals outside the section's subtree; if the section goes
   // URL-hidden while it is up, it must fold with it.

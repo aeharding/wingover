@@ -387,16 +387,6 @@ body.flight-map-full .seat-card {
    reaches the device right edge (its left is inboard, 0 from .desktop-main),
    so the gutters fold in the resolved insets: left = 1.1rem + 0, right =
    1.1rem + notch. */
-.flight-seat .replay-dock {
-  padding-inline: calc(1.1rem + var(--ion-safe-area-left))
-    calc(1.1rem + var(--ion-safe-area-right));
-}
-
-.flight-seat .replay-readouts {
-  justify-content: flex-start;
-  gap: 2.2rem;
-}
-
 /* ── the totals strip (list pane header) ──────────────────────────────── */
 .flightlist-totals {
   /* Content-sized columns, spread apart: equal thirds overflowed the
