@@ -18,6 +18,7 @@ import {
   formatDuration,
   formatSpeed,
 } from "../../flight/format";
+import { cx } from "../cx";
 import {
   ACCENT_CYAN,
   type Line,
@@ -252,7 +253,7 @@ export default function ClipDock({
 
   return (
     <div
-      className={seat ? `${chassis.dock} ${chassis.seat}` : chassis.dock}
+      className={cx(chassis.dock, seat && chassis.seat)}
       data-testid="clip-dock"
     >
       <div className={chassis.readouts}>
@@ -325,7 +326,7 @@ export default function ClipDock({
           {preview}
         </div>
         <button
-          className={`${styles.button} ${styles.accent}`}
+          className={cx(styles.button, styles.accent)}
           data-testid="clip-apply"
           disabled={!canApply || busy}
           onClick={() =>

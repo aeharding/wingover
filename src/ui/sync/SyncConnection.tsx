@@ -14,6 +14,7 @@ import { type RefObject, useState, useSyncExternalStore } from "react";
 
 import { isTauri } from "../../engine/platform";
 import * as sync from "../../sync";
+import { cx } from "../cx";
 import { describe, type SyncTone } from "./describe";
 import { resolveSyncView } from "./resolveSyncView";
 import { SelfHostPage } from "./SelfHostPage";
@@ -152,7 +153,7 @@ export function Connected({
 
   return (
     <>
-      <div className={`${styles.state} ${SHEET_TONE_CLASS[v.statusTone]}`}>
+      <div className={cx(styles.state, SHEET_TONE_CLASS[v.statusTone])}>
         <span className={styles.stateLabel} data-testid="sync-state">
           {v.statusLabel}
         </span>
@@ -345,7 +346,10 @@ export function LinkAccountPage({
       <IonContent>
         <div className={styles.loginBody}>
           <div
-            className={`${styles.state} ${SHEET_TONE_CLASS[describe(status).tone]}`}
+            className={cx(
+              styles.state,
+              SHEET_TONE_CLASS[describe(status).tone],
+            )}
           >
             <span className={styles.stateLabel}>{describe(status).label}</span>
             <span className={styles.stateDetail}>

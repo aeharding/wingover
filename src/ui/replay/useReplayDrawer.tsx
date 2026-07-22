@@ -16,6 +16,7 @@ import {
   saveFlight,
 } from "../../storage/db";
 import NativeIcon from "../components/NativeIcon";
+import { cx } from "../cx";
 import { afterNextFrame } from "../map/afterFrame";
 import type { MapView } from "../map/types";
 import { replayAvailable } from "./available";
@@ -424,11 +425,7 @@ export function useReplayDrawer(
     drawer:
       available && held && isOpen ? (
         <div
-          className={
-            session.phase === "open"
-              ? `${styles.drawer} ${styles.open}`
-              : styles.drawer
-          }
+          className={cx(styles.drawer, session.phase === "open" && styles.open)}
           onTransitionEnd={(event) => {
             if (
               session.phase === "closing" &&

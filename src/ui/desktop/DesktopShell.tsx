@@ -27,6 +27,7 @@ import {
 import { isTauri } from "../../engine/platform";
 import { resetSyncedData } from "../../storage/db";
 import * as sync from "../../sync";
+import { cx } from "../cx";
 import FlyPage from "../flight/FlyPage";
 import FlySplash from "../flight/FlySplash";
 import { useFlights } from "../logbook/useFlights";
@@ -208,7 +209,7 @@ function RailSync() {
   return (
     <>
       <button
-        className={`${styles.link} ${styles.sync} ${RAIL_TONE_CLASS[tone]}`}
+        className={cx(styles.link, styles.sync, RAIL_TONE_CLASS[tone])}
         aria-label={`Sync: ${off ? "Off" : label}`}
         data-testid="rail-sync"
         onClick={(e) => {

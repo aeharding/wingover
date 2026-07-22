@@ -1,5 +1,6 @@
 import { useSyncExternalStore } from "react";
 
+import { cx } from "../cx";
 import type { MapView } from "./types";
 
 import styles from "./CompassButton.module.css";
@@ -35,7 +36,7 @@ export default function CompassButton({ map }: CompassButtonProps) {
 
   return (
     <button
-      className={`${mapCss.button} ${styles.compass}`}
+      className={cx(mapCss.button, styles.compass)}
       aria-label="Point north"
       data-testid="map-compass"
       onClick={() => map.moveTo({ bearing: 0 }, { animate: true })}

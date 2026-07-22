@@ -1,3 +1,5 @@
+import { cx } from "../cx";
+
 import styles from "./Tile.module.css";
 
 interface TileProps {
@@ -17,14 +19,12 @@ export default function Tile({
   wide,
   testId,
 }: TileProps) {
-  const classes = [
+  const classes = cx(
     styles.tile,
     accent && styles[accent],
-    wide ? styles.wide : undefined,
-    icon ? styles.hasIcon : undefined,
-  ]
-    .filter(Boolean)
-    .join(" ");
+    wide && styles.wide,
+    !!icon && styles.hasIcon,
+  );
   return (
     <div className={classes}>
       <div className={styles.label}>{label}</div>

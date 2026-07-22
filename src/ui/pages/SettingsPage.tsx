@@ -25,6 +25,7 @@ import {
   setBooleanSetting,
 } from "../../storage/local";
 import * as sync from "../../sync";
+import { cx } from "../cx";
 import { useSettings } from "../settings/SettingsContext";
 import { describe as describeSync, type SyncTone } from "../sync/describe";
 import { useSyncSheet } from "../sync/SyncSheets";
@@ -145,7 +146,7 @@ export default function SettingsPage() {
               <IonLabel>Sync</IonLabel>
               <IonNote
                 slot="end"
-                className={`${styles.note} ${SETTINGS_TONE_CLASS[described.tone]}`}
+                className={cx(styles.note, SETTINGS_TONE_CLASS[described.tone])}
               >
                 {off && <IonIcon icon={closeCircle} aria-hidden="true" />}
                 {!off && syncBusy && (

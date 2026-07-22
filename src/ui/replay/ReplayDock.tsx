@@ -17,6 +17,7 @@ import {
   formatSpeed,
 } from "../../flight/format";
 import NativeIcon from "../components/NativeIcon";
+import { cx } from "../cx";
 import type { MapView } from "../map/types";
 import { useSettings } from "../settings/SettingsContext";
 import Barogram from "./Barogram";
@@ -140,7 +141,7 @@ export default function ReplayDock({
 
   return (
     <div
-      className={seat ? `${chassis.dock} ${chassis.seat}` : chassis.dock}
+      className={cx(chassis.dock, seat && chassis.seat)}
       data-testid="replay-dock"
     >
       <div className={chassis.readouts}>
@@ -226,7 +227,7 @@ export default function ReplayDock({
           <NativeIcon icon={footstepsOutline} />
         </button>
         <button
-          className={`${mapCss.button} ${styles.speed}`}
+          className={cx(mapCss.button, styles.speed)}
           data-testid="replay-speed"
           aria-label="Playback speed"
           onClick={feed.cycleSpeed}

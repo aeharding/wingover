@@ -1,3 +1,5 @@
+import { cx } from "../cx";
+
 import styles from "./FlySplash.module.css";
 
 /**
@@ -168,7 +170,7 @@ export default function FlySplash() {
           the wing. */}
         <g mask="url(#idle-canopy-window)">
           <circle
-            className={`${styles.sun} ${styles.sunVeiled}`}
+            className={cx(styles.sun, styles.sunVeiled)}
             cx="348"
             cy="812"
             r="135"

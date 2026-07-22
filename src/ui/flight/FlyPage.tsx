@@ -38,6 +38,7 @@ import {
   saveFlight,
 } from "../../storage/db";
 import NativeIcon from "../components/NativeIcon";
+import { cx } from "../cx";
 import type { MapViewKind } from "../map/config";
 import MapCluster from "../map/MapCluster";
 import type { MapView } from "../map/types";
@@ -307,11 +308,10 @@ export default function FlyPage() {
         <div className={styles.armed} data-testid="armed">
           <div className={styles.armedMessage}>
             <div
-              className={
-                status === "armed"
-                  ? styles.pulse
-                  : `${styles.pulse} ${styles.acquiring}`
-              }
+              className={cx(
+                styles.pulse,
+                status !== "armed" && styles.acquiring,
+              )}
               aria-hidden="true"
             />
             <h2>
@@ -447,7 +447,7 @@ export default function FlyPage() {
           />
           {gpsError && (
             <div
-              className={`${styles.gpsError} ${styles.recordingError}`}
+              className={cx(styles.gpsError, styles.recordingError)}
               style={{ top: mapTopInset + 12 }}
               data-testid="gps-error"
             >
@@ -529,7 +529,7 @@ export default function FlyPage() {
               }
               br={
                 <button
-                  className={`${mapCss.button} ${styles.stop}`}
+                  className={cx(mapCss.button, styles.stop)}
                   aria-label="Stop flight"
                   onClick={confirmEndFlight}
                 >

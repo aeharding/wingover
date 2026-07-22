@@ -1,6 +1,7 @@
 import { useEffect, useEffectEvent, useRef, useState } from "react";
 
 import type { Fix, Waypoint } from "../../engine/types";
+import { cx } from "../cx";
 import type { MapViewKind } from "../map/config";
 import { applyFollowWheelZoom } from "../map/followZoom";
 import { readLiveViewState, writeLiveViewState } from "../map/liveViewState";
@@ -335,10 +336,7 @@ export default function LiveTrackMap({
   }, [trackUp]);
 
   return (
-    <div
-      className={className ? `${styles.root} ${className}` : styles.root}
-      data-testid="live-map"
-    >
+    <div className={cx(styles.root, className)} data-testid="live-map">
       <MapCanvas
         base={view}
         // The live map is ALWAYS light: full sun on a leg-mounted phone is

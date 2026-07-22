@@ -1,3 +1,5 @@
+import { cx } from "../cx";
+
 import styles from "./Readout.module.css";
 
 /**
@@ -16,11 +18,7 @@ export default function Readout({
   testId: string;
 }) {
   return (
-    <div
-      className={
-        accent ? `${styles.readout} ${styles[accent]}` : styles.readout
-      }
-    >
+    <div className={cx(styles.readout, accent && styles[accent])}>
       <div className={styles.label}>{label}</div>
       <div className={styles.value} data-testid={testId}>
         {value}

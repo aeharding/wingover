@@ -12,6 +12,7 @@ import {
 import type { Fix } from "../../engine/types";
 import { formatAirtime, formatDuration } from "../../flight/format";
 import NativeIcon from "../components/NativeIcon";
+import { cx } from "../cx";
 import { barogramPaths } from "./barogramPath";
 import type { TimelineView } from "./timelineMemory";
 
@@ -476,7 +477,7 @@ export default function Barogram({
         )}
         {mark && width >= 2 && mark.value >= w0 && mark.value <= w1 && (
           <div
-            className={`${styles.mark} ${styles[mark.kind]}`}
+            className={cx(styles.mark, styles[mark.kind])}
             data-testid={`clip-mark-${mark.kind}`}
             aria-hidden="true"
             style={{ transform: `translateX(${xFor(mark.value)}px)` }}
@@ -520,9 +521,7 @@ export default function Barogram({
         )}
         <div
           ref={bubbleRef}
-          className={
-            scrubbing ? `${styles.bubble} ${styles.visible}` : styles.bubble
-          }
+          className={cx(styles.bubble, scrubbing && styles.visible)}
           aria-hidden="true"
         />
         {timeWindow && (
@@ -541,9 +540,7 @@ export default function Barogram({
           layout (hidden unzoomed): appearing on zoom grew the pane and
           made the map above jump. */}
       <div
-        className={
-          timeWindow ? `${styles.overview} ${styles.zoomed}` : styles.overview
-        }
+        className={cx(styles.overview, timeWindow && styles.zoomed)}
         data-testid="barogram-overview"
         aria-hidden="true"
       >

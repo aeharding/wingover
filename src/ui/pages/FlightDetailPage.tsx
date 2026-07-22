@@ -47,6 +47,7 @@ import {
   formatSpeed,
 } from "../../flight/format";
 import { useAppearance } from "../appTheme";
+import { cx } from "../cx";
 import { endpointMarker } from "../logbook/endpointMarker";
 import { useFlightDoc } from "../logbook/useFlightDoc";
 import { useFlightDrafts } from "../logbook/useFlightDrafts";
@@ -597,14 +598,14 @@ export default function FlightDetailPage() {
           controls. Inline, the map-tap-layer owns tap-to-expand. */}
       <InPortal node={mapPortal}>
         <div
-          className={`${styles.map}${mapFull ? ` ${styles.full}` : ""}`}
+          className={cx(styles.map, mapFull && styles.full)}
           data-testid="flight-detail-map"
         >
           {/* The map region; fullscreen slides the replay pane open below
               it (the region flexes above). The consume class rides here,
               on the region only, so the replay drawer (a sibling below)
               keeps its own home-indicator inset while the map drops it. */}
-          <div className={`${styles.region} ${regionConsume}`}>
+          <div className={cx(styles.region, regionConsume)}>
             <MapCanvas
               base={view}
               appearance={appearance}

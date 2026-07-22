@@ -14,6 +14,7 @@ import {
 import { useEffect, useRef, useState } from "react";
 
 import * as sync from "../../sync";
+import { cx } from "../cx";
 
 import settings from "../pages/settings.module.css";
 import styles from "./sync.module.css";
@@ -105,7 +106,7 @@ export function SelfHostPage({
           the modal's step-gray. */}
       <IonContent className={settings.content}>
         {problem && (
-          <p className={`${styles.errorMessage} ${styles.formProblem}`}>
+          <p className={cx(styles.errorMessage, styles.formProblem)}>
             {problem}
           </p>
         )}
@@ -173,7 +174,7 @@ export function SelfHostPage({
             />
           </IonItem>
         </IonList>
-        <IonNote className={`${styles.finePrint} ${styles.formNote}`}>
+        <IonNote className={cx(styles.finePrint, styles.formNote)}>
           Any CouchDB. Wingover will only communicate with this backend.
         </IonNote>
       </IonContent>

@@ -26,6 +26,7 @@ import {
   formatSpeed,
 } from "../../flight/format";
 import { useAppearance } from "../appTheme";
+import { cx } from "../cx";
 import { afterNextFrame } from "../map/afterFrame";
 import CompassButton from "../map/CompassButton";
 import MapCanvas from "../map/MapCanvas";
@@ -313,7 +314,7 @@ export default function FlightSeat({
           below, IT owns the bottom, so the map consumes it (the drawer is a
           sibling and keeps its own). */}
       <div
-        className={`${seat.map}${replay.isOpen ? " consume-bottom" : ""}`}
+        className={cx(seat.map, replay.isOpen && "consume-bottom")}
         data-testid="seat-map"
       >
         <MapCanvas base={view} appearance={appearance} onReady={handleReady}>
@@ -326,7 +327,7 @@ export default function FlightSeat({
               passes null, never undefined, so the compass shares the top
               row instead of floating above it. */}
           <div
-            className={`${mapCss.overlay} ${seat.overlay}`}
+            className={cx(mapCss.overlay, seat.overlay)}
             data-testid="map-overlay"
           >
             <MapCluster
@@ -355,7 +356,7 @@ export default function FlightSeat({
         </MapCanvas>
         {flight && stats && (
           <div
-            className={`${seat.card}${cardOpen ? ` ${seat.collapsed}` : ""}`}
+            className={cx(seat.card, !cardOpen && seat.collapsed)}
             data-testid="seat-card"
           >
             <div
