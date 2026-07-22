@@ -139,10 +139,13 @@ export default function PlanPage() {
   // Tapping the route (the distance pill, or the desktop pane's total) opens a
   // bottom sheet whose one destructive option wipes the whole plan. The red
   // action-sheet button IS the confirm — the same deliberate step iOS uses for
-  // a destructive choice, so no second alert. The count quantifies the loss.
+  // a destructive choice, so no second alert; the subheader still states the
+  // stakes (matching the flight-delete and clip flows), and the count
+  // quantifies the loss.
   function openRouteSheet() {
     presentRouteSheet({
       header: "Planned route",
+      subHeader: "This cannot be undone.",
       buttons: [
         {
           text: `Delete all ${pins.length} pins`,
@@ -405,11 +408,14 @@ export default function PlanPage() {
                   <ViewToggle view={view} onChange={changeView} />
                 )}
               </div>
+              {/* No aria-label on the pill: the native WaypointUITests probe
+                  reads the "Route:" static text off it, and an aria-label would
+                  collapse the button to a single AX leaf and hide it (matches
+                  #118's canonical form; keeps the sim-only iOS test green). */}
               {routeMeters > 0 && (
                 <button
                   className="plan-distance"
                   data-testid="plan-distance"
-                  aria-label="Route options"
                   onClick={openRouteSheet}
                 >
                   Route: {formatDistance(routeMeters, units)}

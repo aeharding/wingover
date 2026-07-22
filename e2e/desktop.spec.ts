@@ -438,7 +438,6 @@ test("the seat trims a flight from the options sheet", async ({ page }) => {
   await expect.poll(total).toBeLessThan(before - 30);
   await expect(page.locator(".flight-row")).toHaveCount(1);
 });
-
 test("the record opt-in shows Fly live, and turning it off hides it", async ({
   page,
 }) => {
