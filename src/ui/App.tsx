@@ -20,6 +20,7 @@ import { Redirect, Route } from "react-router-dom";
 
 import { engine } from "../engine";
 import { isTauri } from "../engine/platform";
+import ErrorBoundary from "./components/ErrorBoundary";
 import DesktopShell from "./desktop/DesktopShell";
 import FlightSurface from "./flight/FlyPage";
 import AllFlightsMapPage from "./pages/AllFlightsMapPage";
@@ -91,7 +92,19 @@ function AppBody() {
     () => engine.snapshotSync().status !== "idle",
   );
   const isDesktop = useIsDesktop();
-  if (inFlight) return <FlightSurface />;
+  // The live surface is the one place a render throw is genuinely dangerous:
+  // with no boundary it unmounts the whole app mid-flight (see MapCanvas
+  // onReady). The boundary contains that to a panel instead. Recording is
+  // headless (the engine keeps running and the WAL persists regardless of
+  // React), so the fallback tells the pilot recording continues, and the
+  // Retry button re-renders the surface. When the flight ends, inFlight
+  // flips and this whole boundary unmounts with it — no stale state to reset.
+  if (inFlight)
+    return (
+      <ErrorBoundary name="fly" variant="flight">
+        <FlightSurface />
+      </ErrorBoundary>
+    );
   // Desktop gets its own shell: plain react-router, no Ionic outlet (see
   // DesktopShell). Phones keep the Ionic tab shell untouched.
   return (
@@ -112,28 +125,100 @@ function TabShell() {
     <IonReactRouter>
       <IonTabs>
         <IonRouterOutlet>
+          {/* Per-page error boundaries: a render crash in one page degrades
+              to a contained panel and leaves the other tabs alive, instead
+              of unmounting the whole app to a white screen. The boundary is
+              transparent in the happy path (renders its ion-page child
+              directly), so Ionic's page transitions are unaffected. The
+              retry button re-renders the page; the outlet also rebuilds a
+              route's view when you leave and return to its tab, so
+              navigating away and back is itself a retry — no resetKey needed
+              here (contrast the kept-alive desktop sections). */}
           {/* Gated as a ROUTE, not just a tab: a bookmarked /fly in a plain
               browser is the same broken promise as a visible tab. Safe to
               gate because the opt-in is mirrored to localStorage, so
               canRecord is correct synchronously at first render. */}
           {canRecord ? (
-            <Route exact path="/fly" component={FlyPage} />
+            <Route
+              exact
+              path="/fly"
+              render={() => (
+                // Ground variant: this framed page is the IDLE Start screen
+                // (AppBody sheds the whole shell the moment a flight is
+                // live), so a crash here is not mid-recording.
+                <ErrorBoundary name="fly">
+                  <FlyPage />
+                </ErrorBoundary>
+              )}
+            />
           ) : (
             <Route exact path="/fly">
               <Redirect to="/logbook" />
             </Route>
           )}
-          <Route exact path="/logbook" component={LogbookPage} />
-          <Route exact path="/logbook/map" component={AllFlightsMapPage} />
+          <Route
+            exact
+            path="/logbook"
+            render={() => (
+              <ErrorBoundary name="logbook">
+                <LogbookPage />
+              </ErrorBoundary>
+            )}
+          />
+          <Route
+            exact
+            path="/logbook/map"
+            render={() => (
+              <ErrorBoundary name="logbook">
+                <AllFlightsMapPage />
+              </ErrorBoundary>
+            )}
+          />
           <Route
             exact
             path="/logbook/:id(recorded-\d+|[0-9a-fA-F-]{36})"
-            component={FlightDetailPage}
+            render={() => (
+              <ErrorBoundary name="logbook">
+                <FlightDetailPage />
+              </ErrorBoundary>
+            )}
           />
-          <Route exact path="/plan" component={PlanPage} />
-          <Route exact path="/settings" component={SettingsPage} />
-          <Route exact path="/settings/map" component={MapProviderPage} />
-          <Route exact path="/settings/units" component={UnitsPage} />
+          <Route
+            exact
+            path="/plan"
+            render={() => (
+              <ErrorBoundary name="plan">
+                <PlanPage />
+              </ErrorBoundary>
+            )}
+          />
+          <Route
+            exact
+            path="/settings"
+            render={() => (
+              <ErrorBoundary name="settings">
+                <SettingsPage />
+              </ErrorBoundary>
+            )}
+          />
+          <Route
+            exact
+            path="/settings/map"
+            render={() => (
+              <ErrorBoundary name="settings">
+                <MapProviderPage />
+              </ErrorBoundary>
+            )}
+          />
+          <Route
+            exact
+            path="/settings/units"
+            render={() => (
+              <ErrorBoundary name="settings">
+                <UnitsPage />
+              </ErrorBoundary>
+            )}
+          />
           <Route
             exact
             path="/home"

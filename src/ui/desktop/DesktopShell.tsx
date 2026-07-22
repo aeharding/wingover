@@ -27,6 +27,7 @@ import {
 import { isTauri } from "../../engine/platform";
 import { resetSyncedData } from "../../storage/db";
 import * as sync from "../../sync";
+import ErrorBoundary from "../components/ErrorBoundary";
 import { cx } from "../cx";
 import FlyPage from "../flight/FlyPage";
 import FlySplash from "../flight/FlySplash";
@@ -153,28 +154,45 @@ function DesktopFrame() {
         </NavLink>
         <RailSync />
       </nav>
+      {/* Per-section error boundaries: a crash in one section degrades to a
+          contained panel and leaves the others alive. resetKey={section}
+          (not a React key) auto-clears a shown fallback the next time the
+          pilot navigates — a natural retry — WITHOUT remounting the healthy
+          kept-alive sections and re-creating their maps. The Try again
+          button retries in place. */}
       <main className={styles.main} data-testid="desktop-main">
         {canRecord && visited.has("fly") && (
           <section className={styles.section} hidden={section !== "fly"}>
             {/* The splash backdrop behind the frameless surface — same
                 element the phone frame uses as its content background. */}
             <FlySplash />
-            <FlyPage />
+            {/* Ground variant: the desktop fly section is only ever the idle
+                Start screen (AppBody sheds to the bare flight surface while
+                recording), so no recording-continues copy here. */}
+            <ErrorBoundary name="fly" resetKey={section}>
+              <FlyPage />
+            </ErrorBoundary>
           </section>
         )}
         {visited.has("logbook") && (
           <section className={styles.section} hidden={section !== "logbook"}>
-            <LogbookSection />
+            <ErrorBoundary name="logbook" resetKey={section}>
+              <LogbookSection />
+            </ErrorBoundary>
           </section>
         )}
         {visited.has("plan") && (
           <section className={styles.section} hidden={section !== "plan"}>
-            <PlanPage />
+            <ErrorBoundary name="plan" resetKey={section}>
+              <PlanPage />
+            </ErrorBoundary>
           </section>
         )}
         {visited.has("settings") && (
           <section className={styles.section} hidden={section !== "settings"}>
-            <SettingsRoutes />
+            <ErrorBoundary name="settings" resetKey={section}>
+              <SettingsRoutes />
+            </ErrorBoundary>
           </section>
         )}
       </main>
