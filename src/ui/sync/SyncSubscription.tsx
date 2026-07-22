@@ -4,6 +4,8 @@ import { isTauri } from "../../engine/platform";
 import * as sync from "../../sync";
 import { openExternal } from "../externalLinks";
 
+import styles from "./sync.module.css";
+
 /**
  * The Subscription rail (SYNC-UX.md): payments only. The presentational buy
  * CTAs (pitch, lapse, dormant), the plan-button pair they share, Manage
@@ -102,7 +104,7 @@ export function SubscribeArea({
       </IonButton>
     );
   return (
-    <p className="sync-pitch-note" data-testid="sync-web-note">
+    <p className={styles.pitchNote} data-testid="sync-web-note">
       Sync is a subscription, from the Wingover app on your iPhone.
     </p>
   );
@@ -132,12 +134,15 @@ export function ResubscribeArea({
     );
   if (isTauri())
     return (
-      <p className="sync-fine-print" data-testid="sync-resubscribe-unavailable">
+      <p
+        className={styles.finePrint}
+        data-testid="sync-resubscribe-unavailable"
+      >
         Resubscribing needs the App Store. Check your connection and reopen this
         screen.
       </p>
     );
-  return <p className="sync-fine-print">Resubscribe on your iPhone.</p>;
+  return <p className={styles.finePrint}>Resubscribe on your iPhone.</p>;
 }
 
 // Signed in, never subscribed: the plans on iOS, sign-in-on-iPhone on the web.
@@ -163,7 +168,7 @@ export function DormantSubscribe({
       />
     );
   return (
-    <p className="sync-fine-print" data-testid="sync-signedin-web">
+    <p className={styles.finePrint} data-testid="sync-signedin-web">
       Signed in. Subscribe in the iOS app to start syncing.
     </p>
   );
@@ -193,7 +198,7 @@ export function FinePrint({
   const monthly = byTerm(products, "monthly");
   const yearly = byTerm(products, "yearly");
   return (
-    <p className="sync-fine-print">
+    <p className={styles.finePrint}>
       {/* The auto-renew disclosure is App Review's required paywall copy, and it
           belongs only where a purchase happens: with StoreKit products on iOS,
           never on the web, which has no buy button and nothing to renew. */}

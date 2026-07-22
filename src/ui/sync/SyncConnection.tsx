@@ -17,6 +17,7 @@ import * as sync from "../../sync";
 import { describe, type SyncTone } from "./describe";
 import { resolveSyncView } from "./resolveSyncView";
 import { SelfHostPage } from "./SelfHostPage";
+import styles from "./sync.module.css";
 import {
   DormantSubscribe,
   manageSubscription,
@@ -37,8 +38,8 @@ import {
 export const SHEET_TONE_CLASS: Record<SyncTone, string> = {
   on: "",
   off: "",
-  warn: "sync-state-readonly",
-  error: "sync-state-error",
+  warn: styles.stateReadonly,
+  error: styles.stateError,
   neutral: "",
 };
 
@@ -61,7 +62,7 @@ export function AppleSignInButton({
       <IonButton
         fill="clear"
         size="small"
-        className="sync-quiet-action"
+        className={styles.quietAction}
         disabled={busy}
         onClick={onClick}
         data-testid={testId}
@@ -73,7 +74,7 @@ export function AppleSignInButton({
   return (
     <IonButton
       expand="block"
-      className="sync-siwa-button"
+      className={styles.siwaButton}
       disabled={busy}
       onClick={onClick}
       data-testid={testId}
@@ -101,7 +102,7 @@ export function SelfHostLink({ onConnected }: { onConnected: () => void }) {
       <IonButton
         fill="clear"
         size="small"
-        className="sync-quiet-action"
+        className={styles.quietAction}
         data-testid="sync-goto-login"
       >
         Self-hosted config
@@ -150,24 +151,24 @@ export function Connected({
 
   return (
     <>
-      <div className={`sync-state ${SHEET_TONE_CLASS[v.statusTone]}`}>
-        <span className="sync-state-label" data-testid="sync-state">
+      <div className={`${styles.state} ${SHEET_TONE_CLASS[v.statusTone]}`}>
+        <span className={styles.stateLabel} data-testid="sync-state">
           {v.statusLabel}
         </span>
-        <span className="sync-state-detail">{v.statusDetail}</span>
+        <span className={styles.stateDetail}>{v.statusDetail}</span>
       </div>
 
       {v.supporterNote && (
-        <p className="sync-fine-print" data-testid="sync-supporting">
+        <p className={styles.finePrint} data-testid="sync-supporting">
           Subscribed. Thank you for supporting Wingover; your own server stays
           connected.
         </p>
       )}
 
       {status.state === "error" && (
-        <p className="sync-error-message">{status.message}</p>
+        <p className={styles.errorMessage}>{status.message}</p>
       )}
-      {problem && <p className="sync-error-message">{problem}</p>}
+      {problem && <p className={styles.errorMessage}>{problem}</p>}
 
       {/* Turn sync (back) on: subscribed on this device but not connected. */}
       {v.showTurnOn && (
@@ -223,7 +224,7 @@ export function Connected({
         <IonButton
           fill="clear"
           size="small"
-          className="sync-quiet-action"
+          className={styles.quietAction}
           onClick={manageSubscription}
           data-testid="sync-manage"
         >
@@ -238,7 +239,7 @@ export function Connected({
         <IonButton
           fill="clear"
           size="small"
-          className="sync-quiet-action"
+          className={styles.quietAction}
           disabled={busy}
           onClick={onLink}
           data-testid="sync-link-apple"
@@ -248,7 +249,7 @@ export function Connected({
       )}
 
       {v.showLinkedNote && (
-        <p className="sync-fine-print" data-testid="sync-linked-note">
+        <p className={styles.finePrint} data-testid="sync-linked-note">
           Linked. Sign in with Apple at wingover.app any time.
         </p>
       )}
@@ -258,7 +259,7 @@ export function Connected({
           fill="clear"
           size="small"
           color="danger"
-          className="sync-quiet-action"
+          className={styles.quietAction}
           disabled={busy}
           onClick={onDelete}
           data-testid="sync-delete-account"
@@ -270,7 +271,7 @@ export function Connected({
       {v.showSelfHost && <SelfHostLink onConnected={onConnected} />}
 
       {v.showTurnOffNote && (
-        <p className="sync-fine-print">
+        <p className={styles.finePrint}>
           {isTauri()
             ? "Turning sync off forgets this device's connection, and it stays off until you turn it back on. Nothing is deleted: every flight stays on this device and on the server. If you subscribe, billing is unchanged."
             : "Logging out removes your flights from this computer. They stay on the server and your other devices. If you subscribe, billing is unchanged."}
@@ -341,12 +342,12 @@ export function LinkAccountPage({
         </IonToolbar>
       </IonHeader>
       <IonContent>
-        <div className="sync-login-body">
+        <div className={styles.loginBody}>
           <div
-            className={`sync-state ${SHEET_TONE_CLASS[describe(status).tone]}`}
+            className={`${styles.state} ${SHEET_TONE_CLASS[describe(status).tone]}`}
           >
-            <span className="sync-state-label">{describe(status).label}</span>
-            <span className="sync-state-detail">
+            <span className={styles.stateLabel}>{describe(status).label}</span>
+            <span className={styles.stateDetail}>
               {status.state === "syncing" && !status.readOnly
                 ? "Your flights now back up automatically."
                 : describe(status).detail}
@@ -354,17 +355,17 @@ export function LinkAccountPage({
           </div>
 
           {linked ? (
-            <p className="sync-login-lede" data-testid="link-page-linked">
+            <p className={styles.loginLede} data-testid="link-page-linked">
               Linked. Sign in with Apple at wingover.app any time.
             </p>
           ) : (
             <>
-              <p className="sync-login-lede">
+              <p className={styles.loginLede}>
                 One optional step: link your Apple Account, and you can sign in
                 at wingover.app to see your flights on any computer.
               </p>
 
-              {problem && <p className="sync-error-message">{problem}</p>}
+              {problem && <p className={styles.errorMessage}>{problem}</p>}
 
               <AppleSignInButton
                 label="Link Apple Account"
@@ -375,13 +376,13 @@ export function LinkAccountPage({
               <IonButton
                 fill="clear"
                 size="small"
-                className="sync-quiet-action"
+                className={styles.quietAction}
                 onClick={pop}
                 data-testid="link-page-skip"
               >
                 Skip for now
               </IonButton>
-              <p className="sync-fine-print">
+              <p className={styles.finePrint}>
                 You can always do this later from the Sync screen.
               </p>
             </>

@@ -1,3 +1,6 @@
+/* The sync sheet family's shared vocabulary: SyncSheet (shell/pitch),
+   SyncSubscription, SyncConnection, the SelfHostPage form, and the logbook
+   ConnectFunnel (the SIWA button). One modal, one visual language. */
 /* Drop a photo at public/sync-hero.jpg. Layered under a scrim, not raw: a
    photograph behind text is unreadable in the exact conditions this app is
    built for (STEERING: sunlight-readable, high contrast, leg-mounted phone).
@@ -13,7 +16,7 @@
    as a bar at the top. On the wrapper there is no offset math to miss: the
    hero always underlays everything. Everything above it (content, both
    headers) is made transparent so it shows through. */
-.sync-modal {
+.modal {
   /* Scrim stops and text glows, per scheme: the scrim must fade the photo
      toward the sheet background (white in light, black in dark) and the
      glow behind the text must match it — a black halo under dark text
@@ -33,7 +36,7 @@
     url("/sync-hero.jpg") center / cover no-repeat, var(--ion-background-color);
 }
 
-:root.ion-palette-dark .sync-modal {
+:root:global(.ion-palette-dark) .modal {
   --hero-scrim-mid: rgba(0, 0, 0, 0.08);
   --hero-scrim-strong: rgba(0, 0, 0, 0.72);
   --hero-glow: 0 1px 12px rgba(0, 0, 0, 0.8);
@@ -41,14 +44,14 @@
 }
 
 /* Transparent so the modal-wrapper hero shows through the whole sheet. */
-.sync-home-content {
+.homeContent {
   --background: transparent;
 }
 
 /* Flex the scroll container so the condensed header takes its natural height
    and the body fills exactly what's left. min-height:100% on the body instead
    would stack with the header and push the last control off-screen. */
-.sync-home-content::part(scroll) {
+.homeContent::part(scroll) {
   display: flex;
   flex-direction: column;
 }
@@ -61,11 +64,11 @@
    behind the large title. The pinned fade header keeps its background: at rest
    it fades to transparent (hero shows through), and it fades back in as a
    solid bar as the title scrolls away, the native iOS behavior. */
-.sync-home-content ion-header[collapse="condense"] ion-toolbar {
+.homeContent ion-header[collapse="condense"] ion-toolbar {
   --background: transparent;
 }
 
-.sync-home-body {
+.homeBody {
   flex: 1;
   display: flex;
   flex-direction: column;
@@ -79,7 +82,7 @@
 /* --ion-text-color, NOT --ion-color-light: the dark palette redefines the
    "light" step to a dark shade, so it vanishes on exactly the background it
    sounds like it belongs on. */
-.sync-headline {
+.headline {
   margin: 0 0 1.5rem;
   font-size: 2rem;
   font-weight: 700;
@@ -93,7 +96,7 @@
 /* Web pitch: the sentence that stands in for the StoreKit-only buy button —
    what sync is and where to get it. Sits where the buttons would, readable
    over the hero photo (STEERING: sunlight-readable). */
-.sync-pitch-note {
+.pitchNote {
   margin: 0 0 1rem;
   font-size: 1rem;
   line-height: 1.5;
@@ -103,7 +106,7 @@
 
 /* Centred as a block, left-aligned inside: centred bullets are unreadable,
    and a ragged left edge is what makes a list stop scanning as a list. */
-.sync-reasons {
+.reasons {
   list-style: none;
   margin: 0 auto 1.75rem;
   padding: 0;
@@ -111,7 +114,7 @@
   text-align: left;
 }
 
-.sync-reasons li {
+.reasons li {
   display: flex;
   align-items: center;
   gap: 0.75rem;
@@ -120,7 +123,7 @@
   text-shadow: var(--hero-glow-tight);
 }
 
-.sync-reasons ion-icon {
+.reasons ion-icon {
   font-size: 1.375rem;
   color: var(--ion-color-primary);
   flex-shrink: 0;
@@ -128,17 +131,17 @@
 
 /* The Log In sheet is a plain page — no photo, no scrim. It shares the state
    block and fine print with the Subscription sheet, minus the shadows. */
-.sync-login-body {
+.loginBody {
   padding: 1.5rem 1.25rem;
   text-align: center;
 }
 
-.sync-login-lede {
+.loginLede {
   margin: 0.5rem 0 1.5rem;
   color: var(--ion-color-medium);
 }
 
-.sync-state {
+.state {
   display: flex;
   flex-direction: column;
   align-items: center;
@@ -146,13 +149,13 @@
   margin-bottom: 1.5rem;
 }
 
-.sync-state-label {
+.stateLabel {
   font-size: 2rem;
   font-weight: 700;
   letter-spacing: -0.01em;
 }
 
-.sync-state-detail {
+.stateDetail {
   color: var(--ion-color-medium);
   font-size: 0.875rem;
 }
@@ -160,25 +163,25 @@
 /* Shadows only over the photo — on the Subscription sheet the scrim can't be
    trusted everywhere (a bright cloud), and on the plain Log In page the same
    shadow reads as a smudge. */
-.sync-home-body .sync-state-label {
+.homeBody .stateLabel {
   text-shadow: var(--hero-glow);
 }
 
-.sync-home-body .sync-state-detail {
+.homeBody .stateDetail {
   text-shadow: var(--hero-glow-tight);
 }
 
 /* Read-only / Expired is not an error and must not look like one: the pilot's
    flights are all still there. Amber, not red. */
-.sync-state-readonly .sync-state-label {
+.stateReadonly .stateLabel {
   color: var(--ion-color-warning);
 }
 
-.sync-state-error .sync-state-label {
+.stateError .stateLabel {
   color: var(--ion-color-danger);
 }
 
-.sync-error-message {
+.errorMessage {
   color: var(--ion-color-danger);
   font-size: 0.875rem;
   word-break: break-word;
@@ -186,14 +189,14 @@
 }
 
 /* Over the hero photo — same shadow deal as every other word there. */
-.sync-home-body .sync-error-message {
+.homeBody .errorMessage {
   text-shadow: var(--hero-glow-tight);
 }
 
 /* Gloves-first (STEERING): every block action here is well past the platform
    minimum, even though this is ground UI. */
-.sync-home-body ion-button[expand="block"],
-.sync-login-body ion-button[expand="block"] {
+.homeBody ion-button[expand="block"],
+.loginBody ion-button[expand="block"] {
   --padding-top: 1.25rem;
   --padding-bottom: 1.25rem;
   --border-radius: 14px;
@@ -203,7 +206,7 @@
 
 /* Quiet, secondary actions (Restore Purchases, Manage subscription): present
    for the pilot who is looking for them, silent for everyone else. */
-.sync-quiet-action {
+.quietAction {
   --padding-top: 1rem;
   --padding-bottom: 1rem;
 }
@@ -211,7 +214,7 @@
 /* Apple's HIG wants their sign-in button monochrome — never the app's accent
    color — with the contrast variant per background: black on light, white on
    dark. */
-.sync-siwa-button {
+.siwaButton {
   --background: #000;
   --background-activated: #333;
   --background-focused: #333;
@@ -219,7 +222,7 @@
   --color: #fff;
 }
 
-:root.ion-palette-dark .sync-siwa-button {
+:root:global(.ion-palette-dark) .siwaButton {
   --background: #fff;
   --background-activated: #e6e6e6;
   --background-focused: #e6e6e6;
@@ -232,19 +235,19 @@
    ion-padding / ion-margin-horizontal are silently no-ops. Importing the
    utility system to move one note would be the tail wagging the dog —
    STEERING wants plain CSS. */
-.sync-form-note {
+.formNote {
   padding: 0 1.25rem;
 }
 
-/* Same reason as .sync-form-note — this used to carry `ion-padding`, which is
+/* Same reason as .formNote — this used to carry `ion-padding`, which is
    a no-op here, so the one message that has to be readable rendered
    edge-to-edge. Aligned with the inset list it belongs to. */
-.sync-form-problem {
+.formProblem {
   padding: 0 1.25rem;
   margin: 1rem 0 0;
 }
 
-.sync-fine-print {
+.finePrint {
   display: block;
   color: var(--ion-color-medium);
   font-size: 0.8125rem;
@@ -252,6 +255,6 @@
   margin-top: 0.5rem;
 }
 
-.sync-fine-print a {
+.finePrint a {
   color: inherit;
 }

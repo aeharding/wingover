@@ -5,6 +5,7 @@ import { useState, useSyncExternalStore } from "react";
 import * as sync from "../../sync";
 import { describe } from "../sync/describe";
 import { useSyncSheet } from "../sync/SyncSheets";
+import styles from "../sync/sync.module.css";
 
 /**
  * The empty logbook in a browser is a front door, not a dead end: a pilot
@@ -47,7 +48,7 @@ export default function ConnectFunnel({ onImport }: { onImport: () => void }) {
         <>
           <IonButton
             expand="block"
-            className="sync-siwa-button"
+            className={styles.siwaButton}
             disabled={busy}
             onClick={() => void signIn()}
             data-testid="funnel-signin"
