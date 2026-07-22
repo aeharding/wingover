@@ -1,7 +1,0 @@
-/* MapKit builds its view inside our `.map-container`; make it fill the box.
-   Unlike maplibre-gl.css this does not fight MapView.css (MapKit styles its
-   own `.mk-map-view` child, not `.map-container`). */
-.map-container .mk-map-view {
-  position: absolute;
-  inset: 0;
-}

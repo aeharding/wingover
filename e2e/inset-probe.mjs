@@ -105,8 +105,8 @@ const scenarios = {
       paneHeader: ".pane-header",
       paneScroll: ".logbook-pane-scroll",
       paneItem: ".logbook-pane ion-item",
-      seatMapOverlay: ".seat-map .map-overlay",
-      seatProbe: ".seat-map .map-inset-probe",
+      seatMapOverlay: '[data-testid="seat-map"] [data-testid="map-overlay"]',
+      seatProbe: '[data-testid="seat-map"] [data-testid="map-inset-probe"]',
       seatCard: ".seat-card",
       seatCardItem: ".seat-card ion-item",
     },
@@ -130,8 +130,8 @@ const scenarios = {
       await p.waitForTimeout(700);
     },
     specs: {
-      seatProbe: ".seat-map .map-inset-probe",
-      seatMapOverlay: ".seat-map .map-overlay",
+      seatProbe: '[data-testid="seat-map"] [data-testid="map-inset-probe"]',
+      seatMapOverlay: '[data-testid="seat-map"] [data-testid="map-overlay"]',
       scrub: '[data-testid="replay-dock"]',
     },
   },
@@ -162,8 +162,8 @@ const scenarios = {
       await p.waitForTimeout(700);
     },
     specs: {
-      seatProbe: ".seat-map .map-inset-probe",
-      seatMapOverlay: ".seat-map .map-overlay",
+      seatProbe: '[data-testid="seat-map"] [data-testid="map-inset-probe"]',
+      seatMapOverlay: '[data-testid="seat-map"] [data-testid="map-overlay"]',
       scrub: '[data-testid="replay-dock"]',
     },
   },
@@ -171,8 +171,8 @@ const scenarios = {
     vp: { width: 1200, height: 800 },
     url: "/plan?map-style=blank",
     specs: {
-      planProbe: ".plan-map .map-inset-probe",
-      planOverlay: ".plan-map .map-overlay",
+      planProbe: '[data-testid="plan-map"] [data-testid="map-inset-probe"]',
+      planOverlay: '[data-testid="plan-map"] [data-testid="map-overlay"]',
       planPane: ".plan-pane",
       planPaneRows: ".plan-pane-rows",
       planPaneEmpty: ".plan-pane-empty",
@@ -198,8 +198,8 @@ const scenarios = {
       await p.waitForTimeout(800);
     },
     specs: {
-      probe: '[data-testid="all-flights-map"] .map-inset-probe',
-      overlay: '[data-testid="all-flights-map"] .map-overlay',
+      probe: '[data-testid="all-flights-map"] [data-testid="map-inset-probe"]',
+      overlay: '[data-testid="all-flights-map"] [data-testid="map-overlay"]',
       legend: '[data-testid="composite-legend"]',
       header: ".desktop-main ion-toolbar",
     },
@@ -244,8 +244,9 @@ const scenarios = {
     },
     specs: {
       header: "ion-header ion-toolbar",
-      probe: '[data-testid="flight-detail-map"] .map-inset-probe',
-      overlay: '[data-testid="flight-detail-map"] .map-overlay',
+      probe:
+        '[data-testid="flight-detail-map"] [data-testid="map-inset-probe"]',
+      overlay: '[data-testid="flight-detail-map"] [data-testid="map-overlay"]',
       formItem: "ion-content ion-item",
     },
   },
@@ -268,8 +269,9 @@ const scenarios = {
       await p.waitForTimeout(900);
     },
     specs: {
-      probe: '[data-testid="flight-detail-map"] .map-inset-probe',
-      overlay: '[data-testid="flight-detail-map"] .map-overlay',
+      probe:
+        '[data-testid="flight-detail-map"] [data-testid="map-inset-probe"]',
+      overlay: '[data-testid="flight-detail-map"] [data-testid="map-overlay"]',
     },
   },
   "m-detail-full-replay": {
@@ -297,8 +299,9 @@ const scenarios = {
       await p.waitForTimeout(700);
     },
     specs: {
-      probe: '[data-testid="flight-detail-map"] .map-inset-probe',
-      overlay: '[data-testid="flight-detail-map"] .map-overlay',
+      probe:
+        '[data-testid="flight-detail-map"] [data-testid="map-inset-probe"]',
+      overlay: '[data-testid="flight-detail-map"] [data-testid="map-overlay"]',
       scrub: '[data-testid="replay-dock"]',
     },
   },
@@ -306,8 +309,8 @@ const scenarios = {
     vp: { width: 844, height: 390 },
     url: "/plan?map-style=blank",
     specs: {
-      probe: ".plan-map .map-inset-probe",
-      overlay: ".plan-map .map-overlay",
+      probe: '[data-testid="plan-map"] [data-testid="map-inset-probe"]',
+      overlay: '[data-testid="plan-map"] [data-testid="map-overlay"]',
       pill: '[data-testid="plan-distance"]',
     },
   },
@@ -330,8 +333,8 @@ const scenarios = {
       await p.waitForTimeout(800);
     },
     specs: {
-      probe: '[data-testid="all-flights-map"] .map-inset-probe',
-      overlay: '[data-testid="all-flights-map"] .map-overlay',
+      probe: '[data-testid="all-flights-map"] [data-testid="map-inset-probe"]',
+      overlay: '[data-testid="all-flights-map"] [data-testid="map-overlay"]',
       legend: '[data-testid="composite-legend"]',
       header: "ion-header ion-toolbar",
     },

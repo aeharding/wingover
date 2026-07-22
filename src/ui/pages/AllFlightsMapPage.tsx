@@ -25,6 +25,7 @@ import ViewToggle from "../map/ViewToggle";
 import { useIsDesktop } from "../useIsDesktop";
 
 import styles from "./AllFlightsMapPage.module.css";
+import mapCss from "../map/map.module.css";
 
 const OLDEST_HUE = 290;
 const NEWEST_HUE = 175;
@@ -149,7 +150,7 @@ export default function AllFlightsMapPage() {
               Oldest → newest
               <div className={styles.bar} />
             </div>
-            <div className="map-overlay">
+            <div className={mapCss.overlay} data-testid="map-overlay">
               {map && <CompassButton map={map} />}
               {map?.supportsSatellite && (
                 <ViewToggle view={view} onChange={changeView} />

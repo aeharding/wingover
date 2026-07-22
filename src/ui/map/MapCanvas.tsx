@@ -16,7 +16,7 @@ import type { Insets, MapView } from "./types";
 // so ours must come last to win (position: absolute; inset: 0). Eager, and
 // ahead of MapView.css — the adapter (and its map JS) still load lazily.
 import "maplibre-gl/dist/maplibre-gl.css";
-import "./MapView.css";
+import mapCss from "./map.module.css";
 
 interface MapCanvasProps {
   base: MapViewKind;
@@ -255,10 +255,10 @@ export default function MapCanvas({
     const container = containerRef.current;
     if (!container) return;
     container.classList.toggle("satellite", base === "satellite");
-    container.classList.toggle("map-loading", !revealed);
+    container.classList.toggle(mapCss.loading, !revealed);
     // The attribution (an OSM license obligation) is styled per appearance:
     // its dark-map colors are white-on-white over a light basemap.
-    container.classList.toggle("map-light", appearance === "light");
+    container.classList.toggle(mapCss.light, appearance === "light");
     container.setAttribute("data-appearance", appearance);
   }, [base, revealed, appearance]);
 
@@ -291,13 +291,18 @@ export default function MapCanvas({
   // vars for the MapKit path — one source, so the logo and the buttons
   // can't disagree.
   return (
-    <div className="map-surface">
+    <div className={mapCss.surface}>
       <div
         ref={containerRef}
-        className="map-container"
+        className={mapCss.container}
         data-testid="map-container"
       />
-      <div ref={probeRef} className="map-inset-probe" aria-hidden="true" />
+      <div
+        ref={probeRef}
+        className={mapCss.insetProbe}
+        data-testid="map-inset-probe"
+        aria-hidden="true"
+      />
       {children}
     </div>
   );

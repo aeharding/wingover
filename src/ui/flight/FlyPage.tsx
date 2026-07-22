@@ -49,7 +49,8 @@ import Tile from "./Tile";
 import { showToast } from "./toast";
 import { useLiveViewPrefs } from "./useLiveViewPrefs";
 
-import "./FlyPage.css";
+import styles from "./FlyPage.module.css";
+import mapCss from "../map/map.module.css";
 
 // WAL hydration happens once per app launch. The App swaps the whole nav shell
 // for a bare <FlyPage> when a flight is active, so FlyPage remounts mid-session
@@ -284,29 +285,33 @@ export default function FlyPage() {
       : 0;
 
   return (
-    <div className="fly-content" data-testid="fly-content">
+    <div className={styles.content} data-testid="fly-content">
       {status === "idle" && (
-        <div className="fly-idle">
-          <button className="start-button" onClick={armFlight}>
+        <div className={styles.idle}>
+          <button className={styles.start} onClick={armFlight}>
             Start Flight
           </button>
           {plannedRouteMeters > 0 && (
-            <div className="planned-route" data-testid="planned-route">
+            <div className={styles.planned} data-testid="planned-route">
               Planned route: {formatDistance(plannedRouteMeters, units)}
             </div>
           )}
           {gpsError && (
-            <div className="gps-error" data-testid="gps-error">
+            <div className={styles.gpsError} data-testid="gps-error">
               {gpsError.message}
             </div>
           )}
         </div>
       )}
       {(status === "acquiring" || status === "armed") && (
-        <div className="fly-armed" data-testid="armed">
-          <div className="armed-message">
+        <div className={styles.armed} data-testid="armed">
+          <div className={styles.armedMessage}>
             <div
-              className={status === "armed" ? "pulse" : "pulse acquiring"}
+              className={
+                status === "armed"
+                  ? styles.pulse
+                  : `${styles.pulse} ${styles.acquiring}`
+              }
               aria-hidden="true"
             />
             <h2>
@@ -315,29 +320,29 @@ export default function FlyPage() {
             <p>{status === "acquiring" ? ACQUIRING_HINT : ARMED_HINT}</p>
           </div>
           {gpsError && (
-            <div className="gps-error" data-testid="gps-error">
+            <div className={styles.gpsError} data-testid="gps-error">
               {gpsError.message}
             </div>
           )}
           {status === "acquiring" ? (
-            <div className="armed-accuracy" data-testid="armed-accuracy">
+            <div className={styles.armedAccuracy} data-testid="armed-accuracy">
               {latest
                 ? `±${formatAltitude(latest.horizontalAccuracy, units)} H · ±${formatAltitude(latest.verticalAccuracy, units)} V`
                 : "—"}
             </div>
           ) : (
-            <div className="armed-speed" data-testid="armed-speed">
+            <div className={styles.armedSpeed} data-testid="armed-speed">
               {latest ? formatSpeed(latest.speed, units) : "—"}
             </div>
           )}
-          <button className="cancel-button" onClick={confirmEndFlight}>
+          <button className={styles.cancel} onClick={confirmEndFlight}>
             Cancel
           </button>
         </div>
       )}
       {(status === "recording" || status === "landed") && (
-        <div className="fly-recording" data-testid="recording">
-          <div className="instruments" ref={instrumentsRef}>
+        <div className={styles.recording} data-testid="recording">
+          <div className={styles.instruments} ref={instrumentsRef}>
             <Tile
               label="Above launch"
               value={
@@ -396,7 +401,7 @@ export default function FlyPage() {
               icon={
                 latest && navTarget ? (
                   <span
-                    className="launch-arrow"
+                    className={styles.launchArrow}
                     style={{ rotate: `${toTargetRelative}deg` }}
                     aria-hidden="true"
                   >
@@ -405,7 +410,7 @@ export default function FlyPage() {
                           pointer, not a thin glyph. */}
                     <svg
                       viewBox="-8 -11 16 20"
-                      className="launch-arrow-svg"
+                      className={styles.launchArrowSvg}
                       data-testid="launch-arrow-svg"
                     >
                       <polygon points="0,-10 7,8 0,4 -7,8" />
@@ -418,6 +423,7 @@ export default function FlyPage() {
             />
           </div>
           <LiveTrackMap
+            className={styles.liveMap}
             track={track}
             latest={latest}
             view={mapView}
@@ -441,20 +447,20 @@ export default function FlyPage() {
           />
           {gpsError && (
             <div
-              className="gps-error recording-error"
+              className={`${styles.gpsError} ${styles.recordingError}`}
               style={{ top: mapTopInset + 12 }}
               data-testid="gps-error"
             >
               {gpsError.message}
             </div>
           )}
-          <div className="flight-controls">
+          <div className={styles.controls}>
             {/* Contextual: floats ABOVE the fixed control grid (which is
                   bottom-anchored) so appearing/disappearing never nudges the
                   four regular controls out of their fixed positions. */}
             {selectedWaypoint && (
               <button
-                className="map-button skip-button"
+                className={mapCss.button}
                 aria-label="Clear selected waypoint"
                 data-testid="remove-waypoint"
                 onClick={() => {
@@ -464,11 +470,14 @@ export default function FlyPage() {
               >
                 {/* A location pin with a small trash badge: "delete this
                       selected checkpoint". */}
-                <span className="skip-icon" aria-hidden="true">
-                  <span className="skip-icon-pin">
+                <span className={styles.skipIcon} aria-hidden="true">
+                  <span className={styles.skipIconPin}>
                     <NativeIcon icon={locationOutline} />
                   </span>
-                  <NativeIcon className="skip-icon-badge" icon={closeOutline} />
+                  <NativeIcon
+                    className={styles.skipIconBadge}
+                    icon={closeOutline}
+                  />
                 </span>
               </button>
             )}
@@ -479,7 +488,7 @@ export default function FlyPage() {
             <MapCluster
               tl={
                 <button
-                  className="map-button"
+                  className={mapCss.button}
                   aria-label={follow ? "Track up" : "Align north"}
                   // The mode light shows only while the mode is in
                   // effect (unsnapping also clears the pref; the gate
@@ -503,7 +512,7 @@ export default function FlyPage() {
               }
               tr={
                 <button
-                  className="map-button"
+                  className={mapCss.button}
                   aria-label="Follow aircraft"
                   data-active={follow}
                   // A toggle: pressing while snapped unsnaps (and takes
@@ -520,7 +529,7 @@ export default function FlyPage() {
               }
               br={
                 <button
-                  className="map-button stop-button"
+                  className={`${mapCss.button} ${styles.stop}`}
                   aria-label="Stop flight"
                   onClick={confirmEndFlight}
                 >
@@ -551,7 +560,7 @@ export default function FlyPage() {
 
 function Compass({ course }: { course: number }) {
   return (
-    <svg className="compass" viewBox="0 0 44 44" aria-hidden="true">
+    <svg className={styles.compass} viewBox="0 0 44 44" aria-hidden="true">
       <circle cx="22" cy="22" r="20.5" />
       <text x="22" y="8.5">
         N
@@ -566,9 +575,12 @@ function Compass({ course }: { course: number }) {
         W
       </text>
       <g transform={`rotate(${course} 22 22)`}>
-        <polygon className="needle-north" points="22,9 25.5,24 22,21 18.5,24" />
         <polygon
-          className="needle-south"
+          className={styles.needleNorth}
+          points="22,9 25.5,24 22,21 18.5,24"
+        />
+        <polygon
+          className={styles.needleSouth}
           points="22,35 18.5,20 22,23 25.5,20"
         />
       </g>

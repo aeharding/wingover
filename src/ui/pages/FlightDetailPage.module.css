@@ -1,3 +1,5 @@
+@value overlay from "../map/map.module.css";
+
 /* Map on top, details below — a split, not an overlay. The old floating card
    covered the track it existed to show, and its title duplicated the header's.
    The frame owns the map's height and always stays in the scroll flow. Inline
@@ -76,7 +78,7 @@
   pointer-events: none;
 }
 .map:not(.full) .tapLayer,
-.map:not(.full) :global(.map-overlay),
+.map:not(.full) :global(.overlay),
 .map:not(.full) .expandPill {
   pointer-events: auto;
 }
@@ -95,7 +97,7 @@
    and the centered pill (MapView.css stacks it bottom-right, right again once
    full screen). No home-indicator inset — the map box is mid-page here (and
    the region is consume-all anyway, so the safe-area vars already read 0). */
-.map:not(.full) :global(.map-overlay) {
+.map:not(.full) :global(.overlay) {
   top: 0.9rem;
   bottom: auto;
 }

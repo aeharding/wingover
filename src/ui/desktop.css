@@ -287,16 +287,6 @@ body.flight-map-full .flight-seat {
   min-height: 0;
 }
 
-/* Map chrome sits bottom-LEFT in the seat: the card owns the right
-   column, and a grown Notes field must never sit under the expand
-   button's hitbox. Raised above MapKit's Apple logo + Legal strip, which
-   is a license surface, not decoration. */
-.seat-map .map-overlay {
-  right: auto;
-  left: calc(0.9rem + var(--ion-safe-area-left));
-  bottom: calc(2.6rem + var(--ion-safe-area-bottom));
-}
-
 /* The floating details card floats against the seat's top-right — both
    device edges on iPad. It insets its OWN position off them, and separately
    clears safe area for everything inside it: its ion-items DO read

@@ -31,6 +31,7 @@ import { type ReplayCamera, useReplayMapDriver } from "./useReplayMapDriver";
 
 import chassis from "./dock.module.css";
 import styles from "./ReplayDock.module.css";
+import mapCss from "../map/map.module.css";
 
 interface ReplayDockProps {
   // The HOST's map (the seat map, the fullscreen detail map); null while
@@ -188,7 +189,7 @@ export default function ReplayDock({
       />
       <div className={styles.transport}>
         <button
-          className="map-button"
+          className={mapCss.button}
           data-testid="replay-play"
           aria-label={
             feed.playing ? "Pause" : feed.atEnd ? "Replay again" : "Play"
@@ -214,7 +215,7 @@ export default function ReplayDock({
             flown path (per Alex). The label names the action a press
             takes, so it reads opposite to the lit state. */}
         <button
-          className="map-button"
+          className={mapCss.button}
           data-testid="replay-trail"
           aria-label={
             hideAhead ? "Show the whole track" : "Hide the path ahead"
@@ -225,7 +226,7 @@ export default function ReplayDock({
           <NativeIcon icon={footstepsOutline} />
         </button>
         <button
-          className={`map-button ${styles.speed}`}
+          className={`${mapCss.button} ${styles.speed}`}
           data-testid="replay-speed"
           aria-label="Playback speed"
           onClick={feed.cycleSpeed}
@@ -233,7 +234,7 @@ export default function ReplayDock({
           {feed.speed}×
         </button>
         <button
-          className="map-button"
+          className={mapCss.button}
           data-testid="replay-stop"
           aria-label={active ? "Stop replay" : "Hide replay"}
           onClick={() => {

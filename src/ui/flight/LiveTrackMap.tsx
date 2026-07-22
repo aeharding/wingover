@@ -50,6 +50,8 @@ function waypointPinEl(color: string, label: string): HTMLElement {
 }
 
 interface LiveTrackMapProps {
+  // Host placement (FlyPage absolutely fills its recording screen).
+  className?: string;
   track: Fix[];
   latest: Fix | null;
   view: MapViewKind;
@@ -73,6 +75,7 @@ interface LiveTrackMapProps {
 }
 
 export default function LiveTrackMap({
+  className,
   track,
   latest,
   view,
@@ -332,7 +335,10 @@ export default function LiveTrackMap({
   }, [trackUp]);
 
   return (
-    <div className="live-map" data-testid="live-map">
+    <div
+      className={className ? `${styles.root} ${className}` : styles.root}
+      data-testid="live-map"
+    >
       <MapCanvas
         base={view}
         // The live map is ALWAYS light: full sun on a leg-mounted phone is

@@ -1,3 +1,10 @@
+.root {
+  position: relative;
+  flex: 1;
+  min-height: 0;
+  overflow: hidden;
+}
+
 /* Above the map canvas, below the controls (z-index 6): a touch starting
    in the guard is captured here instead of by MapLibre, so the map won't
    pan during the iOS app-switch swipe. Kept narrow so it barely eats into

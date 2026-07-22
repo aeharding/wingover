@@ -48,6 +48,8 @@ import detail from "./detail.module.css";
 import { endpointMarker } from "./endpointMarker";
 import { useFlightDoc } from "./useFlightDoc";
 import { useFlightDrafts } from "./useFlightDrafts";
+import mapCss from "../map/map.module.css";
+import seat from "./FlightSeat.module.css";
 
 /**
  * The desktop split's detail seat: one PERSISTENT component whose id swaps
@@ -322,7 +324,10 @@ export default function FlightSeat({
               no state leaves buttons floating off the anchor — while TR
               passes null, never undefined, so the compass shares the top
               row instead of floating above it. */}
-          <div className="map-overlay">
+          <div
+            className={`${mapCss.overlay} ${seat.overlay}`}
+            data-testid="map-overlay"
+          >
             <MapCluster
               tl={(replay.followButton ?? replay.playButton) || undefined}
               tr={
@@ -331,7 +336,7 @@ export default function FlightSeat({
               }
               bl={
                 <button
-                  className="map-button"
+                  className={mapCss.button}
                   aria-label={mapFull ? "Shrink map" : "Expand map"}
                   data-testid="map-expand"
                   onClick={() => setMapFull(!mapFull)}

@@ -24,6 +24,7 @@ import ReplayDock from "./ReplayDock";
 import { rememberPosition } from "./timelineMemory";
 
 import styles from "./ReplayDrawer.module.css";
+import mapCss from "../map/map.module.css";
 
 // closed → opening (mounted at 0fr) → open (1fr, the slide runs) →
 // closing (back to 0fr) → closed (unmount tears the aircraft down).
@@ -368,7 +369,7 @@ export function useReplayDrawer(
     playButton:
       availableNow && enabled && !isOpen ? (
         <button
-          className="map-button"
+          className={mapCss.button}
           aria-label="Replay flight"
           data-testid="replay-start"
           onClick={open}
@@ -379,7 +380,7 @@ export function useReplayDrawer(
     followButton:
       isOpen && active ? (
         <button
-          className="map-button"
+          className={mapCss.button}
           aria-label="Follow aircraft"
           data-active={camera.follow}
           data-testid="replay-follow"
@@ -399,7 +400,7 @@ export function useReplayDrawer(
     trackUpButton:
       isOpen && active ? (
         <button
-          className="map-button"
+          className={mapCss.button}
           aria-label={
             camera.follow && camera.trackUp ? "Align north" : "Track up"
           }

@@ -38,6 +38,7 @@ import { useSettings } from "../settings/SettingsContext";
 import { useIsDesktop } from "../useIsDesktop";
 
 import styles from "./PlanPage.module.css";
+import mapCss from "../map/map.module.css";
 
 // The plan's pins ARE the planned waypoints, so the route + pins are green to
 // match how they read in flight (see PLANNED_COLOR).
@@ -395,10 +396,10 @@ export default function PlanPage() {
               appearance={appearance}
               onReady={handleReady}
             >
-              <div className="map-overlay">
+              <div className={mapCss.overlay} data-testid="map-overlay">
                 {map && <CompassButton map={map} />}
                 <button
-                  className="map-button"
+                  className={mapCss.button}
                   aria-label="Center on me"
                   onClick={locate}
                 >

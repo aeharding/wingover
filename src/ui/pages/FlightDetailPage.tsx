@@ -71,6 +71,7 @@ import { useFlightActions } from "../useFlightActions";
 import detail from "../logbook/detail.module.css";
 import { endpointMarker } from "../logbook/endpointMarker";
 import styles from "./FlightDetailPage.module.css";
+import mapCss from "../map/map.module.css";
 
 // The expand/collapse toggle animates as a "magic move": the map surface
 // carries a view-transition-name (FlightDetailPage.css), so
@@ -619,7 +620,7 @@ export default function FlightDetailPage() {
                 onClick={expandMap}
               />
             )}
-            <div className="map-overlay">
+            <div className={mapCss.overlay} data-testid="map-overlay">
               {/* Inline preview: the north reset floats (there is no
                   cluster inline). It can't actually appear — the preview
                   is a non-interactive, north-up scroll-through — but the
@@ -650,7 +651,7 @@ export default function FlightDetailPage() {
                   }
                   br={
                     <button
-                      className="map-button"
+                      className={mapCss.button}
                       aria-label="Shrink map"
                       data-testid="map-shrink"
                       onClick={collapseMap}
