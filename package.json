@@ -37,7 +37,6 @@
     "react-reverse-portal": "^2.3.0",
     "react-router": "^5.3.4",
     "react-router-dom": "^5.3.4",
-    "style-observer": "^0.1.2",
     "virtua": "^0.49.3"
   },
   "devDependencies": {

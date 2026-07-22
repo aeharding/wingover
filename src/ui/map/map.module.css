@@ -13,8 +13,9 @@
 /* The bridge from CSS var to the MapKit JS API: an inert box whose padding
    IS var(--ion-safe-area-*) — already cascaded and consumed at this map's
    position. MapCanvas reads its computed padding and feeds setInsets; a
-   StyleObserver on these padding longhands refires whenever any edge
-   changes (rotation, a consume class toggling). Zero-size, hidden, unpainted. */
+   ResizeObserver on the probes' border-boxes refires the read on any inset
+   change (their geometry is injective in the four edges — see the TL
+   companion below; e2e/inset-bridge.spec.ts guards the seam). Zero-size, hidden, unpainted. */
 .insetProbe {
   position: absolute;
   top: 0;
@@ -26,6 +27,15 @@
   box-sizing: border-box;
   padding: var(--ion-safe-area-top) var(--ion-safe-area-right)
     var(--ion-safe-area-bottom) var(--ion-safe-area-left);
+}
+
+/* The companion probe: top+left only. The main probe's border-box is the
+   SUMS (L+R × T+B) — blind to a swap that preserves them (the 180° landscape
+   flip). With this one adding (L × T), the observed geometry is injective in
+   all four edges: any inset change moves some observed box. */
+.insetProbeTL {
+  padding-right: 0;
+  padding-bottom: 0;
 }
 
 .container {

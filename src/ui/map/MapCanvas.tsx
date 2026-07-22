@@ -5,7 +5,6 @@ import {
   useRef,
   useState,
 } from "react";
-import StyleObserver from "style-observer";
 
 import { onSettingChanged } from "../../storage/local";
 import { type MapAppearance, type MapViewKind, resolveBackend } from "./config";
@@ -17,6 +16,7 @@ import type { Insets, MapView } from "./types";
 // ahead of MapView.css — the adapter (and its map JS) still load lazily.
 import "maplibre-gl/dist/maplibre-gl.css";
 import mapCss from "./map.module.css";
+import { cx } from "../cx";
 
 interface MapCanvasProps {
   base: MapViewKind;
@@ -85,6 +85,7 @@ export default function MapCanvas({
   // One source (the vars), so the MapKit logo can't drift from the
   // CSS-positioned buttons.
   const probeRef = useRef<HTMLDivElement>(null);
+  const probeTLRef = useRef<HTMLDivElement>(null);
   const insetsRef = useRef<Insets>({ top: 0, right: 0, bottom: 0, left: 0 });
   // Bumped when the pilot changes the map provider in Settings: the whole
   // backend is torn down and re-created in place, so the choice applies
@@ -224,29 +225,39 @@ export default function MapCanvas({
       left: parseFloat(style.paddingLeft) || 0,
     };
     viewRef.current?.setInsets(insetsRef.current);
+    // Mirror what was pushed on the container's debug handle (the __map /
+    // __display convention): whether the JS bridge actually fired — the bug
+    // class here was a swallowed observer event — is invisible to CSS
+    // measurement, and a DOM attribute would be a test concern mutating
+    // production markup on every read.
+    const container = containerRef.current as
+      (HTMLElement & { __insets?: Insets }) | null;
+    if (container) container.__insets = { ...insetsRef.current };
   });
 
-  // StyleObserver (Lea Verou) fires whenever the probe's resolved padding
-  // moves, which is exactly when the exposed inset moves: device rotation
-  // re-resolves env(), and a consume class toggling (the replay pane
-  // opening, a fullscreen switch) changes a --ion-safe-area-* var. One
-  // read + one observer covers every case; the initial read seeds it.
-  // observe/unobserve take (target, properties) explicitly — the options-
-  // object form leaves a single Element as `targets`, whose missing
-  // `.length` silently skips the observe and throws on teardown.
+  // One mechanism: a ResizeObserver — on the PROBES, not the container.
+  // The probes are width:0 border-boxes whose padding IS
+  // var(--ion-safe-area-*), so their border-box geometry is a pure
+  // function of the insets: the main probe spans the sums (L+R × T+B),
+  // the TL companion spans (L × T), and the pair is injective in all
+  // four edges. ANY inset change therefore moves an observed box —
+  // env() re-resolving, a consume class flipping after its animation
+  // already finished, a reparent into a different context — with no
+  // reliance on transition events (which miss changes applied across a
+  // DOM move) or on the container's own size moving (which a 180°
+  // rotation and a post-animation class flip both defeat; both found by
+  // adversarial review, both pinned in e2e/inset-bridge.spec.ts).
+  // box: "border-box" is load-bearing — the content box of a zero-width
+  // padded div never changes.
   useEffect(() => {
     const probe = probeRef.current;
-    if (!probe) return;
+    const probeTL = probeTLRef.current;
+    if (!probe || !probeTL) return;
     readInsets();
-    const props = [
-      "padding-top",
-      "padding-right",
-      "padding-bottom",
-      "padding-left",
-    ];
-    const observer = new StyleObserver(() => readInsets());
-    observer.observe(probe, props);
-    return () => observer.unobserve(probe, props);
+    const resize = new ResizeObserver(() => readInsets());
+    resize.observe(probe, { box: "border-box" });
+    resize.observe(probeTL, { box: "border-box" });
+    return () => resize.disconnect();
   }, []);
 
   // Modifier classes go through classList: maplibre writes its own classes to
@@ -301,6 +312,11 @@ export default function MapCanvas({
         ref={probeRef}
         className={mapCss.insetProbe}
         data-testid="map-inset-probe"
+        aria-hidden="true"
+      />
+      <div
+        ref={probeTLRef}
+        className={cx(mapCss.insetProbe, mapCss.insetProbeTL)}
         aria-hidden="true"
       />
       {children}
