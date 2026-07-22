@@ -1,0 +1,184 @@
+/* The splash backdrop art (FlySplash.tsx): the app icon's motifs — canopy,
+   fanned flight-path curves, sun/moon, clouds, star — rendered large and
+   near-transparent over a scene gradient. Hosts render it behind the flight
+   surface (inside the phone frame's fullscreen ion-content so it spans under
+   the translucent tab bar; behind the desktop fly section). This is the one
+   part of the flight surface that themes with the app palette: a deep sunset
+   at dusk, a pale blue day sky when the palette is light, so the two read as
+   dusk/dawn of one artwork. Keyed on the palette CLASS (appTheme.ts), not
+   prefers-color-scheme — satellite forces the class on and the splash goes
+   dusk with the rest of the chrome. Palette selectors are :global (the class
+   lives on <html>); the art classes scope. */
+
+.splash {
+  position: absolute;
+  inset: 0;
+  /* The frame's ion-content fixed slot anchors to the HOST box, which stops
+     at the page bottom; fullscreen publishes the under-bar distance as
+     --offset-bottom, so reach past it to span under the translucent tab bar.
+     EXPLICIT height: an svg is a replaced element with a 1:1 intrinsic ratio
+     from its viewBox, so top/bottom anchors alone collapse it to the ratio
+     instead of stretching. Desktop hosts it in a plain section (vars unset)
+     and the fallback is exactly the box. Reach UP past --offset-top too, or
+     the (translucent) header's strip shows the pinned-black page behind. */
+  width: 100%;
+  top: calc(-1 * var(--offset-top, 0px));
+  height: calc(100% + var(--offset-top, 0px) + var(--offset-bottom, 0px));
+  pointer-events: none;
+  background: linear-gradient(
+    180deg,
+    #130d22 0%,
+    #1b1330 38%,
+    #281824 70%,
+    #2d1e13 100%
+  );
+}
+
+.star {
+  fill: #ffdfac;
+  opacity: 0.5;
+}
+
+/* At dusk the disc is the MOON: cool silver against the purples, more
+   present than the old faint sun (moons are bright at night). Daylight
+   overrides below turn it back into the sun. */
+.sun {
+  fill: #e9eef6;
+  opacity: 0.3;
+}
+
+.cloud {
+  fill: #ffdfac;
+  opacity: 0.14;
+}
+
+/* The icon's fanned flight-path curves — recolored warm so they read on the
+   dark sky (the icon draws them dark against a bright one). */
+.lines path {
+  stroke: #ffe1b4;
+  stroke-width: 4;
+  opacity: 0.08;
+}
+
+.canopy {
+  fill: #ffefd3;
+  stroke: #ffefd3;
+  stroke-width: 60;
+  stroke-linejoin: round;
+  stroke-linecap: round;
+  opacity: 0.09;
+}
+
+/* Day sky: blue does not blend straight into amber (RGB crosses a gray dead
+   zone that split the sky into two slabs) — a near-white HAZE stop between
+   them is how a real sky does it. The warmth RADIATES from the sun via the
+   .glow radial below; this base keeps only a gentle amber floor. */
+:global(:root:not(.ion-palette-dark)) .splash {
+  background: linear-gradient(
+    180deg,
+    #c8ddf3 0%,
+    #dbe7f4 38%,
+    #edf1f1 64%,
+    #eeeadd 86%,
+    #ece2cc 100%
+  );
+}
+
+/* The disc's radial glow, both schemes: daylight gets the sun's golden
+   radiance; dusk gets grayscale MOONLIGHT (the yellow sunset stays in the
+   linear horizon glow, the moon casts a cool silver halo). On app start it
+   BLOOMS in — a long easeOutExpo fade, once per splash mount (tab pages stay
+   mounted, so switching tabs never replays it). */
+.glow {
+  animation: glow-in 10s cubic-bezier(0.16, 1, 0.3, 1) both;
+}
+
+@keyframes glow-in {
+  from {
+    opacity: 0;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .glow {
+    animation: none;
+  }
+}
+
+.glowCore {
+  stop-color: #d7dfeb;
+  stop-opacity: 0.11;
+}
+
+.glowMid {
+  stop-color: #aeb9c9;
+  stop-opacity: 0.05;
+}
+
+.glowFringe {
+  stop-color: #8b95a6;
+  stop-opacity: 0.02;
+}
+
+.glowEnd {
+  stop-color: #8b95a6;
+  stop-opacity: 0;
+}
+
+:global(:root:not(.ion-palette-dark)) .glowCore {
+  stop-color: #ffcf70;
+  stop-opacity: 0.68;
+}
+
+:global(:root:not(.ion-palette-dark)) .glowMid {
+  stop-color: #ffd98c;
+  stop-opacity: 0.42;
+}
+
+:global(:root:not(.ion-palette-dark)) .glowFringe {
+  stop-color: #f8dcab;
+  stop-opacity: 0.2;
+}
+
+:global(:root:not(.ion-palette-dark)) .glowEnd {
+  stop-color: #f8dcab;
+  stop-opacity: 0;
+}
+
+/* The sun seen THROUGH the wing (the blurred, canopy-clipped copy), both
+   schemes: brighter than the bare disc because the blur spreads its energy —
+   it must still read as the light source. */
+.sun.sunVeiled {
+  opacity: 0.26;
+}
+
+:global(:root:not(.ion-palette-dark)) .sun.sunVeiled {
+  opacity: 0.5;
+}
+
+/* The motifs flip to deeper ambers: the near-white warm fills that read on
+   the night sky vanish against the day one. */
+:global(:root:not(.ion-palette-dark)) .star {
+  fill: #d3922f;
+  /* Softer than the night stars' 0.5: daylight motes, not beacons. */
+  opacity: 0.32;
+}
+
+:global(:root:not(.ion-palette-dark)) .sun {
+  fill: #eda32f;
+  opacity: 0.22;
+}
+
+:global(:root:not(.ion-palette-dark)) .cloud {
+  fill: #c98f3f;
+}
+
+:global(:root:not(.ion-palette-dark)) .lines path {
+  stroke: #bd8434;
+  opacity: 0.14;
+}
+
+:global(:root:not(.ion-palette-dark)) .canopy {
+  fill: #c98f3f;
+  stroke: #c98f3f;
+}

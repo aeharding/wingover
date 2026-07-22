@@ -1,9 +1,8 @@
 declare const styles: {
-  readonly "flightRow": string;
-  readonly "flightRowDistance": string;
-  readonly "flightRowDuration": string;
-  readonly "flightRowId": string;
-  readonly "flightRowStats": string;
+  readonly distance: string;
+  readonly duration: string;
+  readonly identity: string;
+  readonly row: string;
+  readonly stats: string;
 };
 export = styles;
-
