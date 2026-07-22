@@ -401,7 +401,3 @@ export function setPaused(next: boolean) {
     connect();
   }
 }
-
-export function isPaused(): boolean {
-  return paused;
-}

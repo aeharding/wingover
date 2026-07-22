@@ -8,6 +8,6 @@
 }
 
 .logbook-totals {
-  padding: 1rem 1.25rem calc(1rem + env(safe-area-inset-bottom));
+  padding: 1rem 1.25rem calc(1rem + var(--ion-safe-area-bottom));
   text-align: center;
 }
