@@ -15,6 +15,7 @@ import ConnectFunnel from "../logbook/ConnectFunnel";
 import FlightList from "../logbook/FlightList";
 import FlightSeat from "../logbook/FlightSeat";
 import { useFlights } from "../logbook/useFlights";
+import LogbookEmpty from "../logbook/LogbookEmpty";
 import AllFlightsMapPage from "../pages/AllFlightsMapPage";
 import { useSettings } from "../settings/SettingsContext";
 
@@ -214,9 +215,9 @@ export default function LogbookSection() {
           </div>
         )}
         {empty ? (
-          <div className="logbook-empty">
+          <LogbookEmpty>
             <ConnectFunnel onImport={() => fileInputRef.current?.click()} />
-          </div>
+          </LogbookEmpty>
         ) : (
           <div className="logbook-pane-scroll" ref={paneRef}>
             <FlightList

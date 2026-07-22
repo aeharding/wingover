@@ -19,7 +19,7 @@ import { useHistory } from "react-router-dom";
 import { useSettings } from "../settings/SettingsContext";
 import { useIsDesktop } from "../useIsDesktop";
 
-import "./SettingsPage.css";
+import settings from "./settings.module.css";
 
 /**
  * Apple's Settings idiom for pick-one: the row pushes a page whose options
@@ -32,7 +32,7 @@ export default function UnitsPage() {
   const { units, setUnits } = useSettings();
 
   return (
-    <IonPage className="settings-page">
+    <IonPage className={settings.page}>
       <IonHeader>
         <IonToolbar>
           <IonButtons slot="start">
@@ -48,7 +48,7 @@ export default function UnitsPage() {
           <IonTitle>Units</IonTitle>
         </IonToolbar>
       </IonHeader>
-      <IonContent className="settings-content">
+      <IonContent className={settings.content}>
         <IonList inset>
           <IonRadioGroup
             value={units}

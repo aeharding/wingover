@@ -516,29 +516,6 @@ body.flight-map-full .seat-card {
   text-decoration: underline;
 }
 
-/* ── settings: a centered column, not a stretched phone ───────────────── */
-@media (min-width: 992px) {
-  /* The list is a centered column, inboard of both device edges, so its
-     ion-items must not inset off the notch (left is already 0 from
-     .desktop-main; this clears the right). Desktop-only: on the phone the
-     settings list is full-bleed and SHOULD clear the notch, so no consume. */
-  .settings-content {
-    --ion-safe-area-right: 0px;
-  }
-
-  .settings-content ion-list.list-inset,
-  .settings-content .settings-list-header,
-  .settings-content .settings-helper-text,
-  .settings-content ion-header[collapse="condense"] {
-    max-width: 640px;
-    margin-inline: auto;
-  }
-
-  .settings-content .settings-list-header {
-    padding-left: 32px;
-  }
-}
-
 /* ── the connect funnel (fresh browser, empty logbook) ────────────────── */
 .connect-funnel {
   max-width: 22rem;

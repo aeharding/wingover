@@ -14,6 +14,7 @@ import {
 import { useEffect, useRef, useState } from "react";
 
 import * as sync from "../../sync";
+import settings from "../pages/settings.module.css";
 
 /**
  * The own-server form — the Log In rail's page (SYNC-UX.md: self-host is a
@@ -100,7 +101,7 @@ export function SelfHostPage({
           (white on white). Content-level only: the page var (.settings-page)
           would also repaint this sheet's DARK background, which must keep
           the modal's step-gray. */}
-      <IonContent className="settings-content">
+      <IonContent className={settings.content}>
         {problem && (
           <p className="sync-error-message sync-form-problem">{problem}</p>
         )}

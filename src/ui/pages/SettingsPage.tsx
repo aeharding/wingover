@@ -31,16 +31,17 @@ import { useSyncSheet } from "../sync/SyncSheets";
 import { useCanRecord } from "../useCanRecord";
 import { useIsDesktop } from "../useIsDesktop";
 
-import "./SettingsPage.css";
+import settings from "./settings.module.css";
+import styles from "./SettingsPage.module.css";
 
 // Semantic tone → the Settings row's note color. Off red, On green, a lapse
 // amber, a problem red; transient states neutral. One map (shared derivation in
 // describe), so the row can never disagree with the sheet or rail on a status.
 const SETTINGS_TONE_CLASS: Record<SyncTone, string> = {
-  on: "settings-sync-on",
-  off: "settings-sync-off",
-  warn: "settings-sync-warn",
-  error: "settings-sync-error",
+  on: styles.on,
+  off: styles.off,
+  warn: styles.warn,
+  error: styles.error,
   neutral: "",
 };
 
@@ -111,14 +112,14 @@ export default function SettingsPage() {
   }
 
   return (
-    <IonPage className="settings-page" data-testid="settings-page">
+    <IonPage className={settings.page} data-testid="settings-page">
       <IonHeader>
         <IonToolbar>
           <IonTitle>Settings</IonTitle>
         </IonToolbar>
       </IonHeader>
       <IonContent
-        className="settings-content"
+        className={settings.content}
         data-testid="settings-content"
         fullscreen
       >
@@ -144,7 +145,7 @@ export default function SettingsPage() {
               <IonLabel>Sync</IonLabel>
               <IonNote
                 slot="end"
-                className={`settings-sync-note ${SETTINGS_TONE_CLASS[described.tone]}`}
+                className={`${styles.note} ${SETTINGS_TONE_CLASS[described.tone]}`}
               >
                 {off && <IonIcon icon={closeCircle} aria-hidden="true" />}
                 {!off && syncBusy && (
@@ -163,7 +164,7 @@ export default function SettingsPage() {
             the section appears once "Record in this browser" is enabled. */}
         {canRecord && (
           <>
-            <div className="settings-list-header">Recording</div>
+            <div className={settings.listHeader}>Recording</div>
             <IonList inset>
               <IonItem>
                 <IonToggle
@@ -177,7 +178,7 @@ export default function SettingsPage() {
           </>
         )}
 
-        <div className="settings-list-header">General</div>
+        <div className={settings.listHeader}>General</div>
         <IonList inset>
           <IonItem
             button
@@ -191,7 +192,7 @@ export default function SettingsPage() {
           </IonItem>
         </IonList>
 
-        <div className="settings-list-header">Advanced</div>
+        <div className={settings.listHeader}>Advanced</div>
         <IonList inset>
           {/* Apple's pick-one idiom: the row shows the current value and
               pushes a checkmark list. */}
@@ -217,7 +218,7 @@ export default function SettingsPage() {
           )}
         </IonList>
         {!isTauri() && (
-          <div className="settings-helper-text">
+          <div className={settings.helperText}>
             Browsers can stop background recording at any time. Your phone
             running the Wingover app is the recorder to trust.
           </div>

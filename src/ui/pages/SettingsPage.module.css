@@ -1,0 +1,36 @@
+/* The sync row's "⊗ Off" note: icon and word on one optical line. (These
+   style THIS page's row — SETTINGS_TONE_CLASS — not the sync sheet, which
+   derives its own tones in SyncConnection.) */
+.note {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.3em;
+}
+
+.note ion-spinner {
+  width: 1em;
+  height: 1em;
+}
+
+/* Status colors: the scheme-aware P3 tokens (theme.css) — full saturation
+   in dark, deepened for light. Never any sRGB fallback (STEERING). */
+.off {
+  color: var(--status-bad);
+}
+
+.on {
+  color: var(--status-good);
+}
+
+/* A lapse ("Not subscribed", read-only) reads amber in the row too, not a
+   neutral gray: the one status the copy rules single out (SYNC-UX.md). Never
+   red, because nothing is lost. */
+.warn {
+  color: var(--ion-color-warning);
+}
+
+/* A real problem (error): red, so the row flags it instead of the neutral gray
+   it used to render. */
+.error {
+  color: var(--status-bad);
+}
