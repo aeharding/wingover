@@ -84,7 +84,7 @@ the contents.
 - **Action sheet / bottom-sheet modal** DO sit on the device edge → inset (Ionic
   handles it; leave them).
 
-## Verified matrix (`e2e/inset-probe.mjs`, injected T=11 R=22 B=33 L=44)
+## Verified matrix (`e2e/insets.spec.ts`, injected T=11 R=22 B=33 L=44)
 
 `22` on a right edge = correct · `44` on a right = a left leak · `0` = consumed.
 
@@ -119,16 +119,18 @@ the contents.
 
 ## Re-verifying
 
-`e2e/inset-probe.mjs` is a standalone Playwright harness (not a spec; Playwright
-won't run it). With the dev server up:
+`e2e/insets.spec.ts` is a normal Playwright spec — it runs in the suite (CI
+enforces it), one `describe` per scenario:
 
 ```
-node e2e/inset-probe.mjs all        # every scenario
-node e2e/inset-probe.mjs d-logbook  # one
+pnpm exec playwright test e2e/insets.spec.ts             # every scenario
+pnpm exec playwright test e2e/insets.spec.ts -g d-logbook # one
 ```
 
-It injects distinct per-edge `--safe-area-inset-*` values and prints each
+It injects distinct per-edge `--safe-area-inset-*` values and **asserts** each
 surface's resolved padding/position + the shadow `.item-inner`/`.item-native`
-padding for `ion-item`s. env() is 0 in headless Chromium, so injecting the
-**upstream** var (which Ionic's `--ion-safe-area-*` derives from) is how the
-device is simulated.
+padding for `ion-item`s against the matrix above (each assertion carries its
+formula). env() is 0 in headless Chromium, so injecting the **upstream** var
+(which Ionic's `--ion-safe-area-*` derives from) is how the device is simulated.
+Every expected number here is derived from that injection; update the matrix and
+the spec together.
