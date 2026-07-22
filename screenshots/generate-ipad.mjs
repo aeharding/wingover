@@ -336,11 +336,37 @@ const SHOTS = [
   {
     id: "2-logbook",
     headline: "Your whole logbook, one [screen].",
-    sub: "List, map, and stats, side by side.",
+    sub: "List, map, replay, and stats, side by side.",
     needsFlights: true,
     url: `/logbook/${FLIGHTS[0].id}?mock-speed=1`,
     async prep(page) {
       await page.locator(".map-container").first().waitFor({ timeout: 10000 });
+      // Open the replay pane: the split shows list, map with the aircraft,
+      // the altitude graph, and the stats card in one frame.
+      await page.getByTestId("replay-start").click();
+      await page.getByTestId("replay-dock").waitFor({ timeout: 8000 });
+      // The bounds fit ran against the full-height map; walk the selection
+      // away and back so both refits run with the pane docked (the pane
+      // survives switches) and the track frames inside the SHORTER map.
+      const before = page.url();
+      await page.keyboard.press("ArrowDown");
+      if (page.url() !== before) {
+        await page.keyboard.press("ArrowUp");
+      } else {
+        await page.keyboard.press("ArrowUp");
+        await page.keyboard.press("ArrowDown");
+      }
+      await page.waitForTimeout(800);
+      // The return switch arrives PARKED (autoplay never re-arms); the
+      // scrub below wakes it paused at a fixed fraction, deterministic.
+      // 0.62 on purpose — a different moment than the iPhone replay
+      // shot, so the two don't show identical readouts.
+      const barogram = await page.getByTestId("barogram").boundingBox();
+      await page.mouse.click(
+        barogram.x + barogram.width * 0.62,
+        barogram.y + barogram.height / 2,
+      );
+      await waitForMapIdle(page);
       await page.waitForTimeout(7000);
     },
   },
@@ -376,6 +402,9 @@ async function run() {
       const ctx = await browser.newContext({
         viewport: { width: APPVP[0], height: APPVP[1] },
         deviceScaleFactor: DSF,
+        // Dark system scheme, matching generate.mjs (the ground UI is
+        // class-driven dark under a dark OS scheme or satellite).
+        colorScheme: "dark",
       });
       await ctx.addInitScript(() =>
         localStorage.setItem(

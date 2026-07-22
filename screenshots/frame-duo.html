@@ -97,21 +97,21 @@
           0 calc(var(--u) * 5) calc(var(--u) * 13) rgba(12, 6, 22, 0.72),
           0 calc(var(--u) * 1) calc(var(--u) * 3) rgba(0, 0, 0, 0.5);
       }
-      /* Side by side, not overlapping: each tilts and bleeds off its outer
-         edge with a gap between them. */
+      /* Tilted the same way, bleeding off their outer edges, overlapping
+         slightly in the middle — the front phone rides over the back. */
       .phone.back {
         height: 75%;
-        top: 11%;
-        left: -27%;
+        top: 8%;
+        left: -20%;
         transform: rotate(-6deg);
         z-index: 1;
       }
       .phone.front {
         height: 75%;
-        top: 11%;
-        right: -27%;
+        top: 20%;
+        right: -20%;
         transform: rotate(-6deg);
-        z-index: 1;
+        z-index: 2;
       }
       .screen {
         position: relative;

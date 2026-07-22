@@ -14,7 +14,7 @@ const STORE = join(HERE, "..", "fastlane", "screenshots", "en-US");
 const FILES = [
   "iphone-1-inflight.png",
   "iphone-2-logbook.png",
-  "iphone-3-detail.png",
+  "iphone-3-detail-replay.png",
   "iphone-4-plan.png",
   "iphone-5-inflight-plan.png",
   "iphone-6-sync.png",

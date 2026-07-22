@@ -226,6 +226,12 @@ const SEED_FLIGHTS = [
     fixes: synthToFixes(-89.55, 42.86, 305, "2025-05-18T17:30:00Z", 320),
   }, // ~16 min, landed out
   {
+    name: "Snake River Canyon run",
+    launchName: "Twin Falls, ID",
+    notes: "",
+    fixes: gpxToFixes("flight-b.gpx"),
+  }, // ~1 hr 35 min, the scrub-preview flight (real, big relief)
+  {
     name: "Sunset over the Wisconsin",
     launchName: "Spring Green, WI",
     notes: "",
@@ -242,6 +248,12 @@ const SEED_FLIGHTS = [
   id: `recorded-${f.fixes[0].timestamp}`,
   startedAt: f.fixes[0].timestamp,
 }));
+
+// The replay panel scrubs the canyon flight: 95 minutes and 1,400 ft of
+// relief make a barogram worth reliving.
+const REPLAY_FLIGHT = SEED_FLIGHTS.find(
+  (f) => f.name === "Snake River Canyon run",
+);
 
 // A short cross-country route for the Plan + in-flight-plan shots, over open
 // Driftless ridge country (kept clear of towns — no overflying congested air).
@@ -357,21 +369,94 @@ const SHOTS = [
     },
   },
   {
-    id: "3-detail",
-    type: "ground",
-    headline: "Every flight, [mapped].",
+    // One duo for the whole review story: the flight detail page (map +
+    // name/launch/notes/stats) behind, the fullscreen replay in front.
+    // Duo geometry crops each phone's OUTER edge: the back shows its
+    // right side (right-aligned stat values survive), the front its left
+    // (play button, elapsed time, first readouts survive).
+    id: "3-detail-replay",
+    duo: true,
+    needsFlights: true,
+    headline: "[Relive] every flight.",
     sub: "Every climb, turn, and glide.",
     tone: "light",
-    needsFlights: true,
-    url: `/logbook/${SEED_FLIGHTS[0].id}?mock-speed=1`,
-    async prep(page) {
-      await page.locator(".map-container").first().waitFor({ timeout: 8000 });
-      await page
-        .locator('[data-testid="track"], .map-container canvas')
-        .first()
-        .waitFor({ timeout: 8000 });
-      await page.waitForTimeout(6000);
-    },
+    panels: [
+      {
+        key: "back",
+        type: "ground",
+        url: `/logbook/${SEED_FLIGHTS[0].id}?mock-speed=1`,
+        async prep(page) {
+          await page
+            .locator(".map-container")
+            .first()
+            .waitFor({ timeout: 8000 });
+          await page
+            .locator('[data-testid="track"], .map-container canvas')
+            .first()
+            .waitFor({ timeout: 8000 });
+          // The back panel reads in MAP mode (dark streets) so the two
+          // phones don't blur into one satellite field. The toggle also
+          // persists the setting; the front panel restores satellite.
+          const toStreet = page.getByRole("button", { name: "Street view" });
+          if (await toStreet.count()) await toStreet.click();
+          await page.waitForTimeout(6000);
+        },
+      },
+      {
+        key: "front",
+        type: "ground",
+        url: `/logbook/${REPLAY_FLIGHT.id}?mock-speed=1`,
+        async prep(page) {
+          await page
+            .locator(".map-container")
+            .first()
+            .waitFor({ timeout: 8000 });
+          await page
+            .locator('[data-testid="track"], .map-container canvas')
+            .first()
+            .waitFor({ timeout: 8000 });
+          // The back panel flipped the persisted view to street; take
+          // this page (and every later shot) back to satellite.
+          const toSat = page.getByRole("button", { name: "Satellite view" });
+          if (await toSat.count()) await toSat.click();
+          // The replay pane's bottom padding reads
+          // env(safe-area-inset-bottom) (0 in Chromium); fake the
+          // home-indicator inset like the flight CSS.
+          await page.addStyleTag({
+            content: `.replay-dock { padding-bottom: calc(0.5rem + 34px) !important; }`,
+          });
+          // Fullscreen replay via the pill (auto-plays), then pause and
+          // park the playhead at a fixed fraction so the frame is
+          // deterministic: aircraft mid-track, readouts mid-climb.
+          await page.getByTestId("map-expand").click();
+          await page.getByTestId("replay-start").click();
+          await page.getByTestId("replay-dock").waitFor({ timeout: 8000 });
+          await page.getByTestId("replay-play").click(); // pause
+          const barogram = await page.getByTestId("barogram").boundingBox();
+          await page.mouse.click(
+            barogram.x + barogram.width * 0.55,
+            barogram.y + barogram.height / 2,
+          );
+          // The in-flight camera, mid-replay: follow lock + track-up, then
+          // zoom in (the wheel is aircraft-anchored while following — the
+          // shared followZoom path), so the canyon fills the frame under a
+          // course-up map.
+          await page.getByTestId("replay-follow").click();
+          await page.getByTestId("replay-trackup").click();
+          const region = await page
+            .locator(".flight-detail-map-fullroot .map-container")
+            .boundingBox();
+          await page.mouse.move(
+            region.x + region.width / 2,
+            region.y + region.height * 0.4,
+          );
+          for (let i = 0; i < 7; i++) await page.mouse.wheel(0, -500);
+          await waitForMapIdle(page);
+          await page.waitForTimeout(6000);
+          await waitForMapIdle(page);
+        },
+      },
+    ],
   },
   {
     id: "4-plan",
@@ -585,6 +670,13 @@ async function run() {
         const ctx = await browser.newContext({
           viewport: { width: D.appVp[0], height: D.appVp[1] },
           deviceScaleFactor: D.appDsf,
+          // Dark system scheme: the ground UI is class-driven dark when
+          // the OS scheme is dark OR satellite is on (appTheme). Most
+          // shots run satellite (forced dark already), but the detail
+          // panel toggles to STREET to distinguish the two phones in the
+          // duo — street follows the OS scheme, so without this it fell
+          // back to light. The whole marketing set reads dark.
+          colorScheme: "dark",
         });
         // Seed the live-map preference to satellite before the app boots
         // (readLiveViewState() is synchronous localStorage).
