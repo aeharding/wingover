@@ -2,7 +2,10 @@
   position: absolute;
   inset: 0;
   overflow: hidden;
-  background: #000;
+  /* NO base background: idle is transparent so the host-rendered
+     .fly-splash backdrop (the page's actual background, spanning under
+     the translucent tab bar) reads through; armed and recording paint
+     their own black below and cover it entirely. */
   /* The flight surface never themes — one sunlight-tuned design (STEERING).
      The ground app follows the system scheme and deepens the accent for
      light chrome (theme.css); re-pin the flight-tile cyan here so the
@@ -38,8 +41,28 @@
   justify-content: center;
   gap: 3rem;
   height: 100%;
-  /* A very dark nod to the icon's sunset gradient: deep purple at the top
-     easing to a warm ember at the bottom. */
+}
+
+/* The backdrop element (FlySplash.tsx): the scene gradient plus the
+   icon's motifs as large near-transparent shapes. Hosts render it behind
+   the flight surface — inside the phone frame's fullscreen ion-content
+   (so it spans under the translucent tab bar) and in the desktop fly
+   section. A very dark nod to the icon's sunset gradient: deep purple at
+   the top easing to a warm ember at the bottom. */
+.fly-splash {
+  position: absolute;
+  inset: 0;
+  /* The frame's ion-content fixed slot anchors to the HOST box, which
+     stops at the page bottom; fullscreen publishes the under-bar
+     distance as --offset-bottom, so reach past it to span under the
+     translucent tab bar. EXPLICIT height: an svg is a replaced element
+     with a 1:1 intrinsic ratio from its viewBox, so top/bottom anchors
+     alone collapse it to the ratio instead of stretching. Desktop hosts
+     it in a plain section (no ion-content, var unset) and the fallback
+     is exactly the box. */
+  width: 100%;
+  height: calc(100% + var(--offset-bottom, 0px));
+  pointer-events: none;
   background: linear-gradient(
     180deg,
     #130d22 0%,
@@ -47,16 +70,6 @@
     #281824 70%,
     #2d1e13 100%
   );
-}
-
-/* The icon's motifs, brought over as large near-transparent shapes. */
-.fly-idle-art {
-  position: absolute;
-  inset: 0;
-  width: 100%;
-  height: 100%;
-  z-index: 0;
-  pointer-events: none;
 }
 
 .idle-star {
@@ -91,15 +104,6 @@
   opacity: 0.09;
 }
 
-/* Content sits above the backdrop. */
-.fly-idle > h1,
-.fly-idle > .start-button,
-.fly-idle > .planned-route,
-.fly-idle > .gps-error {
-  position: relative;
-  z-index: 1;
-}
-
 /* A caption tucked just under the Start button (pulled up out of the 3rem
    idle gap). Muted so it reads as secondary to the call-to-action. */
 .planned-route {
@@ -129,6 +133,9 @@
    in-flight UI. */
 :root:not(.ion-palette-dark) .fly-idle {
   color: #23262b;
+}
+
+:root:not(.ion-palette-dark) .fly-splash {
   background: linear-gradient(
     180deg,
     #e8eef7 0%,
@@ -198,6 +205,9 @@
   justify-content: center;
   gap: 2.5rem;
   height: 100%;
+  /* In flight the surface owns its black (the frozen sunlight design);
+     only idle is transparent over the host splash. */
+  background: #000;
   padding: 0 2rem;
   text-align: center;
 }
@@ -257,6 +267,7 @@
 .fly-recording {
   position: relative;
   height: 100%;
+  background: #000;
 }
 
 .fly-recording .live-map {
