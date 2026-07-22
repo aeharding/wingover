@@ -1,4 +1,4 @@
-import { IonPage } from "@ionic/react";
+import { IonContent, IonPage } from "@ionic/react";
 
 import FlyPage from "../flight/FlyPage";
 
@@ -11,11 +11,18 @@ import FlyPage from "../flight/FlyPage";
  *
  * .fly-page-frame (theme.css) pins the frame black in both schemes: the
  * flight surface is exempt from theming.
+ *
+ * fullscreen + scrollY={false}: fullscreen lets the surface paint UNDER
+ * the translucent tab bar (the ionic-framework#28246 mechanism), so the
+ * idle splash flows into it; scrollY off because the flight surface never
+ * scrolls (its own overflow: hidden is e2e-guarded).
  */
 export default function FlyPageFramed() {
   return (
     <IonPage className="fly-page-frame">
-      <FlyPage />
+      <IonContent fullscreen scrollY={false}>
+        <FlyPage />
+      </IonContent>
     </IonPage>
   );
 }

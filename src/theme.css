@@ -239,6 +239,17 @@
   --ion-text-color-rgb: 255, 255, 255;
 }
 
+/* While the Fly tab is the active page, its splash paints under the bar
+   (fullscreen content + translucent bar; ionic-framework#28246), so thin
+   the frost to let the artwork read through and drop the hairline. The
+   rgb var resolves at the BAR (outside .fly-page-frame), so the frost
+   matches the app scheme: white over the day splash, black over dusk.
+   Other tabs never match the :has() — they keep the stock bar. */
+ion-tabs:has(.fly-page-frame:not(.ion-page-hidden)) ion-tab-bar {
+  --background: rgba(var(--ion-background-color-rgb), 0.35);
+  --border: none;
+}
+
 /* On-screen keyboard: src/tauri-ionic/keyboard.ts adds `keyboard-open` to <html> while
    the keyboard is up (off the native plugin's keyboard events). The bottom safe
    area (home indicator) sits behind the keyboard then, so the inset is dead
