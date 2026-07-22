@@ -5,9 +5,3 @@
   position: absolute;
   inset: 0;
 }
-
-/* The aircraft glyph and its wrapper must never swallow map gestures beyond
-   the pins' own footprint. */
-.mk-annotation-container .wingover-aircraft {
-  pointer-events: none;
-}

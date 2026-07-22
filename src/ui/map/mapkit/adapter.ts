@@ -637,6 +637,12 @@ export async function createMapKitMapView(
       const wrapper = document.createElement("div");
       wrapper.style.width = "0";
       wrapper.style.height = "0";
+      // The glyph is a passive position marker; it must never swallow a map
+      // gesture that starts on it (a pan/tap over the ~48px triangle, which in
+      // follow mode sits dead center). pointer-events inherits, so the inner
+      // SVG goes through too. (Enforced here rather than via a CSS class on a
+      // MapKit-owned container, which a refactor silently dropped.)
+      wrapper.style.pointerEvents = "none";
       wrapper.innerHTML = AIRCRAFT_SVG;
       const svg = wrapper.firstElementChild as SVGElement;
       let ann: Annotation | null = null;
