@@ -183,6 +183,34 @@ test("the plan page grows a pin pane at desktop width", async ({ page }) => {
   await expect(page.getByText("Long-press the map")).toBeVisible();
 });
 
+test("the plan pane's Clear route button wipes every pin", async ({ page }) => {
+  await page.goto("/plan?map-style=blank");
+  const canvas = page.locator(".plan-map .map-container");
+  await expect(canvas).toBeVisible();
+  await page.waitForTimeout(500);
+
+  const box = (await canvas.boundingBox())!;
+  for (const [x, y] of [
+    [200, 200],
+    [400, 300],
+  ]) {
+    await page.mouse.move(box.x + x, box.y + y);
+    await page.mouse.down();
+    await page.waitForTimeout(700);
+    await page.mouse.up();
+  }
+  await expect(page.getByTestId("pin-marker")).toHaveCount(2);
+
+  // The pane's total gains a Clear route control once there's a route; it
+  // opens the same sheet the map pill does.
+  await page.getByTestId("plan-clear-route").click();
+  await page.getByRole("button", { name: "Delete all 2 pins" }).click();
+
+  await expect(page.getByTestId("pin-marker")).toHaveCount(0);
+  await expect(page.getByTestId("plan-clear-route")).toHaveCount(0);
+  await expect(page.getByText("Long-press the map")).toBeVisible();
+});
+
 test("the record opt-in shows Fly live, and turning it off hides it", async ({
   page,
 }) => {

@@ -36,7 +36,8 @@
 }
 
 /* Total route length, for planning — a readable pill at the bottom center,
-   clear of the top-right map controls and the tab bar below. */
+   clear of the top-right map controls and the tab bar below. Tapping it opens
+   the route sheet (delete all), so it takes pointer events and a tap state. */
 .plan-distance {
   position: absolute;
   left: 50%;
@@ -44,6 +45,7 @@
   transform: translateX(-50%);
   z-index: 6;
   padding: 0.4rem 0.9rem;
+  border: none;
   border-radius: 999px;
   background: var(--map-chip-bg);
   backdrop-filter: blur(12px);
@@ -52,5 +54,9 @@
   font-size: 0.95rem;
   font-weight: 600;
   white-space: nowrap;
-  pointer-events: none;
+  cursor: pointer;
+}
+
+.plan-distance:active {
+  opacity: 0.7;
 }

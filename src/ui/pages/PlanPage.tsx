@@ -2,6 +2,7 @@ import {
   IonContent,
   IonIcon,
   IonPage,
+  useIonActionSheet,
   useIonViewWillEnter,
 } from "@ionic/react";
 import { locateOutline } from "ionicons/icons";
@@ -11,6 +12,7 @@ import { getCurrentPosition } from "../../engine/currentPosition";
 import { formatDistance } from "../../flight/format";
 import { haversineMeters } from "../../flight/stats";
 import {
+  deleteAllPins,
   deletePin,
   listPins,
   onDocsChanged,
@@ -72,6 +74,7 @@ export default function PlanPage() {
   const { units } = useSettings();
   const isDesktop = useIsDesktop();
   const appearance = useAppearance();
+  const [presentRouteSheet] = useIonActionSheet();
   const [view, changeView] = useMapView();
   const [pins, setPins] = useState<Pin[]>([]);
   const [map, setMap] = useState<MapView | null>(null);
@@ -125,6 +128,29 @@ export default function PlanPage() {
   async function removePin(pinId: string) {
     await deletePin(pinId);
     setPins((current) => current.filter((pin) => pin.id !== pinId));
+  }
+
+  async function clearRoute() {
+    await deleteAllPins();
+    setPins([]);
+  }
+
+  // Tapping the route (the distance pill, or the desktop pane's total) opens a
+  // bottom sheet whose one destructive option wipes the whole plan. The red
+  // action-sheet button IS the confirm — the same deliberate step iOS uses for
+  // a destructive choice, so no second alert. The count quantifies the loss.
+  function openRouteSheet() {
+    presentRouteSheet({
+      header: "Planned route",
+      buttons: [
+        {
+          text: `Delete all ${pins.length} pins`,
+          role: "destructive",
+          handler: () => void clearRoute(),
+        },
+        { text: "Cancel", role: "cancel" },
+      ],
+    });
   }
 
   // Live during a drag: redraw the route line with this pin at its dragged
@@ -334,7 +360,14 @@ export default function PlanPage() {
               </div>
               {routeMeters > 0 && (
                 <div className="plan-pane-route">
-                  Route: {formatDistance(routeMeters, units)}
+                  <span>Route: {formatDistance(routeMeters, units)}</span>
+                  <button
+                    className="plan-pane-clear"
+                    data-testid="plan-clear-route"
+                    onClick={openRouteSheet}
+                  >
+                    Clear route
+                  </button>
                 </div>
               )}
             </aside>
@@ -359,9 +392,14 @@ export default function PlanPage() {
               )}
             </div>
             {routeMeters > 0 && (
-              <div className="plan-distance" data-testid="plan-distance">
+              <button
+                className="plan-distance"
+                data-testid="plan-distance"
+                aria-label="Route options"
+                onClick={openRouteSheet}
+              >
                 Route: {formatDistance(routeMeters, units)}
-              </div>
+              </button>
             )}
           </div>
         </div>
