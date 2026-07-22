@@ -1,8 +1,15 @@
-import { useEffect, useEffectEvent, useRef, useState } from "react";
+import {
+  type ReactNode,
+  useEffect,
+  useEffectEvent,
+  useRef,
+  useState,
+} from "react";
+import StyleObserver from "style-observer";
 
 import { onSettingChanged } from "../../storage/local";
 import { type MapAppearance, type MapViewKind, resolveBackend } from "./config";
-import type { MapView } from "./types";
+import type { Insets, MapView } from "./types";
 
 // maplibre-gl.css must load before MapView.css: both style the shared
 // container (`.maplibregl-map` vs `.map-container`) with equal specificity,
@@ -18,12 +25,11 @@ interface MapCanvasProps {
   // the app; the live flight map is pinned "light" — full sun is where a
   // dark basemap loses (STEERING).
   appearance: MapAppearance;
-  // The page owns the map's layout, so it says whether the map is placed
-  // edge-to-edge (a full-screen or in-flight map, whose bottom sits under the
-  // home indicator) — then MapKit insets its Apple/Legal controls off the
-  // indicator. Embedded maps (logbook, plan, the desktop panes) leave it false;
-  // the inset would only float those controls into a gap.
-  edgeToEdge?: boolean;
+  // The map's overlay — buttons, pills, tap layers — rendered as CHILDREN
+  // so they live inside the inset context the map owns (that shared
+  // ownership is the whole point). Positioned in host CSS off the
+  // cascading var(--ion-safe-area-*).
+  children?: ReactNode;
   // null = the previous view was just destroyed (provider re-create,
   // unmount). Parents MUST drop their MapView and every handle minted from
   // it — a 1 Hz fix calling line.set() on a removed map throws, and with no
@@ -65,12 +71,21 @@ async function createBackend(
 export default function MapCanvas({
   base,
   appearance,
-  edgeToEdge = false,
+  children,
   onReady,
 }: MapCanvasProps) {
   const containerRef = useRef<HTMLDivElement>(null);
   const viewRef = useRef<MapView | null>(null);
   const [revealed, setRevealed] = useState(false);
+  // The JS<->CSS bridge for the backend attribution. The overlay, the
+  // MapLibre attribution and every other chrome read var(--ion-safe-area-*)
+  // directly (they cascade + consume in CSS); MapKit needs real px, so a
+  // hidden probe INSIDE this map's subtree carries the same cascaded,
+  // already-consumed --ion-safe-area-* as padding, and we read it back resolved.
+  // One source (the vars), so the MapKit logo can't drift from the
+  // CSS-positioned buttons.
+  const probeRef = useRef<HTMLDivElement>(null);
+  const insetsRef = useRef<Insets>({ top: 0, right: 0, bottom: 0, left: 0 });
   // Bumped when the pilot changes the map provider in Settings: the whole
   // backend is torn down and re-created in place, so the choice applies
   // immediately — tab pages stay mounted forever and would otherwise show
@@ -79,7 +94,6 @@ export default function MapCanvas({
   const [epoch, setEpoch] = useState(0);
   const notifyReady = useEffectEvent((view: MapView | null) => onReady?.(view));
   const baseRef = useRef(base);
-  const edgeToEdgeRef = useRef(edgeToEdge);
 
   // The key gates MapLibre satellite (supportsSatellite is decided at
   // creation), so key changes re-create too — debounced, because the key is
@@ -128,9 +142,9 @@ export default function MapCanvas({
         return;
       }
       viewRef.current = view;
-      // Apply the current edge-to-edge inset to the fresh map (and to one
-      // re-created by a provider swap); the effect below keeps it in sync.
-      view.setEdgeToEdge(edgeToEdgeRef.current);
+      // Apply the current insets to the fresh map (and to one re-created
+      // by a provider swap); the effect below keeps it in sync.
+      view.setInsets(insetsRef.current);
       // Restore the predecessor's camera BEFORE anyone sees the view, and
       // mark it so pages skip their arrival refit (see MapView.types).
       const preserved = preservedCameraRef.current;
@@ -195,13 +209,45 @@ export default function MapCanvas({
     viewRef.current?.setAppearance(appearance);
   }, [appearance]);
 
-  // Live edge-to-edge: a fullscreen toggle (a logbook entry map expanding to
-  // full screen) flips this without tearing the map down. Ref-mirrored so the
-  // creation effect above reads the latest value.
+  // Resolve the map's own inset off the probe and push it to the backend.
+  // The probe carries the cascaded, already-consumed var(--ion-safe-area-*) as
+  // padding, so its resolved padding is the px really exposed at THIS
+  // map's position — no prop drilling, no knowledge of who consumed what.
+  const readInsets = useEffectEvent(() => {
+    const probe = probeRef.current;
+    if (!probe) return;
+    const style = getComputedStyle(probe);
+    insetsRef.current = {
+      top: parseFloat(style.paddingTop) || 0,
+      right: parseFloat(style.paddingRight) || 0,
+      bottom: parseFloat(style.paddingBottom) || 0,
+      left: parseFloat(style.paddingLeft) || 0,
+    };
+    viewRef.current?.setInsets(insetsRef.current);
+  });
+
+  // StyleObserver (Lea Verou) fires whenever the probe's resolved padding
+  // moves, which is exactly when the exposed inset moves: device rotation
+  // re-resolves env(), and a consume class toggling (the replay pane
+  // opening, a fullscreen switch) changes a --ion-safe-area-* var. One
+  // read + one observer covers every case; the initial read seeds it.
+  // observe/unobserve take (target, properties) explicitly — the options-
+  // object form leaves a single Element as `targets`, whose missing
+  // `.length` silently skips the observe and throws on teardown.
   useEffect(() => {
-    edgeToEdgeRef.current = edgeToEdge;
-    viewRef.current?.setEdgeToEdge(edgeToEdge);
-  }, [edgeToEdge]);
+    const probe = probeRef.current;
+    if (!probe) return;
+    readInsets();
+    const props = [
+      "padding-top",
+      "padding-right",
+      "padding-bottom",
+      "padding-left",
+    ];
+    const observer = new StyleObserver(() => readInsets());
+    observer.observe(probe, props);
+    return () => observer.unobserve(probe, props);
+  }, []);
 
   // Modifier classes go through classList: maplibre writes its own classes to
   // this container, and a React className write would clobber them.
@@ -238,5 +284,16 @@ export default function MapCanvas({
     };
   }, []);
 
-  return <div ref={containerRef} className="map-container" />;
+  // The surface fills the host's map box and wraps the backend container,
+  // the inset probe, and the overlay children. The children position off
+  // var(--ion-safe-area-*) (cascaded + consumed in CSS); the probe reads the same
+  // vars for the MapKit path — one source, so the logo and the buttons
+  // can't disagree.
+  return (
+    <div className="map-surface">
+      <div ref={containerRef} className="map-container" />
+      <div ref={probeRef} className="map-inset-probe" aria-hidden="true" />
+      {children}
+    </div>
+  );
 }

@@ -213,8 +213,15 @@ export default function Barogram({
   function placePlayhead(t: number) {
     const clamped = Math.min(t1, Math.max(t0, t));
     const x = Math.min(width, Math.max(0, ((clamped - w0) / wspan) * width));
-    if (playheadRef.current)
+    if (playheadRef.current) {
+      // Panned out of the zoomed window, the playhead hides rather than
+      // pinning to the edge (the trim marks do the same) — a cursor
+      // clamped to the rim reads as "the position is here" when it is
+      // off-screen. A scrub always keeps t inside the window, so this
+      // only ever hides a paused/parked playhead the window moved past.
+      playheadRef.current.style.visibility = t < w0 || t > w1 ? "hidden" : "";
       playheadRef.current.style.transform = `translateX(${x}px)`;
+    }
     if (bubbleRef.current) {
       // Keep the bubble on-chart near the edges.
       const bx = Math.min(Math.max(x, 28), Math.max(width - 28, 28));

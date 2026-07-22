@@ -101,16 +101,6 @@ interface PrivateMapImpl {
   ): unknown;
 }
 
-function measureSafeAreaBottom(): number {
-  const probe = document.createElement("div");
-  probe.style.cssText =
-    "position:fixed;bottom:0;height:env(safe-area-inset-bottom);visibility:hidden";
-  document.body.appendChild(probe);
-  const px = probe.getBoundingClientRect().height;
-  probe.remove();
-  return px;
-}
-
 export async function createMapKitMapView(
   container: HTMLElement,
   initialBase: MapViewKind,
@@ -312,17 +302,18 @@ export async function createMapKitMapView(
         next === "light" ? mapkit.ColorScheme.Light : mapkit.ColorScheme.Dark;
     },
 
-    // The Apple logo + Legal link are a license surface; inset them off the
-    // home indicator only when the page places this map edge-to-edge (bottom
-    // really under the indicator). Embedded maps pass false, so the controls
-    // never float into a gap. measureSafeAreaBottom is 0 with no safe area
-    // (desktop, older devices), which zeroes the padding too.
-    setEdgeToEdge(edge) {
+    // The Apple logo + Legal link are a license surface; the host's
+    // resolved per-edge insets keep them off the notch and home
+    // indicator (0 on every edge with no safe area — desktop, portrait
+    // L/R). The identical insets drive the button overlay via the
+    // cascading var(--ion-safe-area-*) (MapCanvas resolves them off the same
+    // probe), so the logo and the buttons move as one.
+    setInsets(insets) {
       map.padding = new mapkit.Padding(
-        0,
-        0,
-        edge ? measureSafeAreaBottom() : 0,
-        0,
+        insets.top,
+        insets.right,
+        insets.bottom,
+        insets.left,
       );
     },
 

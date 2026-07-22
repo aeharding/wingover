@@ -9,15 +9,47 @@
   height: 100%;
 }
 
-/* ── the rail ─────────────────────────────────────────────────────────── */
+/* ── Safe area on desktop ─────────────────────────────────────────────────
+   Only bites on iPad (Tauri): a desktop browser has no device insets, so
+   --ion-safe-area-* is 0 and every rule here changes nothing. ONLY the LEFT
+   edge is owned by one piece of chrome (the rail); top, right and bottom are
+   shared, so each surface that reaches such an edge handles it itself (the
+   rail's top, the pane header's top, the list's bottom, the seat card's
+   top/right, the map's right/bottom, the scrub's bottom). The rail owns the
+   left notch for the whole shell, so everything right of it insets from 0. */
+.desktop-main {
+  --ion-safe-area-left: 0px;
+}
+
+/* Full screen hides the rail (body.flight-map-full), so the whole seat — the
+   map AND the scrub docked below it — reaches the device left edge again:
+   take back the left inset that .desktop-main zeroed for embedded content.
+   On the seat (not just the map), so the scrub, a sibling of .seat-map,
+   restores too. var(...,env()) not bare env() so the harness (which injects
+   the upstream var) can verify it, same as everything else in the model. */
+body.flight-map-full .flight-seat {
+  --ion-safe-area-left: var(--safe-area-inset-left, env(safe-area-inset-left));
+}
+
+/* ── the rail ─────────────────────────────────────────────────────────────
+   The rail is the left column and owns the left notch for the whole shell:
+   its box grows by that inset (dynamic width) and its content is padded off
+   it, so the icons clear the notch while everything right of the rail insets
+   from 0. It also sits on the top and bottom device edges: top padding drops
+   the brand below the status bar, bottom padding lifts the sync chip off the
+   home indicator. border-box so the padded insets are part of the width and
+   height, leaving the icon column a steady 76px. */
 .desktop-rail {
-  width: 76px;
+  box-sizing: border-box;
+  width: calc(76px + var(--ion-safe-area-left));
   flex-shrink: 0;
   display: flex;
   flex-direction: column;
   align-items: center;
   gap: 4px;
-  padding-top: 10px;
+  padding-top: calc(10px + var(--ion-safe-area-top));
+  padding-left: var(--ion-safe-area-left);
+  padding-bottom: var(--ion-safe-area-bottom);
   border-right: 1px solid var(--hairline);
 }
 
@@ -113,14 +145,14 @@
    can catch them empty, read a height of ~0, and pin `top` at the trigger's
    bottom — the rows then spill below the fold, and a right-side popover never
    reflows to recover, so "Log In" stays unclickable (the e2e sync-chip test
-   then times out clicking it). Pin the menu's bottom ourselves instead:
-   `bottom: 10px` lands its lower edge on the chip's (the chip has a 10px
-   bottom margin), exactly where alignment="end" intends, but
-   height-independently — so the menu is always fully on-screen no matter what
-   the open-time measurement read. Overrides Ionic's inline `top`. */
+   then times out clicking it). Pin the menu's bottom ourselves instead so it
+   lands on the chip's lower edge (the chip has a 10px bottom margin AND the
+   rail pads its bottom off the home indicator), exactly where alignment="end"
+   intends, but height-independently — so the menu is always fully on-screen
+   and clears the home indicator. Overrides Ionic's inline `top`. */
 .rail-sync-pop::part(content) {
   top: auto !important;
-  bottom: 10px !important;
+  bottom: calc(10px + var(--ion-safe-area-bottom)) !important;
 }
 
 /* Ionic still points its arrow at where it *thinks* the menu is (from that
@@ -170,6 +202,11 @@
   flex-direction: column;
   position: relative;
   border-right: 1px solid var(--hairline);
+  /* Inboard of the device right edge (the seat is to its right), so its
+     FlightList ion-items must not inset right off the notch. Left is already
+     0 from .desktop-main (the rail owns it); top/bottom pass through and the
+     header/list handle them. */
+  --ion-safe-area-right: 0px;
 }
 
 /* The grab strip straddling the pane's edge. Invisible until engaged so
@@ -191,17 +228,22 @@
   outline: none;
 }
 
+/* The pane's bottom is the shell's floor: the list scroll clears the home
+   indicator so the last flight isn't half under it. */
 .logbook-pane-scroll {
   flex: 1;
   min-height: 0;
   overflow-y: auto;
+  padding-bottom: var(--ion-safe-area-bottom);
 }
 
+/* The pane header is at the shell's top edge: drop it below the status bar
+   (left is the rail's, already 0 here). */
 .pane-header {
   display: flex;
   align-items: center;
   justify-content: space-between;
-  padding: 0.6rem 0.5rem 0.5rem 1.1rem;
+  padding: calc(0.6rem + var(--ion-safe-area-top)) 0.5rem 0.5rem 1.1rem;
   border-bottom: 1px solid var(--hairline);
 }
 
@@ -251,18 +293,31 @@
    is a license surface, not decoration. */
 .seat-map .map-overlay {
   right: auto;
-  left: 0.9rem;
-  bottom: 2.6rem;
+  left: calc(0.9rem + var(--ion-safe-area-left));
+  bottom: calc(2.6rem + var(--ion-safe-area-bottom));
 }
 
-/* The floating details card: right side, collapsible, gestures land on
-   the map everywhere else. */
+/* The floating details card floats against the seat's top-right — both
+   device edges on iPad. It insets its OWN position off them, and separately
+   clears safe area for everything inside it: its ion-items DO read
+   --ion-safe-area-* (Ionic's shadow padding), so without the consume they'd
+   pad off a notch the card has already stepped away from. Position reads the
+   raw --safe-area-inset-* (env() fallback), NOT --ion-safe-area-* — the two
+   can't share the var, since the card sets --ion-safe-area-* to 0. */
 .seat-card {
   position: absolute;
-  top: 0.9rem;
-  right: 0.9rem;
+  top: calc(0.9rem + var(--safe-area-inset-top, env(safe-area-inset-top)));
+  right: calc(
+    0.9rem + var(--safe-area-inset-right, env(safe-area-inset-right))
+  );
   width: 380px;
-  max-height: calc(100% - 1.8rem);
+  max-height: calc(
+    100% - 1.8rem - var(--safe-area-inset-top, env(safe-area-inset-top))
+  );
+  --ion-safe-area-top: 0px;
+  --ion-safe-area-right: 0px;
+  --ion-safe-area-bottom: 0px;
+  --ion-safe-area-left: 0px;
   overflow-y: auto;
   background: var(--float-card-bg);
   border: 1px solid var(--hairline);
@@ -328,9 +383,13 @@ body.flight-map-full .seat-card {
 
 /* ── replay: the dock under the seat map is plain flex flow (the seat is
    a column; ReplayDock.css owns the bar's own look). Wider gutters at
-   desktop scale so the readouts don't string out edge-to-edge. */
+   desktop scale so the readouts don't string out edge-to-edge. The scrub
+   reaches the device right edge (its left is inboard, 0 from .desktop-main),
+   so the gutters fold in the resolved insets: left = 1.1rem + 0, right =
+   1.1rem + notch. */
 .flight-seat .replay-dock {
-  padding-inline: 1.1rem;
+  padding-inline: calc(1.1rem + var(--ion-safe-area-left))
+    calc(1.1rem + var(--ion-safe-area-right));
 }
 
 .flight-seat .replay-readouts {
@@ -383,6 +442,12 @@ body.flight-map-full .seat-card {
   border-right: 1px solid var(--hairline);
   display: flex;
   flex-direction: column;
+  /* No header of its own, so the pane itself clears the shell's top/bottom
+     device edges: its first row (or the "long-press to drop a pin" empty
+     note) drops below the status bar, and the route total lifts off the home
+     indicator. Left is the rail's (0 from .desktop-main); right is internal. */
+  padding-top: var(--ion-safe-area-top);
+  padding-bottom: var(--ion-safe-area-bottom);
 }
 
 .plan-pane-rows {
@@ -440,10 +505,37 @@ body.flight-map-full .seat-card {
   padding: 0.8rem 1.1rem;
   font-size: 0.9rem;
   font-variant-numeric: tabular-nums;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.7rem;
+}
+
+.plan-pane-clear {
+  flex-shrink: 0;
+  background: none;
+  border: 0;
+  padding: 0;
+  font-size: 0.9rem;
+  font-weight: 600;
+  color: var(--ion-color-danger);
+  cursor: pointer;
+}
+
+.plan-pane-clear:hover {
+  text-decoration: underline;
 }
 
 /* ── settings: a centered column, not a stretched phone ───────────────── */
 @media (min-width: 992px) {
+  /* The list is a centered column, inboard of both device edges, so its
+     ion-items must not inset off the notch (left is already 0 from
+     .desktop-main; this clears the right). Desktop-only: on the phone the
+     settings list is full-bleed and SHOULD clear the notch, so no consume. */
+  .settings-content {
+    --ion-safe-area-right: 0px;
+  }
+
   .settings-content ion-list.list-inset,
   .settings-content .settings-list-header,
   .settings-content .settings-helper-text,

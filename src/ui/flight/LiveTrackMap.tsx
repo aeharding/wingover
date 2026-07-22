@@ -337,9 +337,10 @@ export default function LiveTrackMap({
         // The live map is ALWAYS light: full sun on a leg-mounted phone is
         // the one context where the dark basemap loses (STEERING).
         appearance="light"
-        // In flight the whole shell is shed, so the map is full-screen on every
-        // device — its Apple/Legal controls must clear the home indicator.
-        edgeToEdge
+        // In flight the whole shell is shed, so the map is full-screen on
+        // every device and consumes nothing: its Apple/Legal attribution
+        // insets off ALL device edges (home indicator, landscape notch)
+        // straight from var(--ion-safe-area-*).
         onReady={(next) => {
           if (!next) {
             // The view these handles came from is destroyed; a 1 Hz fix

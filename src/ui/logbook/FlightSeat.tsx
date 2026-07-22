@@ -306,52 +306,51 @@ export default function FlightSeat({
   return (
     <div className="flight-seat">
       {/* No header bar: the map runs to the top of the seat; the title,
-          date, and options live in the floating card. */}
-      <div className="seat-map">
-        {/* Edge-to-edge only when expanded to full screen; embedded in the
-            desktop split it sits above other UI, so no inset. */}
-        <MapCanvas
-          base={view}
-          appearance={appearance}
-          onReady={handleReady}
-          edgeToEdge={mapFull}
-        />
-        <div className="map-overlay">
-          {/* North reset floats above the cluster; hidden while replay
-              owns the bearing. */}
-          {map && !replay.isOpen && <CompassButton map={map} />}
+          date, and options live in the floating card. Embedded, the map is
+          at the shell's right/top/bottom device edges (it keeps those) but
+          the rail + pane cover its left (zeroed by .desktop-main); full
+          screen the rail hides and body.flight-map-full restores the left
+          edge for the whole seat (see desktop.css). When the scrub docks
+          below, IT owns the bottom, so the map consumes it (the drawer is a
+          sibling and keeps its own). */}
+      <div className={`seat-map${replay.isOpen ? " consume-bottom" : ""}`}>
+        <MapCanvas base={view} appearance={appearance} onReady={handleReady}>
           {/* The app-wide cluster cells (.map-cluster), MIRRORED for the
               seat's bottom-LEFT anchor: the edge column (follow/play
-              over the exit verb) hugs the left edge, compass and globe
-              sit inboard. Empty cells render nothing and the tracks
-              collapse — no state leaves buttons floating off the
-              anchor. */}
-          <div className="map-cluster">
-            {(replay.followButton ?? replay.playButton) && (
-              <div className="map-cell-tl">
-                {replay.followButton ?? replay.playButton}
+              over the exit verb) hugs the left edge, the TR "compass
+              slot" (north reset while the pane is closed, track-up while
+              it is open) and globe sit inboard. Empty cells collapse —
+              no state leaves buttons floating off the anchor, and the
+              compass shares the top row instead of floating above it. */}
+          <div className="map-overlay">
+            <div className="map-cluster">
+              {(replay.followButton ?? replay.playButton) && (
+                <div className="map-cell-tl">
+                  {replay.followButton ?? replay.playButton}
+                </div>
+              )}
+              <div className="map-cell-tr">
+                {replay.trackUpButton ??
+                  (map && !replay.isOpen ? <CompassButton map={map} /> : null)}
               </div>
-            )}
-            {replay.trackUpButton && (
-              <div className="map-cell-tr">{replay.trackUpButton}</div>
-            )}
-            <div className="map-cell-bl">
-              <button
-                className="map-button"
-                aria-label={mapFull ? "Shrink map" : "Expand map"}
-                data-testid="map-expand"
-                onClick={() => setMapFull(!mapFull)}
-              >
-                <IonIcon icon={mapFull ? contractOutline : expandOutline} />
-              </button>
+              <div className="map-cell-bl">
+                <button
+                  className="map-button"
+                  aria-label={mapFull ? "Shrink map" : "Expand map"}
+                  data-testid="map-expand"
+                  onClick={() => setMapFull(!mapFull)}
+                >
+                  <IonIcon icon={mapFull ? contractOutline : expandOutline} />
+                </button>
+              </div>
+              {map?.supportsSatellite && (
+                <div className="map-cell-br">
+                  <ViewToggle view={view} onChange={changeView} />
+                </div>
+              )}
             </div>
-            {map?.supportsSatellite && (
-              <div className="map-cell-br">
-                <ViewToggle view={view} onChange={changeView} />
-              </div>
-            )}
           </div>
-        </div>
+        </MapCanvas>
         {flight && stats && (
           <div className={`seat-card${cardOpen ? "" : " collapsed"}`}>
             <div

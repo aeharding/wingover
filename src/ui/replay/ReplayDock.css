@@ -3,9 +3,15 @@
   flex-direction: column;
   gap: 0.5rem;
   /* Top padding clears the drawer pull's lower half (it straddles the
-     pane's top edge, dipping ~0.9rem in) — on a phone the pull is
-     centered right over the middle readout's label. */
-  padding: 1.1rem 0.75rem calc(0.5rem + env(safe-area-inset-bottom));
+     pane's top edge, dipping ~0.9rem in) — on a phone the pull is centered
+     right over the middle readout's label. The dock is the bottom-most,
+     right-most surface (phone full screen; desktop seat) so it clears the
+     home indicator (bottom) and, in landscape, the notch (left/right) — off
+     the resolved --ion-safe-area-* so a consumed edge (desktop left) reads
+     0 instead of the raw device value. */
+  padding: 1.1rem calc(0.75rem + var(--ion-safe-area-right))
+    calc(0.5rem + var(--ion-safe-area-bottom))
+    calc(0.75rem + var(--ion-safe-area-left));
   /* SOLID: the pane overlays nothing (it sits in flow below the map),
      and a translucent fill only made the drawer pull composite to a
      mismatched shade. Shares --replay-pane-bg with the drawer pull. */

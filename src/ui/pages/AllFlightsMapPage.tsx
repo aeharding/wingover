@@ -140,25 +140,22 @@ export default function AllFlightsMapPage() {
         </IonToolbar>
       </IonHeader>
       <IonContent scrollY={false}>
+        {/* Full-screen on phone (below the header, so the map keeps the
+            device insets — bottom home indicator, landscape notch); a pane
+            in the desktop shell, where env() is 0. Nothing to consume. */}
         <div className="all-flights-map">
-          {/* Full-screen on phone (bottom under the home indicator); a pane in
-              the desktop shell, where it is not edge-to-edge. */}
-          <MapCanvas
-            base={view}
-            appearance={appearance}
-            onReady={handleReady}
-            edgeToEdge={!isDesktop}
-          />
-          <div className="composite-legend">
-            Oldest → newest
-            <div className="legend-bar" />
-          </div>
-          <div className="map-overlay">
-            {map && <CompassButton map={map} />}
-            {map?.supportsSatellite && (
-              <ViewToggle view={view} onChange={changeView} />
-            )}
-          </div>
+          <MapCanvas base={view} appearance={appearance} onReady={handleReady}>
+            <div className="composite-legend">
+              Oldest → newest
+              <div className="legend-bar" />
+            </div>
+            <div className="map-overlay">
+              {map && <CompassButton map={map} />}
+              {map?.supportsSatellite && (
+                <ViewToggle view={view} onChange={changeView} />
+              )}
+            </div>
+          </MapCanvas>
         </div>
       </IonContent>
     </IonPage>

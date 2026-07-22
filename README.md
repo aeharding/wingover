@@ -14,6 +14,7 @@ Paramotor flight recorder
 
 - [STEERING.md](./STEERING.md) — project direction and values
 - [PLAN.md](./PLAN.md) — current status and next steps
+- [docs/INSETS.md](./docs/INSETS.md) — safe-area / notch handling (the `--ion-safe-area-*` model + a verified per-page inset matrix)
 
 ## Development
 

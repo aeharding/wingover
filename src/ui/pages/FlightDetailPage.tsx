@@ -158,6 +158,17 @@ export default function FlightDetailPage() {
   // is a non-interactive preview, so the drawer closes with a collapse.
   const replay = useReplayDrawer(map, track, flight, mapFull);
 
+  // What the map region consumes off the device edges, one class the
+  // buttons AND the MapKit attribution both inherit (so they can never
+  // disagree): inline it is a boxed mid-page preview (every edge covered);
+  // full screen it takes the real device insets, EXCEPT the bottom when
+  // the replay pane is open below and owns the home indicator itself.
+  const regionConsume = !mapFull
+    ? "consume-all"
+    : replay.isOpen
+      ? "consume-bottom"
+      : "";
+
   // Full screen REPARENTS the map surface (same instance — reverse portal, no
   // remount) into a fixed overlay on document.body. Outside the scroller,
   // nothing about the details layout or scroll position ever changes: no
@@ -589,37 +600,45 @@ export default function FlightDetailPage() {
           controls. Inline, the map-tap-layer owns tap-to-expand. */}
       <InPortal node={mapPortal}>
         <div className={`flight-detail-map${mapFull ? " map-full" : ""}`}>
-          {/* The map region; fullscreen slides the replay pane open
-              below it (the region flexes above). */}
-          <div className="detail-map-region">
-            {/* Edge-to-edge only when full screen AND the replay pane is
-                closed (open, the pane owns the home indicator). */}
+          {/* The map region; fullscreen slides the replay pane open below
+              it (the region flexes above). The consume class rides here,
+              on the region only, so the replay drawer (a sibling below)
+              keeps its own home-indicator inset while the map drops it. */}
+          <div className={`detail-map-region ${regionConsume}`}>
             <MapCanvas
               base={view}
               appearance={appearance}
               onReady={handleReady}
-              edgeToEdge={mapFull && !replay.isOpen}
             />
             {/* Inline the map is a scroll-through preview: tap anywhere to
                 expand, vertical drag scrolls the details through (see
                 FlightDetailPage.css). */}
             {!mapFull && <div className="map-tap-layer" onClick={expandMap} />}
             <div className="map-overlay">
-              {/* North reset floats above the grid; hidden while replay
-                  owns the bearing. */}
-              {map && !replay.isOpen && <CompassButton map={map} />}
+              {/* Inline preview: the north reset floats (there is no
+                  cluster inline). It can't actually appear — the preview
+                  is a non-interactive, north-up scroll-through — but the
+                  guard is honest. Fullscreen puts the compass in the
+                  cluster's TL cell instead (below). */}
+              {!mapFull && map && !replay.isOpen && <CompassButton map={map} />}
               {mapFull ? (
                 /* The app-wide cluster cells (.map-cluster, right-edge
-                   anchored like the fly page): compass TL, follow TR
-                   (play borrows TR while the pane is closed), globe BL,
-                   the exit verb BR. Empty cells render nothing and the
-                   tracks collapse: live = the fly page's exact box,
-                   closed = an L hugging the corner, parked = the bottom
-                   pair. */
+                   anchored like the fly page): the TL "compass slot" (the
+                   north reset while the pane is closed, track-up while it
+                   is open — they never coexist), follow TR (play borrows
+                   TR while the pane is closed), globe BL, the exit verb
+                   BR. Empty cells collapse: live = the fly page's exact
+                   box, closed = an L hugging the corner, parked = the
+                   bottom pair. The TL cell renders even when empty so the
+                   compass lands on the SAME ROW as play, not floating a
+                   row above it. */
                 <div className="map-cluster">
-                  {replay.trackUpButton && (
-                    <div className="map-cell-tl">{replay.trackUpButton}</div>
-                  )}
+                  <div className="map-cell-tl">
+                    {replay.trackUpButton ??
+                      (map && !replay.isOpen ? (
+                        <CompassButton map={map} />
+                      ) : null)}
+                  </div>
                   {(replay.followButton ?? replay.playButton) && (
                     <div className="map-cell-tr">
                       {replay.followButton ?? replay.playButton}

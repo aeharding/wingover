@@ -93,7 +93,8 @@
 
 /* Inline, the view toggle moves to the top-right, out of the way of the scroll
    and the centered pill (MapView.css stacks it bottom-right, right again once
-   full screen). No home-indicator inset — the map box is mid-page here. */
+   full screen). No home-indicator inset — the map box is mid-page here (and
+   the region is consume-all anyway, so the safe-area vars already read 0). */
 .flight-detail-map:not(.map-full) .map-overlay {
   top: 0.9rem;
   bottom: auto;

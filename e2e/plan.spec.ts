@@ -65,6 +65,43 @@ test("tap to drop pins, persist across reload, tap to delete", async ({
   await expect(page.getByTestId("pin-marker")).toHaveCount(0);
 });
 
+test("the route pill's sheet clears the whole plan at once", async ({
+  page,
+}) => {
+  await page.goto("/?map-style=blank");
+  await page.getByText("Plan", { exact: true }).click();
+
+  const canvas = page.locator(".map-container");
+  await expect(canvas).toBeVisible();
+  await page.waitForTimeout(500);
+
+  const box = (await canvas.boundingBox())!;
+  for (const [x, y] of [
+    [150, 250],
+    [250, 350],
+  ]) {
+    await page.mouse.move(box.x + x, box.y + y);
+    await page.mouse.down();
+    await page.waitForTimeout(700);
+    await page.mouse.up();
+  }
+  await expect(page.getByTestId("pin-marker")).toHaveCount(2);
+
+  // Tapping the route pill opens a bottom sheet; its one destructive option
+  // wipes every pin, unlike tapping each pin to delete it.
+  await page.getByTestId("plan-distance").click();
+  await page.getByRole("button", { name: "Delete all 2 pins" }).click();
+
+  await expect(page.getByTestId("pin-marker")).toHaveCount(0);
+  await expect(page.getByTestId("plan-distance")).toHaveCount(0);
+
+  // The wipe persists across reload (it was a real delete, not just state).
+  await page.goto("/?map-style=blank");
+  await page.getByText("Plan", { exact: true }).click();
+  await expect(canvas).toBeVisible();
+  await expect(page.getByTestId("pin-marker")).toHaveCount(0);
+});
+
 // ── the ground-map compass, driven by REAL rotation gestures ─────────────
 // The map must hold whatever rotation the gesture leaves (no snap-back to
 // north on release), and the compass must appear rotated, track the bearing,

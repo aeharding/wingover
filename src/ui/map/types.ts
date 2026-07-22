@@ -175,10 +175,16 @@ export interface MapView {
   // registry survives setStyle, same as setBaseMap). NEVER a re-create —
   // a re-created backend loses the pilot's camera (see MapCanvas).
   setAppearance(appearance: MapAppearance): void;
-  // Inset MapKit's Apple/Legal controls off the home indicator (true) or not
-  // (false). Live — so the layouting page can flip it on a fullscreen toggle
-  // without re-creating the map. MapLibre/fake no-op (their attribution is CSS).
-  setEdgeToEdge(edge: boolean): void;
+  // The map's content inset (device safe area, per edge, px): pushes the
+  // backend's attribution/logo off the notch and home indicator. These
+  // are the SAME numbers the button overlay and CSS-positioned
+  // attribution read from the cascading var(--ion-safe-area-*) — MapCanvas
+  // resolves them off a probe carrying those vars and hands them here, so
+  // the imperative (MapKit) and declarative (CSS) consumers can never
+  // disagree. MapKit sets map.padding; MapLibre/fake no-op (their
+  // attribution reads the vars directly). Live — reapplied whenever the
+  // resolved inset moves (rotation, a consume class toggling).
+  setInsets(insets: Insets): void;
   destroy(): void;
 
   // Stamped by MapCanvas (not the adapters) when this instance inherited

@@ -1,12 +1,23 @@
 .all-flights-map {
   position: absolute;
   inset: 0;
+  /* An opaque back-button header sits above the map (both platforms), so it
+     owns the top edge — the map starts at the header's bottom, not the
+     status bar, and must not inset the top again. */
+  --ion-safe-area-top: 0px;
+}
+
+/* On the phone the tab bar sits below the map and owns the home indicator;
+   the map's bottom is the tab bar's top. Scoped to the tab shell so the
+   desktop all-flights (no tab bar, bottom AT the device edge) keeps it. */
+ion-tabs .all-flights-map {
+  --ion-safe-area-bottom: 0px;
 }
 
 .composite-legend {
   position: absolute;
-  left: 0.9rem;
-  bottom: calc(3.2rem + env(safe-area-inset-bottom));
+  left: calc(0.9rem + var(--ion-safe-area-left));
+  bottom: calc(3.2rem + var(--ion-safe-area-bottom));
   z-index: 5;
   padding: 0.4rem 0.6rem;
   font-size: 0.7rem;

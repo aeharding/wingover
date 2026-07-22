@@ -160,6 +160,45 @@
   --ion-color-light-tint: #383a3e;
 }
 
+/* ── Safe-area consumption ─────────────────────────────────────────────────
+   The whole app reads --ion-safe-area-* — the inheriting var Ionic sets on
+   <html> (--ion-safe-area-*: var(--safe-area-inset-*, env(...))) and every
+   Ionic component already insets from. Chrome that sits between a device
+   edge and its content re-declares that var to 0 on the covered edge for
+   its whole subtree, so a descendant reads only what is really still
+   exposed. Applied to the element that OWNS the covered edge (a header host
+   consumes top; a page over the tab bar consumes bottom), so every child —
+   an embedded map's buttons, its attribution, its MapKit padding, and any
+   Ionic chrome (ion-item, ion-content) alike — insets identically without
+   knowing what covered them. Re-declaring the DERIVED var (not the upstream
+   --safe-area-inset-*) is the point: --ion-safe-area-* is computed once at
+   <html> and inherits, so only overriding it reaches Ionic's components.
+   Zeroed in px (not 0) so it stays a valid <length> everywhere it's read. */
+.consume-top {
+  --ion-safe-area-top: 0px;
+}
+
+.consume-right {
+  --ion-safe-area-right: 0px;
+}
+
+.consume-bottom {
+  --ion-safe-area-bottom: 0px;
+}
+
+.consume-left {
+  --ion-safe-area-left: 0px;
+}
+
+/* An element fully within chrome (no device edge exposed on any side),
+   e.g. an embedded map in the desktop split pane. */
+.consume-all {
+  --ion-safe-area-top: 0px;
+  --ion-safe-area-right: 0px;
+  --ion-safe-area-bottom: 0px;
+  --ion-safe-area-left: 0px;
+}
+
 /* ── App tokens, per scheme ──────────────────────────────────────────────
    Light values at :root, dark under .ion-palette-dark — the same split
    the Ionic palette uses above. The FLIGHT surface never themes (STEERING:

@@ -500,3 +500,19 @@ export async function deletePin(pinId: string) {
   const doc = await db.get(pinDocId(pinId));
   await db.remove(doc);
 }
+
+// Clear the whole planned route in one write. A bulk delete (rather than N
+// sequential removes) so a many-pin route wipes as a single feed event, not a
+// flicker of the line shedding a pin at a time.
+export async function deleteAllPins() {
+  const result = await db.allDocs({
+    startkey: "pin:",
+    endkey: "pin:￰",
+  });
+  const deletions = result.rows.map((row) => ({
+    _id: row.id,
+    _rev: row.value.rev,
+    _deleted: true,
+  }));
+  if (deletions.length > 0) await db.bulkDocs(deletions);
+}
