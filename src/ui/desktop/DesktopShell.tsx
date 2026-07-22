@@ -28,6 +28,7 @@ import { isTauri } from "../../engine/platform";
 import { resetSyncedData } from "../../storage/db";
 import * as sync from "../../sync";
 import FlyPage from "../flight/FlyPage";
+import FlySplash from "../flight/FlySplash";
 import { useFlights } from "../logbook/useFlights";
 import MapProviderPage from "../pages/MapProviderPage";
 import PlanPage from "../pages/PlanPage";
@@ -152,6 +153,9 @@ function DesktopFrame() {
       <main className="desktop-main">
         {canRecord && visited.has("fly") && (
           <section className="shell-section" hidden={section !== "fly"}>
+            {/* The splash backdrop behind the frameless surface — same
+                element the phone frame uses as its content background. */}
+            <FlySplash />
             <FlyPage />
           </section>
         )}

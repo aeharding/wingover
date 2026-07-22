@@ -33,13 +33,11 @@
     url("/sync-hero.jpg") center / cover no-repeat, var(--ion-background-color);
 }
 
-@media (prefers-color-scheme: dark) {
-  .sync-modal {
-    --hero-scrim-mid: rgba(0, 0, 0, 0.08);
-    --hero-scrim-strong: rgba(0, 0, 0, 0.72);
-    --hero-glow: 0 1px 12px rgba(0, 0, 0, 0.8);
-    --hero-glow-tight: 0 1px 8px rgba(0, 0, 0, 0.8);
-  }
+:root.ion-palette-dark .sync-modal {
+  --hero-scrim-mid: rgba(0, 0, 0, 0.08);
+  --hero-scrim-strong: rgba(0, 0, 0, 0.72);
+  --hero-glow: 0 1px 12px rgba(0, 0, 0, 0.8);
+  --hero-glow-tight: 0 1px 8px rgba(0, 0, 0, 0.8);
 }
 
 /* Transparent so the modal-wrapper hero shows through the whole sheet. */
@@ -221,14 +219,12 @@
   --color: #fff;
 }
 
-@media (prefers-color-scheme: dark) {
-  .sync-siwa-button {
-    --background: #fff;
-    --background-activated: #e6e6e6;
-    --background-focused: #e6e6e6;
-    --background-hover: #e6e6e6;
-    --color: #000;
-  }
+:root.ion-palette-dark .sync-siwa-button {
+  --background: #fff;
+  --background-activated: #e6e6e6;
+  --background-focused: #e6e6e6;
+  --background-hover: #e6e6e6;
+  --color: #000;
 }
 
 .sync-selfhost-toggle {

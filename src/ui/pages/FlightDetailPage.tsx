@@ -45,12 +45,11 @@ import {
   formatDistance,
   formatSpeed,
 } from "../../flight/format";
-import { getSetting, setSetting } from "../../storage/local";
+import { useAppearance } from "../appTheme";
 import { useFlightDoc } from "../logbook/useFlightDoc";
 import { useFlightDrafts } from "../logbook/useFlightDrafts";
 import { afterNextFrame } from "../map/afterFrame";
 import CompassButton from "../map/CompassButton";
-import type { MapViewKind } from "../map/config";
 import MapCanvas from "../map/MapCanvas";
 import {
   ACCENT_CYAN,
@@ -61,7 +60,7 @@ import {
   type MarkerLayer,
   PLAN_LINE_COLOR,
 } from "../map/types";
-import useSystemAppearance from "../map/useSystemAppearance";
+import useMapView from "../map/useMapView";
 import ViewToggle from "../map/ViewToggle";
 import { useSettings } from "../settings/SettingsContext";
 import { useFlightActions } from "../useFlightActions";
@@ -128,8 +127,8 @@ export default function FlightDetailPage() {
     track,
   );
   const [optionsOpen, setOptionsOpen] = useState(false);
-  const appearance = useSystemAppearance();
-  const [view, setView] = useState<MapViewKind>("street");
+  const appearance = useAppearance();
+  const [view, changeView] = useMapView();
   const [map, setMap] = useState<MapView | null>(null);
   const [mapFull, setMapFull] = useState(false);
   // Mirrors mapFull for the async fullscreen grant below: two quick taps
@@ -149,17 +148,6 @@ export default function FlightDetailPage() {
   const lineRef = useRef<Line | null>(null);
   const planLineRef = useRef<Line | null>(null);
   const markersRef = useRef<MarkerLayer | null>(null);
-
-  useEffect(() => {
-    getSetting("mapView").then((value) => {
-      if (value === "street" || value === "satellite") setView(value);
-    });
-  }, [id]);
-
-  function changeView(value: MapViewKind) {
-    setView(value);
-    setSetting("mapView", value);
-  }
 
   // Full screen REPARENTS the map surface (same instance — reverse portal, no
   // remount) into a fixed overlay on document.body. Outside the scroller,

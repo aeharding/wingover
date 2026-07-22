@@ -16,12 +16,11 @@ import { useEffect, useRef, useState } from "react";
 import { useHistory } from "react-router-dom";
 
 import { getTrack, listFlights } from "../../storage/db";
-import { getSetting, setSetting } from "../../storage/local";
+import { useAppearance } from "../appTheme";
 import CompassButton from "../map/CompassButton";
-import type { MapViewKind } from "../map/config";
 import MapCanvas from "../map/MapCanvas";
 import { boundsOf, type Line, type LngLat, type MapView } from "../map/types";
-import useSystemAppearance from "../map/useSystemAppearance";
+import useMapView from "../map/useMapView";
 import ViewToggle from "../map/ViewToggle";
 import { useIsDesktop } from "../useIsDesktop";
 
@@ -39,16 +38,13 @@ function rampColor(t: number): string {
 export default function AllFlightsMapPage() {
   const history = useHistory();
   const isDesktop = useIsDesktop();
-  const appearance = useSystemAppearance();
-  const [view, setView] = useState<MapViewKind>("street");
+  const appearance = useAppearance();
+  const [view, changeView] = useMapView();
   const [features, setFeatures] = useState<Feature[]>([]);
   const [map, setMap] = useState<MapView | null>(null);
   const lineRef = useRef<Line | null>(null);
 
   function load() {
-    getSetting("mapView").then((value) => {
-      if (value === "street" || value === "satellite") setView(value);
-    });
     (async () => {
       const flights = (await listFlights()).sort(
         (a, b) => a.startedAt - b.startedAt,
@@ -80,11 +76,6 @@ export default function AllFlightsMapPage() {
   useEffect(() => {
     load();
   }, []);
-
-  function changeView(value: MapViewKind) {
-    setView(value);
-    setSetting("mapView", value);
-  }
 
   function handleReady(next: MapView | null) {
     if (!next) {

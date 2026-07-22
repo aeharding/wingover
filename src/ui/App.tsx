@@ -160,7 +160,11 @@ function TabShell() {
             )}
           />
         </IonRouterOutlet>
-        <IonTabBar slot="bottom">
+        {/* translucent: the Fly splash paints under the bar (its content is
+            fullscreen) and frosts through; other tabs' content stays inside
+            the page, where the 80%-alpha bar over the same-color shell is
+            indistinguishable from opaque. */}
+        <IonTabBar slot="bottom" translucent>
           {canRecord && (
             <IonTabButton tab="fly" href="/fly">
               <IonIcon icon={navigateOutline} />

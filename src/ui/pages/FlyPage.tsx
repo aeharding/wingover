@@ -1,6 +1,7 @@
-import { IonPage } from "@ionic/react";
+import { IonContent, IonPage } from "@ionic/react";
 
 import FlyPage from "../flight/FlyPage";
+import FlySplash from "../flight/FlySplash";
 
 /**
  * The Ionic frame around the Ionic-free flight surface. The phone's
@@ -11,11 +12,25 @@ import FlyPage from "../flight/FlyPage";
  *
  * .fly-page-frame (theme.css) pins the frame black in both schemes: the
  * flight surface is exempt from theming.
+ *
+ * fullscreen + scrollY={false}: fullscreen lets the content box reach
+ * UNDER the translucent tab bar (the ionic-framework#28246 mechanism);
+ * scrollY off because the flight surface never scrolls (its own
+ * overflow: hidden is e2e-guarded). FlySplash is the content's actual
+ * background — a backdrop element spanning that full box, so the idle
+ * artwork flows into the bar; the surface renders transparent over it
+ * when idle and covers it in flight.
  */
 export default function FlyPageFramed() {
   return (
     <IonPage className="fly-page-frame">
-      <FlyPage />
+      {/* fixedSlotPlacement="before": the fixed slot (the splash) renders
+          BEFORE the scroll content in the shadow DOM, so the backdrop
+          paints behind the surface, not over it. */}
+      <IonContent fullscreen scrollY={false} fixedSlotPlacement="before">
+        <FlySplash />
+        <FlyPage />
+      </IonContent>
     </IonPage>
   );
 }
