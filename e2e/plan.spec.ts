@@ -18,7 +18,7 @@ test("tap to drop pins, persist across reload, tap to delete", async ({
   await page.goto("/?map-style=blank");
   await page.getByText("Plan", { exact: true }).click();
 
-  const canvas = page.locator(".map-container");
+  const canvas = page.getByTestId("map-container");
   await expect(canvas).toBeVisible();
   await page.waitForTimeout(500);
 
@@ -36,7 +36,7 @@ test("tap to drop pins, persist across reload, tap to delete", async ({
   await expect(page.getByTestId("pin-marker")).toHaveCount(2);
 
   // Two pins connect into an ordered route line.
-  const mapContainer = page.locator(".map-container");
+  const mapContainer = page.getByTestId("map-container");
   await expect(mapContainer).not.toHaveAttribute("data-route-coords", "");
   const routeBefore = await mapContainer.getAttribute("data-route-coords");
   expect(routeBefore!.split(";")).toHaveLength(2);
@@ -71,7 +71,7 @@ test("the route pill's sheet clears the whole plan at once", async ({
   await page.goto("/?map-style=blank");
   await page.getByText("Plan", { exact: true }).click();
 
-  const canvas = page.locator(".map-container");
+  const canvas = page.getByTestId("map-container");
   await expect(canvas).toBeVisible();
   await page.waitForTimeout(500);
 
@@ -112,7 +112,7 @@ test("the route pill's sheet clears the whole plan at once", async ({
 function readBearing(page: Page): Promise<number> {
   return page.evaluate(() =>
     (
-      document.querySelector(".map-container") as HTMLElement & {
+      document.querySelector('[data-testid="map-container"]') as HTMLElement & {
         __map?: { getBearing(): number };
       }
     ).__map!.getBearing(),
@@ -127,7 +127,7 @@ function offNorth(bearing: number): number {
 async function openPlanMap(page: Page) {
   await page.goto("/?map-style=blank");
   await page.getByText("Plan", { exact: true }).click();
-  const canvas = page.locator(".map-container");
+  const canvas = page.getByTestId("map-container");
   await expect(canvas).toBeVisible();
   // North-up: no compass.
   await expect(page.getByTestId("map-compass")).toHaveCount(0);
@@ -135,7 +135,9 @@ async function openPlanMap(page: Page) {
   await page.waitForFunction(
     () =>
       !!(
-        document.querySelector(".map-container") as HTMLElement & {
+        document.querySelector(
+          '[data-testid="map-container"]',
+        ) as HTMLElement & {
           __map?: unknown;
         }
       )?.__map,

@@ -283,7 +283,7 @@ export default function FlyPage() {
       : 0;
 
   return (
-    <div className="fly-content">
+    <div className="fly-content" data-testid="fly-content">
       {status === "idle" && (
         <div className="fly-idle">
           <button className="start-button" onClick={armFlight}>
@@ -402,7 +402,11 @@ export default function FlyPage() {
                     {/* The same chevron as the map's blue location arrow,
                           so "direction to launch" reads as an obvious
                           pointer, not a thin glyph. */}
-                    <svg viewBox="-8 -11 16 20" className="launch-arrow-svg">
+                    <svg
+                      viewBox="-8 -11 16 20"
+                      className="launch-arrow-svg"
+                      data-testid="launch-arrow-svg"
+                    >
                       <polygon points="0,-10 7,8 0,4 -7,8" />
                     </svg>
                   </span>

@@ -21,11 +21,13 @@ async function openImportedFlight(page: Page) {
 // enclosing ion-content — the test must still reach the scroller under it.)
 async function detailScrollHost(page: Page) {
   await page.waitForFunction(() =>
-    document.querySelector(".flight-detail-map-frame")?.closest("ion-content"),
+    document
+      .querySelector('[data-testid="flight-detail-map-frame"]')
+      ?.closest("ion-content"),
   );
   return page.evaluateHandle(async () => {
     const content = document
-      .querySelector(".flight-detail-map-frame")!
+      .querySelector('[data-testid="flight-detail-map-frame"]')!
       .closest("ion-content")!;
     return content.getScrollElement();
   });
@@ -69,7 +71,7 @@ test("flight detail shows stats, exports GPX, and deletes", async ({
   await recordQuickFlight(page);
 
   await page.getByText("Logbook", { exact: true }).click();
-  await page.locator(".flight-row").click();
+  await page.getByTestId("flight-row").click();
 
   await expect(page.getByText("Max altitude")).toBeVisible();
   await expect(page.getByText("Avg speed")).toBeVisible();
@@ -94,11 +96,11 @@ test("map preview expands on tap and collapses via the shrink button", async ({
   page,
 }) => {
   await openImportedFlight(page);
-  const fullroot = page.locator(".flight-detail-map-fullroot");
+  const fullroot = page.getByTestId("flight-detail-map-fullroot");
 
   // Tap anywhere on the preview (the tap layer covers it) → full screen: the
   // map surface reparents into a body-level overlay (covering the bars).
-  await page.locator(".map-tap-layer").click();
+  await page.getByTestId("map-tap-layer").click();
   await expect(fullroot).toBeVisible();
   await expect(page.getByTestId("map-expand")).toBeHidden();
 
@@ -130,9 +132,9 @@ test.describe("scrolled details", () => {
     // and the tap layer's top is above the fold here — that scroll corrupts
     // the very position this test protects (a finger tap never scrolls).
     await page
-      .locator(".map-tap-layer")
+      .getByTestId("map-tap-layer")
       .evaluate((el) => (el as HTMLElement).click());
-    await expect(page.locator(".flight-detail-map-fullroot")).toBeVisible();
+    await expect(page.getByTestId("flight-detail-map-fullroot")).toBeVisible();
     // The map lifts to a body-level overlay; the scroller underneath is
     // untouched by construction.
     expect(await detailScrollTop(page)).toBe(before);
@@ -140,7 +142,7 @@ test.describe("scrolled details", () => {
     // Collapse via the shrink button (it lives in the fixed overlay, not the
     // scroller, so its locator click cannot auto-scroll anything).
     await page.getByTestId("map-shrink").click();
-    await expect(page.locator(".flight-detail-map-fullroot")).toBeHidden();
+    await expect(page.getByTestId("flight-detail-map-fullroot")).toBeHidden();
     await expect.poll(() => detailScrollTop(page)).toBe(before);
   });
 
@@ -150,9 +152,9 @@ test.describe("scrolled details", () => {
     await openImportedFlight(page);
 
     await page.getByTestId("map-expand").click();
-    await expect(page.locator(".flight-detail-map-fullroot")).toBeVisible();
+    await expect(page.getByTestId("flight-detail-map-fullroot")).toBeVisible();
     await page.getByTestId("map-shrink").click();
-    await expect(page.locator(".flight-detail-map-fullroot")).toBeHidden();
+    await expect(page.getByTestId("flight-detail-map-fullroot")).toBeHidden();
 
     // Inline, the map is a scroll-through preview: scroll input over it moves
     // the details instead of being swallowed by the map (pointer-events: none;

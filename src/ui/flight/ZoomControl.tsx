@@ -96,6 +96,7 @@ export default function ZoomControl({ map, onInput }: ZoomControlProps) {
   return (
     <div
       className={active ? "zoom-strip active" : "zoom-strip"}
+      data-active={active}
       role="slider"
       aria-label="Zoom"
       aria-orientation="vertical"
@@ -140,7 +141,11 @@ export default function ZoomControl({ map, onInput }: ZoomControlProps) {
           fully in. */}
       <div className="zoom-gauge" aria-hidden="true">
         <div className="zoom-gauge-rail">
-          <div className="zoom-gauge-thumb" ref={thumbRef}>
+          <div
+            className="zoom-gauge-thumb"
+            data-testid="zoom-gauge-thumb"
+            ref={thumbRef}
+          >
             <svg viewBox="0 0 66 100" aria-hidden="true">
               <path d="M18 12 L52 50 L18 88 Z" />
             </svg>

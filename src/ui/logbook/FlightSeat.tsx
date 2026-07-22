@@ -313,7 +313,10 @@ export default function FlightSeat({
           edge for the whole seat (see desktop.css). When the scrub docks
           below, IT owns the bottom, so the map consumes it (the drawer is a
           sibling and keeps its own). */}
-      <div className={`seat-map${replay.isOpen ? " consume-bottom" : ""}`}>
+      <div
+        className={`seat-map${replay.isOpen ? " consume-bottom" : ""}`}
+        data-testid="seat-map"
+      >
         <MapCanvas base={view} appearance={appearance} onReady={handleReady}>
           {/* The app-wide cluster cells (.map-cluster), MIRRORED for the
               seat's bottom-LEFT anchor: the edge column (follow/play
@@ -352,7 +355,10 @@ export default function FlightSeat({
           </div>
         </MapCanvas>
         {flight && stats && (
-          <div className={`seat-card${cardOpen ? "" : " collapsed"}`}>
+          <div
+            className={`seat-card${cardOpen ? "" : " collapsed"}`}
+            data-testid="seat-card"
+          >
             <div
               className="seat-card-header"
               onClick={(event) => {

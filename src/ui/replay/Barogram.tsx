@@ -444,6 +444,7 @@ export default function Barogram({
           <div
             ref={playheadRef}
             className="barogram-playhead"
+            data-testid="barogram-playhead"
             aria-hidden="true"
           />
         )}
@@ -541,11 +542,13 @@ export default function Barogram({
         className={
           timeWindow ? "barogram-overview zoomed" : "barogram-overview"
         }
+        data-testid="barogram-overview"
         aria-hidden="true"
       >
         {timeWindow && (
           <div
             className="barogram-overview-window"
+            data-testid="barogram-overview-window"
             style={{
               left: `${(((w0 - t0) / spanMs) * 100).toFixed(2)}%`,
               width: `${((wspan / spanMs) * 100).toFixed(2)}%`,
