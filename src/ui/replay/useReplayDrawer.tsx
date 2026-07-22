@@ -16,6 +16,7 @@ import {
   saveFlight,
 } from "../../storage/db";
 import NativeIcon from "../components/NativeIcon";
+import { cx } from "../cx";
 import { afterNextFrame } from "../map/afterFrame";
 import type { MapView } from "../map/types";
 import { replayAvailable } from "./available";
@@ -23,7 +24,8 @@ import ClipDock, { type ClipMode } from "./ClipDock";
 import ReplayDock from "./ReplayDock";
 import { rememberPosition } from "./timelineMemory";
 
-import "./ReplayDrawer.css";
+import mapCss from "../map/map.module.css";
+import styles from "./ReplayDrawer.module.css";
 
 // closed → opening (mounted at 0fr) → open (1fr, the slide runs) →
 // closing (back to 0fr) → closed (unmount tears the aircraft down).
@@ -94,6 +96,8 @@ export function useReplayDrawer(
   // URL-hidden desktop section): the pane folds away with it, and comes
   // back with it if it was wanted open.
   enabled = true,
+  // The desktop seat hosts the drawer with its own dock presentation.
+  seat = false,
 ): {
   available: boolean;
   isOpen: boolean;
@@ -366,7 +370,7 @@ export function useReplayDrawer(
     playButton:
       availableNow && enabled && !isOpen ? (
         <button
-          className="map-button"
+          className={mapCss.button}
           aria-label="Replay flight"
           data-testid="replay-start"
           onClick={open}
@@ -377,7 +381,7 @@ export function useReplayDrawer(
     followButton:
       isOpen && active ? (
         <button
-          className="map-button"
+          className={mapCss.button}
           aria-label="Follow aircraft"
           data-active={camera.follow}
           data-testid="replay-follow"
@@ -397,7 +401,7 @@ export function useReplayDrawer(
     trackUpButton:
       isOpen && active ? (
         <button
-          className="map-button"
+          className={mapCss.button}
           aria-label={
             camera.follow && camera.trackUp ? "Align north" : "Track up"
           }
@@ -421,9 +425,7 @@ export function useReplayDrawer(
     drawer:
       available && held && isOpen ? (
         <div
-          className={
-            session.phase === "open" ? "replay-drawer open" : "replay-drawer"
-          }
+          className={cx(styles.drawer, session.phase === "open" && styles.open)}
           onTransitionEnd={(event) => {
             if (
               session.phase === "closing" &&
@@ -440,16 +442,12 @@ export function useReplayDrawer(
               varies CONTINUOUSLY (tangent circular arcs are only G1: the
               curvature steps at every junction read as kinks). */}
           <button
-            className="replay-collapse-tab"
+            className={styles.tab}
             aria-label="Hide replay"
             data-testid="replay-collapse"
             onClick={collapse}
           >
-            <svg
-              className="replay-collapse-bump"
-              viewBox="0 0 72 20"
-              aria-hidden="true"
-            >
+            <svg className={styles.bump} viewBox="0 0 72 20" aria-hidden="true">
               {/* The curve's tangent BASELINE (y=21) sits exactly ON the
                   pane edge (anchoring it lower was the source of every
                   junction artifact); the rect skirt below (y=21..22)
@@ -462,7 +460,7 @@ export function useReplayDrawer(
             </svg>
             <NativeIcon icon={chevronDownOutline} />
           </button>
-          <div className="replay-drawer-clip">
+          <div className={styles.clip}>
             {/* Keys carry the track's span: a clip rewriting the track
                 under the open pane remounts the dock against the new
                 recording (the feed/handles bind their track at mount). */}
@@ -475,6 +473,7 @@ export function useReplayDrawer(
                 timelineKey={held.flight.id}
                 onCancel={endClip}
                 onApply={applyClip}
+                seat={seat}
               />
             ) : (
               <ReplayDock
@@ -492,6 +491,7 @@ export function useReplayDrawer(
                 hideAhead={hideAhead}
                 onToggleHideAhead={toggleHideAhead}
                 onCollapse={collapse}
+                seat={seat}
               />
             )}
           </div>

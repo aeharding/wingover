@@ -38,17 +38,20 @@ import {
   saveFlight,
 } from "../../storage/db";
 import NativeIcon from "../components/NativeIcon";
+import { cx } from "../cx";
 import type { MapViewKind } from "../map/config";
+import MapCluster from "../map/MapCluster";
 import type { MapView } from "../map/types";
 import ViewToggle from "../map/ViewToggle";
 import { useSettings } from "../settings/SettingsContext";
-import { useBigConfirm } from "./BigConfirm";
+import { ConfirmSurface, useBigConfirm } from "./BigConfirm";
 import LiveTrackMap from "./LiveTrackMap";
 import Tile from "./Tile";
 import { showToast } from "./toast";
 import { useLiveViewPrefs } from "./useLiveViewPrefs";
 
-import "./FlyPage.css";
+import mapCss from "../map/map.module.css";
+import styles from "./FlyPage.module.css";
 
 // WAL hydration happens once per app launch. The App swaps the whole nav shell
 // for a bare <FlyPage> when a flight is active, so FlyPage remounts mid-session
@@ -283,29 +286,32 @@ export default function FlyPage() {
       : 0;
 
   return (
-    <div className="fly-content" data-testid="fly-content">
+    <div className={styles.content} data-testid="fly-content">
       {status === "idle" && (
-        <div className="fly-idle">
-          <button className="start-button" onClick={armFlight}>
+        <div className={styles.idle}>
+          <button className={styles.start} onClick={armFlight}>
             Start Flight
           </button>
           {plannedRouteMeters > 0 && (
-            <div className="planned-route" data-testid="planned-route">
+            <div className={styles.planned} data-testid="planned-route">
               Planned route: {formatDistance(plannedRouteMeters, units)}
             </div>
           )}
           {gpsError && (
-            <div className="gps-error" data-testid="gps-error">
+            <div className={styles.gpsError} data-testid="gps-error">
               {gpsError.message}
             </div>
           )}
         </div>
       )}
       {(status === "acquiring" || status === "armed") && (
-        <div className="fly-armed" data-testid="armed">
-          <div className="armed-message">
+        <div className={styles.armed} data-testid="armed">
+          <div className={styles.armedMessage}>
             <div
-              className={status === "armed" ? "pulse" : "pulse acquiring"}
+              className={cx(
+                styles.pulse,
+                status !== "armed" && styles.acquiring,
+              )}
               aria-hidden="true"
             />
             <h2>
@@ -314,29 +320,29 @@ export default function FlyPage() {
             <p>{status === "acquiring" ? ACQUIRING_HINT : ARMED_HINT}</p>
           </div>
           {gpsError && (
-            <div className="gps-error" data-testid="gps-error">
+            <div className={styles.gpsError} data-testid="gps-error">
               {gpsError.message}
             </div>
           )}
           {status === "acquiring" ? (
-            <div className="armed-accuracy" data-testid="armed-accuracy">
+            <div className={styles.armedAccuracy} data-testid="armed-accuracy">
               {latest
                 ? `±${formatAltitude(latest.horizontalAccuracy, units)} H · ±${formatAltitude(latest.verticalAccuracy, units)} V`
                 : "—"}
             </div>
           ) : (
-            <div className="armed-speed" data-testid="armed-speed">
+            <div className={styles.armedSpeed} data-testid="armed-speed">
               {latest ? formatSpeed(latest.speed, units) : "—"}
             </div>
           )}
-          <button className="cancel-button" onClick={confirmEndFlight}>
+          <button className={styles.cancel} onClick={confirmEndFlight}>
             Cancel
           </button>
         </div>
       )}
       {(status === "recording" || status === "landed") && (
-        <div className="fly-recording" data-testid="recording">
-          <div className="instruments" ref={instrumentsRef}>
+        <div className={styles.recording} data-testid="recording">
+          <div className={styles.instruments} ref={instrumentsRef}>
             <Tile
               label="Above launch"
               value={
@@ -395,7 +401,7 @@ export default function FlyPage() {
               icon={
                 latest && navTarget ? (
                   <span
-                    className="launch-arrow"
+                    className={styles.launchArrow}
                     style={{ rotate: `${toTargetRelative}deg` }}
                     aria-hidden="true"
                   >
@@ -404,7 +410,7 @@ export default function FlyPage() {
                           pointer, not a thin glyph. */}
                     <svg
                       viewBox="-8 -11 16 20"
-                      className="launch-arrow-svg"
+                      className={styles.launchArrowSvg}
                       data-testid="launch-arrow-svg"
                     >
                       <polygon points="0,-10 7,8 0,4 -7,8" />
@@ -417,6 +423,7 @@ export default function FlyPage() {
             />
           </div>
           <LiveTrackMap
+            className={styles.liveMap}
             track={track}
             latest={latest}
             view={mapView}
@@ -440,20 +447,20 @@ export default function FlyPage() {
           />
           {gpsError && (
             <div
-              className="gps-error recording-error"
+              className={cx(styles.gpsError, styles.recordingError)}
               style={{ top: mapTopInset + 12 }}
               data-testid="gps-error"
             >
               {gpsError.message}
             </div>
           )}
-          <div className="flight-controls">
+          <div className={styles.controls}>
             {/* Contextual: floats ABOVE the fixed control grid (which is
                   bottom-anchored) so appearing/disappearing never nudges the
                   four regular controls out of their fixed positions. */}
             {selectedWaypoint && (
               <button
-                className="map-button skip-button"
+                className={mapCss.button}
                 aria-label="Clear selected waypoint"
                 data-testid="remove-waypoint"
                 onClick={() => {
@@ -463,97 +470,86 @@ export default function FlyPage() {
               >
                 {/* A location pin with a small trash badge: "delete this
                       selected checkpoint". */}
-                <span className="skip-icon" aria-hidden="true">
-                  <span className="skip-icon-pin">
+                <span className={styles.skipIcon} aria-hidden="true">
+                  <span className={styles.skipIconPin}>
                     <NativeIcon icon={locationOutline} />
                   </span>
-                  <NativeIcon className="skip-icon-badge" icon={closeOutline} />
+                  <NativeIcon
+                    className={styles.skipIconBadge}
+                    icon={closeOutline}
+                  />
                 </span>
               </button>
             )}
-            {/* The app-wide cluster cells (.map-cluster): this page IS
+            {/* The app-wide corner cluster (MapCluster): this page IS
                 the reference layout the replay hosts mirror. Explicit
                 cells also pin stop to BR on builds without satellite
                 (flow order used to slide it into globe's cell). */}
-            <div className="map-cluster">
-              <button
-                className="map-button map-cell-tl"
-                aria-label={follow ? "Track up" : "Align north"}
-                // The mode light shows only while the mode is in
-                // effect (unsnapping also clears the pref; the gate
-                // guards any future unsnap path that forgets to).
-                data-active={follow && trackUp}
-                onClick={() => {
-                  if (follow) {
-                    changeTrackUp(!trackUp);
-                    return;
-                  }
-                  // Unsnapped, the compass is a north reset: bearing
-                  // zero, immediately, mode untouched. No animation,
-                  // ever, in flight. Always present — a control that
-                  // comes and goes is worse than one that occasionally
-                  // has nothing to do.
-                  liveMap?.moveTo({ bearing: 0 }, { animate: false });
-                }}
-              >
-                <NativeIcon icon={compassOutline} />
-              </button>
-              <button
-                className="map-button map-cell-tr"
-                aria-label="Follow aircraft"
-                data-active={follow}
-                // A toggle: pressing while snapped unsnaps (and takes
-                // track-up down with it, via changeFollow).
-                onClick={() => changeFollow(!follow)}
-              >
-                <NativeIcon icon={locateOutline} />
-              </button>
-              {liveMap?.supportsSatellite && (
-                <div className="map-cell-bl">
+            <MapCluster
+              tl={
+                <button
+                  className={mapCss.button}
+                  aria-label={follow ? "Track up" : "Align north"}
+                  // The mode light shows only while the mode is in
+                  // effect (unsnapping also clears the pref; the gate
+                  // guards any future unsnap path that forgets to).
+                  data-active={follow && trackUp}
+                  onClick={() => {
+                    if (follow) {
+                      changeTrackUp(!trackUp);
+                      return;
+                    }
+                    // Unsnapped, the compass is a north reset: bearing
+                    // zero, immediately, mode untouched. No animation,
+                    // ever, in flight. Always present — a control that
+                    // comes and goes is worse than one that occasionally
+                    // has nothing to do.
+                    liveMap?.moveTo({ bearing: 0 }, { animate: false });
+                  }}
+                >
+                  <NativeIcon icon={compassOutline} />
+                </button>
+              }
+              tr={
+                <button
+                  className={mapCss.button}
+                  aria-label="Follow aircraft"
+                  data-active={follow}
+                  // A toggle: pressing while snapped unsnaps (and takes
+                  // track-up down with it, via changeFollow).
+                  onClick={() => changeFollow(!follow)}
+                >
+                  <NativeIcon icon={locateOutline} />
+                </button>
+              }
+              bl={
+                liveMap?.supportsSatellite ? (
                   <ViewToggle view={mapView} onChange={changeMapView} />
-                </div>
-              )}
-              <button
-                className="map-button stop-button map-cell-br"
-                aria-label="Stop flight"
-                onClick={confirmEndFlight}
-              >
-                <NativeIcon icon={stopIcon} />
-              </button>
-            </div>
+                ) : undefined
+              }
+              br={
+                <button
+                  className={cx(mapCss.button, styles.stop)}
+                  aria-label="Stop flight"
+                  onClick={confirmEndFlight}
+                >
+                  <NativeIcon icon={stopIcon} />
+                </button>
+              }
+            />
           </div>
           {status === "landed" && landingAt !== null && (
-            /* Same surface as the end-flight confirm (BigConfirm's
-                 classes): one dialog language in flight. The scrim is the
-                 safe answer, like Cancel there. */
-            <div
-              className="big-confirm"
-              role="presentation"
-              data-testid="landing-prompt"
-              onClick={dismissLandingPrompt}
-            >
-              <div
-                className="big-confirm-panel"
-                role="alertdialog"
-                aria-modal="true"
-                aria-label="Landing detected"
-                onClick={(event) => event.stopPropagation()}
-              >
-                <div className="big-confirm-title">Landing detected</div>
-                <div className="big-confirm-actions">
-                  <button
-                    className="big-confirm-cancel"
-                    onClick={dismissLandingPrompt}
-                  >
-                    Still flying
-                  </button>
-                  <button className="big-confirm-action" onClick={endFlight}>
-                    Stop
-                    {snapshot.autoEnd ? ` (${landingSecondsLeft})` : ""}
-                  </button>
-                </div>
-              </div>
-            </div>
+            /* The end-flight confirm's exact surface (ConfirmSurface):
+                 one dialog language in flight. The scrim is the safe
+                 answer, like Cancel there. */
+            <ConfirmSurface
+              scrimTestId="landing-prompt"
+              title="Landing detected"
+              cancelLabel="Still flying"
+              action={`Stop${snapshot.autoEnd ? ` (${landingSecondsLeft})` : ""}`}
+              onCancel={dismissLandingPrompt}
+              onAction={endFlight}
+            />
           )}
         </div>
       )}
@@ -564,7 +560,7 @@ export default function FlyPage() {
 
 function Compass({ course }: { course: number }) {
   return (
-    <svg className="compass" viewBox="0 0 44 44" aria-hidden="true">
+    <svg className={styles.compass} viewBox="0 0 44 44" aria-hidden="true">
       <circle cx="22" cy="22" r="20.5" />
       <text x="22" y="8.5">
         N
@@ -579,9 +575,12 @@ function Compass({ course }: { course: number }) {
         W
       </text>
       <g transform={`rotate(${course} 22 22)`}>
-        <polygon className="needle-north" points="22,9 25.5,24 22,21 18.5,24" />
         <polygon
-          className="needle-south"
+          className={styles.needleNorth}
+          points="22,9 25.5,24 22,21 18.5,24"
+        />
+        <polygon
+          className={styles.needleSouth}
           points="22,35 18.5,20 22,23 25.5,20"
         />
       </g>

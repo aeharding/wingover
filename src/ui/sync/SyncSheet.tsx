@@ -36,6 +36,8 @@ import {
 } from "./SyncSubscription";
 import { useLogOut } from "./useLogOut";
 
+import styles from "./sync.module.css";
+
 /**
  * THE sync surface — one sheet, one question ("are my flights backed up?"),
  * every view derived from state (SYNC-UX.md). The payments/connection split
@@ -132,18 +134,18 @@ function SyncHome({
 
   return (
     <>
-      <IonHeader collapse="fade" className="sync-home-header">
+      <IonHeader collapse="fade">
         <IonToolbar>
           <IonTitle>Sync</IonTitle>
         </IonToolbar>
       </IonHeader>
-      <IonContent fullscreen className="sync-home-content">
+      <IonContent fullscreen className={styles.homeContent}>
         <IonHeader collapse="condense">
           <IonToolbar color=" ">
             <IonTitle size="large">Sync</IonTitle>
           </IonToolbar>
         </IonHeader>
-        <div className="sync-home-body">
+        <div className={styles.homeBody}>
           {nothing ? (
             <Pitch
               products={products}
@@ -248,11 +250,11 @@ function Pitch({
   const native = isTauri();
   return (
     <>
-      <h2 className="sync-headline" data-testid="sync-headline">
+      <h2 className={styles.headline} data-testid="sync-headline">
         Your flights, on all your devices.
       </h2>
 
-      <ul className="sync-reasons">
+      <ul className={styles.reasons}>
         <li>
           <IonIcon icon={cloudUploadOutline} aria-hidden="true" />
           Backed up off your phone
@@ -267,7 +269,7 @@ function Pitch({
         </li>
       </ul>
 
-      {problem && <p className="sync-error-message">{problem}</p>}
+      {problem && <p className={styles.errorMessage}>{problem}</p>}
 
       <SubscribeArea products={products} busy={busy} onBuy={onBuy} />
 
@@ -288,7 +290,7 @@ function Pitch({
         <IonButton
           fill="clear"
           size="small"
-          className="sync-quiet-action"
+          className={styles.quietAction}
           disabled={busy}
           onClick={onRestore}
           data-testid="sync-restore"

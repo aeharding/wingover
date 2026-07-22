@@ -6,6 +6,9 @@ import * as sync from "../../sync";
 import { describe } from "../sync/describe";
 import { useSyncSheet } from "../sync/SyncSheets";
 
+import styles from "../sync/sync.module.css";
+import funnel from "./ConnectFunnel.module.css";
+
 /**
  * The empty logbook in a browser is a front door, not a dead end: a pilot
  * who tapped "Open your logbook in the browser" on the landing page arrives
@@ -38,16 +41,16 @@ export default function ConnectFunnel({ onImport }: { onImport: () => void }) {
   const connected = status.state !== "off" && status.state !== "error";
 
   return (
-    <div className="connect-funnel">
+    <div className={funnel.funnel}>
       <h2>No flights yet.</h2>
-      <p className="funnel-sub">
+      <p className={funnel.sub}>
         Flights sync from your phone when sync is on.
       </p>
       {!connected && (
         <>
           <IonButton
             expand="block"
-            className="sync-siwa-button"
+            className={styles.siwaButton}
             disabled={busy}
             onClick={() => void signIn()}
             data-testid="funnel-signin"
@@ -70,12 +73,12 @@ export default function ConnectFunnel({ onImport }: { onImport: () => void }) {
         Import GPX files
       </IonButton>
       {status.state !== "off" && (
-        <p className="funnel-status" data-testid="funnel-status">
+        <p className={funnel.status} data-testid="funnel-status">
           {describe(status).label}
           {describe(status).detail ? `. ${describe(status).detail}` : ""}
         </p>
       )}
-      {problem && <p className="funnel-problem">{problem}</p>}
+      {problem && <p className={funnel.problem}>{problem}</p>}
     </div>
   );
 }

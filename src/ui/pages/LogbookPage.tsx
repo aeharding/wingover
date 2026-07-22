@@ -21,10 +21,11 @@ import { formatAirtime, formatDistance } from "../../flight/format";
 import { importGpxFiles } from "../../storage/importGpx";
 import ConnectFunnel from "../logbook/ConnectFunnel";
 import FlightList from "../logbook/FlightList";
+import LogbookEmpty from "../logbook/LogbookEmpty";
 import { useFlights } from "../logbook/useFlights";
 import { useSettings } from "../settings/SettingsContext";
 
-import "./LogbookPage.css";
+import styles from "./LogbookPage.module.css";
 
 export default function LogbookPage() {
   const { units } = useSettings();
@@ -151,7 +152,7 @@ export default function LogbookPage() {
           }
         />
         {empty ? (
-          <div className="logbook-empty">
+          <LogbookEmpty>
             {isTauri() ? (
               "No flights yet."
             ) : (
@@ -159,7 +160,7 @@ export default function LogbookPage() {
               // their phone, and this is where they connect (SYNC-UX).
               <ConnectFunnel onImport={() => fileInputRef.current?.click()} />
             )}
-          </div>
+          </LogbookEmpty>
         ) : (
           scrollReady && (
             <FlightList
@@ -171,7 +172,7 @@ export default function LogbookPage() {
           )
         )}
         {flights.length > 0 && (
-          <div className="logbook-totals">
+          <div className={styles.totals}>
             <IonNote>
               {flights.length} flights · {formatAirtime(totalDuration)} ·{" "}
               {formatDistance(totalDistance, units)}

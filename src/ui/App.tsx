@@ -35,8 +35,6 @@ import { SyncSheetsProvider } from "./sync/SyncSheets";
 import { useCanRecord } from "./useCanRecord";
 import { useIsDesktop } from "./useIsDesktop";
 
-import "./desktop.css";
-
 setupIonicReact({
   mode: "ios",
   // Ionic's input scroll assist is UA-gated, so it also engages inside the

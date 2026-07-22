@@ -1,13 +1,8 @@
-.logbook-empty {
+.empty {
   display: flex;
   align-items: center;
   justify-content: center;
   height: 100%;
   color: var(--ion-color-medium);
   font-size: 1.1rem;
-}
-
-.logbook-totals {
-  padding: 1rem 1.25rem calc(1rem + var(--ion-safe-area-bottom));
-  text-align: center;
 }

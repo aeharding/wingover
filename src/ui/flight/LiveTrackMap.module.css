@@ -1,4 +1,4 @@
-.live-map {
+.root {
   position: relative;
   flex: 1;
   min-height: 0;
@@ -8,14 +8,12 @@
 /* Above the map canvas, below the controls (z-index 6): a touch starting
    in the guard is captured here instead of by MapLibre, so the map won't
    pan during the iOS app-switch swipe. Kept narrow so it barely eats into
-   real map-drag area. */
-.map-edge-guard {
+   real map-drag area. (One class now — the old base/-bottom split served a
+   family of edge guards that no longer exists.) */
+.edgeGuard {
   position: absolute;
   z-index: 5;
   touch-action: none;
-}
-
-.map-edge-guard-bottom {
   left: 0;
   right: 0;
   bottom: 0;
@@ -24,6 +22,6 @@
 
 /* Numbered waypoint pin (maplibre/fake backends; MapKit draws a native pin
    from the marker color + label). Reset so only the SVG shows. */
-.waypoint-pin {
+.waypointPin {
   line-height: 0;
 }

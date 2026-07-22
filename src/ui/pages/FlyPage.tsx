@@ -6,8 +6,11 @@ import {
   IonToolbar,
 } from "@ionic/react";
 
+import { cx } from "../cx";
 import FlyPage from "../flight/FlyPage";
 import FlySplash from "../flight/FlySplash";
+
+import styles from "./FlyPage.module.css";
 
 /**
  * The Ionic frame around the Ionic-free flight surface. The phone's
@@ -29,7 +32,7 @@ import FlySplash from "../flight/FlySplash";
  */
 export default function FlyPageFramed() {
   return (
-    <IonPage className="fly-page-frame">
+    <IonPage className={cx("fly-page-frame", styles.frame)}>
       {/* The large-title pattern, same as SettingsPage: a main header
           (its title shows condensed on scroll) paired with the condense
           header in the content (the big title). Both toolbars are

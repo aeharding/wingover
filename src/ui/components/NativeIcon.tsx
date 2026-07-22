@@ -1,3 +1,5 @@
+import { cx } from "../cx";
+
 import styles from "./NativeIcon.module.css";
 
 /**
@@ -37,7 +39,7 @@ export default function NativeIcon({
 }) {
   return (
     <span
-      className={`${styles.nativeIcon}${className ? ` ${className}` : ""}`}
+      className={cx(styles.nativeIcon, className)}
       style={{ WebkitMaskImage: maskUrl(icon), maskImage: maskUrl(icon) }}
       aria-hidden="true"
     />

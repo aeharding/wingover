@@ -1,0 +1,62 @@
+/* The in-flight dialog surface (ConfirmSurface): the end-flight confirm and
+   the landing prompt share it — one dialog language in flight. */
+.scrim {
+  position: fixed;
+  inset: 0;
+  z-index: 50;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 1.5rem;
+  background: rgba(0, 0, 0, 0.55);
+}
+
+/* Solid panel, not translucent: it appears over a sunlit map. */
+.panel {
+  width: 100%;
+  max-width: 26rem;
+  background: #0b0c0e;
+  padding: 1.6rem 1.4rem 1.4rem;
+}
+
+.title {
+  font-size: 1.6rem;
+  font-weight: 700;
+  color: #fff;
+  text-align: center;
+  margin-bottom: 1.4rem;
+}
+
+.actions {
+  display: flex;
+  gap: 0.9rem;
+
+  /* The in-flight button family (FlyPage's Start Flight / Cancel): solid
+     fills, rounded, weight 600. One language for everything tappable in
+     flight. */
+  button {
+    flex: 1;
+    min-height: 76px;
+    border: 0;
+    border-radius: 14px;
+    font-size: 1.35rem;
+    font-weight: 600;
+    color: #fff;
+  }
+}
+
+.cancel {
+  background: #333;
+
+  &:active {
+    background: #2a2a2a;
+  }
+}
+
+.action {
+  background: rgba(150, 30, 30, 0.95);
+
+  &:active {
+    background: rgba(120, 24, 24, 0.95);
+  }
+}

@@ -18,6 +18,9 @@ jobs:
       - run: pnpm install --frozen-lockfile
       - run: pnpm lint
       - run: pnpm format:check
+      # *.module.css.d.ts are generated (postinstall), not committed;
+      # check:css's pairing check fails if generation didn't run.
+      - run: pnpm check:css
       - run: pnpm exec vitest run
       - run: pnpm build
       - run: pnpm exec playwright install --with-deps chromium

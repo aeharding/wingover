@@ -1,0 +1,138 @@
+/* The map contract layer: the surface MapCanvas renders, the backend
+   container the adapters mount into, the inset probe, and the shared
+   overlay/button chrome every host composes. Third-party classes
+   (maplibre's .maplibregl-*, MapKit's .mk-*) are :global — theirs, not
+   ours. Dependents that need these names in their own selectors import
+   them (@value ... from this file), never hard-code a global string. */
+
+.surface {
+  position: absolute;
+  inset: 0;
+}
+
+/* The bridge from CSS var to the MapKit JS API: an inert box whose padding
+   IS var(--ion-safe-area-*) — already cascaded and consumed at this map's
+   position. MapCanvas reads its computed padding and feeds setInsets; a
+   StyleObserver on these padding longhands refires whenever any edge
+   changes (rotation, a consume class toggling). Zero-size, hidden, unpainted. */
+.insetProbe {
+  position: absolute;
+  top: 0;
+  left: 0;
+  width: 0;
+  height: 0;
+  visibility: hidden;
+  pointer-events: none;
+  box-sizing: border-box;
+  padding: var(--ion-safe-area-top) var(--ion-safe-area-right)
+    var(--ion-safe-area-bottom) var(--ion-safe-area-left);
+}
+
+.container {
+  position: absolute;
+  inset: 0;
+  background: #191b1e;
+
+  /* The pre-reveal veil matches the basemap's world (light follows the
+     map's appearance, not the app scheme), so neither scheme flashes the
+     other's color while tiles load. */
+  &.light {
+    background: #e2e5e9;
+  }
+
+  /* MapKit builds its view inside our container; make it fill the box. */
+  :global(.mk-map-view) {
+    position: absolute;
+    inset: 0;
+  }
+
+  :global(.maplibregl-canvas) {
+    opacity: 1;
+    transition: opacity 0.25s ease;
+  }
+
+  &.loading :global(.maplibregl-canvas) {
+    opacity: 0;
+  }
+
+  /* Attribution (bottom-left) rides off the home indicator and, in
+     landscape, the notch — from the SAME var(--ion-safe-area-*) the
+     buttons use (the container is a descendant of .surface, so it
+     inherits the cascaded, already-consumed values), so the MapLibre logo
+     and the buttons can never disagree, exactly like the MapKit logo (which
+     takes the same numbers via setInsets, read off the probe). */
+  :global(.maplibregl-ctrl-bottom-left) {
+    margin-bottom: var(--ion-safe-area-bottom);
+    margin-left: var(--ion-safe-area-left);
+  }
+
+  :global(.maplibregl-ctrl-attrib) {
+    box-sizing: border-box;
+    max-width: calc(100vw - 6rem);
+    white-space: normal;
+    line-height: 1.4;
+    font-size: 0.68rem;
+    color: rgba(235, 238, 242, 0.8);
+    background: none;
+    text-shadow: 0 0 3px rgba(0, 0, 0, 0.9);
+  }
+
+  :global(.maplibregl-ctrl-attrib) a {
+    color: rgba(235, 238, 242, 0.92);
+  }
+
+  /* The live map is light; white credit text vanishes there, and the OSM
+     attribution is a license obligation, not decoration. */
+  &.light :global(.maplibregl-ctrl-attrib) {
+    color: rgba(35, 40, 46, 0.85);
+    text-shadow: 0 0 3px rgba(255, 255, 255, 0.9);
+  }
+
+  &.light :global(.maplibregl-ctrl-attrib) a {
+    color: rgba(35, 40, 46, 0.95);
+  }
+
+  &.light :global(.maplibregl-ctrl-attrib) summary {
+    filter: opacity(0.7);
+  }
+
+  :global(.maplibregl-ctrl-attrib) summary {
+    filter: invert(1) opacity(0.85);
+  }
+}
+
+/* Right-anchored by default, off the map's resolved insets via the shared
+   var (the map owns which edges are live, so an embedded map's buttons
+   don't inset from a home indicator that a tab bar already covers). Ionic
+   sets it on <html> from env(), so it is 0 wherever there is no device inset. */
+.overlay {
+  position: absolute;
+  right: calc(0.9rem + var(--ion-safe-area-right));
+  bottom: calc(0.9rem + var(--ion-safe-area-bottom));
+  display: flex;
+  flex-direction: column;
+  gap: 0.6rem;
+  z-index: 10;
+}
+
+.button {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 3.25rem;
+  height: 3.25rem;
+  font-size: 1.5rem;
+  color: var(--map-chip-text);
+  background: var(--map-chip-bg);
+  border: 6px solid transparent;
+  border-radius: 12px;
+
+  &:active {
+    background: var(--map-chip-bg-active);
+  }
+
+  &[data-active="true"] {
+    color: var(--wingover-accent);
+    border-color: var(--wingover-accent);
+  }
+}

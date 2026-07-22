@@ -27,6 +27,7 @@ import {
 import { isTauri } from "../../engine/platform";
 import { resetSyncedData } from "../../storage/db";
 import * as sync from "../../sync";
+import { cx } from "../cx";
 import FlyPage from "../flight/FlyPage";
 import FlySplash from "../flight/FlySplash";
 import { useFlights } from "../logbook/useFlights";
@@ -39,6 +40,8 @@ import { useSyncSheet } from "../sync/SyncSheets";
 import { useLogOut } from "../sync/useLogOut";
 import { useCanRecord } from "../useCanRecord";
 import LogbookSection from "./LogbookSection";
+
+import styles from "./DesktopShell.module.css";
 
 /**
  * The desktop app is its own shell: plain react-router (no Ionic outlet),
@@ -53,11 +56,11 @@ import LogbookSection from "./LogbookSection";
 // the sheet via describe(), so all three agree — the chip no longer paints every
 // non-On/Off state (a normal in-flight pause, a dormant account, an error) amber.
 const RAIL_TONE_CLASS: Record<SyncTone, string> = {
-  on: "sync-on",
-  off: "sync-off",
-  warn: "sync-warn",
-  error: "sync-error",
-  neutral: "sync-neutral",
+  on: styles.on,
+  off: styles.off,
+  warn: styles.warn,
+  error: styles.error,
+  neutral: styles.neutral,
 };
 
 export default function DesktopShell() {
@@ -100,10 +103,10 @@ function DesktopFrame() {
   visited.add(section);
 
   return (
-    <div className="desktop-shell">
-      <nav className="desktop-rail">
+    <div className={styles.shell}>
+      <nav className={styles.rail} data-testid="desktop-rail">
         <a
-          className="rail-brand"
+          className={styles.brand}
           href="/"
           aria-label="About Wingover"
           data-testid="rail-brand"
@@ -112,8 +115,8 @@ function DesktopFrame() {
         </a>
         {canRecord && (
           <NavLink
-            className="rail-link"
-            activeClassName="active"
+            className={styles.link}
+            activeClassName={styles.active}
             to="/fly"
             data-testid="rail-fly"
           >
@@ -122,8 +125,8 @@ function DesktopFrame() {
           </NavLink>
         )}
         <NavLink
-          className="rail-link"
-          activeClassName="active"
+          className={styles.link}
+          activeClassName={styles.active}
           to="/logbook"
           data-testid="rail-logbook"
         >
@@ -131,8 +134,8 @@ function DesktopFrame() {
           <span>Logbook</span>
         </NavLink>
         <NavLink
-          className="rail-link"
-          activeClassName="active"
+          className={styles.link}
+          activeClassName={styles.active}
           to="/plan"
           data-testid="rail-plan"
         >
@@ -140,8 +143,8 @@ function DesktopFrame() {
           <span>Plan</span>
         </NavLink>
         <NavLink
-          className="rail-link"
-          activeClassName="active"
+          className={styles.link}
+          activeClassName={styles.active}
           to="/settings"
           data-testid="rail-settings"
         >
@@ -150,9 +153,9 @@ function DesktopFrame() {
         </NavLink>
         <RailSync />
       </nav>
-      <main className="desktop-main">
+      <main className={styles.main} data-testid="desktop-main">
         {canRecord && visited.has("fly") && (
-          <section className="shell-section" hidden={section !== "fly"}>
+          <section className={styles.section} hidden={section !== "fly"}>
             {/* The splash backdrop behind the frameless surface — same
                 element the phone frame uses as its content background. */}
             <FlySplash />
@@ -160,17 +163,17 @@ function DesktopFrame() {
           </section>
         )}
         {visited.has("logbook") && (
-          <section className="shell-section" hidden={section !== "logbook"}>
+          <section className={styles.section} hidden={section !== "logbook"}>
             <LogbookSection />
           </section>
         )}
         {visited.has("plan") && (
-          <section className="shell-section" hidden={section !== "plan"}>
+          <section className={styles.section} hidden={section !== "plan"}>
             <PlanPage />
           </section>
         )}
         {visited.has("settings") && (
-          <section className="shell-section" hidden={section !== "settings"}>
+          <section className={styles.section} hidden={section !== "settings"}>
             <SettingsRoutes />
           </section>
         )}
@@ -206,7 +209,7 @@ function RailSync() {
   return (
     <>
       <button
-        className={`rail-link rail-sync ${RAIL_TONE_CLASS[tone]}`}
+        className={cx(styles.link, styles.sync, RAIL_TONE_CLASS[tone])}
         aria-label={`Sync: ${off ? "Off" : label}`}
         data-testid="rail-sync"
         onClick={(e) => {
@@ -236,10 +239,10 @@ function RailSync() {
         onDidDismiss={() => setMenuOpen(false)}
         side="right"
         alignment="end"
-        className="rail-sync-pop"
+        className={styles.pop}
       >
         <IonList lines="none">
-          <IonItem className="rail-sync-state">
+          <IonItem className={styles.state}>
             <IonLabel>
               <h3>Sync: {label}</h3>
               {detail && <p>{detail}</p>}

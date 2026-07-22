@@ -93,22 +93,22 @@ const scenarios = {
     flight: true,
     async after(p) {
       await p
-        .locator(".flight-row")
+        .locator('[data-testid="flight-row"]')
         .first()
         .click()
         .catch(() => {});
       await p.waitForTimeout(900);
     },
     specs: {
-      rail: ".desktop-rail",
-      railBrand: ".rail-brand",
-      paneHeader: ".pane-header",
-      paneScroll: ".logbook-pane-scroll",
-      paneItem: ".logbook-pane ion-item",
-      seatMapOverlay: ".seat-map .map-overlay",
-      seatProbe: ".seat-map .map-inset-probe",
-      seatCard: ".seat-card",
-      seatCardItem: ".seat-card ion-item",
+      rail: '[data-testid="desktop-rail"]',
+      railBrand: '[data-testid="rail-brand"]',
+      paneHeader: '[data-testid="pane-header"]',
+      paneScroll: '[data-testid="logbook-pane-scroll"]',
+      paneItem: '[data-testid="logbook-pane"] ion-item',
+      seatMapOverlay: '[data-testid="seat-map"] [data-testid="map-overlay"]',
+      seatProbe: '[data-testid="seat-map"] [data-testid="map-inset-probe"]',
+      seatCard: '[data-testid="seat-card"]',
+      seatCardItem: '[data-testid="seat-card"] ion-item',
     },
   },
   "d-logbook-replay": {
@@ -117,24 +117,22 @@ const scenarios = {
     flight: true,
     async after(p) {
       await p
-        .locator(".flight-row")
+        .locator('[data-testid="flight-row"]')
         .first()
         .click()
         .catch(() => {});
       await p.waitForTimeout(900);
       await p
-        .locator(
-          "[data-testid=detail-play], .map-cell-tl button, .map-cluster button",
-        )
+        .locator('[data-testid="replay-start"]')
         .first()
         .click()
         .catch(() => {});
       await p.waitForTimeout(700);
     },
     specs: {
-      seatProbe: ".seat-map .map-inset-probe",
-      seatMapOverlay: ".seat-map .map-overlay",
-      scrub: ".replay-dock",
+      seatProbe: '[data-testid="seat-map"] [data-testid="map-inset-probe"]',
+      seatMapOverlay: '[data-testid="seat-map"] [data-testid="map-overlay"]',
+      scrub: '[data-testid="replay-dock"]',
     },
   },
   "d-logbook-full-replay": {
@@ -145,13 +143,13 @@ const scenarios = {
     flight: true,
     async after(p) {
       await p
-        .locator(".flight-row")
+        .locator('[data-testid="flight-row"]')
         .first()
         .click()
         .catch(() => {});
       await p.waitForTimeout(900);
       await p
-        .locator(".map-cell-tl button, .map-cluster button")
+        .locator('[data-testid="replay-start"]')
         .first()
         .click()
         .catch(() => {});
@@ -164,20 +162,20 @@ const scenarios = {
       await p.waitForTimeout(700);
     },
     specs: {
-      seatProbe: ".seat-map .map-inset-probe",
-      seatMapOverlay: ".seat-map .map-overlay",
-      scrub: ".replay-dock",
+      seatProbe: '[data-testid="seat-map"] [data-testid="map-inset-probe"]',
+      seatMapOverlay: '[data-testid="seat-map"] [data-testid="map-overlay"]',
+      scrub: '[data-testid="replay-dock"]',
     },
   },
   "d-plan": {
     vp: { width: 1200, height: 800 },
     url: "/plan?map-style=blank",
     specs: {
-      planProbe: ".plan-map .map-inset-probe",
-      planOverlay: ".plan-map .map-overlay",
-      planPane: ".plan-pane",
-      planPaneRows: ".plan-pane-rows",
-      planPaneEmpty: ".plan-pane-empty",
+      planProbe: '[data-testid="plan-map"] [data-testid="map-inset-probe"]',
+      planOverlay: '[data-testid="plan-map"] [data-testid="map-overlay"]',
+      planPane: '[data-testid="plan-pane"]',
+      planPaneRows: '[data-testid="plan-pane-rows"]',
+      planPaneEmpty: '[data-testid="plan-pane-empty"]',
     },
   },
   "d-settings": {
@@ -187,9 +185,9 @@ const scenarios = {
       await p.waitForTimeout(500);
     },
     specs: {
-      firstItem: ".desktop-main ion-item",
-      header: ".desktop-main ion-toolbar",
-      content: ".desktop-main ion-content",
+      firstItem: '[data-testid="desktop-main"] ion-item',
+      header: '[data-testid="desktop-main"] ion-toolbar',
+      content: '[data-testid="desktop-main"] ion-content',
     },
   },
   "d-allflights": {
@@ -200,10 +198,10 @@ const scenarios = {
       await p.waitForTimeout(800);
     },
     specs: {
-      probe: ".all-flights-map .map-inset-probe",
-      overlay: ".all-flights-map .map-overlay",
-      legend: ".composite-legend",
-      header: ".desktop-main ion-toolbar",
+      probe: '[data-testid="all-flights-map"] [data-testid="map-inset-probe"]',
+      overlay: '[data-testid="all-flights-map"] [data-testid="map-overlay"]',
+      legend: '[data-testid="composite-legend"]',
+      header: '[data-testid="desktop-main"] ion-toolbar',
     },
   },
   "m-logbook": {
@@ -238,7 +236,7 @@ const scenarios = {
     flight: true,
     async after(p) {
       await p
-        .locator(".flight-row")
+        .locator('[data-testid="flight-row"]')
         .first()
         .click()
         .catch(() => {});
@@ -246,8 +244,9 @@ const scenarios = {
     },
     specs: {
       header: "ion-header ion-toolbar",
-      probe: ".flight-detail-map .map-inset-probe",
-      overlay: ".flight-detail-map .map-overlay",
+      probe:
+        '[data-testid="flight-detail-map"] [data-testid="map-inset-probe"]',
+      overlay: '[data-testid="flight-detail-map"] [data-testid="map-overlay"]',
       formItem: "ion-content ion-item",
     },
   },
@@ -257,7 +256,7 @@ const scenarios = {
     flight: true,
     async after(p) {
       await p
-        .locator(".flight-row")
+        .locator('[data-testid="flight-row"]')
         .first()
         .click()
         .catch(() => {});
@@ -270,8 +269,9 @@ const scenarios = {
       await p.waitForTimeout(900);
     },
     specs: {
-      probe: ".flight-detail-map .map-inset-probe",
-      overlay: ".flight-detail-map .map-overlay",
+      probe:
+        '[data-testid="flight-detail-map"] [data-testid="map-inset-probe"]',
+      overlay: '[data-testid="flight-detail-map"] [data-testid="map-overlay"]',
     },
   },
   "m-detail-full-replay": {
@@ -280,7 +280,7 @@ const scenarios = {
     flight: true,
     async after(p) {
       await p
-        .locator(".flight-row")
+        .locator('[data-testid="flight-row"]')
         .first()
         .click()
         .catch(() => {});
@@ -292,25 +292,26 @@ const scenarios = {
         .catch(() => {});
       await p.waitForTimeout(900);
       await p
-        .locator(".map-cell-tr button, .map-cluster button")
+        .locator('[data-testid="replay-start"]')
         .first()
         .click()
         .catch(() => {});
       await p.waitForTimeout(700);
     },
     specs: {
-      probe: ".flight-detail-map .map-inset-probe",
-      overlay: ".flight-detail-map .map-overlay",
-      scrub: ".replay-dock",
+      probe:
+        '[data-testid="flight-detail-map"] [data-testid="map-inset-probe"]',
+      overlay: '[data-testid="flight-detail-map"] [data-testid="map-overlay"]',
+      scrub: '[data-testid="replay-dock"]',
     },
   },
   "m-plan": {
     vp: { width: 844, height: 390 },
     url: "/plan?map-style=blank",
     specs: {
-      probe: ".plan-map .map-inset-probe",
-      overlay: ".plan-map .map-overlay",
-      pill: ".plan-distance",
+      probe: '[data-testid="plan-map"] [data-testid="map-inset-probe"]',
+      overlay: '[data-testid="plan-map"] [data-testid="map-overlay"]',
+      pill: '[data-testid="plan-distance"]',
     },
   },
   "m-settings": {
@@ -332,9 +333,9 @@ const scenarios = {
       await p.waitForTimeout(800);
     },
     specs: {
-      probe: ".all-flights-map .map-inset-probe",
-      overlay: ".all-flights-map .map-overlay",
-      legend: ".composite-legend",
+      probe: '[data-testid="all-flights-map"] [data-testid="map-inset-probe"]',
+      overlay: '[data-testid="all-flights-map"] [data-testid="map-overlay"]',
+      legend: '[data-testid="composite-legend"]',
       header: "ion-header ion-toolbar",
     },
   },

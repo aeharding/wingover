@@ -1,0 +1,89 @@
+/* The settings-page family's shared vocabulary (SettingsPage, UnitsPage,
+   MapProviderPage, and the sync modal's SelfHostPage form). Voyager's
+   settings idiom (aeharding/voyager, features/settings/shared/formatting):
+   uppercase muted section headers above inset lists, muted helper notes
+   below them. Values match Voyager's so the two apps read as siblings. */
+
+.listHeader {
+  font-size: 0.8em;
+  margin: 32px 0 -8px 32px;
+  text-transform: uppercase;
+  color: var(--ion-color-medium);
+}
+
+.helperText {
+  margin: 0 32px;
+  font-size: 0.875em;
+  color: var(--ion-color-medium);
+}
+
+/* iOS grouped-table look, both schemes. Light: systemGroupedBackground
+   (#f2f2f7) behind white cells — Ionic's default leaves both white, so the
+   cards vanish. The page-level var also reaches the toolbar (theme.css
+   points it at the page background), matching a native settings bar.
+   Dark: the dark palette leaves --ion-item-background at pure black, so
+   the cards vanish on the black page; the cell color is the app's own
+   tile shade — Apple's systemGray6 (#1c1c1e) reads too bright against
+   Wingover's near-black surfaces. `.list-inset` (the class Ionic stamps),
+   NOT `[inset]`: React sets the prop as a DOM property, so an attribute
+   selector never matches. */
+.page {
+  --ion-background-color: #f2f2f7;
+  --ion-background-color-rgb: 242, 242, 247;
+  /* The page HOST deliberately paints NOTHING. Ionic's iOS large-title
+     transition slides each page's CONTENT and headers while the ion-page
+     hosts stay parked full-viewport - an opaque host background here sat
+     on top of the entering page and blanked its rows for the whole back
+     transition (the regression). The strip behind the at-rest
+     transparent toolbar is covered the way the Ionic docs do it instead:
+     the content is fullscreen and paints its own --background under the
+     bar. */
+
+  :root:global(.ion-palette-dark) & {
+    --ion-background-color: #000000;
+    --ion-background-color-rgb: 0, 0, 0;
+  }
+}
+
+.content ion-list:global(.list-inset) {
+  --ion-item-background: #ffffff;
+}
+
+/* Content-level grouped gray for .content hosts that are NOT a .page —
+   the sync modal's self-host form. On the Settings pages this resolves to
+   the same value the page var already provides; in dark it defers back to
+   the ambient background (the page's black, or the modal's step-gray
+   sheet), so only the light scheme actually changes. */
+.content {
+  --background: #f2f2f7;
+
+  :root:global(.ion-palette-dark) & {
+    --background: var(--ion-background-color);
+  }
+
+  :root:global(.ion-palette-dark) & ion-list:global(.list-inset) {
+    --ion-item-background: var(--wingover-tile);
+  }
+
+  /* Desktop: a centered column, not a stretched phone (moved from the shell —
+     this is the family's own desktop presentation). */
+  @media (min-width: 992px) {
+    /* The list is a centered column, inboard of both device edges, so its
+       ion-items must not inset off the notch (left is already 0 from
+       .desktop-main; this clears the right). Desktop-only: on the phone the
+       settings list is full-bleed and SHOULD clear the notch, so no consume. */
+    --ion-safe-area-right: 0px;
+
+    ion-list:global(.list-inset),
+    .listHeader,
+    .helperText,
+    ion-header[collapse="condense"] {
+      max-width: 640px;
+      margin-inline: auto;
+    }
+
+    .listHeader {
+      padding-left: 32px;
+    }
+  }
+}

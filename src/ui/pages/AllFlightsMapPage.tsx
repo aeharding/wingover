@@ -24,7 +24,8 @@ import useMapView from "../map/useMapView";
 import ViewToggle from "../map/ViewToggle";
 import { useIsDesktop } from "../useIsDesktop";
 
-import "./AllFlightsMapPage.css";
+import mapCss from "../map/map.module.css";
+import styles from "./AllFlightsMapPage.module.css";
 
 const OLDEST_HUE = 290;
 const NEWEST_HUE = 175;
@@ -143,13 +144,13 @@ export default function AllFlightsMapPage() {
         {/* Full-screen on phone (below the header, so the map keeps the
             device insets — bottom home indicator, landscape notch); a pane
             in the desktop shell, where env() is 0. Nothing to consume. */}
-        <div className="all-flights-map">
+        <div className={styles.root} data-testid="all-flights-map">
           <MapCanvas base={view} appearance={appearance} onReady={handleReady}>
-            <div className="composite-legend">
+            <div className={styles.legend} data-testid="composite-legend">
               Oldest → newest
-              <div className="legend-bar" />
+              <div className={styles.bar} />
             </div>
-            <div className="map-overlay">
+            <div className={mapCss.overlay} data-testid="map-overlay">
               {map && <CompassButton map={map} />}
               {map?.supportsSatellite && (
                 <ViewToggle view={view} onChange={changeView} />

@@ -47,11 +47,14 @@ import {
   formatSpeed,
 } from "../../flight/format";
 import { useAppearance } from "../appTheme";
+import { cx } from "../cx";
+import { endpointMarker } from "../logbook/endpointMarker";
 import { useFlightDoc } from "../logbook/useFlightDoc";
 import { useFlightDrafts } from "../logbook/useFlightDrafts";
 import { afterNextFrame } from "../map/afterFrame";
 import CompassButton from "../map/CompassButton";
 import MapCanvas from "../map/MapCanvas";
+import MapCluster from "../map/MapCluster";
 import {
   ACCENT_CYAN,
   boundsOf,
@@ -67,14 +70,9 @@ import { useReplayDrawer } from "../replay/useReplayDrawer";
 import { useSettings } from "../settings/SettingsContext";
 import { useFlightActions } from "../useFlightActions";
 
-import "./FlightDetailPage.css";
-
-function endpointMarker(className: string, testId: string): HTMLElement {
-  const element = document.createElement("div");
-  element.className = className;
-  element.setAttribute("data-testid", testId);
-  return element;
-}
+import detail from "../logbook/detail.module.css";
+import mapCss from "../map/map.module.css";
+import styles from "./FlightDetailPage.module.css";
 
 // The expand/collapse toggle animates as a "magic move": the map surface
 // carries a view-transition-name (FlightDetailPage.css), so
@@ -418,7 +416,7 @@ export default function FlightDetailPage() {
       {
         id: "launch",
         at: [launch.longitude, launch.latitude],
-        el: endpointMarker("endpoint-marker launch", "launch-marker"),
+        el: endpointMarker("launch", "launch-marker"),
         // Launch green (darker than the bright plan green so the white glyph
         // reads) / landing red, for native (MapKit) pins. The glyph (MapKit's
         // glyphText) is a white start ▶ / stop ■ instead of the default dot.
@@ -429,7 +427,7 @@ export default function FlightDetailPage() {
       {
         id: "landing",
         at: [landing.longitude, landing.latitude],
-        el: endpointMarker("endpoint-marker landing", "landing-marker"),
+        el: endpointMarker("landing", "landing-marker"),
         color: "#e0483a",
         label: "■",
         glyphColor: "#ffffff",
@@ -503,10 +501,7 @@ export default function FlightDetailPage() {
             to breathe below. The frame only reserves the space; the map
             surface itself lives in mapPortal and is reparented here (inline)
             or into the body-level overlay below (full screen). */}
-        <div
-          className="flight-detail-map-frame"
-          data-testid="flight-detail-map-frame"
-        >
+        <div className={styles.frame} data-testid="flight-detail-map-frame">
           {!mapFull && <OutPortal node={mapPortal} />}
         </div>
         {flight && stats && (
@@ -603,14 +598,14 @@ export default function FlightDetailPage() {
           controls. Inline, the map-tap-layer owns tap-to-expand. */}
       <InPortal node={mapPortal}>
         <div
-          className={`flight-detail-map${mapFull ? " map-full" : ""}`}
+          className={cx(styles.map, mapFull && styles.full)}
           data-testid="flight-detail-map"
         >
           {/* The map region; fullscreen slides the replay pane open below
               it (the region flexes above). The consume class rides here,
               on the region only, so the replay drawer (a sibling below)
               keeps its own home-indicator inset while the map drops it. */}
-          <div className={`detail-map-region ${regionConsume}`}>
+          <div className={cx(styles.region, regionConsume)}>
             <MapCanvas
               base={view}
               appearance={appearance}
@@ -621,12 +616,12 @@ export default function FlightDetailPage() {
                 FlightDetailPage.css). */}
             {!mapFull && (
               <div
-                className="map-tap-layer"
+                className={styles.tapLayer}
                 data-testid="map-tap-layer"
                 onClick={expandMap}
               />
             )}
-            <div className="map-overlay">
+            <div className={mapCss.overlay} data-testid="map-overlay">
               {/* Inline preview: the north reset floats (there is no
                   cluster inline). It can't actually appear — the preview
                   is a non-interactive, north-up scroll-through — but the
@@ -634,44 +629,38 @@ export default function FlightDetailPage() {
                   cluster's TL cell instead (below). */}
               {!mapFull && map && !replay.isOpen && <CompassButton map={map} />}
               {mapFull ? (
-                /* The app-wide cluster cells (.map-cluster, right-edge
+                /* The app-wide corner cluster (MapCluster, right-edge
                    anchored like the fly page): the TL "compass slot" (the
                    north reset while the pane is closed, track-up while it
                    is open — they never coexist), follow TR (play borrows
                    TR while the pane is closed), globe BL, the exit verb
                    BR. Empty cells collapse: live = the fly page's exact
                    box, closed = an L hugging the corner, parked = the
-                   bottom pair. The TL cell renders even when empty so the
-                   compass lands on the SAME ROW as play, not floating a
-                   row above it. */
-                <div className="map-cluster">
-                  <div className="map-cell-tl">
-                    {replay.trackUpButton ??
-                      (map && !replay.isOpen ? (
-                        <CompassButton map={map} />
-                      ) : null)}
-                  </div>
-                  {(replay.followButton ?? replay.playButton) && (
-                    <div className="map-cell-tr">
-                      {replay.followButton ?? replay.playButton}
-                    </div>
-                  )}
-                  {map?.supportsSatellite && (
-                    <div className="map-cell-bl">
+                   bottom pair. TL passes null, never undefined, so the
+                   cell renders even when empty and the compass lands on
+                   the SAME ROW as play, not floating a row above it. */
+                <MapCluster
+                  tl={
+                    replay.trackUpButton ??
+                    (map && !replay.isOpen ? <CompassButton map={map} /> : null)
+                  }
+                  tr={(replay.followButton ?? replay.playButton) || undefined}
+                  bl={
+                    map?.supportsSatellite ? (
                       <ViewToggle view={view} onChange={changeView} />
-                    </div>
-                  )}
-                  <div className="map-cell-br">
+                    ) : undefined
+                  }
+                  br={
                     <button
-                      className="map-button"
+                      className={mapCss.button}
                       aria-label="Shrink map"
                       data-testid="map-shrink"
                       onClick={collapseMap}
                     >
                       <IonIcon icon={contractOutline} />
                     </button>
-                  </div>
-                </div>
+                  }
+                />
               ) : (
                 map?.supportsSatellite && (
                   <ViewToggle view={view} onChange={changeView} />
@@ -682,7 +671,7 @@ export default function FlightDetailPage() {
                 lives behind it: expand, then the floating play button. */}
             {!mapFull && (
               <button
-                className="map-expand-pill"
+                className={styles.expandPill}
                 aria-label="Expand map"
                 data-testid="map-expand"
                 onClick={expandMap}
@@ -706,7 +695,7 @@ export default function FlightDetailPage() {
       {mapFull &&
         createPortal(
           <div
-            className="flight-detail-map-fullroot"
+            className={styles.fullroot}
             data-testid="flight-detail-map-fullroot"
           >
             <OutPortal node={mapPortal} />
@@ -729,7 +718,7 @@ function Stat({
   return (
     <IonItem lines={lines}>
       <IonLabel>{label}</IonLabel>
-      <IonNote slot="end" className="detail-stat-value">
+      <IonNote slot="end" className={detail.statValue}>
         {value}
       </IonNote>
     </IonItem>

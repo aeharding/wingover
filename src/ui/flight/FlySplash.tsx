@@ -1,8 +1,12 @@
+import { cx } from "../cx";
+
+import styles from "./FlySplash.module.css";
+
 /**
  * The splash backdrop: the app icon's artwork distilled to its motifs and
  * reused VERBATIM — the exact canopy, fanned flight-path curves, sun,
  * clouds and star, in the icon's own 1024 coordinate space — rendered
- * near-transparent over the scene gradient (.fly-splash carries it; dusk
+ * near-transparent over the scene gradient (.flySplash carries it; dusk
  * by default, day-side when the palette is light). Reusing the designer's
  * paths keeps the lines attached to the canopy exactly as the icon draws
  * them. Star/clouds are nudged toward the center so the portrait slice
@@ -19,7 +23,7 @@ export default function FlySplash() {
   return (
     <svg
       slot="fixed"
-      className="fly-splash"
+      className={styles.splash}
       data-testid="fly-splash"
       viewBox="0 0 1024 1024"
       preserveAspectRatio="xMidYMid slice"
@@ -29,7 +33,7 @@ export default function FlySplash() {
           the sun's own viewBox coordinates, so it tracks the slice crop
           on every aspect ratio (a CSS radial on the element box would
           drift off the sun as the crop changes). Light scheme only —
-          FlyPage.css hides it at dusk. */}
+          the module hides it at dusk. */}
       <defs>
         <radialGradient
           id="idle-sun-glow"
@@ -38,12 +42,12 @@ export default function FlySplash() {
           r="740"
           gradientUnits="userSpaceOnUse"
         >
-          {/* Stop colors live in FlyPage.css like every other motif:
+          {/* Stop colors live in the module like every other motif:
               daylight gold at noon strength, a low sunset ember at dusk. */}
-          <stop className="idle-glow-core" offset="0" />
-          <stop className="idle-glow-mid" offset="0.28" />
-          <stop className="idle-glow-fringe" offset="0.55" />
-          <stop className="idle-glow-end" offset="1" />
+          <stop className={styles.glowCore} offset="0" />
+          <stop className={styles.glowMid} offset="0.28" />
+          <stop className={styles.glowFringe} offset="0.55" />
+          <stop className={styles.glowEnd} offset="1" />
         </radialGradient>
         {/* The sun BEHIND the wing: a heavy gaussian copy of the disc,
             masked to the canopy silhouette (the diffuse bloom light
@@ -106,7 +110,7 @@ export default function FlySplash() {
           so every userSpace mask/gradient moves with its subject. */}
       <g transform="translate(0 40)">
         <rect
-          className="idle-glow"
+          className={styles.glow}
           x="0"
           y="0"
           width="1024"
@@ -114,10 +118,10 @@ export default function FlySplash() {
           fill="url(#idle-sun-glow)"
         />
         {/* Nudged below the large-title band (per Alex). */}
-        <circle className="idle-star" cx="322" cy="266" r="14" />
-        <circle className="idle-star" cx="470" cy="204" r="9" />
+        <circle className={styles.star} cx="322" cy="266" r="14" />
+        <circle className={styles.star} cx="470" cy="204" r="9" />
         <rect
-          className="idle-cloud"
+          className={styles.cloud}
           x="470"
           y="690"
           width="180"
@@ -125,7 +129,7 @@ export default function FlySplash() {
           rx="13"
         />
         <rect
-          className="idle-cloud"
+          className={styles.cloud}
           x="560"
           y="742"
           width="110"
@@ -135,14 +139,14 @@ export default function FlySplash() {
         {/* The sharp disc exists only OUTSIDE the wing (the mask cuts the
           canopy's silhouette out of it); the bloom below fills it in. */}
         <circle
-          className="idle-sun"
+          className={styles.sun}
           cx="348"
           cy="812"
           r="135"
           mask="url(#idle-canopy-inverse)"
         />
         <g transform="translate(25 -20)">
-          <g className="idle-lines" fill="none">
+          <g className={styles.lines} fill="none">
             <path d="M 103 927 Q 143 1014 213 1080" />
             <path d="M 185 856 Q 241 978 328 1080" />
             <path d="M 267 784 Q 335 941 435 1080" />
@@ -156,7 +160,7 @@ export default function FlySplash() {
             <path d="M 911 206 Q 981 343 1080 461" />
           </g>
           <path
-            className="idle-canopy"
+            className={styles.canopy}
             transform="translate(10 -20)"
             d="M 60 935 A 1415 1415 0 0 1 1005 90 A 40198 40198 0 0 1 60 935 Z"
           />
@@ -166,7 +170,7 @@ export default function FlySplash() {
           the wing. */}
         <g mask="url(#idle-canopy-window)">
           <circle
-            className="idle-sun idle-sun-veiled"
+            className={cx(styles.sun, styles.sunVeiled)}
             cx="348"
             cy="812"
             r="135"

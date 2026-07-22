@@ -1,0 +1,33 @@
+/* The playback dock's own row: transport controls under the readouts.
+   Chassis (frame + readout row) in dock.module.css. */
+.transport {
+  display: flex;
+  align-items: center;
+  gap: 0.6rem;
+
+  /* The speed control is its label. Scoped under .transport ON PURPOSE:
+     .speed shares its element with the map contract's .button and a
+     single-class tie falls to bundle order (prod emitted the contract
+     later, inflating this to 1.5rem). */
+  .speed {
+    font-size: 1.05rem;
+    font-weight: 700;
+    font-variant-numeric: tabular-nums;
+  }
+}
+
+.time {
+  color: var(--replay-ink);
+  font-size: 1.05rem;
+  font-weight: 600;
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+}
+
+.timeTotal {
+  color: var(--replay-muted);
+}
+
+.spring {
+  flex: 1;
+}

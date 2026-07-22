@@ -22,8 +22,6 @@ import type {
 import { ACCENT_CYAN } from "../types";
 import { loadMapKit } from "./loader";
 
-import "./mapkit.css";
-
 const REVEAL_FALLBACK_MS = 4000;
 const ZERO_INSETS: Insets = { top: 0, bottom: 0, left: 0, right: 0 };
 

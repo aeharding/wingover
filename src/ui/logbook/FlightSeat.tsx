@@ -26,9 +26,11 @@ import {
   formatSpeed,
 } from "../../flight/format";
 import { useAppearance } from "../appTheme";
+import { cx } from "../cx";
 import { afterNextFrame } from "../map/afterFrame";
 import CompassButton from "../map/CompassButton";
 import MapCanvas from "../map/MapCanvas";
+import MapCluster from "../map/MapCluster";
 import {
   ACCENT_CYAN,
   boundsOf,
@@ -43,15 +45,13 @@ import ViewToggle from "../map/ViewToggle";
 import { useReplayDrawer } from "../replay/useReplayDrawer";
 import { useSettings } from "../settings/SettingsContext";
 import { useFlightActions } from "../useFlightActions";
+import { endpointMarker } from "./endpointMarker";
 import { useFlightDoc } from "./useFlightDoc";
 import { useFlightDrafts } from "./useFlightDrafts";
 
-function endpointMarker(className: string, testId: string): HTMLElement {
-  const element = document.createElement("div");
-  element.className = className;
-  element.setAttribute("data-testid", testId);
-  return element;
-}
+import mapCss from "../map/map.module.css";
+import detail from "./detail.module.css";
+import seat from "./FlightSeat.module.css";
 
 /**
  * The desktop split's detail seat: one PERSISTENT component whose id swaps
@@ -98,7 +98,7 @@ export default function FlightSeat({
   const skipArrivalFrameRef = useRef(false);
   // The replay pane slides open under the seat map; closes with a
   // selection swap or when the section is URL-hidden.
-  const replay = useReplayDrawer(map, track, flight, active);
+  const replay = useReplayDrawer(map, track, flight, active, true);
 
   // The sheet portals outside the section's subtree; if the section goes
   // URL-hidden while it is up, it must fold with it.
@@ -154,7 +154,7 @@ export default function FlightSeat({
   }
 
   // Full screen means NO chrome: the list pane, seat header and card hide
-  // via the body class (see desktop.css), the tab rail goes with it, and
+  // via the body class (see the shell + seat modules), the tab rail goes with it, and
   // the PWA sheds browser chrome via the Fullscreen API. Reversed in
   // cleanup so navigating away can't strand anything.
   useEffect(() => {
@@ -259,7 +259,7 @@ export default function FlightSeat({
       {
         id: "launch",
         at: [launch.longitude, launch.latitude],
-        el: endpointMarker("endpoint-marker launch", "launch-marker"),
+        el: endpointMarker("launch", "launch-marker"),
         color: "#22a04a",
         label: "▶",
         glyphColor: "#ffffff",
@@ -267,7 +267,7 @@ export default function FlightSeat({
       {
         id: "landing",
         at: [landing.longitude, landing.latitude],
-        el: endpointMarker("endpoint-marker landing", "landing-marker"),
+        el: endpointMarker("landing", "landing-marker"),
         color: "#e0483a",
         label: "■",
         glyphColor: "#ffffff",
@@ -304,63 +304,63 @@ export default function FlightSeat({
   const stats = flight?.stats;
 
   return (
-    <div className="flight-seat">
+    <div className={seat.root}>
       {/* No header bar: the map runs to the top of the seat; the title,
           date, and options live in the floating card. Embedded, the map is
           at the shell's right/top/bottom device edges (it keeps those) but
           the rail + pane cover its left (zeroed by .desktop-main); full
           screen the rail hides and body.flight-map-full restores the left
-          edge for the whole seat (see desktop.css). When the scrub docks
+          edge for the whole seat (see FlightSeat.module.css). When the scrub docks
           below, IT owns the bottom, so the map consumes it (the drawer is a
           sibling and keeps its own). */}
       <div
-        className={`seat-map${replay.isOpen ? " consume-bottom" : ""}`}
+        className={cx(seat.map, replay.isOpen && "consume-bottom")}
         data-testid="seat-map"
       >
         <MapCanvas base={view} appearance={appearance} onReady={handleReady}>
-          {/* The app-wide cluster cells (.map-cluster), MIRRORED for the
+          {/* The app-wide corner cluster (MapCluster), MIRRORED for the
               seat's bottom-LEFT anchor: the edge column (follow/play
               over the exit verb) hugs the left edge, the TR "compass
               slot" (north reset while the pane is closed, track-up while
               it is open) and globe sit inboard. Empty cells collapse —
-              no state leaves buttons floating off the anchor, and the
-              compass shares the top row instead of floating above it. */}
-          <div className="map-overlay">
-            <div className="map-cluster">
-              {(replay.followButton ?? replay.playButton) && (
-                <div className="map-cell-tl">
-                  {replay.followButton ?? replay.playButton}
-                </div>
-              )}
-              <div className="map-cell-tr">
-                {replay.trackUpButton ??
-                  (map && !replay.isOpen ? <CompassButton map={map} /> : null)}
-              </div>
-              <div className="map-cell-bl">
+              no state leaves buttons floating off the anchor — while TR
+              passes null, never undefined, so the compass shares the top
+              row instead of floating above it. */}
+          <div
+            className={cx(mapCss.overlay, seat.overlay)}
+            data-testid="map-overlay"
+          >
+            <MapCluster
+              tl={(replay.followButton ?? replay.playButton) || undefined}
+              tr={
+                replay.trackUpButton ??
+                (map && !replay.isOpen ? <CompassButton map={map} /> : null)
+              }
+              bl={
                 <button
-                  className="map-button"
+                  className={mapCss.button}
                   aria-label={mapFull ? "Shrink map" : "Expand map"}
                   data-testid="map-expand"
                   onClick={() => setMapFull(!mapFull)}
                 >
                   <IonIcon icon={mapFull ? contractOutline : expandOutline} />
                 </button>
-              </div>
-              {map?.supportsSatellite && (
-                <div className="map-cell-br">
+              }
+              br={
+                map?.supportsSatellite ? (
                   <ViewToggle view={view} onChange={changeView} />
-                </div>
-              )}
-            </div>
+                ) : undefined
+              }
+            />
           </div>
         </MapCanvas>
         {flight && stats && (
           <div
-            className={`seat-card${cardOpen ? "" : " collapsed"}`}
+            className={cx(seat.card, !cardOpen && seat.collapsed)}
             data-testid="seat-card"
           >
             <div
-              className="seat-card-header"
+              className={seat.cardHeader}
               onClick={(event) => {
                 // The whole title row is the collapse toggle; the buttons
                 // in it keep their own jobs.
@@ -370,7 +370,7 @@ export default function FlightSeat({
             >
               {/* The WHEN as the header: the name is already the editable
                   field below and the highlighted row in the list. */}
-              <div className="seat-card-title">
+              <div className={seat.cardTitle}>
                 {new Date(flight.startedAt).toLocaleString(undefined, {
                   month: "short",
                   day: "numeric",
@@ -380,7 +380,7 @@ export default function FlightSeat({
                 })}
               </div>
               <button
-                className="seat-card-collapse"
+                className={seat.cardCollapse}
                 aria-label="Options"
                 data-testid="detail-options"
                 onClick={openOptions}
@@ -388,7 +388,7 @@ export default function FlightSeat({
                 <IonIcon icon={ellipsisHorizontal} />
               </button>
               <button
-                className="seat-card-collapse"
+                className={seat.cardCollapse}
                 aria-label={cardOpen ? "Collapse details" : "Expand details"}
                 onClick={() => setCardOpen(!cardOpen)}
               >
@@ -498,7 +498,7 @@ function Stat({
   return (
     <IonItem lines={lines}>
       <IonLabel>{label}</IonLabel>
-      <IonNote slot="end" className="detail-stat-value">
+      <IonNote slot="end" className={detail.statValue}>
         {value}
       </IonNote>
     </IonItem>

@@ -21,7 +21,7 @@ import { useHistory } from "react-router-dom";
 import { getSetting, setSetting } from "../../storage/local";
 import { useIsDesktop } from "../useIsDesktop";
 
-import "./SettingsPage.css";
+import settings from "./settings.module.css";
 
 /**
  * The map engine, pilot-chosen (Apple checkmark-list idiom, see UnitsPage).
@@ -54,7 +54,7 @@ export default function MapProviderPage() {
   }
 
   return (
-    <IonPage className="settings-page">
+    <IonPage className={settings.page}>
       <IonHeader>
         <IonToolbar>
           <IonButtons slot="start">
@@ -70,7 +70,7 @@ export default function MapProviderPage() {
           <IonTitle>Map Provider</IonTitle>
         </IonToolbar>
       </IonHeader>
-      <IonContent className="settings-content">
+      <IonContent className={settings.content}>
         <IonList inset>
           <IonRadioGroup
             value={backend}
@@ -87,7 +87,7 @@ export default function MapProviderPage() {
             </IonItem>
           </IonRadioGroup>
         </IonList>
-        <div className="settings-helper-text">
+        <div className={settings.helperText}>
           {backend === "maplibre"
             ? "Streets are free via OpenFreeMap."
             : "Apple maps, satellite imagery included."}
@@ -107,7 +107,7 @@ export default function MapProviderPage() {
                 />
               </IonItem>
             </IonList>
-            <div className="settings-helper-text">
+            <div className={settings.helperText}>
               A free key from maptiler.com adds satellite view.
             </div>
           </>

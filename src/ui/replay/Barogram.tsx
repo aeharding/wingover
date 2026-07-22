@@ -12,10 +12,11 @@ import {
 import type { Fix } from "../../engine/types";
 import { formatAirtime, formatDuration } from "../../flight/format";
 import NativeIcon from "../components/NativeIcon";
+import { cx } from "../cx";
 import { barogramPaths } from "./barogramPath";
 import type { TimelineView } from "./timelineMemory";
 
-import "./Barogram.css";
+import styles from "./Barogram.module.css";
 
 const HEIGHT = 72;
 const STEP_MS = 10_000;
@@ -316,10 +317,10 @@ export default function Barogram({
     simTime <= w1;
 
   return (
-    <div className="barogram-frame">
+    <div className={styles.frame}>
       <div
         ref={hostRef}
-        className="barogram"
+        className={styles.chart}
         data-testid="barogram"
         data-zoomed={timeWindow ? "true" : "false"}
         data-panning={panning ? "true" : "false"}
@@ -431,19 +432,19 @@ export default function Barogram({
       >
         {paths && (
           <svg
-            className="barogram-svg"
+            className={styles.svg}
             viewBox={`0 0 ${width} ${HEIGHT}`}
             preserveAspectRatio="none"
             aria-hidden="true"
           >
-            <path className="barogram-area" d={paths.area} />
-            <path className="barogram-outline" d={paths.outline} />
+            <path className={styles.area} d={paths.area} />
+            <path className={styles.outline} d={paths.outline} />
           </svg>
         )}
         {playhead && (
           <div
             ref={playheadRef}
-            className="barogram-playhead"
+            className={styles.playhead}
             data-testid="barogram-playhead"
             aria-hidden="true"
           />
@@ -453,19 +454,19 @@ export default function Barogram({
             {/* The regions the brackets cut away: grayscaled (the profile
                 loses its cyan under them) and dimmed. */}
             <div
-              className="barogram-cut"
+              className={styles.cut}
               aria-hidden="true"
               style={{ left: 0, width: `${xFor(kept.startMs)}px` }}
             />
             <div
-              className="barogram-cut"
+              className={styles.cut}
               aria-hidden="true"
               style={{ left: `${xFor(kept.endMs)}px`, right: 0 }}
             />
             {/* The yellow frame joining the two brackets around the kept
                 window (the iOS-Photos trim idiom). */}
             <div
-              className="barogram-kept"
+              className={styles.kept}
               aria-hidden="true"
               style={{
                 left: `${xFor(kept.startMs)}px`,
@@ -476,17 +477,17 @@ export default function Barogram({
         )}
         {mark && width >= 2 && mark.value >= w0 && mark.value <= w1 && (
           <div
-            className={`barogram-mark ${mark.kind}`}
+            className={cx(styles.mark, styles[mark.kind])}
             data-testid={`clip-mark-${mark.kind}`}
             aria-hidden="true"
             style={{ transform: `translateX(${xFor(mark.value)}px)` }}
           >
-            <div className="barogram-mark-grip" />
+            <div className={styles.grip} />
           </div>
         )}
         {cursorVisible && (
           <div
-            className="barogram-cursor"
+            className={styles.cursor}
             data-testid="timeline-cursor"
             style={{ transform: `translateX(${xFor(simTime)}px)` }}
             onPointerDown={(event) => {
@@ -520,12 +521,12 @@ export default function Barogram({
         )}
         <div
           ref={bubbleRef}
-          className={scrubbing ? "barogram-bubble visible" : "barogram-bubble"}
+          className={cx(styles.bubble, scrubbing && styles.visible)}
           aria-hidden="true"
         />
         {timeWindow && (
           <button
-            className="barogram-reset"
+            className={styles.reset}
             aria-label="Show whole flight"
             data-testid="timeline-reset"
             onPointerDown={(event) => event.stopPropagation()}
@@ -539,15 +540,13 @@ export default function Barogram({
           layout (hidden unzoomed): appearing on zoom grew the pane and
           made the map above jump. */}
       <div
-        className={
-          timeWindow ? "barogram-overview zoomed" : "barogram-overview"
-        }
+        className={cx(styles.overview, timeWindow && styles.zoomed)}
         data-testid="barogram-overview"
         aria-hidden="true"
       >
         {timeWindow && (
           <div
-            className="barogram-overview-window"
+            className={styles.window}
             data-testid="barogram-overview-window"
             style={{
               left: `${(((w0 - t0) / spanMs) * 100).toFixed(2)}%`,

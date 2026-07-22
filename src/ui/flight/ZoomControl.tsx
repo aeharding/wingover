@@ -2,7 +2,7 @@ import { useEffect, useRef, useState } from "react";
 
 import type { MapView } from "../map/types";
 
-import "./ZoomControl.css";
+import styles from "./ZoomControl.module.css";
 
 // Zoom lives on the very right EDGE of the screen: press anywhere along the
 // edge and slide — down zooms in, up zooms out — relative to where the drag
@@ -95,7 +95,7 @@ export default function ZoomControl({ map, onInput }: ZoomControlProps) {
 
   return (
     <div
-      className={active ? "zoom-strip active" : "zoom-strip"}
+      className={styles.strip}
       data-active={active}
       role="slider"
       aria-label="Zoom"
@@ -139,10 +139,10 @@ export default function ZoomControl({ map, onInput }: ZoomControlProps) {
       {/* The gauge: hidden until touched. A rounded triangle rides the rail,
           pointing at the current zoom — top of the rail is fully out, bottom
           fully in. */}
-      <div className="zoom-gauge" aria-hidden="true">
-        <div className="zoom-gauge-rail">
+      <div className={styles.gauge} aria-hidden="true">
+        <div className={styles.rail}>
           <div
-            className="zoom-gauge-thumb"
+            className={styles.thumb}
             data-testid="zoom-gauge-thumb"
             ref={thumbRef}
           >

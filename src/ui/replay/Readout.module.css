@@ -1,0 +1,33 @@
+/* One in-flight stat (Readout.tsx), shared by the playback and clip docks.
+   Color tokens (--replay-*) cascade from the host dock. */
+.readout {
+  min-width: 0;
+}
+
+.label {
+  font-size: 0.58rem;
+  letter-spacing: 0.05em;
+  text-transform: uppercase;
+  color: var(--replay-muted);
+  white-space: nowrap;
+}
+
+.value {
+  font-size: 1.02rem;
+  font-weight: 700;
+  font-variant-numeric: tabular-nums;
+  color: var(--replay-ink);
+  white-space: nowrap;
+
+  .cyan & {
+    color: var(--replay-cyan);
+  }
+
+  .green & {
+    color: var(--replay-green);
+  }
+
+  .yellow & {
+    color: var(--replay-yellow);
+  }
+}

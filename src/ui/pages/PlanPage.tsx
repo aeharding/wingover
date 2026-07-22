@@ -37,7 +37,8 @@ import ViewToggle from "../map/ViewToggle";
 import { useSettings } from "../settings/SettingsContext";
 import { useIsDesktop } from "../useIsDesktop";
 
-import "./PlanPage.css";
+import mapCss from "../map/map.module.css";
+import styles from "./PlanPage.module.css";
 
 // The plan's pins ARE the planned waypoints, so the route + pins are green to
 // match how they read in flight (see PLANNED_COLOR).
@@ -54,10 +55,10 @@ function pinSvg(color: string, label: string): string {
 // bump. Rendered on every backend.
 function handleEl(): HTMLElement {
   const wrapper = document.createElement("div");
-  wrapper.className = "midpoint-handle";
+  wrapper.className = styles.midpoint;
   wrapper.setAttribute("aria-hidden", "true");
   const dot = document.createElement("div");
-  dot.className = "midpoint-handle-dot";
+  dot.className = styles.midpointDot;
   wrapper.appendChild(dot);
   return wrapper;
 }
@@ -283,7 +284,7 @@ export default function PlanPage() {
       // Route order (1, 2, 3…): shows the sequence and thus the direction.
       const label = String(index + 1);
       const element = document.createElement("button");
-      element.className = "pin-marker";
+      element.className = styles.pin;
       element.setAttribute("aria-label", `Pin ${label}`);
       element.setAttribute("data-testid", "pin-marker");
       element.setAttribute("data-lat", String(pin.latitude));
@@ -337,12 +338,15 @@ export default function PlanPage() {
   return (
     <IonPage>
       <IonContent scrollY={false}>
-        <div className="plan-split">
+        <div className={styles.split}>
           {isDesktop && (
-            <aside className="plan-pane" data-testid="plan-pane">
-              <div className="plan-pane-rows">
+            <aside className={styles.pane} data-testid="plan-pane">
+              <div className={styles.rows} data-testid="plan-pane-rows">
                 {pins.length === 0 ? (
-                  <div className="plan-pane-empty">
+                  <div
+                    className={styles.paneEmpty}
+                    data-testid="plan-pane-empty"
+                  >
                     Long-press the map to drop a pin: launches, LZs, fuel stops,
                     hazards.
                   </div>
@@ -350,7 +354,7 @@ export default function PlanPage() {
                   pins.map((pin, index) => (
                     <button
                       key={pin.id}
-                      className="plan-pane-row"
+                      className={styles.row}
                       onClick={() =>
                         map?.moveTo(
                           {
@@ -361,7 +365,7 @@ export default function PlanPage() {
                         )
                       }
                     >
-                      <span className="dot">{index + 1}</span>
+                      <span className={styles.dot}>{index + 1}</span>
                       <span>
                         <h3>{pin.name || `Pin ${index + 1}`}</h3>
                         {pin.notes && <p>{pin.notes}</p>}
@@ -371,10 +375,10 @@ export default function PlanPage() {
                 )}
               </div>
               {routeMeters > 0 && (
-                <div className="plan-pane-route">
+                <div className={styles.route}>
                   <span>Route: {formatDistance(routeMeters, units)}</span>
                   <button
-                    className="plan-pane-clear"
+                    className={styles.clear}
                     data-testid="plan-clear-route"
                     onClick={openRouteSheet}
                   >
@@ -389,16 +393,16 @@ export default function PlanPage() {
               keep the landscape notch. The bottom is owned by the tab bar on
               the phone (consumed in PlanPage.css) and is the device edge on
               desktop (no tab bar). */}
-          <div className="plan-map" data-testid="plan-map">
+          <div className={styles.map} data-testid="plan-map">
             <MapCanvas
               base={view}
               appearance={appearance}
               onReady={handleReady}
             >
-              <div className="map-overlay">
+              <div className={mapCss.overlay} data-testid="map-overlay">
                 {map && <CompassButton map={map} />}
                 <button
-                  className="map-button"
+                  className={mapCss.button}
                   aria-label="Center on me"
                   onClick={locate}
                 >
@@ -414,7 +418,7 @@ export default function PlanPage() {
                   #118's canonical form; keeps the sim-only iOS test green). */}
               {routeMeters > 0 && (
                 <button
-                  className="plan-distance"
+                  className={styles.distance}
                   data-testid="plan-distance"
                   onClick={openRouteSheet}
                 >

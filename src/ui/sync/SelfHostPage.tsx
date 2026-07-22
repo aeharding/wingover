@@ -14,6 +14,10 @@ import {
 import { useEffect, useRef, useState } from "react";
 
 import * as sync from "../../sync";
+import { cx } from "../cx";
+
+import settings from "../pages/settings.module.css";
+import styles from "./sync.module.css";
 
 /**
  * The own-server form — the Log In rail's page (SYNC-UX.md: self-host is a
@@ -100,9 +104,11 @@ export function SelfHostPage({
           (white on white). Content-level only: the page var (.settings-page)
           would also repaint this sheet's DARK background, which must keep
           the modal's step-gray. */}
-      <IonContent className="settings-content">
+      <IonContent className={settings.content}>
         {problem && (
-          <p className="sync-error-message sync-form-problem">{problem}</p>
+          <p className={cx(styles.errorMessage, styles.formProblem)}>
+            {problem}
+          </p>
         )}
         {/* inset: margin + rounded corners in iOS mode — the grouped-card form
             iOS Settings uses. Hand-rolled padding around a plain list fights it
@@ -168,7 +174,7 @@ export function SelfHostPage({
             />
           </IonItem>
         </IonList>
-        <IonNote className="sync-fine-print sync-form-note">
+        <IonNote className={cx(styles.finePrint, styles.formNote)}>
           Any CouchDB. Wingover will only communicate with this backend.
         </IonNote>
       </IonContent>

@@ -19,7 +19,7 @@ import {
 import type { Flight } from "../../storage/db";
 import { useFlightActions } from "../useFlightActions";
 
-import "./FlightList.css";
+import styles from "./FlightList.module.css";
 
 interface FlightListProps {
   flights: Flight[];
@@ -119,16 +119,16 @@ export default function FlightList({
                       style injection order, which differs dev vs prod.
                       A plain slotted div is outside the label's scope
                       class and the fight cannot exist. */}
-                  <div className="flight-row" data-testid="flight-row">
-                    <div className="flight-row-id">
+                  <div className={styles.row} data-testid="flight-row">
+                    <div className={styles.identity}>
                       <h2>{title}</h2>
                       {sub && <p>{sub}</p>}
                     </div>
-                    <div className="flight-row-stats">
-                      <div className="flight-row-duration">
+                    <div className={styles.stats}>
+                      <div className={styles.duration}>
                         {formatAirtime(flight.stats.durationSeconds)}
                       </div>
-                      <div className="flight-row-distance">
+                      <div className={styles.distance}>
                         {formatDistance(flight.stats.distanceMeters, units)}
                       </div>
                     </div>

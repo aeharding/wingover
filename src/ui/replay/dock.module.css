@@ -1,0 +1,46 @@
+/* The dock family's shared chassis: the playback dock and the clip dock are
+   siblings in the drawer, one frame + readout row between them. Hosts pick
+   the presentation by prop, never by reaching into descendants from outside
+   (the old desktop.css .flight-seat overrides live here as the .seat
+   variant — same-file, visible in the family's contract). */
+
+.dock {
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+  /* Top padding clears the drawer pull's lower half (it straddles the
+     pane's top edge, dipping ~0.9rem in) — on a phone the pull is centered
+     right over the middle readout's label. The dock is the bottom-most,
+     right-most surface (phone full screen; desktop seat) so it clears the
+     home indicator (bottom) and, in landscape, the notch (left/right) — off
+     the resolved --ion-safe-area-* so a consumed edge (desktop left) reads
+     0 instead of the raw device value. */
+  padding: 1.1rem calc(0.75rem + var(--ion-safe-area-right))
+    calc(0.5rem + var(--ion-safe-area-bottom))
+    calc(0.75rem + var(--ion-safe-area-left));
+  /* SOLID: the pane overlays nothing (it sits in flow below the map),
+     and a translucent fill only made the drawer pull composite to a
+     mismatched shade. Shares --replay-pane-bg with the drawer pull. */
+  background: var(--replay-pane-bg);
+}
+
+/* The in-flight stats row: live readouts (Readout.module.css); elapsed time
+   sits below in the transport. */
+.readouts {
+  display: flex;
+  justify-content: space-between;
+  gap: 0.6rem;
+  min-width: 0;
+}
+
+/* The desktop seat's presentation: wider inline gutters, and the readouts
+   pack left at a fixed rhythm instead of stretching across the pane. */
+.seat {
+  padding-inline: calc(1.1rem + var(--ion-safe-area-left))
+    calc(1.1rem + var(--ion-safe-area-right));
+
+  .readouts {
+    justify-content: flex-start;
+    gap: 2.2rem;
+  }
+}

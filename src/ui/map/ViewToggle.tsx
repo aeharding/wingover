@@ -3,6 +3,8 @@ import { globeOutline, mapOutline } from "ionicons/icons";
 import NativeIcon from "../components/NativeIcon";
 import type { MapViewKind } from "./config";
 
+import mapCss from "./map.module.css";
+
 interface ViewToggleProps {
   view: MapViewKind;
   onChange: (view: MapViewKind) => void;
@@ -12,7 +14,7 @@ export default function ViewToggle({ view, onChange }: ViewToggleProps) {
   const next: MapViewKind = view === "street" ? "satellite" : "street";
   return (
     <button
-      className="map-button"
+      className={mapCss.button}
       aria-label={next === "satellite" ? "Satellite view" : "Street view"}
       onClick={() => onChange(next)}
     >

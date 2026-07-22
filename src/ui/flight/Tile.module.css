@@ -1,0 +1,58 @@
+/* PPG-Flyer treatment: near-opaque black rows, small plain labels, big
+   saturated values, packed TIGHT — in flight the block must read at a
+   glance and cede as little map as possible. Sunlight readability over
+   looks; a translucent panel over bright imagery washes out. (The
+   instruments GRID hosting these lives with FlyPage — it is the page's
+   layout, not the tile's.) */
+.tile {
+  position: relative;
+  background: rgba(8, 9, 10, 0.9);
+  padding: 0.1rem 0.6rem 0.15rem;
+  min-width: 0;
+  line-height: 1;
+}
+
+.label {
+  font-size: 0.72rem;
+  color: #c2c7cd;
+}
+
+.value {
+  font-size: clamp(1.4rem, 7.3vw, 1.95rem);
+  font-weight: 800;
+  color: #fff;
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+  min-width: 0;
+  overflow: hidden;
+
+  /* In-flight stat values in wide-gamut display-p3 (see --stat-* in theme.css). */
+  .cyan & {
+    color: var(--stat-cyan);
+  }
+
+  .green & {
+    color: var(--stat-green);
+  }
+
+  .yellow & {
+    color: var(--stat-yellow);
+  }
+}
+
+.wide {
+  grid-column: 1 / -1;
+}
+
+.hasIcon {
+  padding-right: clamp(3rem, 12vw, 4rem);
+}
+
+.icon {
+  position: absolute;
+  top: 50%;
+  right: 0.9rem;
+  translate: 0 -50%;
+  display: flex;
+  align-items: center;
+}

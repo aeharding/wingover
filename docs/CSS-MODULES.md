@@ -67,5 +67,69 @@ shouldn't. This mirrors Voyager's `theme/*.css` + `globalCssOverrides.css`.
 
 ## Status
 
-This PR: toolchain plus the `NativeIcon` pilot. The full component migration
-lands next as the architecture pass above.
+DONE. 33 modules, one plain file: `theme.css` (the `:root` token/palette/
+Ionic-variable layer — the one thing modules can't and shouldn't scope).
+Conventions the migration settled on:
+
+- **Short names**: scoping is the module's job, so it's `styles.sun`,
+  `styles.row`, `styles.button` — never `styles.idleSun` or
+  `styles.flightRowId`.
+- **Cross-module selectors import the class**: `@value button from
+"./map.module.css";` then `.controls :global(.button)` — the compiled
+  selector carries the _other module's_ hash. Never hard-code a global
+  string for a class a module owns.
+- **`:global()` only for classes we don't own**: the palette class
+  (`.ion-palette-dark`), Ionic-stamped classes (`.list-inset`), library
+  DOM (`.maplibregl-*`, `.mk-*`), and app-level body state
+  (`body.flight-map-full`).
+- **Variant props over reach-ins**: a host never styles another
+  component's internals by descendant selector; the component exposes a
+  variant (`<ReplayDock seat>`) or takes a placement `className`
+  (`<LiveTrackMap className={styles.liveMap}>`).
+- **Never rely on same-element cross-module ties.** Two single classes
+  from different modules on one element tie on specificity, and the
+  winner is bundle emission order — which DIFFERS between dev (import
+  order) and prod (chunk concatenation). Adversarial review caught three
+  shipped-neutral-in-prod regressions from exactly this (the red Stop
+  button, the seat overlay anchor, the speed button size). When a local
+  class overrides a contract class's property on the same element, scope
+  it under a local ancestor (`.controls .stop`, `.map .overlay`) so
+  descendant specificity decides, order-independently. Corollary: visual
+  verification of cascade behavior must run against the PROD bundle
+  (`vite build` + preview or a computed-style harness), never the dev
+  server.
+- **Nesting**: modules use native CSS nesting (`&`), which Vite lowers to
+  flat rules. Two provable edges: a fold is only byte-equivalent when the
+  parent is a simple compound (a complex parent desugars via `:is()` — the
+  one such case, `.lines path`, stays flat on purpose); and `@value`
+  cross-imports currently make Vite re-emit the imported module's CSS once
+  per importer (byte-identical duplicates, harmless because ties are banned,
+  ~2.5KB pre-gzip; known quirk, revisit on Vite upgrades).
+- **Types**: typed-css-modules writes a `*.module.css.d.ts` per module —
+  GENERATED, gitignored, produced by `postinstall`/`prebuild` (or
+  `pnpm generate:csstypes`). A missed or renamed class is a tsc error.
+  Caveat: if the d.ts are absent, tsc silently falls back to Vite's loose
+  ambient `{ [k: string]: string }` — which is why generation is wired
+  into the lifecycle and check:css fails on a missing pair.
+- **Tests/harness**: e2e and `e2e/inset-probe.mjs` locate by
+  `data-testid`/roles only — hashed class names never appear in tests.
+
+## Enforcement
+
+The conventions above hold by CI, not by memory:
+
+- `pnpm check:css` (`scripts/check-css-conventions.mjs`, a CI step) fails
+  on: a plain `.css` outside the token layer; a `:global(.x)` naming a
+  class that is neither an allowlisted external (Ionic/MapLibre/MapKit/
+  app-state) nor a same-file `@value` import; an `@value` whose target
+  file or class doesn't exist; a module without its committed `.d.ts` (or
+  an orphan `.d.ts`); a module nothing imports.
+- Types are generated, not committed: `postinstall` runs tcm on every
+  install (including CI), and check:css's pairing check fails the build
+  if generation didn't happen.
+- `scripts/css-equiv.py` is the refactor-verification tool: build at the
+  base ref, save `dist/assets/index-*.css`, build at the head, then
+  `python3 scripts/css-equiv.py before.css after.css`. It proves rule
+  multiset equality (hash-normalized) and flags any same-subject cascade
+  reorder for manual adjudication. Use it for any change that moves CSS
+  around; cascade semantics only exist in the prod bundle.

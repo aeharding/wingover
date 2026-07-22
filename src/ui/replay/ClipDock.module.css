@@ -1,11 +1,13 @@
-.clip-transport {
+/* The clip dock's own row: cancel / preview / apply under the readouts.
+   Chassis (frame + readout row) in dock.module.css. */
+.transport {
   display: flex;
   align-items: center;
   gap: 0.6rem;
 }
 
 /* Glove-first text buttons: the transport's 3.25rem control height. */
-.clip-button {
+.button {
   min-height: 3.25rem;
   padding: 0 1.1rem;
   border-radius: 12px;
@@ -15,19 +17,19 @@
   font-size: 1rem;
   font-weight: 600;
   white-space: nowrap;
-}
 
-.clip-button:disabled {
-  opacity: 0.4;
-}
+  &:disabled {
+    opacity: 0.4;
+  }
 
-.clip-button.accent {
-  color: var(--replay-yellow);
-  border-color: var(--replay-yellow);
+  &.accent {
+    color: var(--replay-yellow);
+    border-color: var(--replay-yellow);
+  }
 }
 
 /* The live kept-window preview, centered between the buttons. */
-.clip-preview {
+.preview {
   flex: 1;
   min-width: 0;
   text-align: center;

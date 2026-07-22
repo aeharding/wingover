@@ -3,7 +3,7 @@ import { createContext, type ReactNode, useContext, useState } from "react";
 
 import { SyncSheet } from "./SyncSheet";
 
-import "./SyncSheets.css";
+import styles from "./sync.module.css";
 
 /**
  * One sheet for everything sync (SYNC-UX.md): a modal, not a page, so it can
@@ -40,7 +40,7 @@ export function SyncSheetsProvider({ children }: { children: ReactNode }) {
     <SyncSheetContext.Provider value={present}>
       {children}
       <IonModal
-        className="sync-modal"
+        className={styles.modal}
         isOpen={open}
         onDidDismiss={close}
         presentingElement={presenting ?? undefined}
