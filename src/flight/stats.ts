@@ -32,19 +32,22 @@ export function haversineMeters(
   return 2 * EARTH_RADIUS * Math.asin(Math.sqrt(h));
 }
 
+/** A flight with no fixes, or a doc that predates/omits the stats field. */
+export const EMPTY_STATS: FlightStats = {
+  durationSeconds: 0,
+  distanceMeters: 0,
+  launchAltitude: 0,
+  maxAltitude: 0,
+  minAltitude: 0,
+  maxSpeed: 0,
+  averageSpeed: 0,
+  maxClimbRate: 0,
+  minClimbRate: 0,
+};
+
 export function computeStats(track: Fix[]): FlightStats {
   if (track.length === 0) {
-    return {
-      durationSeconds: 0,
-      distanceMeters: 0,
-      launchAltitude: 0,
-      maxAltitude: 0,
-      minAltitude: 0,
-      maxSpeed: 0,
-      averageSpeed: 0,
-      maxClimbRate: 0,
-      minClimbRate: 0,
-    };
+    return { ...EMPTY_STATS };
   }
 
   const first = track[0];

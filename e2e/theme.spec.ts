@@ -40,14 +40,19 @@ test("ground map restyles live when the scheme flips", async ({ page }) => {
   await page.locator("#tab-button-plan").click();
 
   // Light scheme -> light basemap (map-light also styles the attribution).
-  await expect(page.locator(".map-container")).toHaveClass(/map-light/);
+  await expect(page.getByTestId("map-container")).toHaveAttribute(
+    "data-appearance",
+    "light",
+  );
 
   // The OS theme flips mid-session: appTheme re-renders and MapCanvas
   // re-creates the backend — no reload involved.
   await page.emulateMedia({ colorScheme: "dark" });
-  await expect(page.locator(".map-container")).not.toHaveClass(/map-light/, {
-    timeout: 10_000,
-  });
+  await expect(page.getByTestId("map-container")).toHaveAttribute(
+    "data-appearance",
+    "dark",
+    { timeout: 10_000 },
+  );
 });
 
 test("satellite forces the dark palette app-wide", async ({ page }) => {
@@ -85,7 +90,8 @@ test("the in-flight surface renders identically in both schemes", async ({
   const armedColor = () =>
     page.evaluate(
       () =>
-        getComputedStyle(document.querySelector(".armed-message h2")!).color,
+        getComputedStyle(document.querySelector('[data-testid="armed"] h2')!)
+          .color,
     );
   expect(await armedColor()).toBe("rgb(255, 255, 255)");
 
@@ -100,9 +106,9 @@ test("the in-flight surface renders identically in both schemes", async ({
       const style = (selector: string) =>
         getComputedStyle(document.querySelector(selector)!);
       return {
-        tileCyan: style(".tile.cyan .value").color,
-        chipBg: style(".fly-content .map-button").backgroundColor,
-        chipText: style(".fly-content .map-button").color,
+        tileCyan: style('[data-testid="instrument-agl"]').color,
+        chipBg: style('button[aria-label="Track up"]').backgroundColor,
+        chipText: style('button[aria-label="Track up"]').color,
       };
     });
 
@@ -121,7 +127,7 @@ test("settings shows the large-title header on a grouped page", async ({
   await page.goto("/?map-style=blank");
   await page.locator("#tab-button-settings").click();
   await expect(
-    page.locator('.settings-content ion-title[size="large"]'),
+    page.getByTestId("settings-content").locator('ion-title[size="large"]'),
   ).toHaveText("Settings");
   // The grouped gray lives on the CONTENT (fullscreen, painting under
   // the at-rest transparent toolbar) and the page HOST paints NOTHING:
@@ -130,9 +136,12 @@ test("settings shows the large-title header on a grouped page", async ({
   // entering page's rows for the whole back transition. Regression
   // guard for exactly that.
   const bg = await page.evaluate(() => ({
-    host: getComputedStyle(document.querySelector(".settings-page")!)
-      .backgroundColor,
-    content: getComputedStyle(document.querySelector(".settings-content")!)
+    host: getComputedStyle(
+      document.querySelector('[data-testid="settings-page"]')!,
+    ).backgroundColor,
+    content: getComputedStyle(
+      document.querySelector('[data-testid="settings-content"]')!,
+    )
       .getPropertyValue("--background")
       .trim(),
   }));
@@ -144,7 +153,7 @@ test("a scheme flip restyles the map IN PLACE: same instance, same camera", asyn
   page,
 }) => {
   await page.goto("/plan?map-style=blank");
-  const mapEl = page.locator(".map-container");
+  const mapEl = page.getByTestId("map-container");
   await expect(mapEl).toBeVisible();
 
   // The native MapLibre handle (stashed by the adapter). Stamp a probe
@@ -174,7 +183,7 @@ test("a scheme flip restyles the map IN PLACE: same instance, same camera", asyn
   // its camera untouched.
   await page.emulateMedia({ colorScheme: "dark" });
   await expect(html(page)).toHaveClass(/ion-palette-dark/);
-  await expect(mapEl).not.toHaveClass(/map-light/);
+  await expect(mapEl).toHaveAttribute("data-appearance", "dark");
   const after = await mapEl.evaluate((el) => {
     const m = (el as Handle).__map!;
     const c = m.getCenter();
@@ -203,7 +212,7 @@ test("a provider re-create hands the camera to the successor; pages skip the re-
     page.getByRole("button", { name: "Start Flight" }),
   ).toBeVisible();
   await page.getByText("Logbook", { exact: true }).click();
-  await page.locator(".flight-row").click();
+  await page.getByTestId("flight-row").click();
   await expect(page.getByText("Max altitude")).toBeVisible();
 
   // Wander away from the framed flight (the sim flies near Madison; this
@@ -217,7 +226,9 @@ test("a provider re-create hands the camera to the successor; pages skip the re-
       getZoom(): number;
     };
   };
-  const mapEl = page.locator(".flight-detail-map .map-container");
+  const mapEl = page
+    .getByTestId("flight-detail-map")
+    .getByTestId("map-container");
   await expect
     .poll(() => mapEl.evaluate((el) => Boolean((el as Handle).__map)))
     .toBe(true);

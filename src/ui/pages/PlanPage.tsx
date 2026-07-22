@@ -389,7 +389,7 @@ export default function PlanPage() {
               keep the landscape notch. The bottom is owned by the tab bar on
               the phone (consumed in PlanPage.css) and is the device edge on
               desktop (no tab bar). */}
-          <div className="plan-map">
+          <div className="plan-map" data-testid="plan-map">
             <MapCanvas
               base={view}
               appearance={appearance}

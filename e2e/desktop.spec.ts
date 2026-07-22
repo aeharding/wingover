@@ -54,7 +54,7 @@ test("the logbook splits: list stays while the flight shows", async ({
   // The pane's totals strip.
   await expect(page.getByText("Airtime")).toBeVisible();
 
-  await page.locator(".flight-row").first().click();
+  await page.getByTestId("flight-row").first().click();
   await expect(page).toHaveURL(/\/logbook\/recorded-/);
   // Split: the list (totals strip) and the detail (stats) share the screen.
   await expect(page.getByText("Airtime")).toBeVisible();
@@ -82,7 +82,7 @@ test("selection swaps the seat without remounting the list or the map", async ({
   }
 
   await page.getByTestId("rail-logbook").click();
-  const rows = page.locator(".flight-row");
+  const rows = page.getByTestId("flight-row");
   await rows.first().click();
   await expect(page).toHaveURL(/\/logbook\/recorded-/);
   const firstUrl = page.url();
@@ -90,10 +90,11 @@ test("selection swaps the seat without remounting the list or the map", async ({
   // Tag the live map AND the stats card; if either remounts on selection,
   // its tag dies with it.
   await page
-    .locator(".seat-map .map-container")
+    .getByTestId("seat-map")
+    .getByTestId("map-container")
     .evaluate((el) => el.setAttribute("data-alive", "1"));
   await page
-    .locator(".seat-card")
+    .getByTestId("seat-card")
     .evaluate((el) => el.setAttribute("data-alive", "1"));
 
   await rows.nth(1).click();
@@ -105,16 +106,20 @@ test("selection swaps the seat without remounting the list or the map", async ({
   await expect(page).not.toHaveURL(firstUrl);
   // Same elements, still tagged: the seat swapped data, not DOM.
   await expect(
-    page.locator('.seat-map .map-container[data-alive="1"]'),
+    page.locator(
+      '[data-testid="seat-map"] [data-testid="map-container"][data-alive="1"]',
+    ),
   ).toBeVisible();
-  await expect(page.locator('.seat-card[data-alive="1"]')).toBeVisible();
+  await expect(
+    page.locator('[data-testid="seat-card"][data-alive="1"]'),
+  ).toBeVisible();
 });
 
 test("the list pane resizes by its edge and remembers the width", async ({
   page,
 }) => {
   await page.goto("/?map-style=blank");
-  const pane = page.locator(".logbook-pane");
+  const pane = page.getByTestId("logbook-pane");
   await expect(pane).toBeVisible();
   const before = (await pane.boundingBox())!.width;
 
@@ -185,7 +190,7 @@ test("the plan page grows a pin pane at desktop width", async ({ page }) => {
 
 test("the plan pane's Clear route button wipes every pin", async ({ page }) => {
   await page.goto("/plan?map-style=blank");
-  const canvas = page.locator(".plan-map .map-container");
+  const canvas = page.getByTestId("plan-map").getByTestId("map-container");
   await expect(canvas).toBeVisible();
   await page.waitForTimeout(500);
 
@@ -226,7 +231,7 @@ test("the seat's play button slides the replay pane open, playing; stop closes i
   ).toBeVisible();
 
   await page.getByTestId("rail-logbook").click();
-  await page.locator(".flight-row").first().click();
+  await page.getByTestId("flight-row").first().click();
 
   // Closed by default: just a floating play button on the seat map.
   await expect(page.getByTestId("replay-dock")).toBeHidden();
@@ -235,7 +240,8 @@ test("the seat's play button slides the replay pane open, playing; stop closes i
   // Open: the pane slides up and playback starts on the SEAT's own map.
   const seatDisplay = () =>
     page
-      .locator(".seat-map .map-container")
+      .getByTestId("seat-map")
+      .getByTestId("map-container")
       .evaluate(
         (el) =>
           (el as HTMLElement & { __display?: { lng: number; lat: number } })
@@ -278,7 +284,7 @@ test("the seat's play button slides the replay pane open, playing; stop closes i
   // Parked = no cursors: the graph keeps its shape, the playhead is gone,
   // and the camera locks retire with the glyph (following nothing would
   // pin the zoom anchor to an empty point).
-  await expect(page.locator(".barogram-playhead")).toHaveCount(0);
+  await expect(page.getByTestId("barogram-playhead")).toHaveCount(0);
   await expect(page.getByTestId("replay-follow")).toBeHidden();
   await expect(page.getByTestId("replay-trackup")).toBeHidden();
 
@@ -311,7 +317,7 @@ test("the open replay pane survives flight switches and reloads", async ({
     ).toBeVisible();
   }
   await page.getByTestId("rail-logbook").click();
-  await page.locator(".flight-row").first().click();
+  await page.getByTestId("flight-row").first().click();
   await page.getByTestId("replay-start").click();
   await expect(page.getByTestId("replay-dock")).toBeVisible();
 
@@ -337,7 +343,7 @@ test("the open replay pane survives flight switches and reloads", async ({
     "aria-label",
     "Play",
   );
-  await expect(page.locator(".barogram-playhead")).toHaveCount(0);
+  await expect(page.getByTestId("barogram-playhead")).toHaveCount(0);
 
   // Speed is a device preference too: bump it before the reload.
   await expect(page.getByTestId("replay-speed")).toHaveText("30×");
@@ -384,7 +390,7 @@ test("the seat trims a flight from the options sheet", async ({ page }) => {
   ).toBeVisible();
 
   await page.getByTestId("rail-logbook").click();
-  await page.locator(".flight-row").first().click();
+  await page.getByTestId("flight-row").first().click();
 
   // Prime a live player first: open the pane, pause, park the playhead
   // mid-flight. The clip editors must borrow and RETURN this player.
@@ -396,7 +402,7 @@ test("the seat trims a flight from the options sheet", async ({ page }) => {
   await page.mouse.move(chart.x + chart.width * 0.5, y);
   await page.mouse.down();
   await page.mouse.up();
-  await expect(page.locator(".barogram-playhead")).toHaveCount(1);
+  await expect(page.getByTestId("barogram-playhead")).toHaveCount(1);
 
   // The sheet slides the clip editor open under the seat map, the cut
   // preset from that exact spot.
@@ -411,7 +417,7 @@ test("the seat trims a flight from the options sheet", async ({ page }) => {
   await expect(page.getByTestId("clip-dock")).toBeHidden();
   await expect(page.getByTestId("replay-dock")).toBeVisible();
   await expect(page.getByTestId("replay-time")).not.toContainText("0:00 /");
-  await expect(page.locator(".barogram-playhead")).toHaveCount(1);
+  await expect(page.getByTestId("barogram-playhead")).toHaveCount(1);
 
   // Back in: scrub the cut to half so the trim below is deterministic.
   await page.getByTestId("detail-options").click();
@@ -436,7 +442,7 @@ test("the seat trims a flight from the options sheet", async ({ page }) => {
   // Exit into parked playback of the shorter recording; still one flight.
   await expect(page.getByTestId("replay-dock")).toBeVisible();
   await expect.poll(total).toBeLessThan(before - 30);
-  await expect(page.locator(".flight-row")).toHaveCount(1);
+  await expect(page.getByTestId("flight-row")).toHaveCount(1);
 });
 test("the record opt-in shows Fly live, and turning it off hides it", async ({
   page,

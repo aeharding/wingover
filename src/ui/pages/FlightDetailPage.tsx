@@ -503,7 +503,10 @@ export default function FlightDetailPage() {
             to breathe below. The frame only reserves the space; the map
             surface itself lives in mapPortal and is reparented here (inline)
             or into the body-level overlay below (full screen). */}
-        <div className="flight-detail-map-frame">
+        <div
+          className="flight-detail-map-frame"
+          data-testid="flight-detail-map-frame"
+        >
           {!mapFull && <OutPortal node={mapPortal} />}
         </div>
         {flight && stats && (
@@ -599,7 +602,10 @@ export default function FlightDetailPage() {
           pans, pinches, double-tap zooms, or taps on annotations and
           controls. Inline, the map-tap-layer owns tap-to-expand. */}
       <InPortal node={mapPortal}>
-        <div className={`flight-detail-map${mapFull ? " map-full" : ""}`}>
+        <div
+          className={`flight-detail-map${mapFull ? " map-full" : ""}`}
+          data-testid="flight-detail-map"
+        >
           {/* The map region; fullscreen slides the replay pane open below
               it (the region flexes above). The consume class rides here,
               on the region only, so the replay drawer (a sibling below)
@@ -613,7 +619,13 @@ export default function FlightDetailPage() {
             {/* Inline the map is a scroll-through preview: tap anywhere to
                 expand, vertical drag scrolls the details through (see
                 FlightDetailPage.css). */}
-            {!mapFull && <div className="map-tap-layer" onClick={expandMap} />}
+            {!mapFull && (
+              <div
+                className="map-tap-layer"
+                data-testid="map-tap-layer"
+                onClick={expandMap}
+              />
+            )}
             <div className="map-overlay">
               {/* Inline preview: the north reset floats (there is no
                   cluster inline). It can't actually appear — the preview
@@ -693,7 +705,10 @@ export default function FlightDetailPage() {
           fullroot rule in FlightDetailPage.css. */}
       {mapFull &&
         createPortal(
-          <div className="flight-detail-map-fullroot">
+          <div
+            className="flight-detail-map-fullroot"
+            data-testid="flight-detail-map-fullroot"
+          >
             <OutPortal node={mapPortal} />
           </div>,
           document.querySelector("ion-app") ?? document.body,

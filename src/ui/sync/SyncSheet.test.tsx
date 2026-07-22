@@ -2,13 +2,13 @@ import { renderToStaticMarkup } from "react-dom/server";
 import { describe, expect, test } from "vitest";
 
 import * as sync from "../../sync";
+import { AppleSignInButton } from "./SyncConnection";
 import {
-  AppleSignInButton,
   DormantSubscribe,
   PlanButtons,
   ResubscribeArea,
   SubscribeArea,
-} from "./SyncSheet";
+} from "./SyncSubscription";
 
 // The presentational pieces of the sheet, rendered to static markup. This is
 // the ONLY coverage of the products (iOS) path: the sync e2e runs on the web,

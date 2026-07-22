@@ -119,7 +119,7 @@ export default function FlightList({
                       style injection order, which differs dev vs prod.
                       A plain slotted div is outside the label's scope
                       class and the fight cannot exist. */}
-                  <div className="flight-row">
+                  <div className="flight-row" data-testid="flight-row">
                     <div className="flight-row-id">
                       <h2>{title}</h2>
                       {sub && <p>{sub}</p>}

@@ -11,11 +11,11 @@ test("arm, auto-takeoff, reload kill drill, stop, logbook", async ({
   await expect(page.getByTestId("armed")).toBeVisible();
   await expect(page.getByTestId("recording")).toBeVisible({ timeout: 10_000 });
   await expect(page.locator("ion-tab-bar")).toBeHidden();
-  await expect(page.locator(".map-container")).toBeVisible();
+  await expect(page.getByTestId("map-container")).toBeVisible();
   await expect(page.locator("[data-aircraft-layer='true']")).toBeVisible();
   await expect(page.getByTestId("instrument-duration")).not.toHaveText("0:00");
   // The direction-to-launch arrow renders as the blue location chevron.
-  await expect(page.locator(".launch-arrow-svg")).toBeVisible();
+  await expect(page.getByTestId("launch-arrow-svg")).toBeVisible();
 
   // Shed means SHED: the app's render tree (#root, where React mounts)
   // holds no Ionic while recording — no ion-app, no ion-page, no
@@ -54,7 +54,8 @@ test("arm, auto-takeoff, reload kill drill, stop, logbook", async ({
   // the whole story — no shadow DOM to reach into anymore.
   const overflowY = await page.evaluate(
     () =>
-      getComputedStyle(document.querySelector("div.fly-content")!).overflowY,
+      getComputedStyle(document.querySelector('[data-testid="fly-content"]')!)
+        .overflowY,
   );
   expect(overflowY).toBe("hidden");
 
@@ -86,7 +87,7 @@ test("arm, auto-takeoff, reload kill drill, stop, logbook", async ({
   await expect(page.locator("ion-tab-bar")).toBeVisible();
 
   await page.getByText("Logbook", { exact: true }).click();
-  await expect(page.locator(".flight-row")).toBeVisible();
+  await expect(page.getByTestId("flight-row")).toBeVisible();
   await expect(page.getByText(/1 flights/)).toBeVisible();
   expect(pageErrors).toEqual([]);
 });
@@ -100,7 +101,7 @@ test("the idle screen shows the sunset backdrop and starts a flight", async ({
   // The decorative backdrop (FlySplash, hosted in the frame's ion-content
   // fixed slot) renders and does NOT block the CTA (pointer-events: none)
   // — the click still arms a flight.
-  await expect(page.locator(".fly-splash")).toBeVisible();
+  await expect(page.getByTestId("fly-splash")).toBeVisible();
   await start.click();
   await expect(page.getByTestId("armed")).toBeVisible();
 });
@@ -116,7 +117,7 @@ test("canceling while acquiring GPS discards the session", async ({ page }) => {
   // discard needs the explicit second tap, so a missed launch can't
   // happen by accident.
   await page
-    .locator(".big-confirm")
+    .getByRole("alertdialog")
     .getByRole("button", { name: "Stop" })
     .click();
 
@@ -139,7 +140,7 @@ test("dismissing the cancel confirmation keeps waiting for takeoff", async ({
   // Dismiss the confirm — scope to the alert, since the acquiring screen's
   // own button carries the same "Cancel" label.
   await page
-    .locator(".big-confirm")
+    .getByRole("alertdialog")
     .getByRole("button", { name: "Cancel" })
     .click();
 
@@ -206,11 +207,11 @@ test("zoom control zooms one-fingered from anywhere without unpinning follow", a
   // The gauge (thumb + end caps) is hidden at rest and appears ONLY while
   // dragging — nothing on the map while flying. Its thumb is positioned by
   // the current zoom via an inline `top` percent.
-  await expect(control).not.toHaveClass(/active/);
+  await expect(control).toHaveAttribute("data-active", "false");
   const thumbTopPct = async () =>
     parseFloat(
       await page
-        .locator(".zoom-gauge-thumb")
+        .getByTestId("zoom-gauge-thumb")
         .evaluate((el) => (el as HTMLElement).style.top),
     );
   const thumbBefore = await thumbTopPct();
@@ -225,10 +226,10 @@ test("zoom control zooms one-fingered from anywhere without unpinning follow", a
   const downX = box.x + box.width * 0.6;
   await page.mouse.move(downX, box.y + 20);
   await page.mouse.down();
-  await expect(control).toHaveClass(/active/); // gauge appears on touch
+  await expect(control).toHaveAttribute("data-active", "true"); // gauge appears on touch
   await page.mouse.move(downX, box.y + 150, { steps: 8 });
   await page.mouse.up();
-  await expect(control).not.toHaveClass(/active/); // hidden again on release
+  await expect(control).toHaveAttribute("data-active", "false"); // hidden again on release
 
   await expect.poll(valuenow).toBeGreaterThan(before);
   // The thumb rides down toward the fully-in cap as we zoom in.
@@ -265,7 +266,7 @@ test("follow and track-up: two modes, deliberate resumes", async ({ page }) => {
 
   // Dragging the map unsnaps BOTH modes: the camera is neither following
   // nor rotating, whatever it was doing before.
-  const map = (await page.locator(".live-map").boundingBox())!;
+  const map = (await page.getByTestId("live-map").boundingBox())!;
   await page.mouse.move(map.x + map.width / 2, map.y + map.height / 2);
   await page.mouse.down();
   await page.mouse.move(map.x + map.width / 2 - 140, map.y + map.height / 2, {
@@ -304,7 +305,7 @@ test("edge guards stop an edge swipe from panning, inland drag still pans", asyn
   // — so it covers the home-indicator swipe strip exactly and steals no more
   // map-drag area than the OS already owns. Chromium reports no inset, so zero
   // here is correct and intentional: no gesture area, nothing to guard.
-  await expect(page.locator(".map-edge-guard-bottom")).toHaveCSS(
+  await expect(page.getByTestId("map-edge-guard-bottom")).toHaveCSS(
     "height",
     "0px",
   );
@@ -314,10 +315,10 @@ test("edge guards stop an edge swipe from panning, inland drag still pans", asyn
   // captured, not passed to MapLibre), which is the part that can regress;
   // the height is the OS's business.
   await page.addStyleTag({
-    content: ".map-edge-guard-bottom { height: 22px; }",
+    content: '[data-testid="map-edge-guard-bottom"] { height: 22px; }',
   });
 
-  const map = (await page.locator(".live-map").boundingBox())!;
+  const map = (await page.getByTestId("live-map").boundingBox())!;
   // A swipe from the very bottom edge lands on the guard, not the map: the
   // map must not pan, so follow stays pinned (the iOS app-switch swipe).
   await page.mouse.move(map.x + map.width / 2, map.y + map.height - 3);

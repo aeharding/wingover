@@ -259,6 +259,7 @@ export default function MapCanvas({
     // The attribution (an OSM license obligation) is styled per appearance:
     // its dark-map colors are white-on-white over a light basemap.
     container.classList.toggle("map-light", appearance === "light");
+    container.setAttribute("data-appearance", appearance);
   }, [base, revealed, appearance]);
 
   // A drag that starts on the map belongs to the map: without this, a pan
@@ -291,7 +292,11 @@ export default function MapCanvas({
   // can't disagree.
   return (
     <div className="map-surface">
-      <div ref={containerRef} className="map-container" />
+      <div
+        ref={containerRef}
+        className="map-container"
+        data-testid="map-container"
+      />
       <div ref={probeRef} className="map-inset-probe" aria-hidden="true" />
       {children}
     </div>

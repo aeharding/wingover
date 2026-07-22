@@ -227,11 +227,6 @@
   --color: #000;
 }
 
-.sync-selfhost-toggle {
-  --padding-top: 1rem;
-  --padding-bottom: 1rem;
-}
-
 /* Plain CSS, not ion-padding: this app imports only core/normalize/structure/
    typography, so Ionic's utility classes (padding.css) aren't loaded and
    ion-padding / ion-margin-horizontal are silently no-ops. Importing the

@@ -1,7 +1,11 @@
 import PouchDB from "pouchdb-browser";
 
 import type { Fix, LngLat } from "../engine/types";
-import { type FlightStats, haversineMeters } from "../flight/stats";
+import {
+  EMPTY_STATS,
+  type FlightStats,
+  haversineMeters,
+} from "../flight/stats";
 
 export interface Flight {
   id: string;
@@ -97,7 +101,12 @@ function toFlight(doc: FlightDoc): Flight {
     name: doc.name,
     notes: doc.notes,
     startedAt: doc.startedAt,
-    stats: doc.stats,
+    // stats is non-optional in our type, but a replicated doc can predate the
+    // field or arrive partially written (an older app version, a foreign or
+    // hand-authored doc). Default it here, at the boundary where untyped docs
+    // become Flights, so one malformed doc can't crash the whole logbook
+    // (LogbookPage's totals reduce reads flight.stats.distanceMeters).
+    stats: doc.stats ?? { ...EMPTY_STATS },
     updatedAt: doc.updatedAt,
     source: doc.source,
     sourceFilename: doc.sourceFilename,
