@@ -2,6 +2,7 @@ import { globeOutline, mapOutline } from "ionicons/icons";
 
 import NativeIcon from "../components/NativeIcon";
 import type { MapViewKind } from "./config";
+
 import mapCss from "./map.module.css";
 
 interface ViewToggleProps {

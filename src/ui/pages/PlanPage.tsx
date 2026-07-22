@@ -37,8 +37,8 @@ import ViewToggle from "../map/ViewToggle";
 import { useSettings } from "../settings/SettingsContext";
 import { useIsDesktop } from "../useIsDesktop";
 
-import styles from "./PlanPage.module.css";
 import mapCss from "../map/map.module.css";
+import styles from "./PlanPage.module.css";
 
 // The plan's pins ARE the planned waypoints, so the route + pins are green to
 // match how they read in flight (see PLANNED_COLOR).

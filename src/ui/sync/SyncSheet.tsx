@@ -34,8 +34,9 @@ import {
   manageSubscription,
   SubscribeArea,
 } from "./SyncSubscription";
-import styles from "./sync.module.css";
 import { useLogOut } from "./useLogOut";
+
+import styles from "./sync.module.css";
 
 /**
  * THE sync surface — one sheet, one question ("are my flights backed up?"),

@@ -36,8 +36,8 @@ import {
 } from "./timelineMemory";
 import { useReplayMapDriver } from "./useReplayMapDriver";
 
-import chassis from "./dock.module.css";
 import styles from "./ClipDock.module.css";
+import chassis from "./dock.module.css";
 
 // One cut point per mode (per Alex: a trim is usually one end or the
 // other, so each end is its own errand and the whole editor is a single

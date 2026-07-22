@@ -29,9 +29,9 @@ import {
 import { useReplayFeed } from "./useReplayFeed";
 import { type ReplayCamera, useReplayMapDriver } from "./useReplayMapDriver";
 
+import mapCss from "../map/map.module.css";
 import chassis from "./dock.module.css";
 import styles from "./ReplayDock.module.css";
-import mapCss from "../map/map.module.css";
 
 interface ReplayDockProps {
   // The HOST's map (the seat map, the fullscreen detail map); null while

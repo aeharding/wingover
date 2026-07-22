@@ -44,11 +44,12 @@ import ViewToggle from "../map/ViewToggle";
 import { useReplayDrawer } from "../replay/useReplayDrawer";
 import { useSettings } from "../settings/SettingsContext";
 import { useFlightActions } from "../useFlightActions";
-import detail from "./detail.module.css";
 import { endpointMarker } from "./endpointMarker";
 import { useFlightDoc } from "./useFlightDoc";
 import { useFlightDrafts } from "./useFlightDrafts";
+
 import mapCss from "../map/map.module.css";
+import detail from "./detail.module.css";
 import seat from "./FlightSeat.module.css";
 
 /**

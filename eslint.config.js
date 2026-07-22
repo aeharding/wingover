@@ -87,7 +87,13 @@ export default defineConfig(
     },
   },
   {
-    files: ["e2e/**", "screenshots/**", "*.config.ts", "eslint.config.js"],
+    files: [
+      "e2e/**",
+      "screenshots/**",
+      "scripts/**",
+      "*.config.ts",
+      "eslint.config.js",
+    ],
     languageOptions: {
       globals: globals.node,
     },

@@ -49,8 +49,8 @@ import Tile from "./Tile";
 import { showToast } from "./toast";
 import { useLiveViewPrefs } from "./useLiveViewPrefs";
 
-import styles from "./FlyPage.module.css";
 import mapCss from "../map/map.module.css";
+import styles from "./FlyPage.module.css";
 
 // WAL hydration happens once per app launch. The App swaps the whole nav shell
 // for a bare <FlyPage> when a flight is active, so FlyPage remounts mid-session

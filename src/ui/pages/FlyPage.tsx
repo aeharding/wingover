@@ -8,6 +8,7 @@ import {
 
 import FlyPage from "../flight/FlyPage";
 import FlySplash from "../flight/FlySplash";
+
 import styles from "./FlyPage.module.css";
 
 /**

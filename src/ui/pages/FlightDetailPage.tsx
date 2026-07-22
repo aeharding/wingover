@@ -47,6 +47,7 @@ import {
   formatSpeed,
 } from "../../flight/format";
 import { useAppearance } from "../appTheme";
+import { endpointMarker } from "../logbook/endpointMarker";
 import { useFlightDoc } from "../logbook/useFlightDoc";
 import { useFlightDrafts } from "../logbook/useFlightDrafts";
 import { afterNextFrame } from "../map/afterFrame";
@@ -69,9 +70,8 @@ import { useSettings } from "../settings/SettingsContext";
 import { useFlightActions } from "../useFlightActions";
 
 import detail from "../logbook/detail.module.css";
-import { endpointMarker } from "../logbook/endpointMarker";
-import styles from "./FlightDetailPage.module.css";
 import mapCss from "../map/map.module.css";
+import styles from "./FlightDetailPage.module.css";
 
 // The expand/collapse toggle animates as a "magic move": the map surface
 // carries a view-transition-name (FlightDetailPage.css), so

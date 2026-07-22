@@ -24,8 +24,8 @@ import useMapView from "../map/useMapView";
 import ViewToggle from "../map/ViewToggle";
 import { useIsDesktop } from "../useIsDesktop";
 
-import styles from "./AllFlightsMapPage.module.css";
 import mapCss from "../map/map.module.css";
+import styles from "./AllFlightsMapPage.module.css";
 
 const OLDEST_HUE = 290;
 const NEWEST_HUE = 175;

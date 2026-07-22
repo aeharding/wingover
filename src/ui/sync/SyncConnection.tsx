@@ -17,12 +17,13 @@ import * as sync from "../../sync";
 import { describe, type SyncTone } from "./describe";
 import { resolveSyncView } from "./resolveSyncView";
 import { SelfHostPage } from "./SelfHostPage";
-import styles from "./sync.module.css";
 import {
   DormantSubscribe,
   manageSubscription,
   ResubscribeArea,
 } from "./SyncSubscription";
+
+import styles from "./sync.module.css";
 
 /**
  * The Log In rail (SYNC-UX.md): connection only. Which CouchDB this device

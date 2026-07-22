@@ -14,6 +14,7 @@ import {
 import { useEffect, useRef, useState } from "react";
 
 import * as sync from "../../sync";
+
 import settings from "../pages/settings.module.css";
 import styles from "./sync.module.css";
 

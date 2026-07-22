@@ -23,8 +23,8 @@ import ClipDock, { type ClipMode } from "./ClipDock";
 import ReplayDock from "./ReplayDock";
 import { rememberPosition } from "./timelineMemory";
 
-import styles from "./ReplayDrawer.module.css";
 import mapCss from "../map/map.module.css";
+import styles from "./ReplayDrawer.module.css";
 
 // closed → opening (mounted at 0fr) → open (1fr, the slide runs) →
 // closing (back to 0fr) → closed (unmount tears the aircraft down).

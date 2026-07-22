@@ -14,10 +14,11 @@ import { importGpxFiles } from "../../storage/importGpx";
 import ConnectFunnel from "../logbook/ConnectFunnel";
 import FlightList from "../logbook/FlightList";
 import FlightSeat from "../logbook/FlightSeat";
-import { useFlights } from "../logbook/useFlights";
 import LogbookEmpty from "../logbook/LogbookEmpty";
+import { useFlights } from "../logbook/useFlights";
 import AllFlightsMapPage from "../pages/AllFlightsMapPage";
 import { useSettings } from "../settings/SettingsContext";
+
 import styles from "./LogbookSection.module.css";
 
 /**

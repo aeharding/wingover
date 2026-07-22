@@ -5,6 +5,7 @@ import { useState, useSyncExternalStore } from "react";
 import * as sync from "../../sync";
 import { describe } from "../sync/describe";
 import { useSyncSheet } from "../sync/SyncSheets";
+
 import styles from "../sync/sync.module.css";
 import funnel from "./ConnectFunnel.module.css";
 

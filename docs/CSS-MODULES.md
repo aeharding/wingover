@@ -110,3 +110,24 @@ Conventions the migration settled on:
   a tsc error.
 - **Tests/harness**: e2e and `e2e/inset-probe.mjs` locate by
   `data-testid`/roles only — hashed class names never appear in tests.
+
+## Enforcement
+
+The conventions above hold by CI, not by memory:
+
+- `pnpm check:css` (`scripts/check-css-conventions.mjs`, a CI step) fails
+  on: a plain `.css` outside the token layer; a `:global(.x)` naming a
+  class that is neither an allowlisted external (Ionic/MapLibre/MapKit/
+  app-state) nor a same-file `@value` import; an `@value` whose target
+  file or class doesn't exist; a module without its committed `.d.ts` (or
+  an orphan `.d.ts`); a module nothing imports.
+- CI also regenerates types and fails on drift:
+  `pnpm generate:csstypes && git diff --exit-code -- '*.module.css.d.ts'`
+  (the script chains prettier — bare `tcm` output always differs from the
+  committed form).
+- `scripts/css-equiv.py` is the refactor-verification tool: build at the
+  base ref, save `dist/assets/index-*.css`, build at the head, then
+  `python3 scripts/css-equiv.py before.css after.css`. It proves rule
+  multiset equality (hash-normalized) and flags any same-subject cascade
+  reorder for manual adjudication. Use it for any change that moves CSS
+  around; cascade semantics only exist in the prod bundle.
