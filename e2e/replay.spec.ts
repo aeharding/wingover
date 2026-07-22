@@ -17,7 +17,8 @@ async function openImportedFlight(page: Page) {
 // The aircraft glyph rides the HOST map (the fullscreen detail map).
 function aircraftDisplay(page: Page) {
   return page
-    .locator(".flight-detail-map-fullroot .map-container")
+    .getByTestId("flight-detail-map-fullroot")
+    .getByTestId("map-container")
     .evaluate(
       (el) =>
         (el as HTMLElement & { __display?: { lng: number; lat: number } })
@@ -40,7 +41,7 @@ test("the fullscreen play button opens the pane playing; scrub and speed follow"
   // Replay lives behind Expand: no pill on the preview, just the map.
   await expect(page.getByTestId("replay-dock")).toBeHidden();
   await page.getByTestId("map-expand").click();
-  await expect(page.locator(".flight-detail-map-fullroot")).toBeVisible();
+  await expect(page.getByTestId("flight-detail-map-fullroot")).toBeVisible();
   await page.getByTestId("replay-start").click();
   await expect(page.getByTestId("replay-dock")).toBeVisible();
 
@@ -72,7 +73,7 @@ test("the fullscreen play button opens the pane playing; scrub and speed follow"
 
   // Shrink: back to the intact detail page, dock gone.
   await page.getByTestId("map-shrink").click();
-  await expect(page.locator(".flight-detail-map-fullroot")).toBeHidden();
+  await expect(page.getByTestId("flight-detail-map-fullroot")).toBeHidden();
   await expect(page.getByTestId("replay-dock")).toBeHidden();
   await expect(page.getByText("Max altitude")).toBeVisible();
 });
@@ -83,7 +84,7 @@ test("Expand keeps the map clean; play opens the pane; stop parks; collapse hide
   await openImportedFlight(page);
 
   await page.getByTestId("map-expand").click();
-  await expect(page.locator(".flight-detail-map-fullroot")).toBeVisible();
+  await expect(page.getByTestId("flight-detail-map-fullroot")).toBeVisible();
   // No pane, no glyph — just the map, plus a floating play button.
   await expect(page.getByTestId("replay-dock")).toBeHidden();
   await expect(page.getByTestId("replay-start")).toBeVisible();
@@ -149,13 +150,13 @@ test("trim rewrites the recording; the cut survives a reload", async ({
 }) => {
   await recordLongFlight(page);
   await page.getByText("Logbook", { exact: true }).click();
-  await page.locator(".flight-row").click();
+  await page.getByTestId("flight-row").click();
   await expect(page.getByText("Max altitude")).toBeVisible();
 
   // The sheet opens the clip editor straight into the fullscreen pane.
   await page.getByTestId("detail-options").click();
   await page.getByRole("button", { name: "Trim start" }).click();
-  await expect(page.locator(".flight-detail-map-fullroot")).toBeVisible();
+  await expect(page.getByTestId("flight-detail-map-fullroot")).toBeVisible();
   await expect(page.getByTestId("clip-dock")).toBeVisible();
   const before = await barogramTotal(page);
   expect(before).toBeGreaterThan(120);
@@ -213,8 +214,8 @@ test("trim rewrites the recording; the cut survives a reload", async ({
 test("split turns one flight into two", async ({ page }) => {
   await recordLongFlight(page);
   await page.getByText("Logbook", { exact: true }).click();
-  await expect(page.locator(".flight-row")).toHaveCount(1);
-  await page.locator(".flight-row").click();
+  await expect(page.getByTestId("flight-row")).toHaveCount(1);
+  await page.getByTestId("flight-row").click();
   await expect(page.getByText("Max altitude")).toBeVisible();
 
   await page.getByTestId("detail-options").click();
@@ -237,7 +238,7 @@ test("split turns one flight into two", async ({ page }) => {
   // once a large-title page (the fly frame) has rendered, so a bare
   // ion-back-button locator matches two.
   await page.locator("#root ion-back-button").click();
-  await expect(page.locator(".flight-row")).toHaveCount(2);
+  await expect(page.getByTestId("flight-row")).toHaveCount(2);
 });
 
 test("the timeline zooms with the wheel and resets", async ({ page }) => {
@@ -253,7 +254,7 @@ test("the timeline zooms with the wheel and resets", async ({ page }) => {
   ).toBeVisible();
 
   await page.getByText("Logbook", { exact: true }).click();
-  await page.locator(".flight-row").click();
+  await page.getByTestId("flight-row").click();
   await expect(page.getByText("Max altitude")).toBeVisible();
   await page.getByTestId("map-expand").click();
   await page.getByTestId("replay-start").click();
@@ -272,7 +273,7 @@ test("the timeline zooms with the wheel and resets", async ({ page }) => {
       return barogram.getAttribute("data-zoomed");
     })
     .toBe("true");
-  await expect(page.locator(".barogram-overview")).toBeVisible();
+  await expect(page.getByTestId("barogram-overview")).toBeVisible();
 
   // Park playback first: a live playhead advances aria-valuenow on its
   // own, which would muddy the no-scrub assertion below. (The rewind also
@@ -285,7 +286,7 @@ test("the timeline zooms with the wheel and resets", async ({ page }) => {
 
   // Zoomed, a drag GRABS the timeline: the window pans (the overview
   // slice moves) and the playhead does NOT scrub.
-  const overviewWindow = page.locator(".barogram-overview-window");
+  const overviewWindow = page.getByTestId("barogram-overview-window");
   const windowBefore = await overviewWindow.evaluate((el) => el.style.left);
   const playheadBefore = await barogram.getAttribute("aria-valuenow");
   await page.mouse.move(box.x + box.width * 0.7, box.y + box.height / 2);

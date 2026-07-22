@@ -282,7 +282,7 @@ test("a pin becomes a spoken waypoint announcement mid-flight", async ({
   // Drop a pin on the plan page and read back where it landed
   await page.goto("/?map-style=blank");
   await page.getByText("Plan", { exact: true }).click();
-  const canvas = page.locator(".map-container");
+  const canvas = page.getByTestId("map-container");
   await expect(canvas).toBeVisible();
   await page.waitForTimeout(500);
   const box = (await canvas.boundingBox())!;
@@ -324,7 +324,7 @@ test("in-flight nav: planned distance, tap-select and clear a checkpoint", async
   // Two pins on the zoom-3 plan.
   await page.goto(URL);
   await page.getByText("Plan", { exact: true }).click();
-  const canvas = page.locator(".map-container");
+  const canvas = page.getByTestId("map-container");
   await expect(canvas).toBeVisible();
   await page.waitForTimeout(500);
   const box = (await canvas.boundingBox())!;
@@ -360,7 +360,7 @@ test("in-flight nav: planned distance, tap-select and clear a checkpoint", async
   await emit([{ speed: 7, latitude: p1Lat - 0.005, longitude: p1Lng }]);
 
   // Tap the pin → it becomes selected → the clear-checkpoint button appears.
-  await page.locator(".waypoint-pin").first().click();
+  await page.getByTestId("waypoint-pin").first().click();
   await expect(page.getByTestId("remove-waypoint")).toBeVisible();
 
   // Clear it → that checkpoint is removed; nav retargets to the second pin and
@@ -384,7 +384,9 @@ test("track-up toggle rotates the camera immediately, not on a glide", async ({
     page.evaluate(
       () =>
         (
-          document.querySelector(".map-container") as HTMLElement & {
+          document.querySelector(
+            '[data-testid="map-container"]',
+          ) as HTMLElement & {
             __display?: { course: number };
           }
         ).__display?.course ?? 0,
@@ -400,7 +402,7 @@ test("track-up toggle rotates the camera immediately, not on a glide", async ({
       () =>
         page.evaluate(() => {
           const container = document.querySelector(
-            ".map-container",
+            '[data-testid="map-container"]',
           ) as HTMLElement & { __map?: { getBearing(): number } };
           const bearing = container.__map?.getBearing() ?? 0;
           return bearing > 70 && bearing < 110;

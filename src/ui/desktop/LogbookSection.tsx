@@ -157,7 +157,11 @@ export default function LogbookSection() {
 
   return (
     <div className="logbook-split">
-      <aside className="logbook-pane" style={{ width: paneWidth }}>
+      <aside
+        className="logbook-pane"
+        style={{ width: paneWidth }}
+        data-testid="logbook-pane"
+      >
         <div
           className="pane-resizer"
           role="separator"

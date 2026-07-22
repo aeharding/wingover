@@ -106,7 +106,9 @@ test("a style reload that drops the aircraft layer restores it", async ({
   await page.waitForFunction(
     () => {
       const map = (
-        document.querySelector(".map-container") as HTMLElement & {
+        document.querySelector(
+          '[data-testid="map-container"]',
+        ) as HTMLElement & {
           __map?: {
             isStyleLoaded: () => boolean;
             getLayer: (id: string) => unknown;
@@ -125,7 +127,7 @@ test("a style reload that drops the aircraft layer restores it", async ({
   // restore the aircraft (the "aircraft vanishes until app restart" bug).
   const result = await page.evaluate(() => {
     const container = document.querySelector(
-      ".map-container",
+      '[data-testid="map-container"]',
     ) as HTMLElement & {
       __map?: {
         getLayer: (id: string) => unknown;
@@ -154,7 +156,9 @@ test("a style reload that drops the aircraft layer restores it", async ({
   await page.waitForFunction(
     () => {
       const map = (
-        document.querySelector(".map-container") as HTMLElement & {
+        document.querySelector(
+          '[data-testid="map-container"]',
+        ) as HTMLElement & {
           __map?: { getLayer: (id: string) => unknown };
         }
       )?.__map;
@@ -219,7 +223,7 @@ test("flight detail draws the track even when the map style loads slowly", async
   ).toBeVisible();
 
   await page.getByText("Logbook", { exact: true }).click();
-  await page.locator(".flight-row").click();
+  await page.getByTestId("flight-row").click();
 
   await expect(page.getByTestId("launch-marker")).toBeVisible({
     timeout: 10_000,
@@ -236,7 +240,9 @@ test("flight detail draws the track even when the map style loads slowly", async
       page.evaluate(
         () =>
           !!(
-            document.querySelector(".map-container") as HTMLElement & {
+            document.querySelector(
+              '[data-testid="map-container"]',
+            ) as HTMLElement & {
               __map?: { getLayer(id: string): unknown };
             }
           ).__map?.getLayer("track"),
@@ -262,7 +268,7 @@ test("leaving fullscreen eases the flight map back to its framing", async ({
   ).toBeVisible();
 
   await page.getByText("Logbook", { exact: true }).click();
-  await page.locator(".flight-row").click();
+  await page.getByTestId("flight-row").click();
   await expect(page.getByTestId("launch-marker")).toBeVisible({
     timeout: 10_000,
   });
@@ -276,7 +282,9 @@ test("leaving fullscreen eases the flight map back to its framing", async ({
   const camera = (): Promise<Cam> =>
     page.evaluate(() => {
       const m = (
-        document.querySelector(".map-container") as HTMLElement & {
+        document.querySelector(
+          '[data-testid="map-container"]',
+        ) as HTMLElement & {
           __map?: {
             getCenter(): { lng: number; lat: number };
             getZoom(): number;
@@ -301,7 +309,7 @@ test("leaving fullscreen eases the flight map back to its framing", async ({
   // Wander far off while full screen: pan away, zoom out, rotate.
   await page.evaluate(() => {
     const m = (
-      document.querySelector(".map-container") as HTMLElement & {
+      document.querySelector('[data-testid="map-container"]') as HTMLElement & {
         __map?: {
           getCenter(): { lng: number; lat: number };
           jumpTo(o: {
@@ -346,7 +354,9 @@ test("the unsnapped compass realigns north, instantly", async ({ page }) => {
     page.evaluate(() =>
       Math.abs(
         (
-          document.querySelector(".live-map .map-container") as HTMLElement & {
+          document.querySelector(
+            '[data-testid="live-map"] [data-testid="map-container"]',
+          ) as HTMLElement & {
             __map?: { getBearing(): number };
           }
         ).__map!.getBearing(),
@@ -359,7 +369,7 @@ test("the unsnapped compass realigns north, instantly", async ({ page }) => {
   await expect.poll(bearing, { timeout: 15_000 }).toBeGreaterThan(1);
 
   // Unsnap; the bearing freezes wherever course left it.
-  const map = (await page.locator(".live-map").boundingBox())!;
+  const map = (await page.getByTestId("live-map").boundingBox())!;
   await page.mouse.move(map.x + map.width / 2, map.y + map.height / 2);
   await page.mouse.down();
   await page.mouse.move(map.x + map.width / 2 - 140, map.y + map.height / 2, {

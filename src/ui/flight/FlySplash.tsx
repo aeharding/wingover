@@ -20,6 +20,7 @@ export default function FlySplash() {
     <svg
       slot="fixed"
       className="fly-splash"
+      data-testid="fly-splash"
       viewBox="0 0 1024 1024"
       preserveAspectRatio="xMidYMid slice"
       aria-hidden="true"
