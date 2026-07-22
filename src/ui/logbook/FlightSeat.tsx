@@ -44,15 +44,10 @@ import ViewToggle from "../map/ViewToggle";
 import { useReplayDrawer } from "../replay/useReplayDrawer";
 import { useSettings } from "../settings/SettingsContext";
 import { useFlightActions } from "../useFlightActions";
+import detail from "./detail.module.css";
+import { endpointMarker } from "./endpointMarker";
 import { useFlightDoc } from "./useFlightDoc";
 import { useFlightDrafts } from "./useFlightDrafts";
-
-function endpointMarker(className: string, testId: string): HTMLElement {
-  const element = document.createElement("div");
-  element.className = className;
-  element.setAttribute("data-testid", testId);
-  return element;
-}
 
 /**
  * The desktop split's detail seat: one PERSISTENT component whose id swaps
@@ -260,7 +255,7 @@ export default function FlightSeat({
       {
         id: "launch",
         at: [launch.longitude, launch.latitude],
-        el: endpointMarker("endpoint-marker launch", "launch-marker"),
+        el: endpointMarker("launch", "launch-marker"),
         color: "#22a04a",
         label: "▶",
         glyphColor: "#ffffff",
@@ -268,7 +263,7 @@ export default function FlightSeat({
       {
         id: "landing",
         at: [landing.longitude, landing.latitude],
-        el: endpointMarker("endpoint-marker landing", "landing-marker"),
+        el: endpointMarker("landing", "landing-marker"),
         color: "#e0483a",
         label: "■",
         glyphColor: "#ffffff",
@@ -496,7 +491,7 @@ function Stat({
   return (
     <IonItem lines={lines}>
       <IonLabel>{label}</IonLabel>
-      <IonNote slot="end" className="detail-stat-value">
+      <IonNote slot="end" className={detail.statValue}>
         {value}
       </IonNote>
     </IonItem>

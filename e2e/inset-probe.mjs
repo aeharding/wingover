@@ -244,8 +244,8 @@ const scenarios = {
     },
     specs: {
       header: "ion-header ion-toolbar",
-      probe: ".flight-detail-map .map-inset-probe",
-      overlay: ".flight-detail-map .map-overlay",
+      probe: '[data-testid="flight-detail-map"] .map-inset-probe',
+      overlay: '[data-testid="flight-detail-map"] .map-overlay',
       formItem: "ion-content ion-item",
     },
   },
@@ -268,8 +268,8 @@ const scenarios = {
       await p.waitForTimeout(900);
     },
     specs: {
-      probe: ".flight-detail-map .map-inset-probe",
-      overlay: ".flight-detail-map .map-overlay",
+      probe: '[data-testid="flight-detail-map"] .map-inset-probe',
+      overlay: '[data-testid="flight-detail-map"] .map-overlay',
     },
   },
   "m-detail-full-replay": {
@@ -297,8 +297,8 @@ const scenarios = {
       await p.waitForTimeout(700);
     },
     specs: {
-      probe: ".flight-detail-map .map-inset-probe",
-      overlay: ".flight-detail-map .map-overlay",
+      probe: '[data-testid="flight-detail-map"] .map-inset-probe',
+      overlay: '[data-testid="flight-detail-map"] .map-overlay',
       scrub: '[data-testid="replay-dock"]',
     },
   },

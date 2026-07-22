@@ -4,7 +4,7 @@
    it's a non-interactive preview (see below), so it only needs to tease the
    track and hand off to Expand — details get the rest of the screen. vh (not %)
    because IonContent's scroll host doesn't size against the page. */
-.flight-detail-map-frame {
+.frame {
   position: relative;
   /* svh: stable against the PWA URL bar collapsing/expanding mid-scroll.
      Roughly half the screen: enough map to read the track shape at a
@@ -18,7 +18,7 @@
    the expand/collapse a "magic move": startViewTransition (see the tsx)
    morphs this element's box between the two layouts. Inert on engines
    without the API. */
-.flight-detail-map {
+.map {
   position: absolute;
   inset: 0;
   view-transition-name: flight-map;
@@ -29,7 +29,7 @@
 
 /* The map itself (canvas, controls, pills). Inline it is the whole box;
    fullscreen the replay dock takes the bottom and this flexes above it. */
-.detail-map-region {
+.region {
   position: relative;
   flex: 1;
   min-height: 0;
@@ -55,7 +55,7 @@
    (e.g. iPhone Safari PWA) the overlay tracks the viewport the URL bar
    actually leaves and the bottom controls stay reachable. touch-action:
    none is belt-and-braces on top. */
-.flight-detail-map-fullroot {
+.fullroot {
   position: fixed;
   inset: 0;
   height: 100dvh;
@@ -72,19 +72,19 @@
    scrollable area. pointer-events fall through to Ionic's scroller; the controls
    (view toggle, expand pill) opt back in. Tap the pill to go full screen, where
    the map pans/zooms normally. Phone-only page (desktop uses a different view). */
-.flight-detail-map:not(.map-full) {
+.map:not(.full) {
   pointer-events: none;
 }
-.flight-detail-map:not(.map-full) .map-tap-layer,
-.flight-detail-map:not(.map-full) .map-overlay,
-.flight-detail-map:not(.map-full) .map-expand-pill {
+.map:not(.full) .tapLayer,
+.map:not(.full) :global(.map-overlay),
+.map:not(.full) .expandPill {
   pointer-events: auto;
 }
 
 /* Inline, a full-cover layer turns a tap into "expand" while a vertical drag
    scrolls the details straight through it (touch-action: pan-y). Sits below the
    controls (z-index 10) so the toggle and pill still win their own taps. */
-.map-tap-layer {
+.tapLayer {
   position: absolute;
   inset: 0;
   z-index: 5;
@@ -95,7 +95,7 @@
    and the centered pill (MapView.css stacks it bottom-right, right again once
    full screen). No home-indicator inset — the map box is mid-page here (and
    the region is consume-all anyway, so the safe-area vars already read 0). */
-.flight-detail-map:not(.map-full) .map-overlay {
+.map:not(.full) :global(.map-overlay) {
   top: 0.9rem;
   bottom: auto;
 }
@@ -103,7 +103,7 @@
 /* Inline expand affordance: a labelled pill centered at the bottom of the map
    box (the whole map is a preview now, so the corner icon button wasn't
    discoverable). Matches .map-button's fill; pill-shaped. */
-.map-expand-pill {
+.expandPill {
   position: absolute;
   bottom: 0.9rem;
   left: 50%;
@@ -120,30 +120,6 @@
   border-radius: 999px;
 }
 
-.map-expand-pill:active {
+.expandPill:active {
   background: var(--map-chip-bg-active);
-}
-
-/* Stat values are the point of the rows — full contrast and lined-up digits,
-   not IonNote's muted default. */
-.detail-stat-value {
-  color: var(--ion-text-color);
-  font-weight: 600;
-  font-variant-numeric: tabular-nums;
-}
-
-.endpoint-marker {
-  width: 16px;
-  height: 16px;
-  border-radius: 50%;
-  border: 2.5px solid #fff;
-  box-shadow: 0 1px 4px rgba(0, 0, 0, 0.5);
-}
-
-.endpoint-marker.launch {
-  background: var(--wingover-green);
-}
-
-.endpoint-marker.landing {
-  background: #e0483a;
 }

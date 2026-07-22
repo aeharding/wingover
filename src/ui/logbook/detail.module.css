@@ -1,0 +1,10 @@
+/* Flight-detail presentation bits shared by the phone detail page and the
+   desktop seat card (the seat is a mini detail view of the same flight). */
+
+/* Stat values are the point of the rows — full contrast and lined-up digits,
+   not IonNote's muted default. */
+.statValue {
+  color: var(--ion-text-color);
+  font-weight: 600;
+  font-variant-numeric: tabular-nums;
+}
