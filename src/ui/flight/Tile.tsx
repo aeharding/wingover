@@ -1,4 +1,4 @@
-import "./Tile.css";
+import styles from "./Tile.module.css";
 
 interface TileProps {
   label: string;
@@ -18,20 +18,20 @@ export default function Tile({
   testId,
 }: TileProps) {
   const classes = [
-    "tile",
-    accent,
-    wide ? "wide" : undefined,
-    icon ? "has-icon" : undefined,
+    styles.tile,
+    accent && styles[accent],
+    wide ? styles.wide : undefined,
+    icon ? styles.hasIcon : undefined,
   ]
     .filter(Boolean)
     .join(" ");
   return (
     <div className={classes}>
-      <div className="label">{label}</div>
-      <div className="value" data-testid={testId}>
+      <div className={styles.label}>{label}</div>
+      <div className={styles.value} data-testid={testId}>
         {value}
       </div>
-      {icon && <div className="tile-icon">{icon}</div>}
+      {icon && <div className={styles.icon}>{icon}</div>}
     </div>
   );
 }

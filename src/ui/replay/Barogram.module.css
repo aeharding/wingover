@@ -1,10 +1,10 @@
-.barogram-frame {
+.frame {
   display: flex;
   flex-direction: column;
   gap: 3px;
 }
 
-.barogram {
+.chart {
   position: relative;
   height: 72px;
   /* The whole strip is the scrub gesture; nothing scrolls behind it, and
@@ -16,21 +16,21 @@
 }
 
 /* Zoomed, the chart is grabbable: drag pans the window, tap seeks. */
-.barogram[data-zoomed="true"] {
+.chart[data-zoomed="true"] {
   cursor: grab;
 }
 
-.barogram[data-panning="true"] {
+.chart[data-panning="true"] {
   cursor: grabbing;
 }
 
-.barogram:focus-visible {
+.chart:focus-visible {
   outline: 2px solid var(--wingover-accent);
   outline-offset: 2px;
   border-radius: 4px;
 }
 
-.barogram-svg {
+.svg {
   position: absolute;
   inset: 0;
   width: 100%;
@@ -38,19 +38,19 @@
   display: block;
 }
 
-.barogram-area {
+.area {
   fill: var(--wingover-accent);
   opacity: 0.16;
 }
 
-.barogram-outline {
+.outline {
   fill: none;
   stroke: var(--wingover-accent);
   stroke-width: 1.5;
 }
 
 /* The playhead: positioned by transform only (imperative during a drag). */
-.barogram-playhead {
+.playhead {
   position: absolute;
   top: 0;
   bottom: 0;
@@ -61,7 +61,7 @@
   pointer-events: none;
 }
 
-.barogram-playhead::before {
+.playhead::before {
   content: "";
   position: absolute;
   top: -1px;
@@ -73,7 +73,7 @@
 }
 
 /* Elapsed-time bubble, visible only while scrubbing. */
-.barogram-bubble {
+.bubble {
   position: absolute;
   bottom: calc(100% + 8px);
   left: 0;
@@ -89,14 +89,14 @@
   pointer-events: none;
 }
 
-.barogram-bubble.visible {
+.bubble.visible {
   visibility: visible;
 }
 
 /* Clip mode: the regions a trim's brackets cut away. Grayscale drains
    the cyan out of the doomed profile (per Alex) and a light dim settles
    it behind the kept window. */
-.barogram-cut {
+.cut {
   position: absolute;
   top: 0;
   bottom: 0;
@@ -109,7 +109,7 @@
 /* The yellow frame around the kept window: thin rails joining the two
    brackets (the iOS-Photos trim idiom). Overhangs the chart by the rail
    width so the frame wraps the profile instead of covering it. */
-.barogram-kept {
+.kept {
   position: absolute;
   top: -2px;
   bottom: -2px;
@@ -121,7 +121,7 @@
 /* The cursor's grab zone: invisible, glove-wide, riding the current
    moment (playhead or cut mark). Dragging it scrubs at ANY zoom level;
    the chart around it keeps its own gestures. */
-.barogram-cursor {
+.cursor {
   position: absolute;
   top: -4px;
   bottom: -4px;
@@ -135,7 +135,7 @@
 /* The clip-mode cut marker: a zero-width anchor riding the cut point.
    Decoration (the cursor zone above carries the pointer work), and only
    drawn while its moment is inside the visible window. */
-.barogram-mark {
+.mark {
   position: absolute;
   top: -4px;
   bottom: -4px;
@@ -147,7 +147,7 @@
 /* Trim brackets hang OUTSIDE their moment, framing the kept window:
    rounded outward, square against the frame rails inward, with an
    outward chevron cut into the face. */
-.barogram-mark-grip {
+.grip {
   position: absolute;
   top: 2px;
   bottom: 2px;
@@ -155,17 +155,17 @@
   background: var(--replay-yellow);
 }
 
-.barogram-mark.start .barogram-mark-grip {
+.mark.start .grip {
   right: 0;
   border-radius: 6px 0 0 6px;
 }
 
-.barogram-mark.end .barogram-mark-grip {
+.mark.end .grip {
   left: 0;
   border-radius: 0 6px 6px 0;
 }
 
-.barogram-mark-grip::after {
+.grip::after {
   content: "";
   position: absolute;
   top: 50%;
@@ -176,17 +176,17 @@
   border-bottom: 2px solid rgba(0, 0, 0, 0.65);
 }
 
-.barogram-mark.start .barogram-mark-grip::after {
+.mark.start .grip::after {
   transform: translate(-30%, -50%) rotate(45deg);
 }
 
-.barogram-mark.end .barogram-mark-grip::after {
+.mark.end .grip::after {
   transform: translate(-70%, -50%) rotate(225deg);
 }
 
 /* The split point: a hairline through the profile with a round knob at
    its waist — a divider, not a bracket. */
-.barogram-mark.point .barogram-mark-grip {
+.mark.point .grip {
   left: -2px;
   top: -2px;
   bottom: -2px;
@@ -194,7 +194,7 @@
   border-radius: 2px;
 }
 
-.barogram-mark.point .barogram-mark-grip::before {
+.mark.point .grip::before {
   content: "";
   position: absolute;
   top: 50%;
@@ -207,7 +207,7 @@
   box-shadow: 0 1px 4px rgba(0, 0, 0, 0.4);
 }
 
-.barogram-mark.point .barogram-mark-grip::after {
+.mark.point .grip::after {
   content: "";
   position: absolute;
   top: 50%;
@@ -221,7 +221,7 @@
 }
 
 /* Zoomed only: reset back to the whole flight. */
-.barogram-reset {
+.reset {
   position: absolute;
   top: 4px;
   right: 4px;
@@ -240,7 +240,7 @@
 /* Which slice of the whole flight is on screen. The strip's space is
    ALWAYS reserved (hidden until zoomed) so zooming never changes the
    pane's height. */
-.barogram-overview {
+.overview {
   position: relative;
   height: 4px;
   border-radius: 2px;
@@ -249,11 +249,11 @@
   visibility: hidden;
 }
 
-.barogram-overview.zoomed {
+.overview.zoomed {
   visibility: visible;
 }
 
-.barogram-overview-window {
+.window {
   position: absolute;
   top: 0;
   bottom: 0;

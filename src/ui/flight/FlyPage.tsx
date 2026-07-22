@@ -43,7 +43,7 @@ import MapCluster from "../map/MapCluster";
 import type { MapView } from "../map/types";
 import ViewToggle from "../map/ViewToggle";
 import { useSettings } from "../settings/SettingsContext";
-import { useBigConfirm } from "./BigConfirm";
+import { ConfirmSurface, useBigConfirm } from "./BigConfirm";
 import LiveTrackMap from "./LiveTrackMap";
 import Tile from "./Tile";
 import { showToast } from "./toast";
@@ -530,37 +530,17 @@ export default function FlyPage() {
             />
           </div>
           {status === "landed" && landingAt !== null && (
-            /* Same surface as the end-flight confirm (BigConfirm's
-                 classes): one dialog language in flight. The scrim is the
-                 safe answer, like Cancel there. */
-            <div
-              className="big-confirm"
-              role="presentation"
-              data-testid="landing-prompt"
-              onClick={dismissLandingPrompt}
-            >
-              <div
-                className="big-confirm-panel"
-                role="alertdialog"
-                aria-modal="true"
-                aria-label="Landing detected"
-                onClick={(event) => event.stopPropagation()}
-              >
-                <div className="big-confirm-title">Landing detected</div>
-                <div className="big-confirm-actions">
-                  <button
-                    className="big-confirm-cancel"
-                    onClick={dismissLandingPrompt}
-                  >
-                    Still flying
-                  </button>
-                  <button className="big-confirm-action" onClick={endFlight}>
-                    Stop
-                    {snapshot.autoEnd ? ` (${landingSecondsLeft})` : ""}
-                  </button>
-                </div>
-              </div>
-            </div>
+            /* The end-flight confirm's exact surface (ConfirmSurface):
+                 one dialog language in flight. The scrim is the safe
+                 answer, like Cancel there. */
+            <ConfirmSurface
+              scrimTestId="landing-prompt"
+              title="Landing detected"
+              cancelLabel="Still flying"
+              action={`Stop${snapshot.autoEnd ? ` (${landingSecondsLeft})` : ""}`}
+              onCancel={dismissLandingPrompt}
+              onAction={endFlight}
+            />
           )}
         </div>
       )}

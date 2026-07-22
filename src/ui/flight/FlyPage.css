@@ -346,3 +346,30 @@
   margin: 0;
   background: rgba(120, 24, 24, 0.85);
 }
+
+/* The instruments strip: FlyPage's layout for the Tile components. */
+.instruments {
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  z-index: 5;
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  /* The 1px gaps sit over this light layer, so every cell reads as
+     divided by a crisp hairline — PPG Flyer's grid, not a faint seam. */
+  gap: 1px;
+  background: rgba(255, 255, 255, 0.22);
+  padding-top: env(safe-area-inset-top);
+}
+
+@media (min-width: 768px) {
+  .instruments {
+    top: 0.75rem;
+    left: auto;
+    right: 0.75rem;
+    width: 400px;
+    border-radius: 12px;
+    overflow: hidden;
+  }
+}
