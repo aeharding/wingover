@@ -1,55 +1,71 @@
-# CSS Modules — scope decision
+# CSS Modules — approach
 
-**TL;DR** CSS Modules is wired up and used for new isolated leaf components
-(see `NativeIcon`). A *broad* migration of the existing CSS is **not** done on
-purpose — the audit below shows it would add churn (mixed `className` soup,
-split files) for negligible benefit in this cascade-based, Ionic-integrated
-app. Use modules for genuinely-isolated new components; leave the global
-cascade (theme, shell, Ionic overrides, the map/replay contracts) as plain CSS.
+**TL;DR** CSS Modules is the direction for the whole app's component CSS, the
+way [Voyager](https://github.com/aeharding/voyager) does it (165 modules, 6
+plain files). This PR wires the toolchain and migrates the first leaf
+(`NativeIcon`); the rest follows as an architecture pass, not a 1:1 rename.
+The only CSS that stays global is the design-token / palette / Ionic-variable
+layer (`theme.css` plus a global-overrides entry) — exactly Voyager's handful
+of plain files.
 
 ## The toolchain works
-Vite scopes `*.module.css` out of the box — `.native-icon` →
-`_nativeIcon_<hash>` in the prod bundle; the default `import styles from
-"./x.module.css"` typing (`{ readonly [k: string]: string }`) compiles under
-tsc. No extra deps. (Per-class type-safety / dead-class detection would need a
-`.d.ts` codegen; not added, since the modularizable surface is tiny.)
 
-## Why not a broad migration (audit)
-A per-file class-coupling audit (each CSS class checked for: e2e/native
-test-locator use, JS creation via `className`/`classList`/`innerHTML`,
-cross-file references, and global `ion-*`/`:root`/element selectors):
+Vite scopes `*.module.css` with no extra deps: `.native-icon` →
+`_nativeIcon_<hash>` in the prod bundle, and the default `import styles`
+typing compiles under tsc.
 
-- **Genuinely global (keep as plain CSS):** `theme.css`, `desktop.css`,
-  `FlyPage.css` — 10-17 global selectors each (Ionic component overrides, the
-  `--ion-*` / `--ion-safe-area-*` token layer, the desktop shell). Modules
-  can't scope `:root` / `ion-item` / element selectors; these are correctly
-  document-scope.
-- **Contract / shared classes:** the map (`.map-container`, `.map-overlay`,
-  `.map-cluster`, `.map-cell-*`, `.map-button`) and replay (`.replay-dock`,
-  `.replay-readouts`, `.barogram`) classes are shared ACROSS components and, in
-  the map's case, created in JS by the adapters and read by MapKit/MapLibre.
-  Scoping them would mean threading a `styles` object through the backend
-  adapters and every host — high churn, and they'd have to stay effectively
-  global anyway.
-- **Everything else is MIXED:** almost every component tangles a few of its own
-  leaf classes with (a) shared classes, (b) dynamic modifier classes
-  (`barogram-mark ${kind}`, `barogram-overview zoomed`), (c) JS-created classes,
-  and (d) e2e class-locators. Modularizing the clean subset means a component
-  renders `className={`replay-dock ${styles.clipTransport}`}` — module + literal
-  soup — for classes that are already uniquely named (no collision the modules
-  would prevent).
-- **Cleanly modularizable:** only `NativeIcon` (done). `BigConfirm` and a
-  handful of others become *eligible* once their one e2e class-locator is
-  decoupled — but the intrinsic value (scoping ~6 unique classes) is low.
+## Two facts that make it work everywhere
 
-**The real win adjacent to this** is decoupling the e2e suite from CSS-class
-locators (`page.locator(".flight-row")` → semantic `getByRole`/`getByText` or
-`data-testid`). That improves test resilience and a11y regardless of modules,
-and is where the effort is better spent (tracked separately).
+An earlier draft of this doc argued against a broad migration on two grounds
+that are both wrong. For the record:
 
-## Recommendation
-1. New, genuinely-isolated leaf components → `*.module.css` (pattern:
-   `NativeIcon`).
-2. Existing global/contract/shell CSS → stays plain CSS.
-3. Don't force-migrate MIXED components; the mixed-className result is worse
-   than the well-named global classes it replaces.
+1. **Modules only rewrite _class_ selectors.** `ion-header`, element tags,
+   `::part()`, and `--ion-*` custom properties pass through untouched — you
+   write them straight inside a `.module.css`, scoped under the module's own
+   class. Only Ionic _utility classes_ (`.ion-page`, `.ion-hide`) and
+   third-party classes (MapKit's `.mk-*`) need `:global(...)`. So an
+   Ionic-heavy component is not "unmodularizable"; it just carries a few
+   `:global()` escapes, as Voyager's do.
+2. **JS-built classes hash fine.** `el.className = styles.waypointPin` — the
+   imported `styles` object carries the hashed name at runtime (`NativeIcon`
+   already relies on this for its mask class). Map adapters that set classes
+   in JS import the module and use `styles.x`; only classes owned by a library
+   (MapKit's) stay `:global`.
+
+## Architecture pass, not a rename
+
+A shared class — one CSS file's class used by a different component — is a
+smell, not something to preserve behind a shared module. Each is triaged:
+
+- **Relocate** misplaced styles to the component that renders them.
+  `FlyPage.css`'s `.idle-*` / `.fly-splash` belong to `FlySplash`;
+  `.map-compass*` to the `CompassButton` that draws it; the settings-row tone
+  classes to `SettingsPage`.
+- **Extract a component** where a shared class is really a missing one:
+  `.map-cluster` + `.map-cell-*` is a `<MapCluster>` overlay grid currently
+  hand-rolled in three pages.
+- **Keep one shared module** only for a feature's genuine shared vocabulary
+  (the sync sheet's `.sync-*`), imported by that feature's pieces.
+- **Ignore false shares** — a config string `"tile"` that means a map tile,
+  not the `.tile` class.
+
+The point is to let the migration _remove_ coupling, not re-encode it in
+module syntax.
+
+## Type safety
+
+The pilot uses Vite's built-in module typing. The full migration adopts
+`typed-css-modules` (`tcm src`) like Voyager, committing a `*.module.css.d.ts`
+next to each module, so `styles.foo` is a checked name and a missed or renamed
+class is a tsc error rather than a silent `undefined` className.
+
+## Stays global (the token layer)
+
+`theme.css` and a global-overrides entry hold `:root`, the palette, and the
+`--ion-*` / `--ion-safe-area-*` variables — selectors modules can't scope and
+shouldn't. This mirrors Voyager's `theme/*.css` + `globalCssOverrides.css`.
+
+## Status
+
+This PR: toolchain plus the `NativeIcon` pilot. The full component migration
+lands next as the architecture pass above.
