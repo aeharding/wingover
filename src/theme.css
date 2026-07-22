@@ -174,20 +174,8 @@
    --safe-area-inset-*) is the point: --ion-safe-area-* is computed once at
    <html> and inherits, so only overriding it reaches Ionic's components.
    Zeroed in px (not 0) so it stays a valid <length> everywhere it's read. */
-.consume-top {
-  --ion-safe-area-top: 0px;
-}
-
-.consume-right {
-  --ion-safe-area-right: 0px;
-}
-
 .consume-bottom {
   --ion-safe-area-bottom: 0px;
-}
-
-.consume-left {
-  --ion-safe-area-left: 0px;
 }
 
 /* An element fully within chrome (no device edge exposed on any side),
