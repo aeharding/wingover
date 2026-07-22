@@ -338,12 +338,15 @@ export default function PlanPage() {
   return (
     <IonPage>
       <IonContent scrollY={false}>
-        <div className="plan-split">
+        <div className={styles.split}>
           {isDesktop && (
-            <aside className="plan-pane" data-testid="plan-pane">
-              <div className="plan-pane-rows">
+            <aside className={styles.pane} data-testid="plan-pane">
+              <div className={styles.rows} data-testid="plan-pane-rows">
                 {pins.length === 0 ? (
-                  <div className="plan-pane-empty">
+                  <div
+                    className={styles.paneEmpty}
+                    data-testid="plan-pane-empty"
+                  >
                     Long-press the map to drop a pin: launches, LZs, fuel stops,
                     hazards.
                   </div>
@@ -351,7 +354,7 @@ export default function PlanPage() {
                   pins.map((pin, index) => (
                     <button
                       key={pin.id}
-                      className="plan-pane-row"
+                      className={styles.row}
                       onClick={() =>
                         map?.moveTo(
                           {
@@ -362,7 +365,7 @@ export default function PlanPage() {
                         )
                       }
                     >
-                      <span className="dot">{index + 1}</span>
+                      <span className={styles.dot}>{index + 1}</span>
                       <span>
                         <h3>{pin.name || `Pin ${index + 1}`}</h3>
                         {pin.notes && <p>{pin.notes}</p>}
@@ -372,10 +375,10 @@ export default function PlanPage() {
                 )}
               </div>
               {routeMeters > 0 && (
-                <div className="plan-pane-route">
+                <div className={styles.route}>
                   <span>Route: {formatDistance(routeMeters, units)}</span>
                   <button
-                    className="plan-pane-clear"
+                    className={styles.clear}
                     data-testid="plan-clear-route"
                     onClick={openRouteSheet}
                   >
@@ -390,7 +393,7 @@ export default function PlanPage() {
               keep the landscape notch. The bottom is owned by the tab bar on
               the phone (consumed in PlanPage.css) and is the device edge on
               desktop (no tab bar). */}
-          <div className={`plan-map ${styles.map}`} data-testid="plan-map">
+          <div className={styles.map} data-testid="plan-map">
             <MapCanvas
               base={view}
               appearance={appearance}

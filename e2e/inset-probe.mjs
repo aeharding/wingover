@@ -100,15 +100,15 @@ const scenarios = {
       await p.waitForTimeout(900);
     },
     specs: {
-      rail: ".desktop-rail",
-      railBrand: ".rail-brand",
-      paneHeader: ".pane-header",
-      paneScroll: ".logbook-pane-scroll",
-      paneItem: ".logbook-pane ion-item",
+      rail: '[data-testid="desktop-rail"]',
+      railBrand: '[data-testid="rail-brand"]',
+      paneHeader: '[data-testid="pane-header"]',
+      paneScroll: '[data-testid="logbook-pane-scroll"]',
+      paneItem: '[data-testid="logbook-pane"] ion-item',
       seatMapOverlay: '[data-testid="seat-map"] [data-testid="map-overlay"]',
       seatProbe: '[data-testid="seat-map"] [data-testid="map-inset-probe"]',
-      seatCard: ".seat-card",
-      seatCardItem: ".seat-card ion-item",
+      seatCard: '[data-testid="seat-card"]',
+      seatCardItem: '[data-testid="seat-card"] ion-item',
     },
   },
   "d-logbook-replay": {
@@ -173,9 +173,9 @@ const scenarios = {
     specs: {
       planProbe: '[data-testid="plan-map"] [data-testid="map-inset-probe"]',
       planOverlay: '[data-testid="plan-map"] [data-testid="map-overlay"]',
-      planPane: ".plan-pane",
-      planPaneRows: ".plan-pane-rows",
-      planPaneEmpty: ".plan-pane-empty",
+      planPane: '[data-testid="plan-pane"]',
+      planPaneRows: '[data-testid="plan-pane-rows"]',
+      planPaneEmpty: '[data-testid="plan-pane-empty"]',
     },
   },
   "d-settings": {
@@ -185,9 +185,9 @@ const scenarios = {
       await p.waitForTimeout(500);
     },
     specs: {
-      firstItem: ".desktop-main ion-item",
-      header: ".desktop-main ion-toolbar",
-      content: ".desktop-main ion-content",
+      firstItem: '[data-testid="desktop-main"] ion-item',
+      header: '[data-testid="desktop-main"] ion-toolbar',
+      content: '[data-testid="desktop-main"] ion-content',
     },
   },
   "d-allflights": {
@@ -201,7 +201,7 @@ const scenarios = {
       probe: '[data-testid="all-flights-map"] [data-testid="map-inset-probe"]',
       overlay: '[data-testid="all-flights-map"] [data-testid="map-overlay"]',
       legend: '[data-testid="composite-legend"]',
-      header: ".desktop-main ion-toolbar",
+      header: '[data-testid="desktop-main"] ion-toolbar',
     },
   },
   "m-logbook": {

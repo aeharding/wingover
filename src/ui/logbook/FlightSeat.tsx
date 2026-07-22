@@ -152,7 +152,7 @@ export default function FlightSeat({
   }
 
   // Full screen means NO chrome: the list pane, seat header and card hide
-  // via the body class (see desktop.css), the tab rail goes with it, and
+  // via the body class (see the shell + seat modules), the tab rail goes with it, and
   // the PWA sheds browser chrome via the Fullscreen API. Reversed in
   // cleanup so navigating away can't strand anything.
   useEffect(() => {
@@ -302,17 +302,17 @@ export default function FlightSeat({
   const stats = flight?.stats;
 
   return (
-    <div className="flight-seat">
+    <div className={seat.root}>
       {/* No header bar: the map runs to the top of the seat; the title,
           date, and options live in the floating card. Embedded, the map is
           at the shell's right/top/bottom device edges (it keeps those) but
           the rail + pane cover its left (zeroed by .desktop-main); full
           screen the rail hides and body.flight-map-full restores the left
-          edge for the whole seat (see desktop.css). When the scrub docks
+          edge for the whole seat (see FlightSeat.module.css). When the scrub docks
           below, IT owns the bottom, so the map consumes it (the drawer is a
           sibling and keeps its own). */}
       <div
-        className={`seat-map${replay.isOpen ? " consume-bottom" : ""}`}
+        className={`${seat.map}${replay.isOpen ? " consume-bottom" : ""}`}
         data-testid="seat-map"
       >
         <MapCanvas base={view} appearance={appearance} onReady={handleReady}>
@@ -354,11 +354,11 @@ export default function FlightSeat({
         </MapCanvas>
         {flight && stats && (
           <div
-            className={`seat-card${cardOpen ? "" : " collapsed"}`}
+            className={`${seat.card}${cardOpen ? ` ${seat.collapsed}` : ""}`}
             data-testid="seat-card"
           >
             <div
-              className="seat-card-header"
+              className={seat.cardHeader}
               onClick={(event) => {
                 // The whole title row is the collapse toggle; the buttons
                 // in it keep their own jobs.
@@ -368,7 +368,7 @@ export default function FlightSeat({
             >
               {/* The WHEN as the header: the name is already the editable
                   field below and the highlighted row in the list. */}
-              <div className="seat-card-title">
+              <div className={seat.cardTitle}>
                 {new Date(flight.startedAt).toLocaleString(undefined, {
                   month: "short",
                   day: "numeric",
@@ -378,7 +378,7 @@ export default function FlightSeat({
                 })}
               </div>
               <button
-                className="seat-card-collapse"
+                className={seat.cardCollapse}
                 aria-label="Options"
                 data-testid="detail-options"
                 onClick={openOptions}
@@ -386,7 +386,7 @@ export default function FlightSeat({
                 <IonIcon icon={ellipsisHorizontal} />
               </button>
               <button
-                className="seat-card-collapse"
+                className={seat.cardCollapse}
                 aria-label={cardOpen ? "Collapse details" : "Expand details"}
                 onClick={() => setCardOpen(!cardOpen)}
               >

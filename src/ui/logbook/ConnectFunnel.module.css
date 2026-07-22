@@ -1,0 +1,32 @@
+.funnel {
+  max-width: 22rem;
+  margin: 0 auto;
+  display: flex;
+  flex-direction: column;
+  gap: 0.3rem;
+  text-align: center;
+}
+
+.funnel h2 {
+  font-size: 1.15rem;
+  font-weight: 700;
+  margin: 0 0 0.2rem;
+}
+
+.sub {
+  color: var(--ion-color-medium);
+  font-size: 0.9rem;
+  margin: 0 0 1rem;
+}
+
+.problem {
+  color: var(--ion-color-danger);
+  font-size: 0.85rem;
+  margin: 0.4rem 0 0;
+}
+
+.status {
+  color: var(--ion-color-medium);
+  font-size: 0.9rem;
+  margin: 0.4rem 0 0;
+}

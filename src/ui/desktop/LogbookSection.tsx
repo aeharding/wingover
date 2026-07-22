@@ -18,6 +18,7 @@ import { useFlights } from "../logbook/useFlights";
 import LogbookEmpty from "../logbook/LogbookEmpty";
 import AllFlightsMapPage from "../pages/AllFlightsMapPage";
 import { useSettings } from "../settings/SettingsContext";
+import styles from "./LogbookSection.module.css";
 
 /**
  * The list pane's width, remembered per device. Plain localStorage, not a
@@ -157,14 +158,14 @@ export default function LogbookSection() {
   );
 
   return (
-    <div className="logbook-split">
+    <div className={styles.split}>
       <aside
-        className="logbook-pane"
+        className={styles.pane}
         style={{ width: paneWidth }}
         data-testid="logbook-pane"
       >
         <div
-          className="pane-resizer"
+          className={styles.resizer}
           role="separator"
           aria-orientation="vertical"
           aria-label="Resize flight list"
@@ -187,7 +188,7 @@ export default function LogbookSection() {
         {/* Header and totals are pinned OUTSIDE the scroller: the list's
             scroll view starts at pixel zero, so the virtualizer needs no
             leading-margin math at all. */}
-        <div className="pane-header">
+        <div className={styles.header} data-testid="pane-header">
           <h1>Logbook</h1>
           <IonButton
             fill="clear"
@@ -199,7 +200,7 @@ export default function LogbookSection() {
           </IonButton>
         </div>
         {!empty && flights.length > 0 && (
-          <div className="flightlist-totals">
+          <div className={styles.totals}>
             <div>
               <b>{flights.length}</b>
               <span>Flights</span>
@@ -219,7 +220,11 @@ export default function LogbookSection() {
             <ConnectFunnel onImport={() => fileInputRef.current?.click()} />
           </LogbookEmpty>
         ) : (
-          <div className="logbook-pane-scroll" ref={paneRef}>
+          <div
+            className={styles.scroll}
+            data-testid="logbook-pane-scroll"
+            ref={paneRef}
+          >
             <FlightList
               flights={flights}
               units={units}
@@ -234,7 +239,7 @@ export default function LogbookSection() {
           </div>
         )}
       </aside>
-      <div className="logbook-seat" data-testid="logbook-seat">
+      <div className={styles.seat} data-testid="logbook-seat">
         {selected ? (
           <FlightSeat
             id={selected.id}
@@ -245,7 +250,7 @@ export default function LogbookSection() {
             }}
           />
         ) : (
-          !empty && <div className="seat-placeholder">Select a flight</div>
+          !empty && <div className={styles.placeholder}>Select a flight</div>
         )}
       </div>
       <IonActionSheet

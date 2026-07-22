@@ -1,0 +1,116 @@
+@value empty from "../logbook/LogbookEmpty.module.css";
+
+.split {
+  display: flex;
+  height: 100%;
+}
+
+/* The desktop empty state breathes (the phone one centers full-height). */
+.split :global(.empty) {
+  padding: 2.5rem 1.25rem;
+}
+
+.pane {
+  /* Default width; the inline style (drag-resized, persisted) wins. */
+  width: 340px;
+  flex-shrink: 0;
+  display: flex;
+  flex-direction: column;
+  position: relative;
+  border-right: 1px solid var(--hairline);
+  /* Inboard of the device right edge (the seat is to its right), so its
+     FlightList ion-items must not inset right off the notch. Left is already
+     0 from the shell's main (the rail owns it); top/bottom pass through and
+     the header/list handle them. */
+  --ion-safe-area-right: 0px;
+}
+
+:global(body.flight-map-full) .pane {
+  display: none;
+}
+
+/* The grab strip straddling the pane's edge. Invisible until engaged so
+   the border stays a hairline; lights up under the pointer and on
+   keyboard focus (arrows resize, double-click resets). */
+.resizer {
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  right: -3px;
+  width: 6px;
+  cursor: col-resize;
+  z-index: 4;
+}
+
+.resizer:hover,
+.resizer:focus-visible {
+  background: var(--drag-wash);
+  outline: none;
+}
+
+/* The pane's bottom is the shell's floor: the list scroll clears the home
+   indicator so the last flight isn't half under it. */
+.scroll {
+  flex: 1;
+  min-height: 0;
+  overflow-y: auto;
+  padding-bottom: var(--ion-safe-area-bottom);
+}
+
+/* The pane header is at the shell's top edge: drop it below the status bar
+   (left is the rail's, already 0 here). */
+.header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: calc(0.6rem + var(--ion-safe-area-top)) 0.5rem 0.5rem 1.1rem;
+  border-bottom: 1px solid var(--hairline);
+}
+
+.header h1 {
+  margin: 0;
+  font-size: 1.25rem;
+  font-weight: 700;
+}
+
+.seat {
+  flex: 1;
+  min-width: 0;
+  position: relative;
+  display: flex;
+  flex-direction: column;
+}
+
+.placeholder {
+  flex: 1;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: var(--ion-color-medium);
+}
+
+/* ── the totals strip (list pane header) ──────────────────────────────── */
+.totals {
+  /* Content-sized columns, spread apart: equal thirds overflowed the
+     moment a season's distance grew to "11,623.51 mi". */
+  display: flex;
+  justify-content: space-between;
+  gap: 0.75rem;
+  padding: 0.7rem 1.1rem;
+  border-bottom: 1px solid var(--hairline);
+}
+
+.totals b {
+  display: block;
+  font-size: 1rem;
+  font-weight: 700;
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+}
+
+.totals span {
+  font-size: 0.62rem;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--ion-color-medium);
+}

@@ -16,6 +16,12 @@ ion-tabs .map {
   --ion-safe-area-bottom: 0px;
 }
 
+.map {
+  position: relative;
+  flex: 1;
+  min-width: 0;
+}
+
 /* Midpoint insert handle — a small dot the exact color of the route line, so
    it reads as a draggable "bump" on the leg. The 0×0 wrapper sits on the
    coordinate; the inner dot translates onto that origin (a larger, invisible
@@ -70,4 +76,102 @@ ion-tabs .map {
 
 .distance:active {
   opacity: 0.7;
+}
+
+/* ── plan: wrapper at every width; the pane joins on desktop ──────────── */
+.split {
+  display: flex;
+  height: 100%;
+}
+
+.pane {
+  width: 300px;
+  flex-shrink: 0;
+  overflow-y: auto;
+  border-right: 1px solid var(--hairline);
+  display: flex;
+  flex-direction: column;
+  /* No header of its own, so the pane itself clears the shell's top/bottom
+     device edges: its first row (or the "long-press to drop a pin" empty
+     note) drops below the status bar, and the route total lifts off the home
+     indicator. Left is the rail's (0 from the shell's main); right is
+     internal. */
+  padding-top: var(--ion-safe-area-top);
+  padding-bottom: var(--ion-safe-area-bottom);
+}
+
+.rows {
+  flex: 1;
+}
+
+.row {
+  display: flex;
+  gap: 0.7rem;
+  align-items: flex-start;
+  width: 100%;
+  text-align: left;
+  background: none;
+  border: 0;
+  color: var(--ion-text-color);
+  padding: 0.72rem 1.1rem;
+  border-bottom: 1px solid var(--hairline);
+}
+
+.row .dot {
+  flex-shrink: 0;
+  width: 22px;
+  height: 22px;
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 0.7rem;
+  font-weight: 700;
+  color: #000;
+  background: var(--wingover-green);
+  margin-top: 2px;
+}
+
+.row h3 {
+  margin: 0 0 1px;
+  font-size: 0.92rem;
+  font-weight: 600;
+}
+
+.row p {
+  margin: 0;
+  font-size: 0.78rem;
+  color: var(--ion-color-medium);
+}
+
+.paneEmpty {
+  padding: 1.2rem 1.1rem;
+  color: var(--ion-color-medium);
+  font-size: 0.9rem;
+}
+
+.route {
+  border-top: 1px solid var(--hairline);
+  padding: 0.8rem 1.1rem;
+  font-size: 0.9rem;
+  font-variant-numeric: tabular-nums;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.7rem;
+}
+
+.clear {
+  flex-shrink: 0;
+  background: none;
+  border: 0;
+  padding: 0;
+  font-size: 0.9rem;
+  font-weight: 600;
+  color: var(--ion-color-danger);
+  cursor: pointer;
+}
+
+.clear:hover {
+  text-decoration: underline;
 }

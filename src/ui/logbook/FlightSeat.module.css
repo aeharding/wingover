@@ -1,3 +1,27 @@
+/* The flight seat: the map IS the seat, edge to edge to the top; the
+   title, date, and options live in the floating card. */
+.root {
+  display: flex;
+  flex-direction: column;
+  height: 100%;
+}
+
+/* Full screen hides the rail (body.flight-map-full), so the whole seat — the
+   map AND the scrub docked below it — reaches the device left edge again:
+   take back the left inset that the shell's main zeroed for embedded content.
+   On the seat (not just the map), so the scrub, a sibling of the map,
+   restores too. var(...,env()) not bare env() so the harness (which injects
+   the upstream var) can verify it, same as everything else in the model. */
+:global(body.flight-map-full) .root {
+  --ion-safe-area-left: var(--safe-area-inset-left, env(safe-area-inset-left));
+}
+
+.map {
+  position: relative;
+  flex: 1;
+  min-height: 0;
+}
+
 /* Map chrome sits bottom-LEFT in the seat: the card owns the right
    column, and a grown Notes field must never sit under the expand
    button's hitbox. Raised above MapKit's Apple logo + Legal strip, which
@@ -7,4 +31,85 @@
   right: auto;
   left: calc(0.9rem + var(--ion-safe-area-left));
   bottom: calc(2.6rem + var(--ion-safe-area-bottom));
+}
+
+/* The floating details card floats against the seat's top-right — both
+   device edges on iPad. It insets its OWN position off them, and separately
+   clears safe area for everything inside it: its ion-items DO read
+   --ion-safe-area-* (Ionic's shadow padding), so without the consume they'd
+   pad off a notch the card has already stepped away from. Position reads the
+   raw --safe-area-inset-* (env() fallback), NOT --ion-safe-area-* — the two
+   can't share the var, since the card sets --ion-safe-area-* to 0. */
+.card {
+  position: absolute;
+  top: calc(0.9rem + var(--safe-area-inset-top, env(safe-area-inset-top)));
+  right: calc(
+    0.9rem + var(--safe-area-inset-right, env(safe-area-inset-right))
+  );
+  width: 380px;
+  max-height: calc(
+    100% - 1.8rem - var(--safe-area-inset-top, env(safe-area-inset-top))
+  );
+  --ion-safe-area-top: 0px;
+  --ion-safe-area-right: 0px;
+  --ion-safe-area-bottom: 0px;
+  --ion-safe-area-left: 0px;
+  overflow-y: auto;
+  background: var(--float-card-bg);
+  border: 1px solid var(--hairline);
+  border-radius: 14px;
+  z-index: 5;
+}
+
+:global(body.flight-map-full) .card {
+  display: none;
+}
+
+.card ion-list {
+  background: transparent;
+  padding-top: 0;
+}
+
+.card ion-item {
+  --background: transparent;
+}
+
+/* The whole row toggles the card (see the tsx); the chevron is the
+   labelled control, the rest of the row its generous hit area. */
+.cardHeader {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  padding: 0.7rem 0.5rem 0.5rem 1rem;
+  cursor: pointer;
+}
+
+.cardTitle {
+  /* The title owns the slack: the options + collapse buttons sit
+     together at the right edge instead of space-between floating them. */
+  flex: 1;
+  font-weight: 700;
+  font-size: 1.02rem;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.cardCollapse {
+  flex-shrink: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 2rem;
+  height: 2rem;
+  font-size: 1.1rem;
+  color: var(--ion-color-medium);
+  background: none;
+  border: 0;
+}
+
+.card.collapsed {
+  width: auto;
+  max-width: 380px;
 }
