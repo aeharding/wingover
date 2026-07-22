@@ -86,6 +86,18 @@ Conventions the migration settled on:
   component's internals by descendant selector; the component exposes a
   variant (`<ReplayDock seat>`) or takes a placement `className`
   (`<LiveTrackMap className={styles.liveMap}>`).
+- **Never rely on same-element cross-module ties.** Two single classes
+  from different modules on one element tie on specificity, and the
+  winner is bundle emission order — which DIFFERS between dev (import
+  order) and prod (chunk concatenation). Adversarial review caught three
+  shipped-neutral-in-prod regressions from exactly this (the red Stop
+  button, the seat overlay anchor, the speed button size). When a local
+  class overrides a contract class's property on the same element, scope
+  it under a local ancestor (`.controls .stop`, `.map .overlay`) so
+  descendant specificity decides, order-independently. Corollary: visual
+  verification of cascade behavior must run against the PROD bundle
+  (`vite build` + preview or a computed-style harness), never the dev
+  server.
 - **Types**: `pnpm generate:csstypes` (typed-css-modules) writes a
   committed `*.module.css.d.ts` per module; a missed or renamed class is
   a tsc error.

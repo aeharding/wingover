@@ -22,8 +22,11 @@
   flex: 1;
 }
 
-/* The speed control is its label. */
-.speed {
+/* The speed control is its label. Scoped under .transport ON PURPOSE:
+   .speed shares its element with the map contract's .button and a
+   single-class tie falls to bundle order (prod emitted the contract
+   later, inflating this to 1.5rem). */
+.transport .speed {
   font-size: 1.05rem;
   font-weight: 700;
   font-variant-numeric: tabular-nums;

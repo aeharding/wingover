@@ -286,7 +286,12 @@
   border-color: var(--stat-green);
 }
 
-.stop {
+/* Scoped under .controls ON PURPOSE: .stop rides the same element as the
+   map contract's .button, and two single classes tie on specificity — the
+   winner would be bundle emission order, which differs dev vs prod (this
+   exact rule shipped neutral in prod while dev showed red). A local
+   ancestor makes the override deterministic. */
+.controls .stop {
   background: rgba(150, 30, 30, 0.9);
   touch-action: none;
 }
