@@ -24,7 +24,7 @@ import DesktopShell from "./desktop/DesktopShell";
 import FlightSurface from "./flight/FlyPage";
 import AllFlightsMapPage from "./pages/AllFlightsMapPage";
 import FlightDetailPage from "./pages/FlightDetailPage";
-import FlyPage from "./pages/FlyPage";
+import FlyFrame from "./pages/FlyFrame";
 import LogbookPage from "./pages/LogbookPage";
 import MapProviderPage from "./pages/MapProviderPage";
 import PlanPage from "./pages/PlanPage";
@@ -117,7 +117,7 @@ function TabShell() {
               gate because the opt-in is mirrored to localStorage, so
               canRecord is correct synchronously at first render. */}
           {canRecord ? (
-            <Route exact path="/fly" component={FlyPage} />
+            <Route exact path="/fly" component={FlyFrame} />
           ) : (
             <Route exact path="/fly">
               <Redirect to="/logbook" />

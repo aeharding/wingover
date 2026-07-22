@@ -6,11 +6,10 @@ import {
   IonToolbar,
 } from "@ionic/react";
 
-import { cx } from "../cx";
 import FlyPage from "../flight/FlyPage";
 import FlySplash from "../flight/FlySplash";
 
-import styles from "./FlyPage.module.css";
+import styles from "./FlyFrame.module.css";
 
 /**
  * The Ionic frame around the Ionic-free flight surface. The phone's
@@ -19,7 +18,7 @@ import styles from "./FlyPage.module.css";
  * the frame lives out here in Ionic land. The desktop shell renders
  * src/ui/flight/FlyPage directly, frameless.
  *
- * .fly-page-frame (theme.css) pins the frame black in both schemes: the
+ * .frame (FlyFrame.module.css) pins the frame black in both schemes: the
  * flight surface is exempt from theming.
  *
  * fullscreen + scrollY={false}: fullscreen lets the content box reach
@@ -30,13 +29,13 @@ import styles from "./FlyPage.module.css";
  * artwork flows into the bar; the surface renders transparent over it
  * when idle and covers it in flight.
  */
-export default function FlyPageFramed() {
+export default function FlyFrame() {
   return (
-    <IonPage className={cx("fly-page-frame", styles.frame)}>
+    <IonPage className={styles.frame}>
       {/* The large-title pattern, same as SettingsPage: a main header
           (its title shows condensed on scroll) paired with the condense
           header in the content (the big title). Both toolbars are
-          transparent and pointer-inert (FlyPage.css) so the title floats
+          transparent and pointer-inert (FlyFrame.module.css) so the title floats
           over the sky. The armed/recording states cover it for free —
           the surface below paints opaque over the whole content box in
           flight — and the whole Ionic shell is shed then anyway. */}
