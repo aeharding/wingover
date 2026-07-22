@@ -105,9 +105,12 @@ Conventions the migration settled on:
   cross-imports currently make Vite re-emit the imported module's CSS once
   per importer (byte-identical duplicates, harmless because ties are banned,
   ~2.5KB pre-gzip; known quirk, revisit on Vite upgrades).
-- **Types**: `pnpm generate:csstypes` (typed-css-modules) writes a
-  committed `*.module.css.d.ts` per module; a missed or renamed class is
-  a tsc error.
+- **Types**: typed-css-modules writes a `*.module.css.d.ts` per module —
+  GENERATED, gitignored, produced by `postinstall`/`prebuild` (or
+  `pnpm generate:csstypes`). A missed or renamed class is a tsc error.
+  Caveat: if the d.ts are absent, tsc silently falls back to Vite's loose
+  ambient `{ [k: string]: string }` — which is why generation is wired
+  into the lifecycle and check:css fails on a missing pair.
 - **Tests/harness**: e2e and `e2e/inset-probe.mjs` locate by
   `data-testid`/roles only — hashed class names never appear in tests.
 
@@ -121,10 +124,9 @@ The conventions above hold by CI, not by memory:
   app-state) nor a same-file `@value` import; an `@value` whose target
   file or class doesn't exist; a module without its committed `.d.ts` (or
   an orphan `.d.ts`); a module nothing imports.
-- CI also regenerates types and fails on drift:
-  `pnpm generate:csstypes && git diff --exit-code -- '*.module.css.d.ts'`
-  (the script chains prettier — bare `tcm` output always differs from the
-  committed form).
+- Types are generated, not committed: `postinstall` runs tcm on every
+  install (including CI), and check:css's pairing check fails the build
+  if generation didn't happen.
 - `scripts/css-equiv.py` is the refactor-verification tool: build at the
   base ref, save `dist/assets/index-*.css`, build at the head, then
   `python3 scripts/css-equiv.py before.css after.css`. It proves rule

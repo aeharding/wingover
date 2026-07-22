@@ -18,9 +18,9 @@ jobs:
       - run: pnpm install --frozen-lockfile
       - run: pnpm lint
       - run: pnpm format:check
+      # *.module.css.d.ts are generated (postinstall), not committed;
+      # check:css's pairing check fails if generation didn't run.
       - run: pnpm check:css
-      # tcm drift: the committed *.module.css.d.ts must match the css.
-      - run: pnpm generate:csstypes && git diff --exit-code -- '*.module.css.d.ts' || (echo '::error::*.module.css.d.ts drifted — run pnpm generate:csstypes and commit' && exit 1)
       - run: pnpm exec vitest run
       - run: pnpm build
       - run: pnpm exec playwright install --with-deps chromium

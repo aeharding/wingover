@@ -16,8 +16,10 @@
     "format:check": "prettier --check .",
     "screenshots": "node screenshots/fetch-fonts.mjs && node screenshots/generate.mjs && node screenshots/generate-ipad.mjs && node screenshots/web-optimize.mjs && node screenshots/hero.mjs",
     "release": "release-it",
-    "generate:csstypes": "tcm -p \"src/**/*.module.css\" && prettier --write \"src/**/*.module.css.d.ts\"",
-    "check:css": "node scripts/check-css-conventions.mjs"
+    "generate:csstypes": "tcm -p \"src/**/*.module.css\"",
+    "check:css": "node scripts/check-css-conventions.mjs",
+    "postinstall": "tcm -p \"src/**/*.module.css\"",
+    "prebuild": "tcm -p \"src/**/*.module.css\""
   },
   "dependencies": {
     "@apple/mapkit-loader": "^1.0.0",

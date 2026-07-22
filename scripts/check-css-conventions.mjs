@@ -12,9 +12,10 @@
  *                     hard-coded.
  *  3. value-imports — every `@value x from "./m.module.css"` resolves, and
  *                     m actually declares .x.
- *  4. dts-pairing   — every module has a committed .d.ts and every .d.ts a
- *                     module (tcm drift is CI's regenerate+diff step; this
- *                     catches orphans from renames/deletes).
+ *  4. dts-pairing   — every module has a GENERATED .d.ts (gitignored;
+ *                     postinstall/prebuild run tcm) and every .d.ts a
+ *                     module — catches generation not running, and
+ *                     orphans from renames/deletes.
  *  5. module-used   — every module is imported by some ts/tsx or @value'd
  *                     by another module (dead file detection).
  *
@@ -143,7 +144,7 @@ for (const f of modules) {
   // ── 4. dts-pairing (module -> d.ts) ──
   if (!existsSync(f + ".d.ts")) {
     violations.push(
-      `${rel(f)}: missing committed ${rel(f)}.d.ts — run pnpm generate:csstypes`,
+      `${rel(f)}: missing generated ${rel(f)}.d.ts — run pnpm generate:csstypes (postinstall does this; did it run?)`,
     );
   }
 }
