@@ -13,8 +13,10 @@ cd "$(dirname "$0")"
 #    the tests;
 #  - a flight's worth of motion streaming: out-and-back 1.2 km laps at
 #    40 m/s (well past the 4.5 m/s takeoff threshold; speed is the suite's
-#    master pace knob), fresh fixes at 1 Hz, ~8 min of playback — enough to
-#    outlive the suite. The scenario runs on the HOST, so it keeps feeding
+#    master pace knob), fresh fixes at 1 Hz, ~60 min of playback, sized to
+#    outlive the whole suite (the first launch's compile and pre-warm can
+#    burn minutes before the movement test even starts). The scenario runs
+#    on the HOST, so it keeps feeding
 #    CoreLocation while the app is backgrounded — which is the point. Laps,
 #    not a one-way line, because the waypoint test drops a pin at "wherever
 #    the sim is right now" and relies on the path re-crossing that spot
