@@ -1,16 +1,69 @@
 import { expect, test } from "@playwright/test";
 
-// Playwright emulates prefers-color-scheme: light by default. The palette
-// is CLASS-driven (appTheme.ts stamps ion-palette-dark on <html> from the
-// system scheme OR the global satellite view), so a flip lands one JS
-// listener after emulateMedia — assertions on the flipped state poll.
+// Playwright emulates prefers-color-scheme: light by default. The palette is
+// CLASS-driven (appTheme.ts stamps ion-palette-dark on <html>), and the
+// Appearance setting gates it: the DEFAULT is Dark (the class is on even
+// under a light system), and "auto" restores the follow-the-system behavior
+// (dark when the OS scheme is dark OR the global satellite view is on). A flip
+// lands one JS listener after emulateMedia — assertions on the flipped state
+// poll.
 
 const html = (page: import("@playwright/test").Page) => page.locator("html");
+
+// Drive the local settings store directly, the way these tests already flip
+// mapView. Auto restores the follow-the-system palette that the Dark default
+// otherwise overrides.
+const setAppearance = (page: import("@playwright/test").Page, value: string) =>
+  page.evaluate(async (v) => {
+    const specifier = "/src/storage/local.ts";
+    const local = (await import(/* @vite-ignore */ specifier)) as {
+      setSetting(key: string, value: string): Promise<void>;
+    };
+    await local.setSetting("appearance", v as string);
+  }, value);
+
+test("the DEFAULT appearance is Dark, even when the system prefers light", async ({
+  page,
+}) => {
+  await page.emulateMedia({ colorScheme: "light" });
+  await page.goto("/?map-style=blank");
+  // Fresh state, nothing stored: Dark is the default (fresh installs
+  // included), so the class is present despite the light system scheme.
+  await expect(html(page)).toHaveClass(/ion-palette-dark/);
+});
+
+test("appearance defaults to Dark; Auto set in Settings follows the system", async ({
+  page,
+}) => {
+  await page.emulateMedia({ colorScheme: "light" });
+  await page.goto("/?map-style=blank");
+  await expect(html(page)).toHaveClass(/ion-palette-dark/);
+
+  // Drive the real Settings UI to pick Auto.
+  await page.locator("#tab-button-settings").click();
+  await page.getByTestId("settings-appearance").click();
+  const autoRadio = page.locator("ion-radio", { hasText: "Auto" });
+  await expect(autoRadio).toBeVisible();
+  await autoRadio.click();
+
+  // Auto + light system: the palette follows the system and drops dark.
+  await expect(html(page)).not.toHaveClass(/ion-palette-dark/);
+
+  // ...and it tracks a live scheme flip, both ways, with no reload.
+  await page.emulateMedia({ colorScheme: "dark" });
+  await expect(html(page)).toHaveClass(/ion-palette-dark/);
+  await page.emulateMedia({ colorScheme: "light" });
+  await expect(html(page)).not.toHaveClass(/ion-palette-dark/);
+});
 
 test("classic palette and Ionic base vars follow the system scheme", async ({
   page,
 }) => {
   await page.goto("/?map-style=blank");
+  // The DEFAULT is Dark; this test covers the AUTO (follow-system) palette, so
+  // switch to Auto and let the light scheme paint before reading vars.
+  await setAppearance(page, "auto");
+  await expect(html(page)).not.toHaveClass(/ion-palette-dark/);
 
   const rootVar = (name: string) =>
     page.evaluate(
@@ -37,6 +90,8 @@ test("classic palette and Ionic base vars follow the system scheme", async ({
 
 test("ground map restyles live when the scheme flips", async ({ page }) => {
   await page.goto("/?map-style=blank");
+  // Auto so the map tracks the system scheme (the Dark default would pin it).
+  await setAppearance(page, "auto");
   await page.locator("#tab-button-plan").click();
 
   // Light scheme -> light basemap (map-light also styles the attribution).
@@ -57,6 +112,9 @@ test("ground map restyles live when the scheme flips", async ({ page }) => {
 
 test("satellite forces the dark palette app-wide", async ({ page }) => {
   await page.goto("/?map-style=blank");
+  // In Auto, satellite is what forces dark; the Dark default makes it moot, so
+  // this test runs in Auto (light system) to prove satellite drives the flip.
+  await setAppearance(page, "auto");
   await expect(html(page)).not.toHaveClass(/ion-palette-dark/);
 
   // The street/satellite choice is ONE global persistent setting; flip it
@@ -125,10 +183,13 @@ test("settings shows the large-title header on a grouped page", async ({
   page,
 }) => {
   await page.goto("/?map-style=blank");
+  // The grouped gray under test is the LIGHT scheme's, so run in Auto + light.
+  await setAppearance(page, "auto");
   await page.locator("#tab-button-settings").click();
   await expect(
     page.getByTestId("settings-content").locator('ion-title[size="large"]'),
   ).toHaveText("Settings");
+  await expect(html(page)).not.toHaveClass(/ion-palette-dark/);
   // The grouped gray lives on the CONTENT (fullscreen, painting under
   // the at-rest transparent toolbar) and the page HOST paints NOTHING:
   // Ionic's large-title transition slides content while page hosts stay
@@ -153,8 +214,12 @@ test("a scheme flip restyles the map IN PLACE: same instance, same camera", asyn
   page,
 }) => {
   await page.goto("/plan?map-style=blank");
+  // Auto + light system so the flip below is a real light->dark transition,
+  // not a dark->dark no-op under the Dark default.
+  await setAppearance(page, "auto");
   const mapEl = page.getByTestId("map-container");
   await expect(mapEl).toBeVisible();
+  await expect(mapEl).toHaveAttribute("data-appearance", "light");
 
   // The native MapLibre handle (stashed by the adapter). Stamp a probe
   // expando on the instance: if the flip re-created the backend, the
