@@ -436,6 +436,25 @@ body.flight-map-full .seat-card {
   padding: 0.8rem 1.1rem;
   font-size: 0.9rem;
   font-variant-numeric: tabular-nums;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.7rem;
+}
+
+.plan-pane-clear {
+  flex-shrink: 0;
+  background: none;
+  border: 0;
+  padding: 0;
+  font-size: 0.9rem;
+  font-weight: 600;
+  color: var(--ion-color-danger);
+  cursor: pointer;
+}
+
+.plan-pane-clear:hover {
+  text-decoration: underline;
 }
 
 /* ── settings: a centered column, not a stretched phone ───────────────── */
