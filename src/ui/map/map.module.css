@@ -13,8 +13,9 @@
 /* The bridge from CSS var to the MapKit JS API: an inert box whose padding
    IS var(--ion-safe-area-*) — already cascaded and consumed at this map's
    position. MapCanvas reads its computed padding and feeds setInsets; a
-   StyleObserver on these padding longhands refires whenever any edge
-   changes (rotation, a consume class toggling). Zero-size, hidden, unpainted. */
+   ResizeObserver on the container refires the read whenever the map box
+   moves — which every inset-moving event also does (rotation, fullscreen
+   reparents, pane docking; e2e/inset-bridge.spec.ts guards the seam). Zero-size, hidden, unpainted. */
 .insetProbe {
   position: absolute;
   top: 0;

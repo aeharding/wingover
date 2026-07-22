@@ -5,7 +5,6 @@ import {
   useRef,
   useState,
 } from "react";
-import StyleObserver from "style-observer";
 
 import { onSettingChanged } from "../../storage/local";
 import { type MapAppearance, type MapViewKind, resolveBackend } from "./config";
@@ -224,29 +223,31 @@ export default function MapCanvas({
       left: parseFloat(style.paddingLeft) || 0,
     };
     viewRef.current?.setInsets(insetsRef.current);
-  });
-
-  // StyleObserver (Lea Verou) fires whenever the probe's resolved padding
-  // moves, which is exactly when the exposed inset moves: device rotation
-  // re-resolves env(), and a consume class toggling (the replay pane
-  // opening, a fullscreen switch) changes a --ion-safe-area-* var. One
-  // read + one observer covers every case; the initial read seeds it.
-  // observe/unobserve take (target, properties) explicitly — the options-
-  // object form leaves a single Element as `targets`, whose missing
-  // `.length` silently skips the observe and throws on teardown.
+    // Mirror what was pushed, for tests and devtools: the CSS side of the
+    // model is probeable from CSS, but whether the JS bridge actually fired
+    // (the bug class: a reparent swallowing the observer event) is only
+    // visible here.
+    const { top, right, bottom, left } = insetsRef.current;
+    probe.setAttribute("data-insets", `${top},${right},${bottom},${left}`);
+  }); // One mechanism: a ResizeObserver on the container. Every event that
+  // changes this map's exposed inset also changes its box on today's
+  // surfaces — rotation re-resolves env() while the viewport swaps,
+  // fullscreen toggles reparent into a different-sized slot, the replay
+  // pane shrinks the map above it, the desktop rail hiding widens the
+  // seat. A transition-event style observer looked cleverer but had a
+  // structural blind spot: changes applied while the node moves through
+  // the DOM (the reverse-portal fullscreen toggle) fire no transition,
+  // and the basemap attribution held a stale inset until rotation.
+  // INVARIANT this trades on: if a future surface ever flips a
+  // consume class without changing the map's box, this needs a poke —
+  // e2e/inset-bridge.spec.ts guards the seam.
   useEffect(() => {
-    const probe = probeRef.current;
-    if (!probe) return;
+    const container = containerRef.current;
+    if (!container) return;
     readInsets();
-    const props = [
-      "padding-top",
-      "padding-right",
-      "padding-bottom",
-      "padding-left",
-    ];
-    const observer = new StyleObserver(() => readInsets());
-    observer.observe(probe, props);
-    return () => observer.unobserve(probe, props);
+    const resize = new ResizeObserver(() => readInsets());
+    resize.observe(container);
+    return () => resize.disconnect();
   }, []);
 
   // Modifier classes go through classList: maplibre writes its own classes to

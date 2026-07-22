@@ -24,8 +24,10 @@ Two facts that drive everything:
 2. **`env()` cannot be overridden or made position-aware.** `--ion-safe-area-*`
    can. So the whole app reads `var(--ion-safe-area-*)` (never `env()` directly,
    outside the FlyPage which is deliberately Ionic-free and always full-screen),
-   and MapCanvas bridges the resolved value to MapKit via a hidden probe +
-   `style-observer`.
+   and MapCanvas bridges the resolved value to MapKit via a hidden probe whose
+   padding IS the vars, re-read by a ResizeObserver on the container (any
+   inset-moving event also moves the map box; transition-event observers
+   missed changes applied across a DOM move — e2e/inset-bridge.spec.ts).
 
 ### Consuming
 
