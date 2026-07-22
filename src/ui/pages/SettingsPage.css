@@ -28,12 +28,14 @@
 .settings-page {
   --ion-background-color: #f2f2f7;
   --ion-background-color-rgb: 242, 242, 247;
-  /* Paint the page ELEMENT too: with the large-title (condense) pattern,
-     Ionic holds the main toolbar's background at opacity 0 while the big
-     title shows (native iOS fades the bar in on scroll), and ion-page
-     itself paints nothing — so an unpainted page shows body's white
-     through the transparent bar as a mismatched strip. */
-  background: var(--ion-background-color);
+  /* The page HOST deliberately paints NOTHING. Ionic's iOS large-title
+     transition slides each page's CONTENT and headers while the ion-page
+     hosts stay parked full-viewport - an opaque host background here sat
+     on top of the entering page and blanked its rows for the whole back
+     transition (the regression). The strip behind the at-rest
+     transparent toolbar is covered the way the Ionic docs do it instead:
+     the content is fullscreen and paints its own --background under the
+     bar. */
 }
 
 .settings-content ion-list.list-inset {

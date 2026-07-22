@@ -5,7 +5,7 @@
   "identifier": "app.wingover.wingover",
   "build": {
     "beforeDevCommand": "pnpm dev",
-    "devUrl": "http://localhost:5173",
+    "devUrl": "http://localhost:5173/?app",
     "beforeBuildCommand": "pnpm build",
     "frontendDist": "../dist"
   },

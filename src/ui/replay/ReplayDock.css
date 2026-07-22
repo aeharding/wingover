@@ -1,0 +1,90 @@
+.replay-dock {
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+  /* Top padding clears the drawer pull's lower half (it straddles the
+     pane's top edge, dipping ~0.9rem in) — on a phone the pull is centered
+     right over the middle readout's label. The dock is the bottom-most,
+     right-most surface (phone full screen; desktop seat) so it clears the
+     home indicator (bottom) and, in landscape, the notch (left/right) — off
+     the resolved --ion-safe-area-* so a consumed edge (desktop left) reads
+     0 instead of the raw device value. */
+  padding: 1.1rem calc(0.75rem + var(--ion-safe-area-right))
+    calc(0.5rem + var(--ion-safe-area-bottom))
+    calc(0.75rem + var(--ion-safe-area-left));
+  /* SOLID: the pane overlays nothing (it sits in flow below the map),
+     and a translucent fill only made the drawer pull composite to a
+     mismatched shade. Shares --replay-pane-bg with the drawer pull. */
+  background: var(--replay-pane-bg);
+}
+
+/* The six in-flight stats: five live readouts here, elapsed time below in
+   the transport (the nav pair needs the live waypoint sequence, which
+   isn't recorded per moment). */
+.replay-readouts {
+  display: flex;
+  justify-content: space-between;
+  gap: 0.6rem;
+  min-width: 0;
+}
+
+.replay-readout {
+  min-width: 0;
+}
+
+.replay-readout .label {
+  font-size: 0.58rem;
+  letter-spacing: 0.05em;
+  text-transform: uppercase;
+  color: var(--replay-muted);
+  white-space: nowrap;
+}
+
+.replay-readout .value {
+  font-size: 1.02rem;
+  font-weight: 700;
+  font-variant-numeric: tabular-nums;
+  color: var(--replay-ink);
+  white-space: nowrap;
+}
+
+.replay-readout.cyan .value {
+  color: var(--replay-cyan);
+}
+
+.replay-readout.green .value {
+  color: var(--replay-green);
+}
+
+.replay-readout.yellow .value {
+  color: var(--replay-yellow);
+}
+
+.replay-transport {
+  display: flex;
+  align-items: center;
+  gap: 0.6rem;
+}
+
+.replay-time {
+  color: var(--replay-ink);
+  font-size: 1.05rem;
+  font-weight: 600;
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+}
+
+.replay-time-total {
+  color: var(--replay-muted);
+}
+
+.replay-transport-spring {
+  flex: 1;
+}
+
+/* The speed control is its label. */
+.replay-speed {
+  font-size: 1.05rem;
+  font-weight: 700;
+  font-variant-numeric: tabular-nums;
+}

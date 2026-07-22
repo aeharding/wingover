@@ -80,6 +80,7 @@ export default function PlanPage() {
   const [map, setMap] = useState<MapView | null>(null);
   const lineRef = useRef<Line | null>(null);
   const markersRef = useRef<MarkerLayer | null>(null);
+  const skipArrivalFrameRef = useRef(false);
 
   // Total route length = sum of the legs between consecutive pins, for
   // planning (matches the idle Fly screen's "Planned route").
@@ -235,6 +236,9 @@ export default function PlanPage() {
     });
     markersRef.current = next.markers();
     next.on("longpress", (event) => addPin(event.at));
+    // A re-created map that inherited its camera (appearance flip) must
+    // not re-run the initial framing — the pilot's place survives.
+    skipArrivalFrameRef.current = next.restoredCamera === true;
     setMap(next);
   }
 
@@ -252,7 +256,12 @@ export default function PlanPage() {
   });
 
   useEffect(() => {
-    if (map) frameInitial(map);
+    if (!map) return;
+    if (skipArrivalFrameRef.current) {
+      skipArrivalFrameRef.current = false;
+      return;
+    }
+    frameInitial(map);
   }, [map]);
 
   useEffect(() => {
@@ -375,34 +384,44 @@ export default function PlanPage() {
               )}
             </aside>
           )}
+          {/* The plan map is full-bleed with NO header: its top is a real
+              device edge (status bar), so it keeps the top inset; left/right
+              keep the landscape notch. The bottom is owned by the tab bar on
+              the phone (consumed in PlanPage.css) and is the device edge on
+              desktop (no tab bar). */}
           <div className="plan-map">
             <MapCanvas
               base={view}
               appearance={appearance}
               onReady={handleReady}
-            />
-            <div className="map-overlay">
-              {map && <CompassButton map={map} />}
-              <button
-                className="map-button"
-                aria-label="Center on me"
-                onClick={locate}
-              >
-                <IonIcon icon={locateOutline} />
-              </button>
-              {map?.supportsSatellite && (
-                <ViewToggle view={view} onChange={changeView} />
+            >
+              <div className="map-overlay">
+                {map && <CompassButton map={map} />}
+                <button
+                  className="map-button"
+                  aria-label="Center on me"
+                  onClick={locate}
+                >
+                  <IonIcon icon={locateOutline} />
+                </button>
+                {map?.supportsSatellite && (
+                  <ViewToggle view={view} onChange={changeView} />
+                )}
+              </div>
+              {/* No aria-label on the pill: the native WaypointUITests probe
+                  reads the "Route:" static text off it, and an aria-label would
+                  collapse the button to a single AX leaf and hide it (matches
+                  #118's canonical form; keeps the sim-only iOS test green). */}
+              {routeMeters > 0 && (
+                <button
+                  className="plan-distance"
+                  data-testid="plan-distance"
+                  onClick={openRouteSheet}
+                >
+                  Route: {formatDistance(routeMeters, units)}
+                </button>
               )}
-            </div>
-            {routeMeters > 0 && (
-              <button
-                className="plan-distance"
-                data-testid="plan-distance"
-                onClick={openRouteSheet}
-              >
-                Route: {formatDistance(routeMeters, units)}
-              </button>
-            )}
+            </MapCanvas>
           </div>
         </div>
       </IonContent>

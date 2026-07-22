@@ -123,13 +123,133 @@ test("settings shows the large-title header on a grouped page", async ({
   await expect(
     page.locator('.settings-content ion-title[size="large"]'),
   ).toHaveText("Settings");
-  // The page ELEMENT paints the grouped gray: with the large-title
-  // pattern the toolbar background sits at opacity 0 at rest, so an
-  // unpainted page would show body's white through it as a strip.
-  const pageBg = await page.evaluate(
-    () =>
-      getComputedStyle(document.querySelector(".settings-page")!)
-        .backgroundColor,
-  );
-  expect(pageBg).toBe("rgb(242, 242, 247)");
+  // The grouped gray lives on the CONTENT (fullscreen, painting under
+  // the at-rest transparent toolbar) and the page HOST paints NOTHING:
+  // Ionic's large-title transition slides content while page hosts stay
+  // parked full-viewport, so an opaque host background covers the
+  // entering page's rows for the whole back transition. Regression
+  // guard for exactly that.
+  const bg = await page.evaluate(() => ({
+    host: getComputedStyle(document.querySelector(".settings-page")!)
+      .backgroundColor,
+    content: getComputedStyle(document.querySelector(".settings-content")!)
+      .getPropertyValue("--background")
+      .trim(),
+  }));
+  expect(bg.host).toBe("rgba(0, 0, 0, 0)");
+  expect(bg.content).toBe("#f2f2f7");
+});
+
+test("a scheme flip restyles the map IN PLACE: same instance, same camera", async ({
+  page,
+}) => {
+  await page.goto("/plan?map-style=blank");
+  const mapEl = page.locator(".map-container");
+  await expect(mapEl).toBeVisible();
+
+  // The native MapLibre handle (stashed by the adapter). Stamp a probe
+  // expando on the instance: if the flip re-created the backend, the
+  // successor would not carry it.
+  type Handle = HTMLElement & {
+    __map?: {
+      __probe?: boolean;
+      jumpTo(o: { center: [number, number]; zoom: number }): void;
+      getCenter(): { lng: number; lat: number };
+      getZoom(): number;
+    };
+  };
+  await expect
+    .poll(() => mapEl.evaluate((el) => Boolean((el as Handle).__map)))
+    .toBe(true);
+  await mapEl.evaluate((el) => {
+    const m = (el as Handle).__map!;
+    m.__probe = true;
+    m.jumpTo({ center: [-112.2, 33.9], zoom: 11 });
+  });
+
+  // The regression: appearance used to tear the backend down and every
+  // page re-framed the fresh map — the pilot's place died with every
+  // scheme or street/satellite toggle (satellite forces dark). Appearance
+  // is a live restyle now, so the very same instance must survive with
+  // its camera untouched.
+  await page.emulateMedia({ colorScheme: "dark" });
+  await expect(html(page)).toHaveClass(/ion-palette-dark/);
+  await expect(mapEl).not.toHaveClass(/map-light/);
+  const after = await mapEl.evaluate((el) => {
+    const m = (el as Handle).__map!;
+    const c = m.getCenter();
+    return {
+      probe: m.__probe === true,
+      lng: Number(c.lng.toFixed(4)),
+      lat: Number(c.lat.toFixed(4)),
+      zoom: Number(m.getZoom().toFixed(2)),
+    };
+  });
+  expect(after).toEqual({ probe: true, lng: -112.2, lat: 33.9, zoom: 11 });
+});
+
+test("a provider re-create hands the camera to the successor; pages skip the re-frame", async ({
+  page,
+}) => {
+  // Record a short flight and open its detail map (which frames the
+  // track on arrival — the layer that must NOT re-run after a restore).
+  await page.goto("/?mock-speed=40&map-style=blank");
+  await page.getByRole("button", { name: "Start Flight" }).click();
+  await expect(page.getByTestId("recording")).toBeVisible({ timeout: 10_000 });
+  await page.waitForTimeout(500);
+  await page.getByRole("button", { name: "Stop flight" }).click();
+  await page.getByRole("button", { name: "Stop", exact: true }).click();
+  await expect(
+    page.getByRole("button", { name: "Start Flight" }),
+  ).toBeVisible();
+  await page.getByText("Logbook", { exact: true }).click();
+  await page.locator(".flight-row").click();
+  await expect(page.getByText("Max altitude")).toBeVisible();
+
+  // Wander away from the framed flight (the sim flies near Madison; this
+  // is Arizona), stamp the probe, then swap the provider setting — the
+  // one path that still re-creates the backend.
+  type Handle = HTMLElement & {
+    __map?: {
+      __probe?: boolean;
+      jumpTo(o: { center: [number, number]; zoom: number }): void;
+      getCenter(): { lng: number; lat: number };
+      getZoom(): number;
+    };
+  };
+  const mapEl = page.locator(".flight-detail-map .map-container");
+  await expect
+    .poll(() => mapEl.evaluate((el) => Boolean((el as Handle).__map)))
+    .toBe(true);
+  await mapEl.evaluate((el) => {
+    const m = (el as Handle).__map!;
+    m.__probe = true;
+    m.jumpTo({ center: [-112.2, 33.9], zoom: 13 });
+  });
+  await page.evaluate(async () => {
+    const specifier = "/src/storage/local.ts";
+    const local = (await import(/* @vite-ignore */ specifier)) as {
+      setSetting(key: string, value: string): Promise<void>;
+    };
+    await local.setSetting("mapBackend", "maplibre");
+  });
+
+  // A fresh instance (no probe) that inherited the exact camera — and the
+  // page skipped its arrival re-frame (a re-frame would fit the track,
+  // yanking the camera back to Wisconsin).
+  await expect
+    .poll(async () =>
+      mapEl.evaluate((el) => {
+        const m = (el as Handle).__map;
+        if (!m) return "recreating";
+        const c = m.getCenter();
+        return JSON.stringify({
+          probe: m.__probe === true,
+          lng: Number(c.lng.toFixed(4)),
+          lat: Number(c.lat.toFixed(4)),
+          zoom: Number(m.getZoom().toFixed(2)),
+        });
+      }),
+    )
+    .toBe(JSON.stringify({ probe: false, lng: -112.2, lat: 33.9, zoom: 13 }));
 });

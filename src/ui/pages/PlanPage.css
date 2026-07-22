@@ -5,6 +5,16 @@
   line-height: 0;
 }
 
+/* On the phone the plan map lives in the tab shell, where the tab bar sits
+   below it and owns the home indicator; the map's bottom is the tab bar's
+   top, so it consumes the bottom inset (the overlay + distance pill would
+   otherwise float a home-indicator's height too high). Scoped to the tab
+   shell, so the desktop plan — no tab bar, bottom AT the device edge — keeps
+   it. */
+ion-tabs .plan-map {
+  --ion-safe-area-bottom: 0px;
+}
+
 /* Midpoint insert handle — a small dot the exact color of the route line, so
    it reads as a draggable "bump" on the leg. The 0×0 wrapper sits on the
    coordinate; the inner dot translates onto that origin (a larger, invisible
@@ -41,7 +51,7 @@
 .plan-distance {
   position: absolute;
   left: 50%;
-  bottom: calc(1rem + env(safe-area-inset-bottom));
+  bottom: calc(1rem + var(--ion-safe-area-bottom));
   transform: translateX(-50%);
   z-index: 6;
   padding: 0.4rem 0.9rem;

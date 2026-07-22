@@ -27,7 +27,8 @@ const QUALITY = 0.82;
 const PHONE_JOBS = [
   { src: "iphone-6.9/1-inflight.png", out: "fly.webp" },
   { src: "iphone-6.9/2-logbook.png", out: "logbook.webp" },
-  { src: "iphone-6.9/3-detail.png", out: "detail.webp" },
+  { src: "iphone-6.9/3-detail-replay-back.png", out: "detail.webp" },
+  { src: "iphone-6.9/3-detail-replay-front.png", out: "replay.webp" },
   { src: "iphone-6.9/4-plan.png", out: "plan.webp" },
   { src: "iphone-6.9/6-sync-front.png", out: "sync.webp" },
 ];

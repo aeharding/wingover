@@ -1,6 +1,6 @@
 import type { Feature } from "geojson";
 
-import type { MapViewKind } from "./config";
+import type { MapAppearance, MapViewKind } from "./config";
 
 // The backend-agnostic map surface. One implementation wraps MapLibre GL
 // (maplibre/adapter.ts); a MapKit JS implementation can slot in behind the
@@ -170,11 +170,29 @@ export interface MapView {
   // supplied their own MapTiler key. Pages hide the view toggle when false.
   readonly supportsSatellite: boolean;
   setBaseMap(base: MapViewKind): void;
-  // Inset MapKit's Apple/Legal controls off the home indicator (true) or not
-  // (false). Live — so the layouting page can flip it on a fullscreen toggle
-  // without re-creating the map. MapLibre/fake no-op (their attribution is CSS).
-  setEdgeToEdge(edge: boolean): void;
+  // Live appearance flip (scheme change, satellite forcing dark): MapKit
+  // sets colorScheme in place, MapLibre restyles in place (the content
+  // registry survives setStyle, same as setBaseMap). NEVER a re-create —
+  // a re-created backend loses the pilot's camera (see MapCanvas).
+  setAppearance(appearance: MapAppearance): void;
+  // The map's content inset (device safe area, per edge, px): pushes the
+  // backend's attribution/logo off the notch and home indicator. These
+  // are the SAME numbers the button overlay and CSS-positioned
+  // attribution read from the cascading var(--ion-safe-area-*) — MapCanvas
+  // resolves them off a probe carrying those vars and hands them here, so
+  // the imperative (MapKit) and declarative (CSS) consumers can never
+  // disagree. MapKit sets map.padding; MapLibre/fake no-op (their
+  // attribution reads the vars directly). Live — reapplied whenever the
+  // resolved inset moves (rotation, a consume class toggling).
+  setInsets(insets: Insets): void;
   destroy(): void;
+
+  // Stamped by MapCanvas (not the adapters) when this instance inherited
+  // its predecessor's camera across a backend re-create — an appearance
+  // flip (scheme change, satellite forcing dark) or a provider swap.
+  // Pages must skip their ARRIVAL refit when set, or the pilot's place
+  // dies with the old backend; later content-driven fits run as always.
+  restoredCamera?: boolean;
 
   // Camera — the only live, imperative surface. moveTo unifies
   // jump / ease / fly; omitted fields hold their current value.

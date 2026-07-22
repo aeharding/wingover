@@ -135,6 +135,16 @@ export default function LogbookSection() {
 
   const selectedId = /^\/logbook\/(.+)$/.exec(pathname)?.[1];
   const selected = flights.find((flight) => flight.id === selectedId);
+
+  // Deleting the seated flight moves to its list neighbor (next, else
+  // previous) instead of dumping back to the bare list — the pilot is
+  // usually working DOWN the log. Computed against the pre-refresh list,
+  // where the deleted flight still anchors the index.
+  function selectNeighborOf(deleted: { id: string }) {
+    const index = flights.findIndex((flight) => flight.id === deleted.id);
+    const next = flights[index + 1] ?? flights[index - 1];
+    history.replace(next ? `/logbook/${next.id}` : "/logbook");
+  }
   const empty = loaded && flights.length === 0;
   const totalDistance = flights.reduce(
     (sum, flight) => sum + flight.stats.distanceMeters,
@@ -213,7 +223,7 @@ export default function LogbookSection() {
               onSelect={(flight) => history.push(`/logbook/${flight.id}`)}
               onDeleted={(deleted) => {
                 refresh();
-                if (deleted.id === selectedId) history.replace("/logbook");
+                if (deleted.id === selectedId) selectNeighborOf(deleted);
               }}
             />
           </div>
@@ -226,7 +236,7 @@ export default function LogbookSection() {
             active={pathname.startsWith("/logbook")}
             onDeleted={() => {
               refresh();
-              history.replace("/logbook");
+              selectNeighborOf(selected);
             }}
           />
         ) : (

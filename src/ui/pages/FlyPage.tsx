@@ -1,4 +1,10 @@
-import { IonContent, IonPage } from "@ionic/react";
+import {
+  IonContent,
+  IonHeader,
+  IonPage,
+  IonTitle,
+  IonToolbar,
+} from "@ionic/react";
 
 import FlyPage from "../flight/FlyPage";
 import FlySplash from "../flight/FlySplash";
@@ -24,11 +30,28 @@ import FlySplash from "../flight/FlySplash";
 export default function FlyPageFramed() {
   return (
     <IonPage className="fly-page-frame">
+      {/* The large-title pattern, same as SettingsPage: a main header
+          (its title shows condensed on scroll) paired with the condense
+          header in the content (the big title). Both toolbars are
+          transparent and pointer-inert (FlyPage.css) so the title floats
+          over the sky. The armed/recording states cover it for free —
+          the surface below paints opaque over the whole content box in
+          flight — and the whole Ionic shell is shed then anyway. */}
+      <IonHeader translucent>
+        <IonToolbar>
+          <IonTitle>Wingover</IonTitle>
+        </IonToolbar>
+      </IonHeader>
       {/* fixedSlotPlacement="before": the fixed slot (the splash) renders
           BEFORE the scroll content in the shadow DOM, so the backdrop
           paints behind the surface, not over it. */}
       <IonContent fullscreen scrollY={false} fixedSlotPlacement="before">
         <FlySplash />
+        <IonHeader collapse="condense">
+          <IonToolbar>
+            <IonTitle size="large">Wingover</IonTitle>
+          </IonToolbar>
+        </IonHeader>
         <FlyPage />
       </IonContent>
     </IonPage>

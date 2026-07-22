@@ -172,7 +172,7 @@ export function createFakeMapView(container: HTMLElement): MapView {
     ready: Promise.resolve(),
     supportsSatellite: true,
     setBaseMap() {},
-    setEdgeToEdge() {},
+    setInsets() {},
     destroy() {
       clearTimeout(pressTimer);
       container.removeEventListener("pointerdown", onPointerDown);
@@ -212,6 +212,8 @@ export function createFakeMapView(container: HTMLElement): MapView {
       setZoom(Math.log2((360 * w) / (TILE * spanLng)));
       repositionMarkers();
     },
+
+    setAppearance() {},
 
     zoomRange() {
       return { min: 2, max: 20 };

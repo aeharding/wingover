@@ -2,6 +2,7 @@ import { useEffect, useEffectEvent, useRef, useState } from "react";
 
 import type { Fix, Waypoint } from "../../engine/types";
 import type { MapViewKind } from "../map/config";
+import { applyFollowWheelZoom } from "../map/followZoom";
 import { readLiveViewState, writeLiveViewState } from "../map/liveViewState";
 import MapCanvas from "../map/MapCanvas";
 import {
@@ -28,12 +29,11 @@ import "./LiveTrackMap.css";
 // or two. The only animations left are rotations, and they're delegated to
 // the backend (a native camera turn, a CSS transform on the glyph) rather
 // than interpolated frame-by-frame in JS.
-const WHEEL_ZOOM_RATE = 1 / 450;
-const PINCH_ZOOM_RATE = 1 / 100;
 
 // The live map is always light; the shared PLAN_LINE_COLOR grey is tuned
-// for the dark ground maps and washes out here.
-const LIVE_PLAN_LINE_COLOR = "#5c6470";
+// for the dark ground maps and washes out here. (Nudged a shade brighter
+// than the original #5c6470 so it reads between waypoints on satellite.)
+const LIVE_PLAN_LINE_COLOR = "#68707c";
 
 // The planned route reference: a static grey line from launch through every
 // planned pin, plus numbered markers for the ACTIVE nav sequence (green =
@@ -145,21 +145,13 @@ export default function LiveTrackMap({
     onFollowChange(false);
   });
 
-  // While following, intercept the wheel and apply the zoom directly and
-  // instantly (the finger/wheel IS the animation). The map is centered on the
-  // aircraft, so the zoom anchors there. Unpinned keeps native behavior.
+  // While following, intercept the wheel and apply the zoom directly (see
+  // followZoom.ts — shared with the replay driver). Unpinned keeps native
+  // behavior.
   const handleWheel = useEffectEvent((event: GestureEvent) => {
     if (!map) return;
     if (!follow || interactingRef.current) return;
-    event.preventDefault?.();
-    const rate = event.ctrlKey ? PINCH_ZOOM_RATE : WHEEL_ZOOM_RATE;
-    const { min, max } = map.zoomRange();
-    const from = map.camera().zoom;
-    const next = Math.min(
-      max,
-      Math.max(min, from - (event.deltaY ?? 0) * rate),
-    );
-    map.moveTo({ zoom: next }, { animate: false });
+    applyFollowWheelZoom(map, event);
   });
 
   const handleLongPress = useEffectEvent((at: LngLat) => {
@@ -345,9 +337,10 @@ export default function LiveTrackMap({
         // The live map is ALWAYS light: full sun on a leg-mounted phone is
         // the one context where the dark basemap loses (STEERING).
         appearance="light"
-        // In flight the whole shell is shed, so the map is full-screen on every
-        // device — its Apple/Legal controls must clear the home indicator.
-        edgeToEdge
+        // In flight the whole shell is shed, so the map is full-screen on
+        // every device and consumes nothing: its Apple/Legal attribution
+        // insets off ALL device edges (home indicator, landscape notch)
+        // straight from var(--ion-safe-area-*).
         onReady={(next) => {
           if (!next) {
             // The view these handles came from is destroyed; a 1 Hz fix

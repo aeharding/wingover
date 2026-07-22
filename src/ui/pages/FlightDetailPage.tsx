@@ -1,5 +1,4 @@
 import {
-  IonActionSheet,
   IonBackButton,
   IonButton,
   IonButtons,
@@ -15,6 +14,7 @@ import {
   IonTextarea,
   IonTitle,
   IonToolbar,
+  useIonActionSheet,
   useIonRouter,
 } from "@ionic/react";
 import {
@@ -39,6 +39,7 @@ import {
 import { useParams } from "react-router";
 
 import { isTauri } from "../../engine/platform";
+import { splitAvailable, trimAvailable } from "../../flight/clip";
 import {
   formatAirtime,
   formatAltitude,
@@ -62,6 +63,7 @@ import {
 } from "../map/types";
 import useMapView from "../map/useMapView";
 import ViewToggle from "../map/ViewToggle";
+import { useReplayDrawer } from "../replay/useReplayDrawer";
 import { useSettings } from "../settings/SettingsContext";
 import { useFlightActions } from "../useFlightActions";
 
@@ -126,7 +128,10 @@ export default function FlightDetailPage() {
     setFlight,
     track,
   );
-  const [optionsOpen, setOptionsOpen] = useState(false);
+  // Controller hook, not a controlled <IonActionSheet isOpen>: a reopen
+  // while the prior dismissal is still animating desyncs the controlled
+  // form (see FlightSeat) — the clip flows reopen exactly that fast.
+  const [presentOptions, dismissOptions] = useIonActionSheet();
   const appearance = useAppearance();
   const [view, changeView] = useMapView();
   const [map, setMap] = useState<MapView | null>(null);
@@ -148,6 +153,21 @@ export default function FlightDetailPage() {
   const lineRef = useRef<Line | null>(null);
   const planLineRef = useRef<Line | null>(null);
   const markersRef = useRef<MarkerLayer | null>(null);
+  const skipArrivalFrameRef = useRef(false);
+  // The replay pane docks under the fullscreen map only; inline the map
+  // is a non-interactive preview, so the drawer closes with a collapse.
+  const replay = useReplayDrawer(map, track, flight, mapFull);
+
+  // What the map region consumes off the device edges, one class the
+  // buttons AND the MapKit attribution both inherit (so they can never
+  // disagree): inline it is a boxed mid-page preview (every edge covered);
+  // full screen it takes the real device insets, EXCEPT the bottom when
+  // the replay pane is open below and owns the home indicator itself.
+  const regionConsume = !mapFull
+    ? "consume-all"
+    : replay.isOpen
+      ? "consume-bottom"
+      : "";
 
   // Full screen REPARENTS the map surface (same instance — reverse portal, no
   // remount) into a fixed overlay on document.body. Outside the scroller,
@@ -170,6 +190,67 @@ export default function FlightDetailPage() {
   }
 
   const collapseMap = () => collapseMapVia(setMapFull);
+
+  async function openOptions() {
+    // The previous sheet may still be tearing down (the clip flows reopen
+    // fast, and a busy frame stretches the dismiss animation); presenting
+    // into its cleanup gets the new sheet silently destroyed with it.
+    await dismissOptions();
+    await presentOptions({
+      buttons: [
+        {
+          text: "Export GPX",
+          handler: () => {
+            if (flight) exportFlight(flight);
+          },
+        },
+        // The clip editors live in the fullscreen pane, so entry jumps
+        // straight there (no morph: the view transition would capture
+        // the dismissing sheet). Each trim end is its own errand (per
+        // Alex: usually it is one or the other).
+        ...(trimAvailable(track)
+          ? [
+              {
+                text: "Trim start",
+                handler: () => {
+                  setMapFull(true);
+                  replay.beginClip("trim-start");
+                },
+              },
+              {
+                text: "Trim end",
+                handler: () => {
+                  setMapFull(true);
+                  replay.beginClip("trim-end");
+                },
+              },
+            ]
+          : []),
+        ...(splitAvailable(track)
+          ? [
+              {
+                text: "Split flight",
+                handler: () => {
+                  setMapFull(true);
+                  replay.beginClip("split");
+                },
+              },
+            ]
+          : []),
+        {
+          text: "Delete flight",
+          role: "destructive",
+          handler: () => {
+            if (flight)
+              confirmDeleteFlight(flight, () =>
+                router.push("/logbook", "back"),
+              );
+          },
+        },
+        { text: "Cancel", role: "cancel" },
+      ],
+    });
+  }
 
   // Native only: the keyboard's return key reads "Done" (enterkeyhint on the
   // inputs below) and pressing it closes the keyboard. Single-line fields have
@@ -256,6 +337,10 @@ export default function FlightDetailPage() {
       setMap(null);
       return;
     }
+    // A re-created map that inherited its camera (appearance flip) must
+    // not be re-framed on arrival; one skip only — the next content
+    // change (flight switch, clip rewrite) frames as always.
+    skipArrivalFrameRef.current = next.restoredCamera === true;
     // Grey planned-route reference, created first so it sits UNDER the cyan
     // flown track (later lines draw on top). No markers — just the line.
     planLineRef.current = next.line({
@@ -293,12 +378,27 @@ export default function FlightDetailPage() {
     }
   });
 
+  // Draw-along replay owns the track line while active: the driver draws
+  // the flown prefix, so the full line here goes blank. An Effect Event
+  // shared by the main content effect AND the toggle effect below, so
+  // toggling never re-frames the camera.
+  const applyTrackVisibility = useEffectEvent(() => {
+    if (!map || track.length === 0) return;
+    lineRef.current?.set(
+      replay.trackHidden
+        ? []
+        : track.map((fix): LngLat => [fix.longitude, fix.latitude]),
+    );
+  });
+
+  useEffect(() => {
+    applyTrackVisibility();
+  }, [replay.trackHidden]);
+
   useEffect(() => {
     if (!map || track.length === 0) return;
 
-    lineRef.current?.set(
-      track.map((fix): LngLat => [fix.longitude, fix.latitude]),
-    );
+    applyTrackVisibility();
 
     const launch = track[0];
     const landing = track[track.length - 1];
@@ -336,7 +436,11 @@ export default function FlightDetailPage() {
       },
     ]);
 
-    frameFlight(false);
+    if (skipArrivalFrameRef.current) {
+      skipArrivalFrameRef.current = false;
+    } else {
+      frameFlight(false);
+    }
   }, [track, map, flight?.id, flight?.plannedRoute]);
 
   // Leaving full screen EASES the map back to the framed flight: wherever
@@ -383,7 +487,7 @@ export default function FlightDetailPage() {
             <IonButton
               aria-label="Options"
               data-testid="detail-options"
-              onClick={() => setOptionsOpen(true)}
+              onClick={openOptions}
             >
               <IonIcon slot="icon-only" icon={ellipsisHorizontal} />
             </IonButton>
@@ -488,29 +592,6 @@ export default function FlightDetailPage() {
             </IonList>
           </>
         )}
-        <IonActionSheet
-          isOpen={optionsOpen}
-          onDidDismiss={() => setOptionsOpen(false)}
-          buttons={[
-            {
-              text: "Export GPX",
-              handler: () => {
-                if (flight) exportFlight(flight);
-              },
-            },
-            {
-              text: "Delete flight",
-              role: "destructive",
-              handler: () => {
-                if (flight)
-                  confirmDeleteFlight(flight, () =>
-                    router.push("/logbook", "back"),
-                  );
-              },
-            },
-            { text: "Cancel", role: "cancel" },
-          ]}
-        />
       </IonContent>
       {/* The one true map surface. Full screen: a single tap on the map
           collapses it — via the map's own singletap gesture (MapKit's
@@ -519,60 +600,103 @@ export default function FlightDetailPage() {
           controls. Inline, the map-tap-layer owns tap-to-expand. */}
       <InPortal node={mapPortal}>
         <div className={`flight-detail-map${mapFull ? " map-full" : ""}`}>
-          {/* Edge-to-edge only when expanded to full screen (bottom under the
-              home indicator); embedded in the split, it isn't. */}
-          <MapCanvas
-            base={view}
-            appearance={appearance}
-            onReady={handleReady}
-            edgeToEdge={mapFull}
-          />
-          {/* Inline the map is a scroll-through preview: tap anywhere to
-              expand, vertical drag scrolls the details through (see
-              FlightDetailPage.css). */}
-          {!mapFull && <div className="map-tap-layer" onClick={expandMap} />}
-          <div className="map-overlay">
-            {map && <CompassButton map={map} />}
-            {mapFull && (
+          {/* The map region; fullscreen slides the replay pane open below
+              it (the region flexes above). The consume class rides here,
+              on the region only, so the replay drawer (a sibling below)
+              keeps its own home-indicator inset while the map drops it. */}
+          <div className={`detail-map-region ${regionConsume}`}>
+            <MapCanvas
+              base={view}
+              appearance={appearance}
+              onReady={handleReady}
+            />
+            {/* Inline the map is a scroll-through preview: tap anywhere to
+                expand, vertical drag scrolls the details through (see
+                FlightDetailPage.css). */}
+            {!mapFull && <div className="map-tap-layer" onClick={expandMap} />}
+            <div className="map-overlay">
+              {/* Inline preview: the north reset floats (there is no
+                  cluster inline). It can't actually appear — the preview
+                  is a non-interactive, north-up scroll-through — but the
+                  guard is honest. Fullscreen puts the compass in the
+                  cluster's TL cell instead (below). */}
+              {!mapFull && map && !replay.isOpen && <CompassButton map={map} />}
+              {mapFull ? (
+                /* The app-wide cluster cells (.map-cluster, right-edge
+                   anchored like the fly page): the TL "compass slot" (the
+                   north reset while the pane is closed, track-up while it
+                   is open — they never coexist), follow TR (play borrows
+                   TR while the pane is closed), globe BL, the exit verb
+                   BR. Empty cells collapse: live = the fly page's exact
+                   box, closed = an L hugging the corner, parked = the
+                   bottom pair. The TL cell renders even when empty so the
+                   compass lands on the SAME ROW as play, not floating a
+                   row above it. */
+                <div className="map-cluster">
+                  <div className="map-cell-tl">
+                    {replay.trackUpButton ??
+                      (map && !replay.isOpen ? (
+                        <CompassButton map={map} />
+                      ) : null)}
+                  </div>
+                  {(replay.followButton ?? replay.playButton) && (
+                    <div className="map-cell-tr">
+                      {replay.followButton ?? replay.playButton}
+                    </div>
+                  )}
+                  {map?.supportsSatellite && (
+                    <div className="map-cell-bl">
+                      <ViewToggle view={view} onChange={changeView} />
+                    </div>
+                  )}
+                  <div className="map-cell-br">
+                    <button
+                      className="map-button"
+                      aria-label="Shrink map"
+                      data-testid="map-shrink"
+                      onClick={collapseMap}
+                    >
+                      <IonIcon icon={contractOutline} />
+                    </button>
+                  </div>
+                </div>
+              ) : (
+                map?.supportsSatellite && (
+                  <ViewToggle view={view} onChange={changeView} />
+                )
+              )}
+            </div>
+            {/* A visible affordance for the tap-to-expand above. Replay
+                lives behind it: expand, then the floating play button. */}
+            {!mapFull && (
               <button
-                className="map-button"
-                aria-label="Shrink map"
-                data-testid="map-shrink"
-                onClick={collapseMap}
+                className="map-expand-pill"
+                aria-label="Expand map"
+                data-testid="map-expand"
+                onClick={expandMap}
               >
-                <IonIcon icon={contractOutline} />
+                <IonIcon icon={expandOutline} />
+                Expand
               </button>
             )}
-            {map?.supportsSatellite && (
-              <ViewToggle view={view} onChange={changeView} />
-            )}
           </div>
-          {/* A visible affordance for the tap-to-expand above. */}
-          {!mapFull && (
-            <button
-              className="map-expand-pill"
-              aria-label="Expand map"
-              data-testid="map-expand"
-              onClick={expandMap}
-            >
-              <IonIcon icon={expandOutline} />
-              Expand
-            </button>
-          )}
+          {replay.drawer}
         </div>
       </InPortal>
-      {/* Full screen: a fixed overlay on document.body — OUTSIDE the page
-          scroller (so scroll position and layout are untouched by
+      {/* Full screen: a fixed overlay portaled INTO ion-app — outside the
+          page scroller (so scroll position and layout are untouched by
           construction, and drags on the overlay have nothing scrollable to
           grab) and outside ion-content (so a status-bar tap's center
           hit-test finds nothing to scroll). It covers the header and tab
-          bar rather than hiding them. */}
+          bar rather than hiding them. Inside ion-app, not body, so Ionic
+          overlays (the clip confirm alert) present ABOVE it — see the
+          fullroot rule in FlightDetailPage.css. */}
       {mapFull &&
         createPortal(
           <div className="flight-detail-map-fullroot">
             <OutPortal node={mapPortal} />
           </div>,
-          document.body,
+          document.querySelector("ion-app") ?? document.body,
         )}
     </IonPage>
   );

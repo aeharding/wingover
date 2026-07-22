@@ -1,0 +1,41 @@
+.clip-transport {
+  display: flex;
+  align-items: center;
+  gap: 0.6rem;
+}
+
+/* Glove-first text buttons: the transport's 3.25rem control height. */
+.clip-button {
+  min-height: 3.25rem;
+  padding: 0 1.1rem;
+  border-radius: 12px;
+  border: 1px solid var(--hairline);
+  background: var(--hover-wash);
+  color: var(--replay-ink);
+  font-size: 1rem;
+  font-weight: 600;
+  white-space: nowrap;
+}
+
+.clip-button:disabled {
+  opacity: 0.4;
+}
+
+.clip-button.accent {
+  color: var(--replay-yellow);
+  border-color: var(--replay-yellow);
+}
+
+/* The live kept-window preview, centered between the buttons. */
+.clip-preview {
+  flex: 1;
+  min-width: 0;
+  text-align: center;
+  color: var(--replay-ink);
+  font-size: 1rem;
+  font-weight: 600;
+  font-variant-numeric: tabular-nums;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}

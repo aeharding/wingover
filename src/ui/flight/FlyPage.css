@@ -61,7 +61,11 @@
      it in a plain section (no ion-content, var unset) and the fallback
      is exactly the box. */
   width: 100%;
-  height: calc(100% + var(--offset-bottom, 0px));
+  /* ...and since the frame gained a (translucent) header, reach UP past
+     the fixed slot's --offset-top translation the same way — or the
+     header's strip shows the pinned-black page behind the sky. */
+  top: calc(-1 * var(--offset-top, 0px));
+  height: calc(100% + var(--offset-top, 0px) + var(--offset-bottom, 0px));
   pointer-events: none;
   background: linear-gradient(
     180deg,
@@ -77,9 +81,12 @@
   opacity: 0.5;
 }
 
+/* At dusk the disc is the MOON: cool silver against the purples, more
+   present than the old faint sun (moons are bright at night). Daylight
+   overrides below turn it back into the sun. */
 .idle-sun {
-  fill: #ffc66b;
-  opacity: 0.12;
+  fill: #e9eef6;
+  opacity: 0.3;
 }
 
 .idle-cloud {
@@ -104,6 +111,32 @@
   opacity: 0.09;
 }
 
+/* The page title: the Settings page's large-title idiom, rendered by
+   the FRAME (pages/FlyPage.tsx — the surface is Ionic-free). The frame
+   pins --ion-background-color black, which would paint the toolbars as
+   bands over the sky — go transparent and let the splash through. BOTH
+   headers (the outer main one AND the condense one nested in the
+   content) float over the surface — Ionic gives ion-header z-index 10,
+   above the surface — so a descendant selector, not a direct child:
+   either must never eat a tap on the sky or a control beneath the title
+   band. */
+.fly-page-frame ion-header {
+  pointer-events: none;
+}
+
+.fly-page-frame ion-toolbar {
+  --background: transparent;
+  --border-width: 0;
+}
+
+.fly-page-frame ion-title {
+  color: #fff;
+}
+
+:root:not(.ion-palette-dark) .fly-page-frame ion-title {
+  color: #23262b;
+}
+
 /* A caption tucked just under the Start button (pulled up out of the 3rem
    idle gap). Muted so it reads as secondary to the call-to-action. */
 .planned-route {
@@ -113,50 +146,116 @@
   text-shadow: 0 1px 6px rgba(0, 0, 0, 0.6);
 }
 
-.fly-idle h1 {
-  color: #fff;
-  font-size: 2.5rem;
-  font-weight: 700;
-  letter-spacing: 0.01em;
-  /* Depth over the backdrop, plus the faintest warm halo from the sun. */
-  text-shadow:
-    0 2px 22px rgba(0, 0, 0, 0.55),
-    0 0 46px rgba(255, 173, 95, 0.12);
-}
-
 /* The IDLE splash themes with the app (the one part of this surface that
-   does): the icon's sunset, day-side — pale sky easing into the same warm
-   horizon, so the two splashes read as dawn/dusk of one artwork. Keyed on
-   the palette CLASS being absent (appTheme.ts), not prefers-color-scheme:
-   satellite forces the class on and the splash goes dusk with the rest of
-   the chrome. Armed and recording states below stay frozen: they are the
-   in-flight UI. */
+   does): the icon's sunset, day-side — a pale BLUE sky (per Alex) easing
+   through haze into the same warm horizon, so the two splashes read as
+   dawn/dusk of one artwork. Keyed on the palette CLASS being absent
+   (appTheme.ts), not prefers-color-scheme: satellite forces the class on
+   and the splash goes dusk with the rest of the chrome. Armed and
+   recording states below stay frozen: they are the in-flight UI. */
 :root:not(.ion-palette-dark) .fly-idle {
   color: #23262b;
 }
 
 :root:not(.ion-palette-dark) .fly-splash {
+  /* Blue does not blend straight into amber: in RGB that path crosses a
+     desaturated gray dead zone, which split the sky into two slabs. A
+     near-white HAZE stop between them is how a real sky does it — blue
+     up top, whitening toward the horizon, then the warm glow. The warmth
+     itself RADIATES from the sun: the .idle-glow radial in FlySplash
+     (viewBox-anchored so it stays on the sun through the slice crop);
+     this base keeps only a gentle amber floor so the glow reads as the
+     light source, not a second horizon. */
   background: linear-gradient(
     180deg,
-    #e8eef7 0%,
-    #edeadf 45%,
-    #f6e7cd 75%,
-    #f3d8ae 100%
+    #c8ddf3 0%,
+    #dbe7f4 38%,
+    #edf1f1 64%,
+    #eeeadd 86%,
+    #ece2cc 100%
   );
 }
 
-:root:not(.ion-palette-dark) .fly-idle h1 {
-  color: #23262b;
-  /* Lifted off the sky, plus the same faint warm halo. */
-  text-shadow:
-    0 1px 2px rgba(255, 255, 255, 0.7),
-    0 0 46px rgba(255, 173, 95, 0.4);
+/* The disc's radial glow (FlySplash), both schemes: daylight gets the
+   sun's golden radiance; dusk gets grayscale MOONLIGHT — the yellowish
+   sunset stays where it belongs, in the linear horizon glow, while the
+   moon casts a cool silver halo. On app start the glow BLOOMS in:
+   a long fade that settles very slowly (easeOutExpo-shaped), like the
+   sun coming out — runs once per splash mount (tab pages stay mounted,
+   so switching tabs never replays it). */
+.idle-glow {
+  animation: idle-glow-in 10s cubic-bezier(0.16, 1, 0.3, 1) both;
+}
+
+@keyframes idle-glow-in {
+  from {
+    opacity: 0;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .idle-glow {
+    animation: none;
+  }
+}
+
+.idle-glow-core {
+  stop-color: #d7dfeb;
+  stop-opacity: 0.11;
+}
+
+.idle-glow-mid {
+  stop-color: #aeb9c9;
+  stop-opacity: 0.05;
+}
+
+.idle-glow-fringe {
+  stop-color: #8b95a6;
+  stop-opacity: 0.02;
+}
+
+.idle-glow-end {
+  stop-color: #8b95a6;
+  stop-opacity: 0;
+}
+
+:root:not(.ion-palette-dark) .idle-glow-core {
+  stop-color: #ffcf70;
+  stop-opacity: 0.68;
+}
+
+:root:not(.ion-palette-dark) .idle-glow-mid {
+  stop-color: #ffd98c;
+  stop-opacity: 0.42;
+}
+
+:root:not(.ion-palette-dark) .idle-glow-fringe {
+  stop-color: #f8dcab;
+  stop-opacity: 0.2;
+}
+
+:root:not(.ion-palette-dark) .idle-glow-end {
+  stop-color: #f8dcab;
+  stop-opacity: 0;
+}
+
+/* The sun seen THROUGH the wing (FlySplash's blurred, canopy-clipped
+   copy), both schemes: brighter than the bare disc because the blur
+   spreads its energy — it must still read as the light source. */
+.idle-sun.idle-sun-veiled {
+  opacity: 0.26;
+}
+
+:root:not(.ion-palette-dark) .idle-sun.idle-sun-veiled {
+  opacity: 0.5;
 }
 
 /* The motifs flip to deeper ambers: the near-white warm fills that read
    on the night sky vanish against the day one. */
 :root:not(.ion-palette-dark) .idle-star {
   fill: #d3922f;
+  /* Softer than the night stars' 0.5: daylight motes, not beacons. */
+  opacity: 0.32;
 }
 
 :root:not(.ion-palette-dark) .idle-sun {
@@ -288,14 +387,10 @@
   z-index: 6;
 }
 
-/* The four regular controls in a fixed 2×2. Because .flight-controls is
-   bottom-anchored and this grid is its LAST child, the contextual skip button
-   above it grows the stack upward — these four never shift. */
-.flight-controls-grid {
-  display: grid;
-  grid-template-columns: repeat(2, auto);
-  gap: 0.6rem;
-}
+/* The four regular controls sit in the shared .map-cluster (MapView.css)
+   as its reference layout. Because .flight-controls is bottom-anchored
+   and the cluster is its LAST child, the contextual skip button above it
+   grows the stack upward — these four never shift. */
 
 /* "Clear checkpoint": a location pin (outline) with an X in a circular cutout
    at its top-right. A real cutout — a transparent hole masked out of the pin,

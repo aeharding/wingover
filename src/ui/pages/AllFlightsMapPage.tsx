@@ -43,6 +43,7 @@ export default function AllFlightsMapPage() {
   const [features, setFeatures] = useState<Feature[]>([]);
   const [map, setMap] = useState<MapView | null>(null);
   const lineRef = useRef<Line | null>(null);
+  const skipArrivalFitRef = useRef(false);
 
   function load() {
     (async () => {
@@ -84,6 +85,9 @@ export default function AllFlightsMapPage() {
       setMap(null);
       return;
     }
+    // A re-created map that inherited its camera (appearance flip) must
+    // not be re-fit on arrival — the pilot's place survives the flip.
+    skipArrivalFitRef.current = next.restoredCamera === true;
     lineRef.current = next.line({
       color: ["get", "color"],
       width: 3.5,
@@ -106,9 +110,13 @@ export default function AllFlightsMapPage() {
     }
     const bounds = boundsOf(positions);
     if (bounds) {
-      map.fitBounds(bounds, {
-        padding: { top: 80, bottom: 60, left: 50, right: 50 },
-      });
+      if (skipArrivalFitRef.current) {
+        skipArrivalFitRef.current = false;
+      } else {
+        map.fitBounds(bounds, {
+          padding: { top: 80, bottom: 60, left: 50, right: 50 },
+        });
+      }
     }
   }, [features, map]);
 
@@ -132,25 +140,22 @@ export default function AllFlightsMapPage() {
         </IonToolbar>
       </IonHeader>
       <IonContent scrollY={false}>
+        {/* Full-screen on phone (below the header, so the map keeps the
+            device insets — bottom home indicator, landscape notch); a pane
+            in the desktop shell, where env() is 0. Nothing to consume. */}
         <div className="all-flights-map">
-          {/* Full-screen on phone (bottom under the home indicator); a pane in
-              the desktop shell, where it is not edge-to-edge. */}
-          <MapCanvas
-            base={view}
-            appearance={appearance}
-            onReady={handleReady}
-            edgeToEdge={!isDesktop}
-          />
-          <div className="composite-legend">
-            Oldest → newest
-            <div className="legend-bar" />
-          </div>
-          <div className="map-overlay">
-            {map && <CompassButton map={map} />}
-            {map?.supportsSatellite && (
-              <ViewToggle view={view} onChange={changeView} />
-            )}
-          </div>
+          <MapCanvas base={view} appearance={appearance} onReady={handleReady}>
+            <div className="composite-legend">
+              Oldest → newest
+              <div className="legend-bar" />
+            </div>
+            <div className="map-overlay">
+              {map && <CompassButton map={map} />}
+              {map?.supportsSatellite && (
+                <ViewToggle view={view} onChange={changeView} />
+              )}
+            </div>
+          </MapCanvas>
         </div>
       </IonContent>
     </IonPage>

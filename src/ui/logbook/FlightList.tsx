@@ -64,18 +64,30 @@ export default function FlightList({
   const { exportFlight, confirmDeleteFlight } = useFlightActions();
   const virtualizer = useRef<VirtualizerHandle>(null);
   const lastScrolledTo = useRef<string | undefined>(undefined);
+  // The selection present at MOUNT is a deep link (page load straight to
+  // /logbook/:id) — that row deserves centering; a click can only pick a
+  // visible row, where centering would yank the list under the pointer.
+  const initialSelectedId = useRef(selectedId);
 
   // The virtualizer's own scrollToIndex, not a DOM query: an off-screen
   // row isn't mounted, but virtua knows its offset regardless. Guarded to
   // fire only when the SELECTION changes, so a background list refresh
-  // never yanks the scroll position back to the selected row.
+  // never yanks the scroll position back to the selected row. The id is
+  // recorded only once the row exists: on a cold page load the flights
+  // land AFTER the first pass, and stamping early skipped the scroll
+  // forever. That first scroll centers (the pilot landed on a deep link);
+  // in-session selection changes keep the gentle nearest.
   useEffect(() => {
     if (!selectedId || lastScrolledTo.current === selectedId) return;
-    lastScrolledTo.current = selectedId;
     const index = flights.findIndex((flight) => flight.id === selectedId);
-    if (index >= 0) {
-      virtualizer.current?.scrollToIndex(index, { align: "nearest" });
-    }
+    if (index < 0) return;
+    const align =
+      selectedId === initialSelectedId.current ? "center" : "nearest";
+    // One-shot: re-SELECTING the deep-linked flight later must not
+    // re-center it under the pointer.
+    initialSelectedId.current = undefined;
+    lastScrolledTo.current = selectedId;
+    virtualizer.current?.scrollToIndex(index, { align });
   }, [selectedId, flights]);
 
   return (
