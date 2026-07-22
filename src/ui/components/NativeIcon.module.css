@@ -1,6 +1,6 @@
 /* Sized like ion-icon: a 1em box driven by font-size, colored by
    currentColor through the mask. */
-.native-icon {
+.nativeIcon {
   display: inline-block;
   width: 1em;
   height: 1em;

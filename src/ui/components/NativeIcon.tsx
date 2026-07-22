@@ -1,4 +1,4 @@
-import "./NativeIcon.css";
+import styles from "./NativeIcon.module.css";
 
 /**
  * ion-icon without Ionic. ionicons ships every glyph as an SVG data URL,
@@ -37,7 +37,7 @@ export default function NativeIcon({
 }) {
   return (
     <span
-      className={`native-icon${className ? ` ${className}` : ""}`}
+      className={`${styles.nativeIcon}${className ? ` ${className}` : ""}`}
       style={{ WebkitMaskImage: maskUrl(icon), maskImage: maskUrl(icon) }}
       aria-hidden="true"
     />
