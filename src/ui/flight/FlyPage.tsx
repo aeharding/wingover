@@ -286,7 +286,6 @@ export default function FlyPage() {
     <div className="fly-content">
       {status === "idle" && (
         <div className="fly-idle">
-          <h1>Wingover</h1>
           <button className="start-button" onClick={armFlight}>
             Start Flight
           </button>
@@ -468,9 +467,13 @@ export default function FlyPage() {
                 </span>
               </button>
             )}
-            <div className="flight-controls-grid">
+            {/* The app-wide cluster cells (.map-cluster): this page IS
+                the reference layout the replay hosts mirror. Explicit
+                cells also pin stop to BR on builds without satellite
+                (flow order used to slide it into globe's cell). */}
+            <div className="map-cluster">
               <button
-                className="map-button"
+                className="map-button map-cell-tl"
                 aria-label={follow ? "Track up" : "Align north"}
                 // The mode light shows only while the mode is in
                 // effect (unsnapping also clears the pref; the gate
@@ -492,7 +495,7 @@ export default function FlyPage() {
                 <NativeIcon icon={compassOutline} />
               </button>
               <button
-                className="map-button"
+                className="map-button map-cell-tr"
                 aria-label="Follow aircraft"
                 data-active={follow}
                 // A toggle: pressing while snapped unsnaps (and takes
@@ -502,10 +505,12 @@ export default function FlyPage() {
                 <NativeIcon icon={locateOutline} />
               </button>
               {liveMap?.supportsSatellite && (
-                <ViewToggle view={mapView} onChange={changeMapView} />
+                <div className="map-cell-bl">
+                  <ViewToggle view={mapView} onChange={changeMapView} />
+                </div>
               )}
               <button
-                className="map-button stop-button"
+                className="map-button stop-button map-cell-br"
                 aria-label="Stop flight"
                 onClick={confirmEndFlight}
               >

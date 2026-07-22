@@ -17,15 +17,37 @@ test("arm, auto-takeoff, reload kill drill, stop, logbook", async ({
   // The direction-to-launch arrow renders as the blue location chevron.
   await expect(page.locator(".launch-arrow-svg")).toBeVisible();
 
-  // Shed means SHED: while recording, Ionic does not exist in the DOM —
-  // no ion-app, no ion-page, no ion-anything (src/ui/flight is Ionic-free
-  // by lint; this asserts the runtime half).
-  const ionicTags = await page.evaluate(() =>
-    [...document.querySelectorAll("*")]
+  // Shed means SHED: the app's render tree (#root, where React mounts)
+  // holds no Ionic while recording — no ion-app, no ion-page, no
+  // ion-anything. The flight surface is a plain div tree (src/ui/flight,
+  // Ionic-free by lint); this asserts the runtime half, and is exactly
+  // what the memory invariant is about (the shed shell held the maps and
+  // tile caches that ballooned the WKWebView; those live in #root).
+  //
+  // Scoped to #root on purpose: Ionic parks two hidden, empty,
+  // display:none <ion-title>/<ion-back-button> ANIMATION-SCRATCH
+  // singletons directly on document.body the first time any large-title
+  // or back-button page renders (the fly page's own large title triggers
+  // it), and reuses them app-wide. They sit outside #root and the shell,
+  // render nothing, cost nothing, and are not what this guards — a
+  // document-wide query would count those framework internals, not the
+  // shed. The assertion below documents that they are the ONLY Ionic
+  // left in the document, so a real leak (a stranded page/app) still
+  // fails loudly.
+  const ionic = await page.evaluate(() => {
+    const inRoot = [...document.querySelectorAll("#root *")]
       .filter((el) => el.tagName.startsWith("ION-"))
-      .map((el) => el.tagName),
-  );
-  expect(ionicTags).toEqual([]);
+      .map((el) => el.tagName);
+    const strayVisible = [...document.querySelectorAll("*")].filter(
+      (el) =>
+        el.tagName.startsWith("ION-") &&
+        !el.closest("#root") &&
+        !el.classList.contains("ion-cloned-element"),
+    ).length;
+    return { inRoot, strayVisible };
+  });
+  expect(ionic.inRoot).toEqual([]);
+  expect(ionic.strayVisible).toBe(0);
 
   // Style regression guard: the fly page must not scroll. The flight
   // surface is Ionic-free (a plain div), so its own computed overflow is

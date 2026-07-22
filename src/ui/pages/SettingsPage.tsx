@@ -117,7 +117,7 @@ export default function SettingsPage() {
           <IonTitle>Settings</IonTitle>
         </IonToolbar>
       </IonHeader>
-      <IonContent className="settings-content">
+      <IonContent className="settings-content" fullscreen>
         {/* Native iOS large-title collapse, same as the sync sheet: the big
             title rides the content and condenses into the toolbar on
             scroll. The toolbar blends because its --background is the page
