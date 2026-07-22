@@ -209,10 +209,10 @@
   z-index: 6;
 }
 
-/* The four regular controls sit in the shared .map-cluster (MapView.css)
-   as its reference layout. Because .flight-controls is bottom-anchored
-   and the cluster is its LAST child, the contextual skip button above it
-   grows the stack upward — these four never shift. */
+/* The four regular controls sit in the shared MapCluster component as its
+   reference layout. Because .flight-controls is bottom-anchored and the
+   cluster is its LAST child, the contextual skip button above it grows the
+   stack upward — these four never shift. */
 
 /* "Clear checkpoint": a location pin (outline) with an X in a circular cutout
    at its top-right. A real cutout — a transparent hole masked out of the pin,

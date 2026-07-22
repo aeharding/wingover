@@ -1,0 +1,27 @@
+/* The 2×2 corner control cluster every full-screen map wears. One grid; the
+   hosts choose which corner it hugs by where they place it, and "mirroring"
+   (the seat's left-edge column) is purely which content goes in which cell —
+   the grid never changes. Empty cells collapse (auto tracks), so no state
+   leaves buttons floating off the anchor. */
+.cluster {
+  display: grid;
+  grid-template-columns: auto auto;
+  grid-template-rows: auto auto;
+  gap: 0.6rem;
+}
+
+.tl {
+  grid-area: 1 / 1;
+}
+
+.tr {
+  grid-area: 1 / 2;
+}
+
+.bl {
+  grid-area: 2 / 1;
+}
+
+.br {
+  grid-area: 2 / 2;
+}

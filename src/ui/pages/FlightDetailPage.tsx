@@ -52,6 +52,7 @@ import { useFlightDrafts } from "../logbook/useFlightDrafts";
 import { afterNextFrame } from "../map/afterFrame";
 import CompassButton from "../map/CompassButton";
 import MapCanvas from "../map/MapCanvas";
+import MapCluster from "../map/MapCluster";
 import {
   ACCENT_CYAN,
   boundsOf,
@@ -634,34 +635,28 @@ export default function FlightDetailPage() {
                   cluster's TL cell instead (below). */}
               {!mapFull && map && !replay.isOpen && <CompassButton map={map} />}
               {mapFull ? (
-                /* The app-wide cluster cells (.map-cluster, right-edge
+                /* The app-wide corner cluster (MapCluster, right-edge
                    anchored like the fly page): the TL "compass slot" (the
                    north reset while the pane is closed, track-up while it
                    is open — they never coexist), follow TR (play borrows
                    TR while the pane is closed), globe BL, the exit verb
                    BR. Empty cells collapse: live = the fly page's exact
                    box, closed = an L hugging the corner, parked = the
-                   bottom pair. The TL cell renders even when empty so the
-                   compass lands on the SAME ROW as play, not floating a
-                   row above it. */
-                <div className="map-cluster">
-                  <div className="map-cell-tl">
-                    {replay.trackUpButton ??
-                      (map && !replay.isOpen ? (
-                        <CompassButton map={map} />
-                      ) : null)}
-                  </div>
-                  {(replay.followButton ?? replay.playButton) && (
-                    <div className="map-cell-tr">
-                      {replay.followButton ?? replay.playButton}
-                    </div>
-                  )}
-                  {map?.supportsSatellite && (
-                    <div className="map-cell-bl">
+                   bottom pair. TL passes null, never undefined, so the
+                   cell renders even when empty and the compass lands on
+                   the SAME ROW as play, not floating a row above it. */
+                <MapCluster
+                  tl={
+                    replay.trackUpButton ??
+                    (map && !replay.isOpen ? <CompassButton map={map} /> : null)
+                  }
+                  tr={(replay.followButton ?? replay.playButton) || undefined}
+                  bl={
+                    map?.supportsSatellite ? (
                       <ViewToggle view={view} onChange={changeView} />
-                    </div>
-                  )}
-                  <div className="map-cell-br">
+                    ) : undefined
+                  }
+                  br={
                     <button
                       className="map-button"
                       aria-label="Shrink map"
@@ -670,8 +665,8 @@ export default function FlightDetailPage() {
                     >
                       <IonIcon icon={contractOutline} />
                     </button>
-                  </div>
-                </div>
+                  }
+                />
               ) : (
                 map?.supportsSatellite && (
                   <ViewToggle view={view} onChange={changeView} />

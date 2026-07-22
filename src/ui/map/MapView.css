@@ -86,29 +86,6 @@
    hugging L or pair, never as buttons floating off the anchor edge.
    Hosts assign cells mirrored to their anchor corner: the EDGE column
    (follow/play over the exit verb) goes nearest the screen edge. */
-.map-cluster {
-  display: grid;
-  grid-template-columns: auto auto;
-  grid-template-rows: auto auto;
-  gap: 0.6rem;
-}
-
-.map-cell-tl {
-  grid-area: 1 / 1;
-}
-
-.map-cell-tr {
-  grid-area: 1 / 2;
-}
-
-.map-cell-bl {
-  grid-area: 2 / 1;
-}
-
-.map-cell-br {
-  grid-area: 2 / 2;
-}
-
 .map-button:active {
   background: var(--map-chip-bg-active);
 }

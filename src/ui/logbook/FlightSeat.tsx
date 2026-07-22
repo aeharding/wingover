@@ -29,6 +29,7 @@ import { useAppearance } from "../appTheme";
 import { afterNextFrame } from "../map/afterFrame";
 import CompassButton from "../map/CompassButton";
 import MapCanvas from "../map/MapCanvas";
+import MapCluster from "../map/MapCluster";
 import {
   ACCENT_CYAN,
   boundsOf,
@@ -318,25 +319,22 @@ export default function FlightSeat({
         data-testid="seat-map"
       >
         <MapCanvas base={view} appearance={appearance} onReady={handleReady}>
-          {/* The app-wide cluster cells (.map-cluster), MIRRORED for the
+          {/* The app-wide corner cluster (MapCluster), MIRRORED for the
               seat's bottom-LEFT anchor: the edge column (follow/play
               over the exit verb) hugs the left edge, the TR "compass
               slot" (north reset while the pane is closed, track-up while
               it is open) and globe sit inboard. Empty cells collapse —
-              no state leaves buttons floating off the anchor, and the
-              compass shares the top row instead of floating above it. */}
+              no state leaves buttons floating off the anchor — while TR
+              passes null, never undefined, so the compass shares the top
+              row instead of floating above it. */}
           <div className="map-overlay">
-            <div className="map-cluster">
-              {(replay.followButton ?? replay.playButton) && (
-                <div className="map-cell-tl">
-                  {replay.followButton ?? replay.playButton}
-                </div>
-              )}
-              <div className="map-cell-tr">
-                {replay.trackUpButton ??
-                  (map && !replay.isOpen ? <CompassButton map={map} /> : null)}
-              </div>
-              <div className="map-cell-bl">
+            <MapCluster
+              tl={(replay.followButton ?? replay.playButton) || undefined}
+              tr={
+                replay.trackUpButton ??
+                (map && !replay.isOpen ? <CompassButton map={map} /> : null)
+              }
+              bl={
                 <button
                   className="map-button"
                   aria-label={mapFull ? "Shrink map" : "Expand map"}
@@ -345,13 +343,13 @@ export default function FlightSeat({
                 >
                   <IonIcon icon={mapFull ? contractOutline : expandOutline} />
                 </button>
-              </div>
-              {map?.supportsSatellite && (
-                <div className="map-cell-br">
+              }
+              br={
+                map?.supportsSatellite ? (
                   <ViewToggle view={view} onChange={changeView} />
-                </div>
-              )}
-            </div>
+                ) : undefined
+              }
+            />
           </div>
         </MapCanvas>
         {flight && stats && (

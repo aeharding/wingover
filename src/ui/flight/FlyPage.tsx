@@ -39,6 +39,7 @@ import {
 } from "../../storage/db";
 import NativeIcon from "../components/NativeIcon";
 import type { MapViewKind } from "../map/config";
+import MapCluster from "../map/MapCluster";
 import type { MapView } from "../map/types";
 import ViewToggle from "../map/ViewToggle";
 import { useSettings } from "../settings/SettingsContext";
@@ -471,56 +472,62 @@ export default function FlyPage() {
                 </span>
               </button>
             )}
-            {/* The app-wide cluster cells (.map-cluster): this page IS
+            {/* The app-wide corner cluster (MapCluster): this page IS
                 the reference layout the replay hosts mirror. Explicit
                 cells also pin stop to BR on builds without satellite
                 (flow order used to slide it into globe's cell). */}
-            <div className="map-cluster">
-              <button
-                className="map-button map-cell-tl"
-                aria-label={follow ? "Track up" : "Align north"}
-                // The mode light shows only while the mode is in
-                // effect (unsnapping also clears the pref; the gate
-                // guards any future unsnap path that forgets to).
-                data-active={follow && trackUp}
-                onClick={() => {
-                  if (follow) {
-                    changeTrackUp(!trackUp);
-                    return;
-                  }
-                  // Unsnapped, the compass is a north reset: bearing
-                  // zero, immediately, mode untouched. No animation,
-                  // ever, in flight. Always present — a control that
-                  // comes and goes is worse than one that occasionally
-                  // has nothing to do.
-                  liveMap?.moveTo({ bearing: 0 }, { animate: false });
-                }}
-              >
-                <NativeIcon icon={compassOutline} />
-              </button>
-              <button
-                className="map-button map-cell-tr"
-                aria-label="Follow aircraft"
-                data-active={follow}
-                // A toggle: pressing while snapped unsnaps (and takes
-                // track-up down with it, via changeFollow).
-                onClick={() => changeFollow(!follow)}
-              >
-                <NativeIcon icon={locateOutline} />
-              </button>
-              {liveMap?.supportsSatellite && (
-                <div className="map-cell-bl">
+            <MapCluster
+              tl={
+                <button
+                  className="map-button"
+                  aria-label={follow ? "Track up" : "Align north"}
+                  // The mode light shows only while the mode is in
+                  // effect (unsnapping also clears the pref; the gate
+                  // guards any future unsnap path that forgets to).
+                  data-active={follow && trackUp}
+                  onClick={() => {
+                    if (follow) {
+                      changeTrackUp(!trackUp);
+                      return;
+                    }
+                    // Unsnapped, the compass is a north reset: bearing
+                    // zero, immediately, mode untouched. No animation,
+                    // ever, in flight. Always present — a control that
+                    // comes and goes is worse than one that occasionally
+                    // has nothing to do.
+                    liveMap?.moveTo({ bearing: 0 }, { animate: false });
+                  }}
+                >
+                  <NativeIcon icon={compassOutline} />
+                </button>
+              }
+              tr={
+                <button
+                  className="map-button"
+                  aria-label="Follow aircraft"
+                  data-active={follow}
+                  // A toggle: pressing while snapped unsnaps (and takes
+                  // track-up down with it, via changeFollow).
+                  onClick={() => changeFollow(!follow)}
+                >
+                  <NativeIcon icon={locateOutline} />
+                </button>
+              }
+              bl={
+                liveMap?.supportsSatellite ? (
                   <ViewToggle view={mapView} onChange={changeMapView} />
-                </div>
-              )}
-              <button
-                className="map-button stop-button map-cell-br"
-                aria-label="Stop flight"
-                onClick={confirmEndFlight}
-              >
-                <NativeIcon icon={stopIcon} />
-              </button>
-            </div>
+                ) : undefined
+              }
+              br={
+                <button
+                  className="map-button stop-button"
+                  aria-label="Stop flight"
+                  onClick={confirmEndFlight}
+                >
+                  <NativeIcon icon={stopIcon} />
+                </button>
+              }
+            />
           </div>
           {status === "landed" && landingAt !== null && (
             /* Same surface as the end-flight confirm (BigConfirm's
