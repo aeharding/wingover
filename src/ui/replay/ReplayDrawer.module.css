@@ -22,7 +22,7 @@
   --replay-yellow: color(display-p3 0.72 0.52 0);
 }
 
-:global(:root.ion-palette-dark) .drawer {
+:root:global(.ion-palette-dark) .drawer {
   --replay-pane-bg: #17191c;
   --replay-ink: #fff;
   --replay-muted: #9a9fa6;

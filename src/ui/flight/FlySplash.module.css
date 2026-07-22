@@ -7,8 +7,8 @@
    at dusk, a pale blue day sky when the palette is light, so the two read as
    dusk/dawn of one artwork. Keyed on the palette CLASS (appTheme.ts), not
    prefers-color-scheme — satellite forces the class on and the splash goes
-   dusk with the rest of the chrome. Palette selectors are :global (the class
-   lives on <html>); the art classes scope. */
+   dusk with the rest of the chrome. Only the palette CLASS is :global (it
+   lives on <html> and must not hash); the art classes scope. */
 
 .splash {
   position: absolute;
@@ -73,7 +73,7 @@
    zone that split the sky into two slabs) — a near-white HAZE stop between
    them is how a real sky does it. The warmth RADIATES from the sun via the
    .glow radial below; this base keeps only a gentle amber floor. */
-:global(:root:not(.ion-palette-dark)) .splash {
+:root:not(:global(.ion-palette-dark)) .splash {
   background: linear-gradient(
     180deg,
     #c8ddf3 0%,
@@ -125,22 +125,22 @@
   stop-opacity: 0;
 }
 
-:global(:root:not(.ion-palette-dark)) .glowCore {
+:root:not(:global(.ion-palette-dark)) .glowCore {
   stop-color: #ffcf70;
   stop-opacity: 0.68;
 }
 
-:global(:root:not(.ion-palette-dark)) .glowMid {
+:root:not(:global(.ion-palette-dark)) .glowMid {
   stop-color: #ffd98c;
   stop-opacity: 0.42;
 }
 
-:global(:root:not(.ion-palette-dark)) .glowFringe {
+:root:not(:global(.ion-palette-dark)) .glowFringe {
   stop-color: #f8dcab;
   stop-opacity: 0.2;
 }
 
-:global(:root:not(.ion-palette-dark)) .glowEnd {
+:root:not(:global(.ion-palette-dark)) .glowEnd {
   stop-color: #f8dcab;
   stop-opacity: 0;
 }
@@ -152,33 +152,33 @@
   opacity: 0.26;
 }
 
-:global(:root:not(.ion-palette-dark)) .sun.sunVeiled {
+:root:not(:global(.ion-palette-dark)) .sun.sunVeiled {
   opacity: 0.5;
 }
 
 /* The motifs flip to deeper ambers: the near-white warm fills that read on
    the night sky vanish against the day one. */
-:global(:root:not(.ion-palette-dark)) .star {
+:root:not(:global(.ion-palette-dark)) .star {
   fill: #d3922f;
   /* Softer than the night stars' 0.5: daylight motes, not beacons. */
   opacity: 0.32;
 }
 
-:global(:root:not(.ion-palette-dark)) .sun {
+:root:not(:global(.ion-palette-dark)) .sun {
   fill: #eda32f;
   opacity: 0.22;
 }
 
-:global(:root:not(.ion-palette-dark)) .cloud {
+:root:not(:global(.ion-palette-dark)) .cloud {
   fill: #c98f3f;
 }
 
-:global(:root:not(.ion-palette-dark)) .lines path {
+:root:not(:global(.ion-palette-dark)) .lines path {
   stroke: #bd8434;
   opacity: 0.14;
 }
 
-:global(:root:not(.ion-palette-dark)) .canopy {
+:root:not(:global(.ion-palette-dark)) .canopy {
   fill: #c98f3f;
   stroke: #c98f3f;
 }

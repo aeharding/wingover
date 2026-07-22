@@ -10,7 +10,7 @@
 /* On the phone the tab bar sits below the map and owns the home indicator;
    the map's bottom is the tab bar's top. Scoped to the tab shell so the
    desktop all-flights (no tab bar, bottom AT the device edge) keeps it. */
-:global(ion-tabs) .root {
+ion-tabs .root {
   --ion-safe-area-bottom: 0px;
 }
 

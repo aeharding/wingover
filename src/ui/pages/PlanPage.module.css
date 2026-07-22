@@ -12,7 +12,7 @@
    shell, so the desktop plan — no tab bar, bottom AT the device edge — keeps
    it. (.plan-map itself is still a global class: desktop.css lays it out in
    the split; it modularizes with the desktop-shell batch.) */
-:global(ion-tabs) :global(.plan-map) {
+ion-tabs .map {
   --ion-safe-area-bottom: 0px;
 }
 
