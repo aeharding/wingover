@@ -321,10 +321,6 @@ ion-tab-button {
   font-size: 0.85rem;
 }
 
-.tab-bar-hidden {
-  display: none;
-}
-
 /* clearInput's ✕ only while editing — UITextField's clearButtonMode =
    .whileEditing, which Ionic doesn't offer as a prop (the button renders
    whenever the field has a value). ion-input is scoped, not shadow, and its
