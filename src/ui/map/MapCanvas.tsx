@@ -16,6 +16,7 @@ import type { Insets, MapView } from "./types";
 // ahead of MapView.css — the adapter (and its map JS) still load lazily.
 import "maplibre-gl/dist/maplibre-gl.css";
 import mapCss from "./map.module.css";
+import { cx } from "../cx";
 
 interface MapCanvasProps {
   base: MapViewKind;
@@ -84,6 +85,7 @@ export default function MapCanvas({
   // One source (the vars), so the MapKit logo can't drift from the
   // CSS-positioned buttons.
   const probeRef = useRef<HTMLDivElement>(null);
+  const probeTLRef = useRef<HTMLDivElement>(null);
   const insetsRef = useRef<Insets>({ top: 0, right: 0, bottom: 0, left: 0 });
   // Bumped when the pilot changes the map provider in Settings: the whole
   // backend is torn down and re-created in place, so the choice applies
@@ -229,24 +231,30 @@ export default function MapCanvas({
     // visible here.
     const { top, right, bottom, left } = insetsRef.current;
     probe.setAttribute("data-insets", `${top},${right},${bottom},${left}`);
-  }); // One mechanism: a ResizeObserver on the container. Every event that
-  // changes this map's exposed inset also changes its box on today's
-  // surfaces — rotation re-resolves env() while the viewport swaps,
-  // fullscreen toggles reparent into a different-sized slot, the replay
-  // pane shrinks the map above it, the desktop rail hiding widens the
-  // seat. A transition-event style observer looked cleverer but had a
-  // structural blind spot: changes applied while the node moves through
-  // the DOM (the reverse-portal fullscreen toggle) fire no transition,
-  // and the basemap attribution held a stale inset until rotation.
-  // INVARIANT this trades on: if a future surface ever flips a
-  // consume class without changing the map's box, this needs a poke —
-  // e2e/inset-bridge.spec.ts guards the seam.
+  });
+
+  // One mechanism: a ResizeObserver — on the PROBES, not the container.
+  // The probes are width:0 border-boxes whose padding IS
+  // var(--ion-safe-area-*), so their border-box geometry is a pure
+  // function of the insets: the main probe spans the sums (L+R × T+B),
+  // the TL companion spans (L × T), and the pair is injective in all
+  // four edges. ANY inset change therefore moves an observed box —
+  // env() re-resolving, a consume class flipping after its animation
+  // already finished, a reparent into a different context — with no
+  // reliance on transition events (which miss changes applied across a
+  // DOM move) or on the container's own size moving (which a 180°
+  // rotation and a post-animation class flip both defeat; both found by
+  // adversarial review, both pinned in e2e/inset-bridge.spec.ts).
+  // box: "border-box" is load-bearing — the content box of a zero-width
+  // padded div never changes.
   useEffect(() => {
-    const container = containerRef.current;
-    if (!container) return;
+    const probe = probeRef.current;
+    const probeTL = probeTLRef.current;
+    if (!probe || !probeTL) return;
     readInsets();
     const resize = new ResizeObserver(() => readInsets());
-    resize.observe(container);
+    resize.observe(probe, { box: "border-box" });
+    resize.observe(probeTL, { box: "border-box" });
     return () => resize.disconnect();
   }, []);
 
@@ -302,6 +310,11 @@ export default function MapCanvas({
         ref={probeRef}
         className={mapCss.insetProbe}
         data-testid="map-inset-probe"
+        aria-hidden="true"
+      />
+      <div
+        ref={probeTLRef}
+        className={cx(mapCss.insetProbe, mapCss.insetProbeTL)}
         aria-hidden="true"
       />
       {children}

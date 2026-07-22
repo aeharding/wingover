@@ -61,3 +61,73 @@ test("the fullscreen toggle re-feeds the basemap inset bridge", async ({
   await expect(page.getByTestId("flight-detail-map-fullroot")).toBeHidden();
   await expect(probe).toHaveAttribute("data-insets", "0,0,0,0");
 });
+
+test("closing the replay pane restores the bottom inset without a box change", async ({
+  page,
+}) => {
+  // Adversarial-review counterexample: the pane's close ANIMATES the map
+  // region to its final size while consume-bottom is still applied
+  // (isOpen holds through "closing"), then the class flips at
+  // transitionend with no further resize. A container ResizeObserver's
+  // last read has the bottom consumed; the restore must still land.
+  await recordQuickFlight(page);
+  await page.addStyleTag({
+    content: `:root {
+      --safe-area-inset-top: 11px;
+      --safe-area-inset-right: 22px;
+      --safe-area-inset-bottom: 33px;
+      --safe-area-inset-left: 44px;
+    }`,
+  });
+  await page.getByText("Logbook", { exact: true }).click();
+  await page.getByTestId("flight-row").click();
+  const probe = page
+    .getByTestId("flight-detail-map")
+    .getByTestId("map-inset-probe");
+
+  await page.getByTestId("map-expand").click();
+  await expect(probe).toHaveAttribute("data-insets", "11,22,33,44");
+
+  // Open the replay pane: it owns the home indicator, the map consumes it.
+  await page.getByTestId("replay-start").click();
+  await expect(page.getByTestId("replay-dock")).toBeVisible();
+  await expect(probe).toHaveAttribute("data-insets", "11,22,0,44");
+
+  // Collapse: the bottom edge is the map's again.
+  await page.getByTestId("replay-collapse").click();
+  await expect(page.getByTestId("replay-dock")).toBeHidden();
+  await expect(probe).toHaveAttribute("data-insets", "11,22,33,44");
+});
+
+test("a sum-preserving left/right swap still re-feeds the bridge", async ({
+  page,
+}) => {
+  // The 180-degree landscape flip in miniature: left and right swap while
+  // every box keeps its exact size (the sums are unchanged), so nothing
+  // resizes anywhere — only the resolved vars move.
+  await recordQuickFlight(page);
+  await page.addStyleTag({
+    content: `:root {
+      --safe-area-inset-top: 11px;
+      --safe-area-inset-right: 22px;
+      --safe-area-inset-bottom: 33px;
+      --safe-area-inset-left: 44px;
+    }`,
+  });
+  await page.getByText("Logbook", { exact: true }).click();
+  await page.getByTestId("flight-row").click();
+  const probe = page
+    .getByTestId("flight-detail-map")
+    .getByTestId("map-inset-probe");
+
+  await page.getByTestId("map-expand").click();
+  await expect(probe).toHaveAttribute("data-insets", "11,22,33,44");
+
+  await page.addStyleTag({
+    content: `:root {
+      --safe-area-inset-right: 44px;
+      --safe-area-inset-left: 22px;
+    }`,
+  });
+  await expect(probe).toHaveAttribute("data-insets", "11,44,33,22");
+});
