@@ -24,6 +24,7 @@ import {
 } from "ionicons/icons";
 import {
   type KeyboardEvent as ReactKeyboardEvent,
+  type RefObject,
   useEffect,
   useEffectEvent,
   useLayoutEffect,
@@ -67,6 +68,7 @@ import {
 } from "../map/types";
 import useMapView from "../map/useMapView";
 import ViewToggle from "../map/ViewToggle";
+import type { ClipMode } from "../replay/ClipDock";
 import { useReplayDrawer } from "../replay/useReplayDrawer";
 import { useSettings } from "../settings/SettingsContext";
 import { useFlightActions } from "../useFlightActions";
@@ -115,40 +117,169 @@ function collapseMapVia(setMapFull: (value: boolean) => void) {
  * The PHONE flight page: map on top, details scrolling below. Desktop
  * renders the logbook split instead (DesktopShell → LogbookSection →
  * FlightSeat); this page only ever mounts inside the Ionic tab shell.
- */
-/**
- * The page shell: the OUTLET-REGISTERED IonPage stays mounted for the
- * page's whole life, and the boundary swaps only its content — replacing
- * the IonPage itself on a crash breaks the stack manager's gesture wiring
- * (swipe-back attached to a dead element; found by Alex in review). All
- * hooks and logic live in the Body, so a hook-level crash (the class that
- * motivated this boundary, e.g. the old stats reduce) is still caught.
+ *
+ * ── The error-boundary shape (three review rounds, PR #133) ──
+ * The outlet registers THE specific IonPage element it mounted for this
+ * route; the iOS stack manager wires swipe-back to that element and its
+ * ion-header / ion-content, and a page transition animates them on the way
+ * out. So a crash must leave the CHROME exactly as it was: the IonPage, the
+ * real IonHeader (back button, title, Options), and the IonContent element
+ * all stay mounted and untouched — only the CONTENT inside IonContent is
+ * swapped for the fallback. Two earlier shapes broke this: a route-level
+ * boundary whose fallback replaced the whole tree (no .ion-page), and a
+ * fallback re-wrapped in a FRESH IonPage (never re-registered with the
+ * stack manager — swipe-back stayed wired to the dead element).
+ *
+ * DELIBERATE TRADEOFF: this shell's own hooks (useFlightDoc, the options
+ * sheet, the actions) are OUTSIDE the boundary and unprotected — a throw in
+ * them still white-screens. That is the price of stable chrome. The risky
+ * mass — drafts, the map, replay, portals, every effect — lives in DetailBody
+ * inside the boundary, where a throw degrades to the contained panel while
+ * the chrome (and its swipe-back) keeps working.
  */
 export default function FlightDetailPage() {
+  const { id } = useParams<{ id: string }>();
+  const router = useIonRouter();
+  const { flight, setFlight, track } = useFlightDoc(id);
+  const contentRef = useRef<HTMLIonContentElement>(null);
+  // Controller hook, not a controlled <IonActionSheet isOpen>: a reopen
+  // while the prior dismissal is still animating desyncs the controlled
+  // form (see FlightSeat) — the clip flows reopen exactly that fast.
+  const [presentOptions, dismissOptions] = useIonActionSheet();
+  const { exportFlight, confirmDeleteFlight } = useFlightActions();
+  // The options sheet lives up here in the chrome (so it survives a body
+  // crash), but its clip actions flip body-only state (fullscreen map +
+  // replay pane). DetailBody registers a fresh closure here every render;
+  // the sheet handlers call it. Null while no body is mounted.
+  const clipEntryRef = useRef<((mode: ClipMode) => void) | null>(null);
+
+  async function openOptions() {
+    // The previous sheet may still be tearing down (the clip flows reopen
+    // fast, and a busy frame stretches the dismiss animation); presenting
+    // into its cleanup gets the new sheet silently destroyed with it.
+    await dismissOptions();
+    await presentOptions({
+      buttons: [
+        {
+          text: "Export GPX",
+          handler: () => {
+            if (flight) exportFlight(flight);
+          },
+        },
+        // The clip editors live in the fullscreen pane, so entry jumps
+        // straight there (no morph: the view transition would capture
+        // the dismissing sheet). Each trim end is its own errand (per
+        // Alex: usually it is one or the other). The body owns the state
+        // these flip, reached through clipEntryRef.
+        ...(trimAvailable(track)
+          ? [
+              {
+                text: "Trim start",
+                handler: () => clipEntryRef.current?.("trim-start"),
+              },
+              {
+                text: "Trim end",
+                handler: () => clipEntryRef.current?.("trim-end"),
+              },
+            ]
+          : []),
+        ...(splitAvailable(track)
+          ? [
+              {
+                text: "Split flight",
+                handler: () => clipEntryRef.current?.("split"),
+              },
+            ]
+          : []),
+        {
+          text: "Delete flight",
+          role: "destructive",
+          handler: () => {
+            if (flight)
+              confirmDeleteFlight(flight, () =>
+                router.push("/logbook", "back"),
+              );
+          },
+        },
+        { text: "Cancel", role: "cancel" },
+      ],
+    });
+  }
+
   return (
-    <>
-      <ErrorBoundary name="flight-detail">
-        <DetailBody />
-      </ErrorBoundary>
-    </>
+    <IonPage>
+      {/* Chrome — mounted for the page's whole life, never swapped by the
+          boundary (see the shell doc-comment). The fullscreen overlay simply
+          covers the header; it is never conditionally rendered (a remounting
+          Stencil ion-header sizes async, and the late layout clamps scroll). */}
+      <IonHeader>
+        <IonToolbar>
+          <IonButtons slot="start">
+            <IonBackButton defaultHref="/logbook" />
+          </IonButtons>
+          {/* The when, not the name — the name is the editable field below,
+                and printing it twice an inch apart read as a bug. */}
+          <IonTitle>
+            {flight
+              ? new Date(flight.startedAt).toLocaleString(undefined, {
+                  month: "short",
+                  day: "numeric",
+                  year: "numeric",
+                  hour: "numeric",
+                  minute: "2-digit",
+                })
+              : "Flight"}
+          </IonTitle>
+          <IonButtons slot="end">
+            <IonButton
+              aria-label="Options"
+              data-testid="detail-options"
+              onClick={openOptions}
+            >
+              <IonIcon slot="icon-only" icon={ellipsisHorizontal} />
+            </IonButton>
+          </IonButtons>
+        </IonToolbar>
+      </IonHeader>
+      {/* scrollY stays on even full screen: the map overlay covers the details
+          and eats the touches, so nothing scrolls behind it anyway, and toggling
+          overflow off/on is what was resetting the scroll position on collapse.
+          The IonContent element is chrome too (the transition animates it), so
+          it stays mounted; only its CHILDREN — DetailBody, or the fallback on a
+          crash — change. */}
+      <IonContent ref={contentRef}>
+        <ErrorBoundary name="flight-detail">
+          <DetailBody
+            flight={flight}
+            setFlight={setFlight}
+            track={track}
+            contentRef={contentRef}
+            registerClipEntry={(entry) => {
+              clipEntryRef.current = entry;
+            }}
+          />
+        </ErrorBoundary>
+      </IonContent>
+    </IonPage>
   );
 }
 
-function DetailBody() {
-  const { id } = useParams<{ id: string }>();
-  const router = useIonRouter();
+function DetailBody({
+  flight,
+  setFlight,
+  track,
+  contentRef,
+  registerClipEntry,
+}: ReturnType<typeof useFlightDoc> & {
+  contentRef: RefObject<HTMLIonContentElement | null>;
+  registerClipEntry: (entry: ((mode: ClipMode) => void) | null) => void;
+}) {
   const { units } = useSettings();
-  const { exportFlight, confirmDeleteFlight } = useFlightActions();
-  const { flight, setFlight, track } = useFlightDoc(id);
   const { drafts, setDraft, commit } = useFlightDrafts(
     flight,
     setFlight,
     track,
   );
-  // Controller hook, not a controlled <IonActionSheet isOpen>: a reopen
-  // while the prior dismissal is still animating desyncs the controlled
-  // form (see FlightSeat) — the clip flows reopen exactly that fast.
-  const [presentOptions, dismissOptions] = useIonActionSheet();
   const appearance = useAppearance();
   const [view, changeView] = useMapView();
   const [map, setMap] = useState<MapView | null>(null);
@@ -157,7 +288,6 @@ function DetailBody() {
   // can fold the map before the browser grants fullscreen, and the grant
   // callback must see the CURRENT intent, not the one it closed over.
   const mapFullRef = useRef(false);
-  const contentRef = useRef<HTMLIonContentElement>(null);
   // The map surface lives in this portal so full screen can REPARENT it (same
   // React and DOM instance — no map re-init) between the inline frame and a
   // fixed overlay on document.body. Lazy useState = create-once (this is
@@ -174,6 +304,18 @@ function DetailBody() {
   // The replay pane docks under the fullscreen map only; inline the map
   // is a non-interactive preview, so the drawer closes with a collapse.
   const replay = useReplayDrawer(map, track, flight, mapFull);
+
+  // The options sheet (chrome, in the shell) starts a clip by calling into
+  // here. Re-register every render so the sheet always sees the latest
+  // replay/beginClip; null it on unmount so a crashed-and-replaced body can't
+  // be driven from the still-live header.
+  useEffect(() => {
+    registerClipEntry((mode) => {
+      setMapFull(true);
+      replay.beginClip(mode);
+    });
+    return () => registerClipEntry(null);
+  });
 
   // What the map region consumes off the device edges, one class the
   // buttons AND the MapKit attribution both inherit (so they can never
@@ -207,67 +349,6 @@ function DetailBody() {
   }
 
   const collapseMap = () => collapseMapVia(setMapFull);
-
-  async function openOptions() {
-    // The previous sheet may still be tearing down (the clip flows reopen
-    // fast, and a busy frame stretches the dismiss animation); presenting
-    // into its cleanup gets the new sheet silently destroyed with it.
-    await dismissOptions();
-    await presentOptions({
-      buttons: [
-        {
-          text: "Export GPX",
-          handler: () => {
-            if (flight) exportFlight(flight);
-          },
-        },
-        // The clip editors live in the fullscreen pane, so entry jumps
-        // straight there (no morph: the view transition would capture
-        // the dismissing sheet). Each trim end is its own errand (per
-        // Alex: usually it is one or the other).
-        ...(trimAvailable(track)
-          ? [
-              {
-                text: "Trim start",
-                handler: () => {
-                  setMapFull(true);
-                  replay.beginClip("trim-start");
-                },
-              },
-              {
-                text: "Trim end",
-                handler: () => {
-                  setMapFull(true);
-                  replay.beginClip("trim-end");
-                },
-              },
-            ]
-          : []),
-        ...(splitAvailable(track)
-          ? [
-              {
-                text: "Split flight",
-                handler: () => {
-                  setMapFull(true);
-                  replay.beginClip("split");
-                },
-              },
-            ]
-          : []),
-        {
-          text: "Delete flight",
-          role: "destructive",
-          handler: () => {
-            if (flight)
-              confirmDeleteFlight(flight, () =>
-                router.push("/logbook", "back"),
-              );
-          },
-        },
-        { text: "Cancel", role: "cancel" },
-      ],
-    });
-  }
 
   // Native only: the keyboard's return key reads "Done" (enterkeyhint on the
   // inputs below) and pressing it closes the keyboard. Single-line fields have
@@ -309,7 +390,7 @@ function DetailBody() {
       window.clearTimeout(timer);
       content.removeEventListener("focusin", onFocusIn);
     };
-  }, []);
+  }, [contentRef]);
 
   // Full screen means NO bars — the body-level overlay simply COVERS the
   // header and tab bar (their layout never changes, so neither does the
@@ -478,138 +559,100 @@ function DetailBody() {
   const stats = flight?.stats;
 
   return (
-    <IonPage>
-      {/* Always mounted; the fullscreen overlay simply covers it (never
-          conditionally render it — a remounting Stencil ion-header sizes
-          async, and the late layout clamps the scroll position). */}
-      <IonHeader>
-        <IonToolbar>
-          <IonButtons slot="start">
-            <IonBackButton defaultHref="/logbook" />
-          </IonButtons>
-          {/* The when, not the name — the name is the editable field below,
-                and printing it twice an inch apart read as a bug. */}
-          <IonTitle>
-            {flight
-              ? new Date(flight.startedAt).toLocaleString(undefined, {
-                  month: "short",
-                  day: "numeric",
-                  year: "numeric",
-                  hour: "numeric",
-                  minute: "2-digit",
-                })
-              : "Flight"}
-          </IonTitle>
-          <IonButtons slot="end">
-            <IonButton
-              aria-label="Options"
-              data-testid="detail-options"
-              onClick={openOptions}
-            >
-              <IonIcon slot="icon-only" icon={ellipsisHorizontal} />
-            </IonButton>
-          </IonButtons>
-        </IonToolbar>
-      </IonHeader>
-      {/* scrollY stays on even full screen: the map overlay covers the details
-          and eats the touches, so nothing scrolls behind it anyway, and toggling
-          overflow off/on is what was resetting the scroll position on collapse. */}
-      <IonContent ref={contentRef}>
-        {/* Map and details split the screen instead of a card floating over
-            the track — nothing overlaps the flight, and the stats get room
-            to breathe below. The frame only reserves the space; the map
-            surface itself lives in mapPortal and is reparented here (inline)
-            or into the body-level overlay below (full screen). */}
-        <div className={styles.frame} data-testid="flight-detail-map-frame">
-          {!mapFull && <OutPortal node={mapPortal} />}
-        </div>
-        {flight && stats && (
-          <>
-            <IonList>
-              <IonItem>
-                <IonInput
-                  label="Name"
-                  clearInput
-                  autocapitalize="words"
-                  placeholder="Add name"
-                  value={drafts.name}
-                  aria-label="Flight name"
-                  onIonInput={(event) =>
-                    setDraft("name", event.detail.value ?? "")
-                  }
-                  onIonBlur={commit}
-                  enterkeyhint="done"
-                  onKeyDown={blurOnEnter}
-                />
-              </IonItem>
-              <IonItem>
-                <IonInput
-                  label="Launch"
-                  clearInput
-                  autocapitalize="words"
-                  placeholder="Add location"
-                  value={drafts.launch}
-                  aria-label="Launch location"
-                  onIonInput={(event) =>
-                    setDraft("launch", event.detail.value ?? "")
-                  }
-                  onIonBlur={commit}
-                  enterkeyhint="done"
-                  onKeyDown={blurOnEnter}
-                />
-              </IonItem>
-              <IonItem>
-                {/* rows 1: one line empty (a textarea's native default is
-                    two), growing with content. */}
-                <IonTextarea
-                  label="Notes"
-                  autocapitalize="sentences"
-                  placeholder="Wing, motor, conditions…"
-                  rows={1}
-                  autoGrow
-                  value={drafts.notes}
-                  aria-label="Flight notes"
-                  onIonInput={(event) =>
-                    setDraft("notes", event.detail.value ?? "")
-                  }
-                  onIonBlur={commit}
-                />
-              </IonItem>
-            </IonList>
-            <IonList>
-              <Stat
-                label="Duration"
-                value={formatAirtime(stats.durationSeconds)}
+    <>
+      {/* Map and details split the screen instead of a card floating over
+          the track — nothing overlaps the flight, and the stats get room
+          to breathe below. The frame only reserves the space; the map
+          surface itself lives in mapPortal and is reparented here (inline)
+          or into the body-level overlay below (full screen). */}
+      <div className={styles.frame} data-testid="flight-detail-map-frame">
+        {!mapFull && <OutPortal node={mapPortal} />}
+      </div>
+      {flight && stats && (
+        <>
+          <IonList>
+            <IonItem>
+              <IonInput
+                label="Name"
+                clearInput
+                autocapitalize="words"
+                placeholder="Add name"
+                value={drafts.name}
+                aria-label="Flight name"
+                onIonInput={(event) =>
+                  setDraft("name", event.detail.value ?? "")
+                }
+                onIonBlur={commit}
+                enterkeyhint="done"
+                onKeyDown={blurOnEnter}
               />
-              <Stat
-                label="Distance"
-                value={formatDistance(stats.distanceMeters, units)}
+            </IonItem>
+            <IonItem>
+              <IonInput
+                label="Launch"
+                clearInput
+                autocapitalize="words"
+                placeholder="Add location"
+                value={drafts.launch}
+                aria-label="Launch location"
+                onIonInput={(event) =>
+                  setDraft("launch", event.detail.value ?? "")
+                }
+                onIonBlur={commit}
+                enterkeyhint="done"
+                onKeyDown={blurOnEnter}
               />
-              <Stat
-                label="Max speed"
-                value={formatSpeed(stats.maxSpeed, units)}
+            </IonItem>
+            <IonItem>
+              {/* rows 1: one line empty (a textarea's native default is
+                  two), growing with content. */}
+              <IonTextarea
+                label="Notes"
+                autocapitalize="sentences"
+                placeholder="Wing, motor, conditions…"
+                rows={1}
+                autoGrow
+                value={drafts.notes}
+                aria-label="Flight notes"
+                onIonInput={(event) =>
+                  setDraft("notes", event.detail.value ?? "")
+                }
+                onIonBlur={commit}
               />
-              <Stat
-                label="Avg speed"
-                value={formatSpeed(stats.averageSpeed, units)}
-              />
-              <Stat
-                label="Max altitude"
-                value={formatAltitude(stats.maxAltitude, units)}
-              />
-              <Stat
-                label="Max above launch"
-                lines="none"
-                value={formatAltitude(
-                  stats.maxAltitude -
-                    (stats.launchAltitude ?? stats.minAltitude),
-                  units,
-                )}
-              />
-            </IonList>
-          </>
-        )}
-      </IonContent>
+            </IonItem>
+          </IonList>
+          <IonList>
+            <Stat
+              label="Duration"
+              value={formatAirtime(stats.durationSeconds)}
+            />
+            <Stat
+              label="Distance"
+              value={formatDistance(stats.distanceMeters, units)}
+            />
+            <Stat
+              label="Max speed"
+              value={formatSpeed(stats.maxSpeed, units)}
+            />
+            <Stat
+              label="Avg speed"
+              value={formatSpeed(stats.averageSpeed, units)}
+            />
+            <Stat
+              label="Max altitude"
+              value={formatAltitude(stats.maxAltitude, units)}
+            />
+            <Stat
+              label="Max above launch"
+              lines="none"
+              value={formatAltitude(
+                stats.maxAltitude - (stats.launchAltitude ?? stats.minAltitude),
+                units,
+              )}
+            />
+          </IonList>
+        </>
+      )}
       {/* The one true map surface. Full screen: a single tap on the map
           collapses it — via the map's own singletap gesture (MapKit's
           single-tap / a debounced MapLibre click), which never fires for
@@ -721,7 +764,7 @@ function DetailBody() {
           </div>,
           document.querySelector("ion-app") ?? document.body,
         )}
-    </IonPage>
+    </>
   );
 }
 

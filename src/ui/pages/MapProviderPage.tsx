@@ -19,6 +19,7 @@ import { useEffect, useState } from "react";
 import { useHistory } from "react-router-dom";
 
 import { getSetting, setSetting } from "../../storage/local";
+import ErrorBoundary from "../components/ErrorBoundary";
 import { useIsDesktop } from "../useIsDesktop";
 
 import settings from "./settings.module.css";
@@ -28,10 +29,43 @@ import settings from "./settings.module.css";
  * MapKit is the default: Apple imagery, satellite included, free. MapLibre
  * is the FOSS path: keyless OpenFreeMap streets, satellite only with the
  * pilot's own MapTiler key — first-party map costs stay zero either way.
+ *
+ * The shell keeps the chrome the outlet's stack transitions need — IonPage,
+ * the IonHeader with its back button, and IonContent — mounted through a
+ * crash; the boundary swaps only the body. The header needs
+ * isDesktop/history, so those stay in the shell. See PR #133.
  */
 export default function MapProviderPage() {
   const history = useHistory();
   const isDesktop = useIsDesktop();
+
+  return (
+    <IonPage className={settings.page}>
+      <IonHeader>
+        <IonToolbar>
+          <IonButtons slot="start">
+            {isDesktop ? (
+              <IonButton onClick={() => history.push("/settings")}>
+                <IonIcon slot="start" icon={chevronBackOutline} />
+                Settings
+              </IonButton>
+            ) : (
+              <IonBackButton defaultHref="/settings" text="Settings" />
+            )}
+          </IonButtons>
+          <IonTitle>Map Provider</IonTitle>
+        </IonToolbar>
+      </IonHeader>
+      <IonContent className={settings.content}>
+        <ErrorBoundary name="settings">
+          <MapProviderBody />
+        </ErrorBoundary>
+      </IonContent>
+    </IonPage>
+  );
+}
+
+function MapProviderBody() {
   const [backend, setBackend] = useState("mapkit");
   const [maptilerKey, setMaptilerKey] = useState("");
 
@@ -54,65 +88,48 @@ export default function MapProviderPage() {
   }
 
   return (
-    <IonPage className={settings.page}>
-      <IonHeader>
-        <IonToolbar>
-          <IonButtons slot="start">
-            {isDesktop ? (
-              <IonButton onClick={() => history.push("/settings")}>
-                <IonIcon slot="start" icon={chevronBackOutline} />
-                Settings
-              </IonButton>
-            ) : (
-              <IonBackButton defaultHref="/settings" text="Settings" />
-            )}
-          </IonButtons>
-          <IonTitle>Map Provider</IonTitle>
-        </IonToolbar>
-      </IonHeader>
-      <IonContent className={settings.content}>
-        <IonList inset>
-          <IonRadioGroup
-            value={backend}
-            onIonChange={(event) => {
-              if (typeof event.detail.value === "string")
-                saveBackend(event.detail.value);
-            }}
-          >
-            <IonItem>
-              <IonRadio value="mapkit">MapKit</IonRadio>
-            </IonItem>
-            <IonItem>
-              <IonRadio value="maplibre">MapLibre</IonRadio>
-            </IonItem>
-          </IonRadioGroup>
-        </IonList>
-        <div className={settings.helperText}>
-          {backend === "maplibre"
-            ? "Streets are free via OpenFreeMap."
-            : "Apple maps, satellite imagery included."}
-        </div>
+    <>
+      <IonList inset>
+        <IonRadioGroup
+          value={backend}
+          onIonChange={(event) => {
+            if (typeof event.detail.value === "string")
+              saveBackend(event.detail.value);
+          }}
+        >
+          <IonItem>
+            <IonRadio value="mapkit">MapKit</IonRadio>
+          </IonItem>
+          <IonItem>
+            <IonRadio value="maplibre">MapLibre</IonRadio>
+          </IonItem>
+        </IonRadioGroup>
+      </IonList>
+      <div className={settings.helperText}>
+        {backend === "maplibre"
+          ? "Streets are free via OpenFreeMap."
+          : "Apple maps, satellite imagery included."}
+      </div>
 
-        {backend === "maplibre" && (
-          <>
-            <IonList inset>
-              <IonItem>
-                <IonInput
-                  label="MapTiler key"
-                  placeholder="Key"
-                  value={maptilerKey}
-                  onIonInput={(event) =>
-                    saveMaptilerKey(event.detail.value ?? "")
-                  }
-                />
-              </IonItem>
-            </IonList>
-            <div className={settings.helperText}>
-              A free key from maptiler.com adds satellite view.
-            </div>
-          </>
-        )}
-      </IonContent>
-    </IonPage>
+      {backend === "maplibre" && (
+        <>
+          <IonList inset>
+            <IonItem>
+              <IonInput
+                label="MapTiler key"
+                placeholder="Key"
+                value={maptilerKey}
+                onIonInput={(event) =>
+                  saveMaptilerKey(event.detail.value ?? "")
+                }
+              />
+            </IonItem>
+          </IonList>
+          <div className={settings.helperText}>
+            A free key from maptiler.com adds satellite view.
+          </div>
+        </>
+      )}
+    </>
   );
 }

@@ -17,6 +17,7 @@ import { useHistory } from "react-router-dom";
 
 import { getTrack, listFlights } from "../../storage/db";
 import { useAppearance } from "../appTheme";
+import ErrorBoundary from "../components/ErrorBoundary";
 import CompassButton from "../map/CompassButton";
 import MapCanvas from "../map/MapCanvas";
 import { boundsOf, type Line, type LngLat, type MapView } from "../map/types";
@@ -36,9 +37,45 @@ function rampColor(t: number): string {
   return `hsl(${Math.round(hue)}, 85%, ${Math.round(lightness)}%)`;
 }
 
+/**
+ * The composite "all flights" map. The shell keeps the chrome the outlet's
+ * stack transitions need — IonPage, the IonHeader with its back button, and
+ * the IonContent — mounted through a crash; the boundary swaps only the map
+ * body inside. The header needs isDesktop/history, so those stay in the
+ * shell; the rest is map logic in AllFlightsMapBody. See PR #133.
+ */
 export default function AllFlightsMapPage() {
   const history = useHistory();
   const isDesktop = useIsDesktop();
+  return (
+    <IonPage>
+      <IonHeader>
+        <IonToolbar>
+          <IonButtons slot="start">
+            {isDesktop ? (
+              // No Ionic router in the desktop shell; IonBackButton there
+              // falls back to a FULL document navigation.
+              <IonButton onClick={() => history.push("/logbook")}>
+                <IonIcon slot="start" icon={chevronBackOutline} />
+                Logbook
+              </IonButton>
+            ) : (
+              <IonBackButton defaultHref="/logbook" />
+            )}
+          </IonButtons>
+          <IonTitle>All Flights</IonTitle>
+        </IonToolbar>
+      </IonHeader>
+      <IonContent scrollY={false}>
+        <ErrorBoundary name="logbook">
+          <AllFlightsMapBody />
+        </ErrorBoundary>
+      </IonContent>
+    </IonPage>
+  );
+}
+
+function AllFlightsMapBody() {
   const appearance = useAppearance();
   const [view, changeView] = useMapView();
   const [features, setFeatures] = useState<Feature[]>([]);
@@ -122,43 +159,22 @@ export default function AllFlightsMapPage() {
   }, [features, map]);
 
   return (
-    <IonPage>
-      <IonHeader>
-        <IonToolbar>
-          <IonButtons slot="start">
-            {isDesktop ? (
-              // No Ionic router in the desktop shell; IonBackButton there
-              // falls back to a FULL document navigation.
-              <IonButton onClick={() => history.push("/logbook")}>
-                <IonIcon slot="start" icon={chevronBackOutline} />
-                Logbook
-              </IonButton>
-            ) : (
-              <IonBackButton defaultHref="/logbook" />
-            )}
-          </IonButtons>
-          <IonTitle>All Flights</IonTitle>
-        </IonToolbar>
-      </IonHeader>
-      <IonContent scrollY={false}>
-        {/* Full-screen on phone (below the header, so the map keeps the
-            device insets — bottom home indicator, landscape notch); a pane
-            in the desktop shell, where env() is 0. Nothing to consume. */}
-        <div className={styles.root} data-testid="all-flights-map">
-          <MapCanvas base={view} appearance={appearance} onReady={handleReady}>
-            <div className={styles.legend} data-testid="composite-legend">
-              Oldest → newest
-              <div className={styles.bar} />
-            </div>
-            <div className={mapCss.overlay} data-testid="map-overlay">
-              {map && <CompassButton map={map} />}
-              {map?.supportsSatellite && (
-                <ViewToggle view={view} onChange={changeView} />
-              )}
-            </div>
-          </MapCanvas>
+    // Full-screen on phone (below the header, so the map keeps the device
+    // insets — bottom home indicator, landscape notch); a pane in the desktop
+    // shell, where env() is 0. Nothing to consume.
+    <div className={styles.root} data-testid="all-flights-map">
+      <MapCanvas base={view} appearance={appearance} onReady={handleReady}>
+        <div className={styles.legend} data-testid="composite-legend">
+          Oldest → newest
+          <div className={styles.bar} />
         </div>
-      </IonContent>
-    </IonPage>
+        <div className={mapCss.overlay} data-testid="map-overlay">
+          {map && <CompassButton map={map} />}
+          {map?.supportsSatellite && (
+            <ViewToggle view={view} onChange={changeView} />
+          )}
+        </div>
+      </MapCanvas>
+    </div>
   );
 }

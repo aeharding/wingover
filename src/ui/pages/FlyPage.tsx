@@ -6,6 +6,7 @@ import {
   IonToolbar,
 } from "@ionic/react";
 
+import ErrorBoundary from "../components/ErrorBoundary";
 import { cx } from "../cx";
 import FlyPage from "../flight/FlyPage";
 import FlySplash from "../flight/FlySplash";
@@ -29,6 +30,14 @@ import styles from "./FlyPage.module.css";
  * background — a backdrop element spanning that full box, so the idle
  * artwork flows into the bar; the surface renders transparent over it
  * when idle and covers it in flight.
+ *
+ * This page is the IDLE Start screen (AppBody sheds the whole shell the
+ * moment a flight is live, wrapping the live surface in its own boundary),
+ * so a crash here is never mid-recording. The shell keeps IonPage + the
+ * IonHeader + IonContent mounted for the outlet's stack transitions; the
+ * boundary swaps only the body inside. FlySplash stays a direct light-DOM
+ * child of IonContent (the boundary and the fragment emit no DOM), so its
+ * slot="fixed" still projects. See PR #133.
  */
 export default function FlyPageFramed() {
   return (
@@ -49,14 +58,24 @@ export default function FlyPageFramed() {
           BEFORE the scroll content in the shadow DOM, so the backdrop
           paints behind the surface, not over it. */}
       <IonContent fullscreen scrollY={false} fixedSlotPlacement="before">
-        <FlySplash />
-        <IonHeader collapse="condense">
-          <IonToolbar>
-            <IonTitle size="large">Wingover</IonTitle>
-          </IonToolbar>
-        </IonHeader>
-        <FlyPage />
+        <ErrorBoundary name="fly">
+          <FlyPageBody />
+        </ErrorBoundary>
       </IonContent>
     </IonPage>
+  );
+}
+
+function FlyPageBody() {
+  return (
+    <>
+      <FlySplash />
+      <IonHeader collapse="condense">
+        <IonToolbar>
+          <IonTitle size="large">Wingover</IonTitle>
+        </IonToolbar>
+      </IonHeader>
+      <FlyPage />
+    </>
   );
 }

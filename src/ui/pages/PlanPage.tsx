@@ -21,6 +21,7 @@ import {
   updatePin,
 } from "../../storage/db";
 import { useAppearance } from "../appTheme";
+import ErrorBoundary from "../components/ErrorBoundary";
 import CompassButton from "../map/CompassButton";
 import MapCanvas from "../map/MapCanvas";
 import {
@@ -71,7 +72,26 @@ function routeCoords(pins: Pin[]): LngLat[] {
     : pins.map((pin): LngLat => [pin.longitude, pin.latitude]);
 }
 
+/**
+ * The plan page is a full-bleed map with no header, so its chrome is just
+ * IonPage + IonContent (scrollY off). Both stay mounted through a crash for
+ * the outlet's stack transitions; the boundary swaps only the map body
+ * inside. Everything here is map logic, so it all lives in PlanBody. See
+ * PR #133.
+ */
 export default function PlanPage() {
+  return (
+    <IonPage>
+      <IonContent scrollY={false}>
+        <ErrorBoundary name="plan">
+          <PlanBody />
+        </ErrorBoundary>
+      </IonContent>
+    </IonPage>
+  );
+}
+
+function PlanBody() {
   const { units } = useSettings();
   const isDesktop = useIsDesktop();
   const appearance = useAppearance();
@@ -336,99 +356,88 @@ export default function PlanPage() {
   }
 
   return (
-    <IonPage>
-      <IonContent scrollY={false}>
-        <div className={styles.split}>
-          {isDesktop && (
-            <aside className={styles.pane} data-testid="plan-pane">
-              <div className={styles.rows} data-testid="plan-pane-rows">
-                {pins.length === 0 ? (
-                  <div
-                    className={styles.paneEmpty}
-                    data-testid="plan-pane-empty"
-                  >
-                    Long-press the map to drop a pin: launches, LZs, fuel stops,
-                    hazards.
-                  </div>
-                ) : (
-                  pins.map((pin, index) => (
-                    <button
-                      key={pin.id}
-                      className={styles.row}
-                      onClick={() =>
-                        map?.moveTo(
-                          {
-                            center: [pin.longitude, pin.latitude],
-                            zoom: 13,
-                          },
-                          { animate: true },
-                        )
-                      }
-                    >
-                      <span className={styles.dot}>{index + 1}</span>
-                      <span>
-                        <h3>{pin.name || `Pin ${index + 1}`}</h3>
-                        {pin.notes && <p>{pin.notes}</p>}
-                      </span>
-                    </button>
-                  ))
-                )}
+    <div className={styles.split}>
+      {isDesktop && (
+        <aside className={styles.pane} data-testid="plan-pane">
+          <div className={styles.rows} data-testid="plan-pane-rows">
+            {pins.length === 0 ? (
+              <div className={styles.paneEmpty} data-testid="plan-pane-empty">
+                Long-press the map to drop a pin: launches, LZs, fuel stops,
+                hazards.
               </div>
-              {routeMeters > 0 && (
-                <div className={styles.route}>
-                  <span>Route: {formatDistance(routeMeters, units)}</span>
-                  <button
-                    className={styles.clear}
-                    data-testid="plan-clear-route"
-                    onClick={openRouteSheet}
-                  >
-                    Clear route
-                  </button>
-                </div>
-              )}
-            </aside>
+            ) : (
+              pins.map((pin, index) => (
+                <button
+                  key={pin.id}
+                  className={styles.row}
+                  onClick={() =>
+                    map?.moveTo(
+                      {
+                        center: [pin.longitude, pin.latitude],
+                        zoom: 13,
+                      },
+                      { animate: true },
+                    )
+                  }
+                >
+                  <span className={styles.dot}>{index + 1}</span>
+                  <span>
+                    <h3>{pin.name || `Pin ${index + 1}`}</h3>
+                    {pin.notes && <p>{pin.notes}</p>}
+                  </span>
+                </button>
+              ))
+            )}
+          </div>
+          {routeMeters > 0 && (
+            <div className={styles.route}>
+              <span>Route: {formatDistance(routeMeters, units)}</span>
+              <button
+                className={styles.clear}
+                data-testid="plan-clear-route"
+                onClick={openRouteSheet}
+              >
+                Clear route
+              </button>
+            </div>
           )}
-          {/* The plan map is full-bleed with NO header: its top is a real
+        </aside>
+      )}
+      {/* The plan map is full-bleed with NO header: its top is a real
               device edge (status bar), so it keeps the top inset; left/right
               keep the landscape notch. The bottom is owned by the tab bar on
               the phone (consumed in PlanPage.css) and is the device edge on
               desktop (no tab bar). */}
-          <div className={styles.map} data-testid="plan-map">
-            <MapCanvas
-              base={view}
-              appearance={appearance}
-              onReady={handleReady}
+      <div className={styles.map} data-testid="plan-map">
+        <MapCanvas base={view} appearance={appearance} onReady={handleReady}>
+          <div className={mapCss.overlay} data-testid="map-overlay">
+            {map && <CompassButton map={map} />}
+            <button
+              className={mapCss.button}
+              aria-label="Center on me"
+              onClick={locate}
             >
-              <div className={mapCss.overlay} data-testid="map-overlay">
-                {map && <CompassButton map={map} />}
-                <button
-                  className={mapCss.button}
-                  aria-label="Center on me"
-                  onClick={locate}
-                >
-                  <IonIcon icon={locateOutline} />
-                </button>
-                {map?.supportsSatellite && (
-                  <ViewToggle view={view} onChange={changeView} />
-                )}
-              </div>
-              {/* No aria-label on the pill: the native WaypointUITests probe
+              <IonIcon icon={locateOutline} />
+            </button>
+            {map?.supportsSatellite && (
+              <ViewToggle view={view} onChange={changeView} />
+            )}
+          </div>
+          {/* No aria-label on the pill: the native WaypointUITests probe
                   reads the "Route:" static text off it, and an aria-label would
                   collapse the button to a single AX leaf and hide it (matches
                   #118's canonical form; keeps the sim-only iOS test green). */}
-              {routeMeters > 0 && (
-                <button
-                  className={styles.distance}
-                  data-testid="plan-distance"
-                  onClick={openRouteSheet}
-                >
-                  Route: {formatDistance(routeMeters, units)}
-                </button>
-              )}
-            </MapCanvas>
-          </div>
-        </div>
-      </IonContent>
-    </IonPage>
+          {routeMeters > 0 && (
+            <button
+              className={styles.distance}
+              data-testid="plan-distance"
+              onClick={openRouteSheet}
+            >
+              Route: {formatDistance(routeMeters, units)}
+            </button>
+          )}
+        </MapCanvas>
+      </div>
+    </div>
   );
 }

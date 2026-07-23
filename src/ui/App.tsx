@@ -2,7 +2,6 @@ import {
   IonApp,
   IonIcon,
   IonLabel,
-  IonPage,
   IonRouterOutlet,
   IonTabBar,
   IonTabButton,
@@ -126,111 +125,46 @@ function TabShell() {
     <IonReactRouter>
       <IonTabs>
         <IonRouterOutlet>
-          {/* Per-page error boundaries: a render crash in one page degrades
-              to a contained panel and leaves the other tabs alive, instead
-              of unmounting the whole app to a white screen. The boundary is
-              transparent in the happy path (renders its ion-page child
-              directly), so Ionic's page transitions are unaffected. The
-              retry button re-renders the page; the outlet also rebuilds a
-              route's view when you leave and return to its tab, so
-              navigating away and back is itself a retry — no resetKey needed
-              here (contrast the kept-alive desktop sections). */}
+          {/* Per-page error boundaries live INSIDE each page now, wrapping
+              only the content within its IonContent — the page's IonPage,
+              IonHeader (back button) and IonContent stay mounted through a
+              crash, which the outlet's stack transitions and the iOS
+              swipe-back gesture require (they animate the leaving page's
+              chrome). A route-level boundary here could only replace the
+              whole .ion-page, breaking exactly that (three review rounds,
+              PR #133). The retry button re-renders the page content; the
+              outlet also rebuilds a route's view when you leave and return
+              to its tab, so navigating away and back is itself a retry. */}
           {/* Gated as a ROUTE, not just a tab: a bookmarked /fly in a plain
               browser is the same broken promise as a visible tab. Safe to
               gate because the opt-in is mirrored to localStorage, so
               canRecord is correct synchronously at first render. */}
           {canRecord ? (
-            <Route
-              exact
-              path="/fly"
-              render={() => (
-                // Ground variant: this framed page is the IDLE Start screen
-                // (AppBody sheds the whole shell the moment a flight is
-                // live), so a crash here is not mid-recording.
-                <ErrorBoundary name="fly" shell={(f) => <IonPage>{f}</IonPage>}>
-                  <FlyPage />
-                </ErrorBoundary>
-              )}
-            />
+            <Route exact path="/fly" render={() => <FlyPage />} />
           ) : (
             <Route exact path="/fly">
               <Redirect to="/logbook" />
             </Route>
           )}
-          <Route
-            exact
-            path="/logbook"
-            render={() => (
-              <ErrorBoundary
-                name="logbook"
-                shell={(f) => <IonPage>{f}</IonPage>}
-              >
-                <LogbookPage />
-              </ErrorBoundary>
-            )}
-          />
+          <Route exact path="/logbook" render={() => <LogbookPage />} />
           <Route
             exact
             path="/logbook/map"
-            render={() => (
-              <ErrorBoundary
-                name="logbook"
-                shell={(f) => <IonPage>{f}</IonPage>}
-              >
-                <AllFlightsMapPage />
-              </ErrorBoundary>
-            )}
+            render={() => <AllFlightsMapPage />}
           />
           <Route
             exact
             path="/logbook/:id(recorded-\d+|[0-9a-fA-F-]{36})"
             render={() => <FlightDetailPage />}
           />
-          <Route
-            exact
-            path="/plan"
-            render={() => (
-              <ErrorBoundary name="plan" shell={(f) => <IonPage>{f}</IonPage>}>
-                <PlanPage />
-              </ErrorBoundary>
-            )}
-          />
-          <Route
-            exact
-            path="/settings"
-            render={() => (
-              <ErrorBoundary
-                name="settings"
-                shell={(f) => <IonPage>{f}</IonPage>}
-              >
-                <SettingsPage />
-              </ErrorBoundary>
-            )}
-          />
+          <Route exact path="/plan" render={() => <PlanPage />} />
+          <Route exact path="/settings" render={() => <SettingsPage />} />
           <Route
             exact
             path="/settings/map"
-            render={() => (
-              <ErrorBoundary
-                name="settings"
-                shell={(f) => <IonPage>{f}</IonPage>}
-              >
-                <MapProviderPage />
-              </ErrorBoundary>
-            )}
+            render={() => <MapProviderPage />}
           />
-          <Route
-            exact
-            path="/settings/units"
-            render={() => (
-              <ErrorBoundary
-                name="settings"
-                shell={(f) => <IonPage>{f}</IonPage>}
-              >
-                <UnitsPage />
-              </ErrorBoundary>
-            )}
-          />
+          <Route exact path="/settings/units" render={() => <UnitsPage />} />
           <Route
             exact
             path="/home"

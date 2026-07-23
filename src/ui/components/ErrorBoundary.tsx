@@ -21,14 +21,6 @@ interface Props {
    * `key` remount: healthy siblings are never torn down. See use sites.
    */
   resetKey?: unknown;
-  /**
-   * Wraps the FALLBACK only (children render untouched). Routed pages
-   * inside an IonRouterOutlet must stay .ion-page even when crashed, or
-   * the outlet's stack transitions and the iOS swipe-back gesture break —
-   * pass a shell like (f) => <IonPage>{f}</IonPage> there. The boundary
-   * itself stays Ionic-free so the flight surface may use it.
-   */
-  shell?: (fallback: ReactNode) => ReactNode;
   /** Extra cleanup to run when the pilot taps Try again (optional). */
   onRetry?: () => void;
 }
@@ -46,11 +38,17 @@ interface State {
  * crash). Wrapped per page, a crash degrades to a contained, pilot-readable
  * panel with a retry, and every other page stays alive.
  *
- * Plain DOM, no Ionic: the same component wraps the flight surface, which
- * is Ionic-free by lint (src/ui/flight/**). Recording lives in the headless
- * engine (WAL-persisted, running regardless of React), so a boundary around
- * the flight surface is strictly safer than the unmount it replaces — the
- * flight fallback says so.
+ * Plain DOM, no Ionic — deliberately. The fallback is a bare div, so it can
+ * be dropped straight INSIDE a routed page's <IonContent> without disturbing
+ * the page's chrome: the IonPage the outlet registered, its IonHeader (back
+ * button), and the IonContent element all stay mounted through a crash, which
+ * the outlet's stack transitions and the iOS swipe-back gesture require (they
+ * animate the leaving page's ion-header/ion-content — a fallback that
+ * replaced them would break the gesture; found by Alex across three review
+ * rounds on PR #133). The same Ionic-free fallback also wraps the flight
+ * surface (Ionic-free by lint, src/ui/flight/**); recording is headless
+ * (WAL-persisted, running regardless of React), so a boundary there is
+ * strictly safer than the unmount it replaces — the flight fallback says so.
  */
 export default class ErrorBoundary extends Component<Props, State> {
   state: State = { error: null, resetKey: this.props.resetKey };
@@ -100,6 +98,6 @@ export default class ErrorBoundary extends Component<Props, State> {
         </div>
       </div>
     );
-    return this.props.shell ? this.props.shell(fallback) : fallback;
+    return fallback;
   }
 }
