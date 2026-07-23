@@ -359,7 +359,17 @@ function createTarget(
   const tex = gl.createTexture();
   if (!tex) return null;
   gl.bindTexture(gl.TEXTURE_2D, tex);
-  gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGBA8, w, h, 0, gl.RGBA, gl.UNSIGNED_BYTE, null);
+  gl.texImage2D(
+    gl.TEXTURE_2D,
+    0,
+    gl.RGBA8,
+    w,
+    h,
+    0,
+    gl.RGBA,
+    gl.UNSIGNED_BYTE,
+    null,
+  );
   gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MIN_FILTER, gl.LINEAR);
   gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MAG_FILTER, gl.LINEAR);
   gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_S, gl.CLAMP_TO_EDGE);
@@ -370,8 +380,15 @@ function createTarget(
     return null;
   }
   gl.bindFramebuffer(gl.FRAMEBUFFER, fbo);
-  gl.framebufferTexture2D(gl.FRAMEBUFFER, gl.COLOR_ATTACHMENT0, gl.TEXTURE_2D, tex, 0);
-  const complete = gl.checkFramebufferStatus(gl.FRAMEBUFFER) === gl.FRAMEBUFFER_COMPLETE;
+  gl.framebufferTexture2D(
+    gl.FRAMEBUFFER,
+    gl.COLOR_ATTACHMENT0,
+    gl.TEXTURE_2D,
+    tex,
+    0,
+  );
+  const complete =
+    gl.checkFramebufferStatus(gl.FRAMEBUFFER) === gl.FRAMEBUFFER_COMPLETE;
   gl.bindFramebuffer(gl.FRAMEBUFFER, null);
   if (!complete) {
     gl.deleteTexture(tex);
@@ -764,7 +781,14 @@ class TraceRendererImpl implements TraceRenderer {
 
     // GHOST: plain source-over hairline, never bloomed, in both modes.
     gl.blendFunc(gl.ONE, gl.ONE_MINUS_SRC_ALPHA);
-    this.drawRibbon(phase, true, this.ghost, this.ghostAlpha, GHOST_WIDTH, GHOST_WIDTH);
+    this.drawRibbon(
+      phase,
+      true,
+      this.ghost,
+      this.ghostAlpha,
+      GHOST_WIDTH,
+      GHOST_WIDTH,
+    );
 
     // BLOOM composite: additive light (glow) vs. tinted alpha veil (ink).
     if (ink) {
@@ -776,7 +800,12 @@ class TraceRendererImpl implements TraceRenderer {
     gl.useProgram(this.compositeProgram);
     gl.bindTexture(gl.TEXTURE_2D, emissive.tex);
     gl.uniform1f(this.compositeU.ink, ink ? 1 : 0);
-    gl.uniform3f(this.compositeU.tint, this.bodyCol[0], this.bodyCol[1], this.bodyCol[2]);
+    gl.uniform3f(
+      this.compositeU.tint,
+      this.bodyCol[0],
+      this.bodyCol[1],
+      this.bodyCol[2],
+    );
     gl.uniform1f(this.compositeU.gain, ink ? BLOOM_GAIN_INK : BLOOM_GAIN_GLOW);
     gl.uniform1f(this.compositeU.veilMax, VEIL_MAX);
     gl.drawArrays(gl.TRIANGLES, 0, 3);
@@ -787,7 +816,14 @@ class TraceRendererImpl implements TraceRenderer {
     } else {
       gl.blendFunc(gl.ONE, gl.ONE);
     }
-    this.drawRibbon(phase, false, this.bodyCol, TRAIL_ALPHA, WIDTH_TAIL, WIDTH_HEAD);
+    this.drawRibbon(
+      phase,
+      false,
+      this.bodyCol,
+      TRAIL_ALPHA,
+      WIDTH_TAIL,
+      WIDTH_HEAD,
+    );
     if (!ink && headFade > 0) {
       this.drawHead(this.headCol, HEAD_INTENSITY_SHARP * headFade);
     }

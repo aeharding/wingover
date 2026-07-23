@@ -81,11 +81,7 @@ describe("sunFactLabel", () => {
     const night = at(set, 1)!;
     expect(night).toMatch(/^Sunrise /);
     expect(night).not.toContain(" in ");
-    const nextRise = sunriseNear(
-      new Date(set.getTime() + 12 * HOUR),
-      45,
-      0,
-    )!;
+    const nextRise = sunriseNear(new Date(set.getTime() + 12 * HOUR), 45, 0)!;
     expect(sunFactLabel(new Date(nextRise.getTime() - HOUR), 45, 0)).toBe(
       "Sunrise in 1h",
     );
