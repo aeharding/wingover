@@ -111,7 +111,7 @@ Conventions the migration settled on:
   Caveat: if the d.ts are absent, tsc silently falls back to Vite's loose
   ambient `{ [k: string]: string }` — which is why generation is wired
   into the lifecycle and check:css fails on a missing pair.
-- **Tests/harness**: e2e and `e2e/inset-probe.mjs` locate by
+- **Tests/harness**: e2e (including `e2e/insets.spec.ts`) locate by
   `data-testid`/roles only — hashed class names never appear in tests.
 
 ## Enforcement
