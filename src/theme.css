@@ -191,7 +191,7 @@
    Light values at :root, dark under .ion-palette-dark — the same split
    the Ionic palette uses above. The FLIGHT surface never themes (STEERING:
    one sunlight-tuned design); it re-pins what it consumes (see
-   .fly-page-frame below and .fly-content in FlyPage.css), so these
+   .frame in FlyFrame.module.css and .fly-content in FlyPage.css), so these
    light-scheme values only ever reach ground UI. */
 :root {
   /* The one app cyan (buttons, stats, flown track) — wide-gamut
@@ -255,27 +255,9 @@
   --map-compass-south: color(display-p3 0.85 0.87 0.9);
 }
 
-/* The flight surface's Ionic frame (pages/FlyPage.tsx), pinned black in
-   both schemes: the surface's own CSS is hardcoded dark already, and this
-   keeps the ion-page chrome around it — route transitions included — from
-   flashing the light scheme through. */
-.fly-page-frame {
-  --ion-background-color: #000000;
-  --ion-background-color-rgb: 0, 0, 0;
-  --ion-text-color: #ffffff;
-  --ion-text-color-rgb: 255, 255, 255;
-}
-
-/* While the Fly tab is the active page, its splash paints under the bar
-   (fullscreen content + translucent bar; ionic-framework#28246), so thin
-   the frost to let the artwork read through and drop the hairline. The
-   rgb var resolves at the BAR (outside .fly-page-frame), so the frost
-   matches the app scheme: white over the day splash, black over dusk.
-   Other tabs never match the :has() — they keep the stock bar. */
-ion-tabs:has(.fly-page-frame:not(.ion-page-hidden)) ion-tab-bar {
-  --background: rgba(var(--ion-background-color-rgb), 0.35);
-  --border: none;
-}
+/* The flight surface's Ionic frame black-pins its tokens and frosts the tab
+   bar while it shows — both rules moved to FlyFrame.module.css's .frame (the
+   last global-class holdout), scoped to the module. */
 
 /* On-screen keyboard: src/tauri-ionic/keyboard.ts adds `keyboard-open` to <html> while
    the keyboard is up (off the native plugin's keyboard events). The bottom safe
