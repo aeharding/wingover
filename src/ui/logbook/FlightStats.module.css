@@ -1,5 +1,5 @@
-/* Flight-detail presentation bits shared by the phone detail page and the
-   desktop seat card (the seat is a mini detail view of the same flight). */
+/* The <FlightStats> rows, shared by the phone detail page and the desktop
+   seat card (the seat is a mini detail view of the same flight). */
 
 /* Stat values are the point of the rows — full contrast and lined-up digits,
    not IonNote's muted default. */

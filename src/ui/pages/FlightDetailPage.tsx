@@ -7,14 +7,11 @@ import {
   IonIcon,
   IonInput,
   IonItem,
-  IonLabel,
   IonList,
-  IonNote,
   IonPage,
   IonTextarea,
   IonTitle,
   IonToolbar,
-  useIonActionSheet,
   useIonRouter,
 } from "@ionic/react";
 import {
@@ -39,18 +36,13 @@ import {
 import { useParams } from "react-router";
 
 import { isTauri } from "../../engine/platform";
-import { splitAvailable, trimAvailable } from "../../flight/clip";
-import {
-  formatAirtime,
-  formatAltitude,
-  formatDistance,
-  formatSpeed,
-} from "../../flight/format";
 import { useAppearance } from "../appTheme";
 import { cx } from "../cx";
 import { endpointMarker } from "../logbook/endpointMarker";
+import FlightStats from "../logbook/FlightStats";
 import { useFlightDoc } from "../logbook/useFlightDoc";
 import { useFlightDrafts } from "../logbook/useFlightDrafts";
+import { useFlightOptionsSheet } from "../logbook/useFlightOptionsSheet";
 import { afterNextFrame } from "../map/afterFrame";
 import CompassButton from "../map/CompassButton";
 import MapCanvas from "../map/MapCanvas";
@@ -68,9 +60,7 @@ import useMapView from "../map/useMapView";
 import ViewToggle from "../map/ViewToggle";
 import { useReplayDrawer } from "../replay/useReplayDrawer";
 import { useSettings } from "../settings/SettingsContext";
-import { useFlightActions } from "../useFlightActions";
 
-import detail from "../logbook/detail.module.css";
 import mapCss from "../map/map.module.css";
 import styles from "./FlightDetailPage.module.css";
 
@@ -119,17 +109,12 @@ export default function FlightDetailPage() {
   const { id } = useParams<{ id: string }>();
   const router = useIonRouter();
   const { units } = useSettings();
-  const { exportFlight, confirmDeleteFlight } = useFlightActions();
   const { flight, setFlight, track } = useFlightDoc(id);
   const { drafts, setDraft, commit } = useFlightDrafts(
     flight,
     setFlight,
     track,
   );
-  // Controller hook, not a controlled <IonActionSheet isOpen>: a reopen
-  // while the prior dismissal is still animating desyncs the controlled
-  // form (see FlightSeat) — the clip flows reopen exactly that fast.
-  const [presentOptions, dismissOptions] = useIonActionSheet();
   const appearance = useAppearance();
   const [view, changeView] = useMapView();
   const [map, setMap] = useState<MapView | null>(null);
@@ -189,66 +174,18 @@ export default function FlightDetailPage() {
 
   const collapseMap = () => collapseMapVia(setMapFull);
 
-  async function openOptions() {
-    // The previous sheet may still be tearing down (the clip flows reopen
-    // fast, and a busy frame stretches the dismiss animation); presenting
-    // into its cleanup gets the new sheet silently destroyed with it.
-    await dismissOptions();
-    await presentOptions({
-      buttons: [
-        {
-          text: "Export GPX",
-          handler: () => {
-            if (flight) exportFlight(flight);
-          },
-        },
-        // The clip editors live in the fullscreen pane, so entry jumps
-        // straight there (no morph: the view transition would capture
-        // the dismissing sheet). Each trim end is its own errand (per
-        // Alex: usually it is one or the other).
-        ...(trimAvailable(track)
-          ? [
-              {
-                text: "Trim start",
-                handler: () => {
-                  setMapFull(true);
-                  replay.beginClip("trim-start");
-                },
-              },
-              {
-                text: "Trim end",
-                handler: () => {
-                  setMapFull(true);
-                  replay.beginClip("trim-end");
-                },
-              },
-            ]
-          : []),
-        ...(splitAvailable(track)
-          ? [
-              {
-                text: "Split flight",
-                handler: () => {
-                  setMapFull(true);
-                  replay.beginClip("split");
-                },
-              },
-            ]
-          : []),
-        {
-          text: "Delete flight",
-          role: "destructive",
-          handler: () => {
-            if (flight)
-              confirmDeleteFlight(flight, () =>
-                router.push("/logbook", "back"),
-              );
-          },
-        },
-        { text: "Cancel", role: "cancel" },
-      ],
-    });
-  }
+  const openOptions = useFlightOptionsSheet({
+    flight,
+    track,
+    onBeginClip: (mode) => {
+      // The clip editors live in the fullscreen pane, so entry jumps
+      // straight there (no morph: the view transition would capture the
+      // dismissing sheet).
+      setMapFull(true);
+      replay.beginClip(mode);
+    },
+    onDeleted: () => router.push("/logbook", "back"),
+  });
 
   // Native only: the keyboard's return key reads "Done" (enterkeyhint on the
   // inputs below) and pressing it closes the keyboard. Single-line fields have
@@ -557,37 +494,7 @@ export default function FlightDetailPage() {
                 />
               </IonItem>
             </IonList>
-            <IonList>
-              <Stat
-                label="Duration"
-                value={formatAirtime(stats.durationSeconds)}
-              />
-              <Stat
-                label="Distance"
-                value={formatDistance(stats.distanceMeters, units)}
-              />
-              <Stat
-                label="Max speed"
-                value={formatSpeed(stats.maxSpeed, units)}
-              />
-              <Stat
-                label="Avg speed"
-                value={formatSpeed(stats.averageSpeed, units)}
-              />
-              <Stat
-                label="Max altitude"
-                value={formatAltitude(stats.maxAltitude, units)}
-              />
-              <Stat
-                label="Max above launch"
-                lines="none"
-                value={formatAltitude(
-                  stats.maxAltitude -
-                    (stats.launchAltitude ?? stats.minAltitude),
-                  units,
-                )}
-              />
-            </IonList>
+            <FlightStats stats={stats} units={units} />
           </>
         )}
       </IonContent>
@@ -703,24 +610,5 @@ export default function FlightDetailPage() {
           document.querySelector("ion-app") ?? document.body,
         )}
     </IonPage>
-  );
-}
-
-function Stat({
-  label,
-  value,
-  lines,
-}: {
-  label: string;
-  value: string;
-  lines?: "none";
-}) {
-  return (
-    <IonItem lines={lines}>
-      <IonLabel>{label}</IonLabel>
-      <IonNote slot="end" className={detail.statValue}>
-        {value}
-      </IonNote>
-    </IonItem>
   );
 }

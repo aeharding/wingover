@@ -1,13 +1,4 @@
-import {
-  IonIcon,
-  IonInput,
-  IonItem,
-  IonLabel,
-  IonList,
-  IonNote,
-  IonTextarea,
-  useIonActionSheet,
-} from "@ionic/react";
+import { IonIcon, IonInput, IonItem, IonList, IonTextarea } from "@ionic/react";
 import {
   chevronDownOutline,
   chevronUpOutline,
@@ -18,13 +9,6 @@ import {
 import { useEffect, useEffectEvent, useRef, useState } from "react";
 
 import { isTauri } from "../../engine/platform";
-import { splitAvailable, trimAvailable } from "../../flight/clip";
-import {
-  formatAirtime,
-  formatAltitude,
-  formatDistance,
-  formatSpeed,
-} from "../../flight/format";
 import { useAppearance } from "../appTheme";
 import { cx } from "../cx";
 import { afterNextFrame } from "../map/afterFrame";
@@ -44,13 +28,13 @@ import useMapView from "../map/useMapView";
 import ViewToggle from "../map/ViewToggle";
 import { useReplayDrawer } from "../replay/useReplayDrawer";
 import { useSettings } from "../settings/SettingsContext";
-import { useFlightActions } from "../useFlightActions";
 import { endpointMarker } from "./endpointMarker";
+import FlightStats from "./FlightStats";
 import { useFlightDoc } from "./useFlightDoc";
 import { useFlightDrafts } from "./useFlightDrafts";
+import { useFlightOptionsSheet } from "./useFlightOptionsSheet";
 
 import mapCss from "../map/map.module.css";
-import detail from "./detail.module.css";
 import seat from "./FlightSeat.module.css";
 
 /**
@@ -72,19 +56,12 @@ export default function FlightSeat({
   onDeleted: () => void;
 }) {
   const { units } = useSettings();
-  const { exportFlight, confirmDeleteFlight } = useFlightActions();
   const { flight, setFlight, track } = useFlightDoc(id);
   const { drafts, setDraft, commit } = useFlightDrafts(
     flight,
     setFlight,
     track,
   );
-  // The CONTROLLER hook, not a controlled <IonActionSheet isOpen>: each
-  // present makes a fresh overlay. The controlled form desynced when the
-  // sheet was reopened while the previous dismissal was still animating
-  // (clip flows do exactly that): the late onDidDismiss stamped the open
-  // flag false over the new request and the sheet went permanently mute.
-  const [presentOptions, dismissOptions] = useIonActionSheet();
   const appearance = useAppearance();
   const [view, changeView] = useMapView();
   const [map, setMap] = useState<MapView | null>(null);
@@ -100,58 +77,14 @@ export default function FlightSeat({
   // selection swap or when the section is URL-hidden.
   const replay = useReplayDrawer(map, track, flight, active, true);
 
-  // The sheet portals outside the section's subtree; if the section goes
-  // URL-hidden while it is up, it must fold with it.
-  useEffect(() => {
-    if (!active) void dismissOptions();
-  }, [active, dismissOptions]);
-
-  async function openOptions() {
-    // The previous sheet may still be tearing down (the clip flows reopen
-    // fast, and a busy frame stretches the dismiss animation); presenting
-    // into its cleanup gets the new sheet silently destroyed with it.
-    await dismissOptions();
-    await presentOptions({
-      buttons: [
-        {
-          text: "Export GPX",
-          handler: () => {
-            if (flight) exportFlight(flight);
-          },
-        },
-        // The clip editors open in the pane under the seat map. Each
-        // trim end is its own errand (usually it is one or the other).
-        ...(trimAvailable(track)
-          ? [
-              {
-                text: "Trim start",
-                handler: () => replay.beginClip("trim-start"),
-              },
-              {
-                text: "Trim end",
-                handler: () => replay.beginClip("trim-end"),
-              },
-            ]
-          : []),
-        ...(splitAvailable(track)
-          ? [
-              {
-                text: "Split flight",
-                handler: () => replay.beginClip("split"),
-              },
-            ]
-          : []),
-        {
-          text: "Delete flight",
-          role: "destructive",
-          handler: () => {
-            if (flight) confirmDeleteFlight(flight, onDeleted);
-          },
-        },
-        { text: "Cancel", role: "cancel" },
-      ],
-    });
-  }
+  const openOptions = useFlightOptionsSheet({
+    flight,
+    track,
+    active,
+    // The clip editors open in the pane under the seat map.
+    onBeginClip: replay.beginClip,
+    onDeleted,
+  });
 
   // Full screen means NO chrome: the list pane, seat header and card hide
   // via the body class (see the shell + seat modules), the tab rail goes with it, and
@@ -444,37 +377,7 @@ export default function FlightSeat({
                     />
                   </IonItem>
                 </IonList>
-                <IonList>
-                  <Stat
-                    label="Duration"
-                    value={formatAirtime(stats.durationSeconds)}
-                  />
-                  <Stat
-                    label="Distance"
-                    value={formatDistance(stats.distanceMeters, units)}
-                  />
-                  <Stat
-                    label="Max speed"
-                    value={formatSpeed(stats.maxSpeed, units)}
-                  />
-                  <Stat
-                    label="Avg speed"
-                    value={formatSpeed(stats.averageSpeed, units)}
-                  />
-                  <Stat
-                    label="Max altitude"
-                    value={formatAltitude(stats.maxAltitude, units)}
-                  />
-                  <Stat
-                    label="Max above launch"
-                    lines="none"
-                    value={formatAltitude(
-                      stats.maxAltitude -
-                        (stats.launchAltitude ?? stats.minAltitude),
-                      units,
-                    )}
-                  />
-                </IonList>
+                <FlightStats stats={stats} units={units} />
               </>
             )}
           </div>
@@ -483,24 +386,5 @@ export default function FlightSeat({
       {/* The replay pane, sliding open in flow under the seat map. */}
       {replay.drawer}
     </div>
-  );
-}
-
-function Stat({
-  label,
-  value,
-  lines,
-}: {
-  label: string;
-  value: string;
-  lines?: "none";
-}) {
-  return (
-    <IonItem lines={lines}>
-      <IonLabel>{label}</IonLabel>
-      <IonNote slot="end" className={detail.statValue}>
-        {value}
-      </IonNote>
-    </IonItem>
   );
 }
