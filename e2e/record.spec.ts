@@ -92,13 +92,13 @@ test("arm, auto-takeoff, reload kill drill, stop, logbook", async ({
   expect(pageErrors).toEqual([]);
 });
 
-test("the idle screen shows the sunset backdrop and starts a flight", async ({
+test("the idle screen shows the trace backdrop and starts a flight", async ({
   page,
 }) => {
   await page.goto("/?mock-speed=40&map-style=blank");
   const start = page.getByRole("button", { name: "Start Flight" });
   await expect(start).toBeVisible({ timeout: 10_000 });
-  // The decorative backdrop (FlySplash, hosted in the frame's ion-content
+  // The decorative backdrop (FlyTrace, hosted in the frame's ion-content
   // fixed slot) renders and does NOT block the CTA (pointer-events: none)
   // — the click still arms a flight.
   await expect(page.getByTestId("fly-splash")).toBeVisible();

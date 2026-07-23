@@ -1,0 +1,35 @@
+.trace {
+  position: absolute;
+  inset: 0;
+  /* The frame's ion-content fixed slot anchors to the HOST box, which
+     stops at the page bottom; fullscreen publishes the under-bar
+     distance as --offset-bottom, so reach past it to span under the
+     translucent tab bar — the under-glass pass is the point. Reach UP
+     past --offset-top too, or the (translucent) header's strip shows
+     the page background behind. The desktop shell hosts this in a
+     plain section (vars unset) and the fallback is exactly the box.
+     Inert: a backdrop must never eat a tap. */
+  width: 100%;
+  top: calc(-1 * var(--offset-top, 0px));
+  height: calc(100% + var(--offset-top, 0px) + var(--offset-bottom, 0px));
+  pointer-events: none;
+  display: block;
+
+  /* GL theme bridge: the renderer reads these RESOLVED values off the
+     canvas, so the palette flip stays pure CSS (keyed on the class,
+     appTheme.ts) and the shader never knows about schemes. Authored
+     display-p3 like every color in the app; the drawing buffer is asked
+     for the same space where the platform allows. */
+  --trace-body: color(display-p3 0.45 0.72 1);
+  --trace-head: color(display-p3 0.85 0.93 1);
+  --trace-ghost: color(display-p3 0.6 0.75 1);
+  --trace-ghost-alpha: 0.09;
+
+  :root:not(:global(.ion-palette-dark)) & {
+    /* Pale cyan ink (per Alex): light mode is pigment, not light. */
+    --trace-body: color(display-p3 0.2 0.66 0.84);
+    --trace-head: color(display-p3 0.15 0.6 0.8);
+    --trace-ghost: color(display-p3 0.15 0.4 0.5);
+    --trace-ghost-alpha: 0.16;
+  }
+}
