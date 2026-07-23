@@ -3,7 +3,11 @@ import { useEffect, useRef, useState } from "react";
 import type { Fix } from "../../engine/types";
 import { getTrack } from "../../storage/db";
 import { projectTrack } from "./traceGeometry";
-import { createTraceRenderer, type TraceTheme } from "./traceRenderer";
+import {
+  createTraceRenderer,
+  type TraceRenderer,
+  type TraceTheme,
+} from "./traceRenderer";
 import { useLatestFlight } from "./useLatestFlight";
 
 import styles from "./FlyTrace.module.css";
@@ -42,7 +46,7 @@ function readTheme(canvas: HTMLCanvasElement): TraceTheme {
 // The newest flight's track, keyed on the FLIGHT ID, not array identity:
 // getTrack returns a fresh array every call, and the change feed fires
 // on any flight-doc write (renames, deletes of other flights, sync
-// pulls). Rebuilding the GL world for those flashed the backdrop blank;
+// pulls). Rebuilding the GPU world for those flashed the backdrop blank;
 // only a genuinely different flight should reload anything.
 function useLastTrack(): Fix[] | null {
   const flightId = useLatestFlight()?.id ?? null;
@@ -68,22 +72,26 @@ function useLastTrack(): Fix[] | null {
 
 /**
  * The idle backdrop on BOTH shells (the phone frame's fixed slot and the
- * desktop shell's fly section): a WebGL2 comet with shader bloom
- * retracing the pilot's LAST FLIGHT over the page's own background. An
- * EMPTY logbook renders nothing at all, deliberately: the animation is
- * the reward for the first flight (per Alex), not wallpaper — no track,
- * no GL context, no cost. Same testid as the old splash: the (possibly
+ * desktop shell's fly section): a WebGPU comet with shader bloom
+ * retracing the pilot's LAST FLIGHT over the page's own background —
+ * and, on HDR displays (rgba16float + extended tone mapping, see
+ * traceRenderer), a head that burns brighter than SDR white. An EMPTY
+ * logbook renders nothing at all, deliberately: the animation is the
+ * reward for the first flight (per Alex), not wallpaper — no track, no
+ * GPU device, no cost. Same testid as the old splash: the (possibly
  * inert) canvas IS the splash backdrop to e2e.
  *
- * No fallback by design (per Alex): if WebGL2 is unavailable or the
- * context dies and won't restore, the page simply keeps its quiet
- * greeting + facts + Start pill.
+ * No fallback by design (per Alex): where WebGPU is missing the page
+ * simply keeps its quiet greeting + facts + Start pill. Device loss
+ * (the WebGPU analogue of context loss, surfaced as the renderer's
+ * `lost` promise — it also resolves on our own destroy, hence the
+ * disposed/identity guards) re-boots the renderer from scratch.
  *
  * The loop is EVENT-DRIVEN, never polled: rAF only exists while the
  * canvas is on screen (IntersectionObserver — covers Ionic's
  * display: none'd hidden tabs and the desktop shell's hidden sections),
  * the document visible, and motion allowed. Parked means zero wakeups
- * and zero GL work; rAF is per-document, so the browser would NOT stop
+ * and zero GPU work; rAF is per-document, so the browser would NOT stop
  * it for a merely display: none'd element on its own. Reduced motion
  * holds a single mid-flight still frame, repainted only on
  * resize/theme/track changes.
@@ -96,38 +104,21 @@ export default function FlyTrace() {
     const canvas = canvasRef.current;
     if (!canvas || !track) return;
 
-    const gl = canvas.getContext("webgl2", {
-      alpha: true,
-      premultipliedAlpha: true,
-      antialias: false,
-    });
-    if (!gl) return;
-    if ("drawingBufferColorSpace" in gl) {
-      try {
-        (gl as { drawingBufferColorSpace: string }).drawingBufferColorSpace =
-          "display-p3";
-      } catch {
-        // sRGB is an acceptable rendering of the same components.
-      }
-    }
-
-    let renderer = createTraceRenderer(gl);
-    if (!renderer) return;
-
-    const reducedMotion = matchMedia("(prefers-reduced-motion: reduce)");
+    let disposed = false;
+    let renderer: TraceRenderer | null = null;
     let raf = 0;
     let running = false;
-    let lost = false;
     let intersecting = false;
     let lastW = 0;
     let lastH = 0;
     let lastDpr = 0;
     const started = performance.now();
+    const reducedMotion = matchMedia("(prefers-reduced-motion: reduce)");
 
     // The reduced-motion (or otherwise parked-but-visible) single frame.
     const still = () => {
-      if (!running && !lost && intersecting && !document.hidden) {
-        renderer?.render(0.55);
+      if (renderer && !running && intersecting && !document.hidden) {
+        renderer.render(0.55);
       }
     };
 
@@ -140,7 +131,10 @@ export default function FlyTrace() {
 
     const sync = () => {
       const shouldRun =
-        !lost && intersecting && !document.hidden && !reducedMotion.matches;
+        renderer !== null &&
+        intersecting &&
+        !document.hidden &&
+        !reducedMotion.matches;
       if (shouldRun === running) return;
       running = shouldRun;
       if (running) {
@@ -163,27 +157,29 @@ export default function FlyTrace() {
     };
 
     const fit = () => {
+      if (!renderer) return;
       const dpr = Math.min(window.devicePixelRatio || 1, 2);
       const w = canvas.clientWidth;
       const h = canvas.clientHeight;
       if (w === 0 || h === 0) return;
-      // Spurious observer fires must not churn FBOs.
+      // Spurious observer fires must not churn GPU targets.
       if (w === lastW && h === lastH && dpr === lastDpr) return;
       lastW = w;
       lastH = h;
       lastDpr = dpr;
       canvas.width = Math.round(w * dpr);
       canvas.height = Math.round(h * dpr);
-      renderer?.resize(w, h, dpr);
+      renderer.resize(w, h, dpr);
       // A box too small to project into clears the path — never leave a
       // ribbon fitted to the previous box on screen.
-      renderer?.setPath(projectTrack(track, w, h) ?? new Float32Array(0));
+      renderer.setPath(projectTrack(track, w, h) ?? new Float32Array(0));
       watchDpr();
       still();
     };
 
     const applyTheme = () => {
-      renderer?.setTheme(readTheme(canvas));
+      if (!renderer) return;
+      renderer.setTheme(readTheme(canvas));
       still();
     };
     // Gate on the palette class actually flipping: documentElement takes
@@ -201,35 +197,52 @@ export default function FlyTrace() {
       attributeFilter: ["class"],
     });
 
-    const onLost = (event: Event) => {
-      // preventDefault signals we want a restore callback.
-      event.preventDefault();
-      lost = true;
-      running = false;
-      cancelAnimationFrame(raf);
-    };
-    const onRestored = () => {
-      // The old objects died with the context; destroy is a no-op on
-      // them, and a fresh renderer rebuilds everything.
-      renderer?.destroy();
-      renderer = createTraceRenderer(gl);
-      lost = false;
-      if (!renderer) return;
-      lastW = lastH = lastDpr = 0;
-      // Theme before fit: the restore's first paint (the reduced-motion
-      // still inside fit) must already wear the real theme.
+    // Async bring-up, re-entered on device loss. Everything below (the
+    // observers) is attached exactly once and reads `renderer` through
+    // the closure, so a re-boot swaps the renderer under them in place.
+    let retryTimer = 0;
+    const boot = async (retryOnFail = false) => {
+      const created = await createTraceRenderer(canvas);
+      if (disposed) {
+        created?.destroy();
+        return;
+      }
+      if (!created) {
+        // A reboot can race the very GPU reset that caused it: the
+        // adapter may be momentarily unavailable, and bailing here
+        // would leave the backdrop blank forever. One delayed retry
+        // self-heals; the initial mount stays fail-quiet (no WebGPU =
+        // no backdrop, by design).
+        if (retryOnFail) {
+          retryTimer = window.setTimeout(() => void boot(true), 3000);
+        }
+        return;
+      }
+      renderer = created;
+      // Debuggability + the on-device HDR probe: one glance at the DOM
+      // answers "did extended-range configuration take".
+      canvas.dataset.hdr = String(created.hdr);
+      void created.lost.then(() => {
+        // Resolves on true device loss AND on our own destroy(); only
+        // the former (this renderer still current, not unmounting)
+        // warrants a re-boot.
+        if (disposed || renderer !== created) return;
+        renderer = null;
+        running = false;
+        cancelAnimationFrame(raf);
+        lastW = lastH = lastDpr = 0;
+        void boot(true);
+      });
       applyTheme();
       fit();
       sync();
     };
-    canvas.addEventListener("webglcontextlost", onLost);
-    canvas.addEventListener("webglcontextrestored", onRestored);
 
     // The refit trigger for every box change — including 0x0 -> real
     // box when Ionic un-hides the tab. Load-bearing: if this effect
-    // (re)ran while the page was display: none, the initial fit() below
-    // bailed on a 0x0 box, and THIS observer's fire on un-hide is what
-    // finally sizes the buffer and projects the path.
+    // (re)ran while the page was display: none, boot's fit() bailed on
+    // a 0x0 box, and THIS observer's fire on un-hide is what finally
+    // sizes the buffer and projects the path.
     const resizeWatcher = new ResizeObserver(fit);
     resizeWatcher.observe(canvas);
 
@@ -242,14 +255,12 @@ export default function FlyTrace() {
     document.addEventListener("visibilitychange", sync);
     reducedMotion.addEventListener("change", sync);
 
-    applyTheme();
-    fit();
-    sync();
+    void boot();
 
     return () => {
+      disposed = true;
       cancelAnimationFrame(raf);
-      canvas.removeEventListener("webglcontextlost", onLost);
-      canvas.removeEventListener("webglcontextrestored", onRestored);
+      clearTimeout(retryTimer);
       document.removeEventListener("visibilitychange", sync);
       reducedMotion.removeEventListener("change", sync);
       dprWatcher?.removeEventListener("change", onDprChange);

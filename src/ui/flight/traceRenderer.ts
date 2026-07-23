@@ -1,5 +1,5 @@
 /**
- * traceRenderer — WebGL2 backdrop: a glowing comet retraces the last flight.
+ * traceRenderer — WebGPU backdrop: a glowing comet retraces the last flight.
  *
  * The effect is the idle-screen wallpaper on FlyPage: a point-headed comet
  * flies launch → landing along the pilot's smoothed track, over a TRANSPARENT
@@ -9,39 +9,85 @@
  * ink draws NO head sprite at all (emissive and sharp passes alike): the
  * light-mode comet is deliberately the bare trail.
  *
- * Per-frame pipeline:
- *   1. EMISSIVE PASS → a HALF-resolution offscreen FBO. The tapered trail
- *      ribbon and the head sprite are drawn ADDITIVELY into it, so overlapping
- *      light accumulates and the head clips to a hot core. Half-res is the
- *      first (and cheapest) half of the bloom trick.
- *   2. SEPARABLE GAUSSIAN → two half-res passes (horizontal, then vertical),
- *      13 taps each. Tap spacing scales with dpr so the *visual* blur radius is
- *      device-independent (~20-24 CSS px). Blurring premultiplied colour is
- *      linear, so no un/re-multiply dance is needed.
- *   3. COMPOSITE the blurred field over the transparent default framebuffer:
+ * Per-frame pipeline (one command encoder, four render passes; a single
+ * clear pass when there is nothing to draw):
+ *   1. EMISSIVE PASS → a HALF-resolution offscreen texture. The tapered trail
+ *      ribbon and the head sprite are drawn ADDITIVELY into it (blend ONE,ONE),
+ *      so overlapping light accumulates and the head clips to a hot core.
+ *      Half-res is the first (and cheapest) half of the bloom trick.
+ *   2. SEPARABLE GAUSSIAN → two half-res fullscreen passes (horizontal into a
+ *      scratch texture, then vertical back into the emissive texture), 13 taps
+ *      each. Tap spacing scales with dpr so the *visual* blur radius is device-
+ *      independent (~20-24 CSS px). Blurring premultiplied colour is linear, so
+ *      no un/re-multiply dance is needed.
+ *   3. COMPOSITE the blurred field over the transparent swapchain, in the SAME
+ *      on-screen pass as the ghost and sharp draws. Blend state is baked per
+ *      pipeline in WebGPU, so the four on-screen draws switch PIPELINES rather
+ *      than blendFunc:
  *        - "glow" (dark mode): additive light over pure black IS a real glow,
- *          so we ADD the blurred colour (blendFunc ONE, ONE).
+ *          so we ADD the blurred colour (blend ONE,ONE).
  *        - "ink" (light mode): additive light is invisible on white, so instead
  *          we blend the blur as a normal-alpha VEIL tinted by `body` — alpha =
  *          blurred luminance, clamped so the halo stays subtle. The comet then
  *          reads as saturated pigment with a soft coloured aura.
- *   4. SHARP PASS: redraw the crisp trail + head on top of the bloom so the
+ *   4. SHARP DRAWS: redraw the crisp trail + head on top of the bloom so the
  *      centre stays a hard point of light inside its own halo.
  *   The GHOST hairline (the whole track) is drawn first, UNDER the bloom, and
  *   is never part of the emissive pass — it is a plain anti-aliased thread.
  *
  * Everything outputs correct PREMULTIPLIED alpha over a (0,0,0,0) clear: the
- * caller's context is { alpha: true, premultipliedAlpha: true, antialias:
- * false }, and the browser composites the canvas over the page. On the
- * spec-guaranteed pure-black page the additive glow's premultiplied RGB IS the
- * final colour; on the white page the ink veil / pigment darkens it.
+ * context is configured { alphaMode: "premultiplied" } and the browser
+ * composites the canvas over the page. On the spec-guaranteed pure-black page
+ * the additive glow's premultiplied RGB IS the final colour; on the white page
+ * the ink veil / pigment darkens it.
  *
  * Geometry is tessellated ONCE (in setPath): the polyline becomes a triangle
  * strip carrying screen-space normals and per-vertex arc-length s ∈ [0,1]. All
  * per-frame animation (trail window, taper, head position) is expressed as
- * shader uniforms, so a frame is just uniform writes + a handful of draws — no
- * CPU re-tessellation, no per-frame allocation.
+ * uniform-buffer values, so a frame is a handful of small writeBuffer() calls +
+ * fixed draws — no CPU re-tessellation, no per-frame geometry allocation.
+ *
+ * HDR duality. When the canvas can be configured extended-range (rgba16float +
+ * extended tone mapping) AND the display reports high dynamic range, the head
+ * is allowed to burn brighter than SDR white: the EMISSIVE head rides at 2.5×
+ * its SDR intensity with its premultiplied RGB left UNCLAMPED (float16 keeps the
+ * >1.0 values), so the bloom around the head exceeds 1.0 and the extended-tone-
+ * mapped panel displays it above white. The DELIBERATE headroom is the head's
+ * alone — ghost, ink mode, and the sharp head core stay SDR-normalised — but
+ * note one incidental consequence: the whole emissive buffer is float16 in HDR,
+ * so additive TRAIL SELF-OVERLAPS (thermal stacks cross themselves constantly)
+ * also accumulate past 1.0 instead of clamping as rgba8unorm did, and glow
+ * hotter at the crossings. Bounded in practice (a few strip layers), and
+ * arguably truthful — dense maneuvering reads brighter — but it is head +
+ * self-overlap, not head alone. With hdr false the whole path is identical to
+ * the SDR original (rgba8unorm offscreen, preferred-format swapchain, standard
+ * tone map, and the additive clamp behavior included).
+ *
+ * The hdr flag itself is honest about the DISPLAY, less so about the browser:
+ * configure() ignores an unsupported toneMapping member (WebIDL) rather than
+ * throwing, so on an HDR display in a browser without extended tone mapping the
+ * flag still reads true and the >1.0 head simply clamps to SDR white in the
+ * compositor — graceful, but the flag means "we asked and the display could",
+ * not "extended tone mapping verified".
  */
+
+// The GPU*Usage / GPUShaderStage bitflag namespaces are value-level globals in
+// every WebGPU runtime, but this workspace's TS DOM lib types their *flag*
+// fields as `number` without declaring the namespaces themselves. Declare the
+// exact subset used here so the flags stay typed (no `any`, no bare magic ints).
+declare const GPUBufferUsage: {
+  readonly VERTEX: number;
+  readonly UNIFORM: number;
+  readonly COPY_DST: number;
+};
+declare const GPUTextureUsage: {
+  readonly RENDER_ATTACHMENT: number;
+  readonly TEXTURE_BINDING: number;
+};
+declare const GPUShaderStage: {
+  readonly VERTEX: number;
+  readonly FRAGMENT: number;
+};
 
 export type RGB = [number, number, number];
 
@@ -58,11 +104,18 @@ export interface TraceTheme {
 }
 
 export interface TraceRenderer {
+  // True when the canvas is configured extended-range (rgba16float +
+  // toneMapping extended) AND the display reports high dynamic range — i.e.
+  // the head is actually allowed to exceed SDR white.
+  readonly hdr: boolean;
+  // Resolves when the GPUDevice is lost — real loss OR destroy() (reason
+  // "destroyed"); the host recreates the renderer. Never rejects.
+  readonly lost: Promise<void>;
   resize(width: number, height: number, dpr: number): void; // CSS px + devicePixelRatio
   setPath(points: Float32Array): void; // [x0,y0, x1,y1, ...] in CSS px, ≥2 points, already smoothed/evenly spaced
   setTheme(theme: TraceTheme): void;
   render(phase: number): void; // draws one frame; phase in [0, 1.25)
-  destroy(): void; // delete all GL resources; renderer unusable after
+  destroy(): void; // destroy all GPU resources; renderer unusable after
 }
 
 // --- Tunable constants (CSS-px unless noted; dpr is applied in the shaders) ---
@@ -83,8 +136,8 @@ const GHOST_WIDTH = 1.5;
 const ROUND_HEAD = true;
 
 // Feather envelope (device px) added on each side of the ribbon so the coverage
-// smoothstep has room to fall to zero — WebGL lineWidth is unreliable, so all
-// edges are SDF-feathered in screen space instead.
+// smoothstep has room to fall to zero — a reliable line width is not available,
+// so all edges are SDF-feathered in screen space instead.
 const AA_PAD = 1.5;
 
 // Head sprite: a gaussian point. HEAD_QUAD is the quad half-extent (the sprite's
@@ -118,24 +171,25 @@ const CYAN_TILT = 0.18;
 // lighter cyan. Dark-mode glow is unaffected.
 const INK_LIGHTEN = 0.35;
 
-// Bloom kernel. SIGMA_TAPS is the gaussian sigma measured in TAPS (the shape of
-// the 13-tap kernel); SIGMA_CSS drives the physical spacing so the halo is ~2×
-// SIGMA_CSS ≈ 20 px across at dpr 1, scaling with dpr for device independence.
+// Bloom kernel. BLUR_SIGMA_TAPS is the gaussian sigma measured in TAPS (the
+// shape of the 13-tap kernel); BLUR_SIGMA_CSS drives the physical spacing so the
+// halo is ~2× SIGMA_CSS ≈ 20 px across at dpr 1, scaling with dpr for device
+// independence.
 const BLUR_SIGMA_TAPS = 2.4;
+const BLUR_SIGMA_CSS = 10.0;
 
-// The 13-tap kernel's normalized weights, folded to literals at module
-// init and baked into the shader source: computing exp() per fragment
-// for compile-time constants was ~half a billion redundant
-// transcendentals per second at phone fill rates, and mobile GLSL
-// compilers are not guaranteed to constant-fold the loop.
-const BLUR_WEIGHTS = (() => {
+// The 13-tap kernel's normalized half-weights [w0..w6], folded to literals at
+// module init and baked into the WGSL source: computing exp() per fragment for
+// compile-time constants was ~half a billion redundant transcendentals per
+// second at phone fill rates, and shader compilers are not guaranteed to
+// constant-fold the loop.
+const BLUR_WEIGHTS: readonly string[] = (() => {
   const raw = Array.from({ length: 7 }, (_, i) =>
     Math.exp((-0.5 * i * i) / (BLUR_SIGMA_TAPS * BLUR_SIGMA_TAPS)),
   );
   const sum = raw[0] + 2 * raw.slice(1).reduce((a, b) => a + b, 0);
-  return raw.map((w) => (w / sum).toFixed(6)).join(", ");
+  return raw.map((w) => (w / sum).toFixed(6));
 })();
-const BLUR_SIGMA_CSS = 10.0;
 
 // Composite gains. Ink needs more because a clamped veil alpha is weaker than a
 // straight additive add; VEIL_MAX keeps the ink halo from turning into a smear.
@@ -149,254 +203,218 @@ const VEIL_MAX = 0.5;
 // composite tint the resulting halo by `body`.
 const WHITE: RGB = [1, 1, 1];
 
-// --- Shader sources (GLSL ES 3.00; explicit attribute locations so VAO setup
-//     needs no getAttribLocation round-trips) ---
+// HDR headroom, applied ONLY to the emissive head in glow mode when hdr is on.
+// The emissive head rides at 2.5× intensity with its RGB effectively unclamped
+// (min(e, HDR_HEAD_RGB_MAX); the head's energy peaks ≈ 2.75, so the cap only
+// guards float16 range and never actually binds), so its bloom exceeds 1.0 and
+// burns above SDR white. SDR uses a clamp max of 1.0, making the emissive head
+// output identical to the original.
+const HDR_HEAD_BOOST = 2.5;
+const HDR_HEAD_RGB_MAX = 64.0;
+const SDR_RGB_MAX = 1.0;
 
-const RIBBON_VERT = `#version 300 es
-layout(location = 0) in vec2 aCenter;   // polyline vertex, CSS px
-layout(location = 1) in vec2 aNormal;   // unit screen-space normal
-layout(location = 2) in float aS;       // arc length, 0..1
-layout(location = 3) in float aSide;    // -1 / +1 strip side
-uniform vec2 uResolution;               // device px (full-res drawing buffer)
-uniform float uDpr;
-uniform float uPhase;
-uniform float uWinLen;                  // trail window length in s
-uniform float uWTail;                   // width at tail end (CSS px)
-uniform float uWHead;                   // width at head end (CSS px)
-uniform float uGhost;                   // 1 = ghost (constant width, whole path)
-uniform float uAAPad;                   // feather envelope (device px)
-out float vU;                           // 0 at tail edge → 1 at head
-out float vDist;                        // signed distance from centreline (device px)
-out float vRadius;                      // half-width coverage radius (device px)
-void main() {
-  float u = (aS - (uPhase - uWinLen)) / uWinLen;
-  float width = mix(uWTail, uWHead, clamp(u, 0.0, 1.0));
-  width = mix(width, uWHead, uGhost);          // ghost overrides to a constant hairline
-  float halfW = 0.5 * width * uDpr;
-  float off = aSide * (halfW + uAAPad);        // extra pad so the feather isn't clipped
-  vec2 posPx = aCenter * uDpr + aNormal * off;
-  vec2 ndc = (posPx / uResolution) * 2.0 - 1.0;
-  gl_Position = vec4(ndc.x, -ndc.y, 0.0, 1.0); // px is y-down, NDC is y-up
-  vU = u;
-  vDist = off;
-  vRadius = halfW;
+// --- WGSL shaders (template-literal constants; struct layouts match the
+//     Float32Array uniform stagings below, std140-style 16-byte alignment) ---
+
+// Shared fullscreen-triangle vertex, generated from the vertex index (no vertex
+// buffer). uv is V-FLIPPED relative to the WebGL original: WebGPU texture
+// coordinates put v=0 at the top row, while the emissive texture is written with
+// clip-y-up, so screen-top (clip +1) must sample v=0. Without the flip the bloom
+// would composite upside-down relative to the sharp draws.
+const FULLSCREEN_VS = `
+struct FSOut { @builtin(position) pos: vec4f, @location(0) uv: vec2f, }
+@vertex fn vs_full(@builtin(vertex_index) vi: u32) -> FSOut {
+  let x = select(-1.0, 3.0, vi == 1u);
+  let y = select(-1.0, 3.0, vi == 2u);
+  let p = vec2f(x, y);
+  var out: FSOut;
+  out.pos = vec4f(p, 0.0, 1.0);
+  out.uv = vec2f(0.5 * (p.x + 1.0), 0.5 * (1.0 - p.y));
+  return out;
 }`;
 
-const RIBBON_FRAG = `#version 300 es
-precision highp float;
-in float vU;
-in float vDist;
-in float vRadius;
-uniform vec3 uColor;
-uniform float uAlpha;
-uniform float uGhost;
-uniform float uRoundCap;   // 1 = round the leading tip into a cap, 0 = flat cut
-uniform float uWinPx;      // trail window length in device px (maps u → forward px)
-out vec4 outColor;
-void main() {
-  float aa = fwidth(vDist) + 1e-4;                        // screen-space edge softness
-  float cov;
-  float wa;
-  if (uGhost > 0.5) {
-    cov = 1.0 - smoothstep(vRadius - aa, vRadius + aa, abs(vDist));
-    wa = 1.0;                                             // whole path, flat alpha
-  } else if (vU < 0.0) {
-    discard;                                              // behind the tail
-  } else if (vU > 1.0) {
+const RIBBON_WGSL = `
+struct RibbonU {
+  resolution: vec2f,   // device px (full-res drawing buffer)
+  dpr: f32,
+  phase: f32,
+  winLen: f32,         // trail window length in s
+  wTail: f32,          // width at tail end (CSS px)
+  wHead: f32,          // width at head end (CSS px)
+  ghost: f32,          // 1 = ghost (constant width, whole path)
+  aaPad: f32,          // feather envelope (device px)
+  alpha: f32,
+  roundCap: f32,       // 1 = round the leading tip into a cap, 0 = flat cut
+  winPx: f32,          // trail window length in device px (maps u → forward px)
+  color: vec3f,
+}
+@group(0) @binding(0) var<uniform> ru: RibbonU;
+
+struct VIn {
+  @location(0) center: vec2f,   // polyline vertex, CSS px
+  @location(1) normal: vec2f,   // unit screen-space normal
+  @location(2) s: f32,          // arc length, 0..1
+  @location(3) side: f32,       // -1 / +1 strip side
+}
+struct VOut {
+  @builtin(position) pos: vec4f,
+  @location(0) u: f32,          // 0 at tail edge → 1 at head
+  @location(1) dist: f32,       // signed distance from centreline (device px)
+  @location(2) radius: f32,     // half-width coverage radius (device px)
+}
+@vertex fn vs_ribbon(in: VIn) -> VOut {
+  let u = (in.s - (ru.phase - ru.winLen)) / ru.winLen;
+  var width = mix(ru.wTail, ru.wHead, clamp(u, 0.0, 1.0));
+  width = mix(width, ru.wHead, ru.ghost);        // ghost overrides to a constant hairline
+  let halfW = 0.5 * width * ru.dpr;
+  let off = in.side * (halfW + ru.aaPad);        // extra pad so the feather isn't clipped
+  let posPx = in.center * ru.dpr + in.normal * off;
+  let ndc = (posPx / ru.resolution) * 2.0 - vec2f(1.0);
+  var out: VOut;
+  out.pos = vec4f(ndc.x, -ndc.y, 0.0, 1.0);      // px is y-down, clip is y-up
+  out.u = u;
+  out.dist = off;
+  out.radius = halfW;
+  return out;
+}
+@fragment fn fs_ribbon(in: VOut) -> @location(0) vec4f {
+  let aa = fwidth(in.dist) + 1e-4;               // edge softness (fwidth needs uniform control flow → compute first)
+  var cov = 0.0;
+  var wa = 0.0;
+  if (ru.ghost > 0.5) {
+    cov = 1.0 - smoothstep(in.radius - aa, in.radius + aa, abs(in.dist));
+    wa = 1.0;                                    // whole path, flat alpha
+  } else if (in.u < 0.0) {
+    discard;                                      // behind the tail
+  } else if (in.u > 1.0) {
     // Past the head centreline. The path continues here, so these fragments are
-    // free geometry for a round cap: clip them to a circle of radius vRadius
+    // free geometry for a round cap: clip them to a circle of radius in.radius
     // centred on the head point. Flat mode just discards them (crisp cut).
-    if (uRoundCap < 0.5) discard;
-    float fwd = (vU - 1.0) * uWinPx;                      // px ahead of the head
-    if (fwd > vRadius + aa) discard;                      // outside the cap
-    float rr = length(vec2(vDist, fwd));                  // radial dist from head point
-    cov = 1.0 - smoothstep(vRadius - aa, vRadius + aa, rr);
-    wa = 1.0;                                             // the head end is full brightness
+    if (ru.roundCap < 0.5) { discard; }
+    let fwd = (in.u - 1.0) * ru.winPx;           // px ahead of the head
+    if (fwd > in.radius + aa) { discard; }       // outside the cap
+    let rr = length(vec2f(in.dist, fwd));        // radial dist from head point
+    cov = 1.0 - smoothstep(in.radius - aa, in.radius + aa, rr);
+    wa = 1.0;                                     // the head end is full brightness
   } else {
-    cov = 1.0 - smoothstep(vRadius - aa, vRadius + aa, abs(vDist));
-    wa = smoothstep(0.0, 1.0, vU);                        // eased 0→1 toward the head
+    cov = 1.0 - smoothstep(in.radius - aa, in.radius + aa, abs(in.dist));
+    wa = smoothstep(0.0, 1.0, in.u);             // eased 0→1 toward the head
   }
-  float a = cov * wa * uAlpha;
-  if (a <= 0.0) discard;
-  outColor = vec4(uColor * a, a);                        // premultiplied
+  let a = cov * wa * ru.alpha;
+  if (a <= 0.0) { discard; }
+  return vec4f(ru.color * a, a);                 // premultiplied
 }`;
 
-const HEAD_VERT = `#version 300 es
-layout(location = 0) in vec2 aCorner;   // unit quad corner in [-1,1]
-uniform vec2 uResolution;
-uniform float uDpr;
-uniform vec2 uHeadPos;                   // head position, CSS px
-uniform float uHeadQuad;                 // quad half-extent, CSS px
-out vec2 vCorner;
-void main() {
-  vec2 posPx = uHeadPos * uDpr + aCorner * uHeadQuad * uDpr;
-  vec2 ndc = (posPx / uResolution) * 2.0 - 1.0;
-  gl_Position = vec4(ndc.x, -ndc.y, 0.0, 1.0);
-  vCorner = aCorner;
-}`;
-
-const HEAD_FRAG = `#version 300 es
-precision highp float;
-in vec2 vCorner;
-uniform vec3 uColor;
-uniform float uFalloff;
-uniform float uIntensity;
-out vec4 outColor;
-void main() {
-  float r2 = dot(vCorner, vCorner);            // 0 at centre → 2 at corner
-  float g = exp(-r2 * uFalloff);               // gaussian radial falloff
-  float a = clamp(g * uIntensity, 0.0, 1.0);
-  if (a <= 0.0) discard;
-  outColor = vec4(uColor * a, a);              // premultiplied
-}`;
-
-// Full-screen triangle generated from gl_VertexID — no attribute buffer needed.
-const FULLSCREEN_VERT = `#version 300 es
-out vec2 vUv;
-void main() {
-  vec2 p = vec2(gl_VertexID == 1 ? 3.0 : -1.0, gl_VertexID == 2 ? 3.0 : -1.0);
-  vUv = 0.5 * (p + 1.0);
-  gl_Position = vec4(p, 0.0, 1.0);
-}`;
-
-const BLUR_FRAG = `#version 300 es
-precision highp float;
-in vec2 vUv;
-uniform sampler2D uTex;
-uniform vec2 uDir;                       // per-tap UV offset (encodes direction + spacing)
-out vec4 outColor;
-void main() {
-  const float W[7] = float[7](${BLUR_WEIGHTS});
-  vec4 acc = W[0] * texture(uTex, vUv);
-  for (int i = 1; i <= 6; i++) {
-    vec2 off = float(i) * uDir;
-    acc += W[i] * (texture(uTex, vUv + off) + texture(uTex, vUv - off));
-  }
-  outColor = acc;
-}`;
-
-const COMPOSITE_FRAG = `#version 300 es
-precision highp float;
-in vec2 vUv;
-uniform sampler2D uTex;                   // blurred emissive field
-uniform float uInk;                       // 1 = ink (veil), 0 = glow (additive)
-uniform vec3 uBodyTint;
-uniform float uGain;
-uniform float uVeilMax;
-out vec4 outColor;
-void main() {
-  vec4 b = texture(uTex, vUv);
-  if (uInk > 0.5) {
-    float lum = dot(b.rgb, vec3(0.299, 0.587, 0.114));
-    float a = clamp(lum * uGain, 0.0, uVeilMax);
-    outColor = vec4(uBodyTint * a, a);     // premultiplied veil, drawn source-over
-  } else {
-    outColor = vec4(b.rgb * uGain, 0.0);   // additive light; alpha untouched
-  }
-}`;
-
-// --- GL helpers -------------------------------------------------------------
-
-function compileShader(
-  gl: WebGL2RenderingContext,
-  type: number,
-  src: string,
-): WebGLShader | null {
-  const shader = gl.createShader(type);
-  if (!shader) return null;
-  gl.shaderSource(shader, src);
-  gl.compileShader(shader);
-  if (!gl.getShaderParameter(shader, gl.COMPILE_STATUS)) {
-    gl.deleteShader(shader);
-    return null;
-  }
-  return shader;
+const HEAD_WGSL = `
+struct HeadU {
+  resolution: vec2f,
+  headPos: vec2f,      // head position, CSS px
+  dpr: f32,
+  quad: f32,           // quad half-extent, CSS px
+  falloff: f32,
+  intensity: f32,
+  rgbClampMax: f32,    // 1 = SDR (rgb = color*a); ≫e = HDR (rgb = color*e, may exceed 1)
+  color: vec3f,
 }
+@group(0) @binding(0) var<uniform> hu: HeadU;
 
-function createProgram(
-  gl: WebGL2RenderingContext,
-  vertSrc: string,
-  fragSrc: string,
-): WebGLProgram | null {
-  const vert = compileShader(gl, gl.VERTEX_SHADER, vertSrc);
-  if (!vert) return null;
-  const frag = compileShader(gl, gl.FRAGMENT_SHADER, fragSrc);
-  if (!frag) {
-    gl.deleteShader(vert);
-    return null;
-  }
-  const program = gl.createProgram();
-  if (!program) {
-    gl.deleteShader(vert);
-    gl.deleteShader(frag);
-    return null;
-  }
-  gl.attachShader(program, vert);
-  gl.attachShader(program, frag);
-  gl.linkProgram(program);
-  // Shaders are reference-counted by the program once linked; flag them now.
-  gl.deleteShader(vert);
-  gl.deleteShader(frag);
-  if (!gl.getProgramParameter(program, gl.LINK_STATUS)) {
-    gl.deleteProgram(program);
-    return null;
-  }
-  return program;
+struct HOut { @builtin(position) pos: vec4f, @location(0) corner: vec2f, }
+@vertex fn vs_head(@builtin(vertex_index) vi: u32) -> HOut {
+  // Unit quad corners for a triangle strip: (-1,-1)(1,-1)(-1,1)(1,1).
+  let cx = select(-1.0, 1.0, (vi & 1u) != 0u);
+  let cy = select(-1.0, 1.0, (vi & 2u) != 0u);
+  let corner = vec2f(cx, cy);
+  let posPx = hu.headPos * hu.dpr + corner * hu.quad * hu.dpr;
+  let ndc = (posPx / hu.resolution) * 2.0 - vec2f(1.0);
+  var out: HOut;
+  out.pos = vec4f(ndc.x, -ndc.y, 0.0, 1.0);
+  out.corner = corner;
+  return out;
 }
+@fragment fn fs_head(@location(0) corner: vec2f) -> @location(0) vec4f {
+  let r2 = dot(corner, corner);                  // 0 at centre → 2 at corner
+  let g = exp(-r2 * hu.falloff);                 // gaussian radial falloff
+  let e = g * hu.intensity;
+  let a = clamp(e, 0.0, 1.0);
+  if (a <= 0.0) { discard; }
+  // SDR: rgbClampMax = 1 → rgb = color*min(e,1) = color*a, identical to original.
+  // HDR: rgbClampMax ≫ e → rgb = color*e can exceed 1.0 (float16 preserves it).
+  let rgb = hu.color * min(e, hu.rgbClampMax);
+  return vec4f(rgb, a);                          // premultiplied (emissive: rgb may exceed a)
+}`;
 
-interface Target {
-  tex: WebGLTexture;
-  fbo: WebGLFramebuffer;
-}
+const BLUR_TAPS = BLUR_WEIGHTS.map((w, i) =>
+  i === 0
+    ? `  var acc = ${w} * textureSample(tex, samp, uv);`
+    : `  acc += ${w} * (textureSample(tex, samp, uv + ${i}.0 * d) + textureSample(tex, samp, uv - ${i}.0 * d));`,
+).join("\n");
 
-// A half-res RGBA8 colour target. RGBA8 is guaranteed colour-renderable and
-// linear-filterable in core WebGL2, so this never needs a feature check.
-function createTarget(
-  gl: WebGL2RenderingContext,
-  w: number,
-  h: number,
-): Target | null {
-  const tex = gl.createTexture();
-  if (!tex) return null;
-  gl.bindTexture(gl.TEXTURE_2D, tex);
-  gl.texImage2D(
-    gl.TEXTURE_2D,
-    0,
-    gl.RGBA8,
-    w,
-    h,
-    0,
-    gl.RGBA,
-    gl.UNSIGNED_BYTE,
-    null,
-  );
-  gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MIN_FILTER, gl.LINEAR);
-  gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MAG_FILTER, gl.LINEAR);
-  gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_S, gl.CLAMP_TO_EDGE);
-  gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_T, gl.CLAMP_TO_EDGE);
-  const fbo = gl.createFramebuffer();
-  if (!fbo) {
-    gl.deleteTexture(tex);
-    return null;
+const BLUR_WGSL = `
+struct BlurU { dir: vec2f, }                     // per-tap UV offset (direction + spacing)
+@group(0) @binding(0) var<uniform> bu: BlurU;
+@group(0) @binding(1) var samp: sampler;
+@group(0) @binding(2) var tex: texture_2d<f32>;
+${FULLSCREEN_VS}
+@fragment fn fs_blur(@location(0) uv: vec2f) -> @location(0) vec4f {
+  let d = bu.dir;
+${BLUR_TAPS}
+  return acc;
+}`;
+
+const COMPOSITE_WGSL = `
+struct CompU { ink: f32, gain: f32, veilMax: f32, bodyTint: vec3f, }
+@group(0) @binding(0) var<uniform> cu: CompU;
+@group(0) @binding(1) var samp: sampler;
+@group(0) @binding(2) var tex: texture_2d<f32>; // blurred emissive field
+${FULLSCREEN_VS}
+@fragment fn fs_composite(@location(0) uv: vec2f) -> @location(0) vec4f {
+  let b = textureSample(tex, samp, uv);
+  if (cu.ink > 0.5) {
+    let lum = dot(b.rgb, vec3f(0.299, 0.587, 0.114));
+    let a = clamp(lum * cu.gain, 0.0, cu.veilMax);
+    return vec4f(cu.bodyTint * a, a);            // premultiplied veil, drawn source-over
   }
-  gl.bindFramebuffer(gl.FRAMEBUFFER, fbo);
-  gl.framebufferTexture2D(
-    gl.FRAMEBUFFER,
-    gl.COLOR_ATTACHMENT0,
-    gl.TEXTURE_2D,
-    tex,
-    0,
-  );
-  const complete =
-    gl.checkFramebufferStatus(gl.FRAMEBUFFER) === gl.FRAMEBUFFER_COMPLETE;
-  gl.bindFramebuffer(gl.FRAMEBUFFER, null);
-  if (!complete) {
-    gl.deleteTexture(tex);
-    gl.deleteFramebuffer(fbo);
-    return null;
-  }
-  return { tex, fbo };
-}
+  return vec4f(b.rgb * cu.gain, 0.0);            // additive light; alpha untouched
+}`;
+
+// --- Blend states ----------------------------------------------------------
+
+// Additive (ONE, ONE) for colour AND alpha — the emissive accumulation and the
+// glow-mode on-screen composite / sharp draws.
+const BLEND_ADD: GPUBlendState = {
+  color: { srcFactor: "one", dstFactor: "one", operation: "add" },
+  alpha: { srcFactor: "one", dstFactor: "one", operation: "add" },
+};
+// Premultiplied source-over (ONE, ONE_MINUS_SRC_ALPHA) — the ghost hairline in
+// both modes and every ink-mode on-screen draw.
+const BLEND_OVER: GPUBlendState = {
+  color: { srcFactor: "one", dstFactor: "one-minus-src-alpha", operation: "add" },
+  alpha: { srcFactor: "one", dstFactor: "one-minus-src-alpha", operation: "add" },
+};
+
+const CLEAR: GPUColor = { r: 0, g: 0, b: 0, a: 0 };
+
+// Interleaved ribbon vertex: center(2) + normal(2) + s(1) + side(1) = 24 bytes.
+const RIBBON_STRIDE = 24;
+const RIBBON_VB_LAYOUT: GPUVertexBufferLayout = {
+  arrayStride: RIBBON_STRIDE,
+  attributes: [
+    { shaderLocation: 0, offset: 0, format: "float32x2" },
+    { shaderLocation: 1, offset: 8, format: "float32x2" },
+    { shaderLocation: 2, offset: 16, format: "float32" },
+    { shaderLocation: 3, offset: 20, format: "float32" },
+  ],
+};
+
+// Uniform-buffer element counts (Float32 slots) for the shared staging array;
+// byte sizes are 4× these. Ribbon/head structs pad to 64 B, composite to 32 B,
+// blur to 16 B.
+const RIBBON_U_FLOATS = 16;
+const HEAD_U_FLOATS = 16;
+const COMPOSITE_U_FLOATS = 8;
+const BLUR_U_FLOATS = 4;
+
+// --- Small colour helpers ---------------------------------------------------
 
 function smoothstep(edge0: number, edge1: number, x: number): number {
   const t = Math.min(Math.max((x - edge0) / (edge1 - edge0), 0), 1);
@@ -424,66 +442,69 @@ function lighten(c: RGB, t: number): RGB {
   return [c[0] + (1 - c[0]) * t, c[1] + (1 - c[1]) * t, c[2] + (1 - c[2]) * t];
 }
 
-// Cached uniform locations, one struct per program.
-
-interface RibbonUniforms {
-  res: WebGLUniformLocation | null;
-  dpr: WebGLUniformLocation | null;
-  phase: WebGLUniformLocation | null;
-  winLen: WebGLUniformLocation | null;
-  wTail: WebGLUniformLocation | null;
-  wHead: WebGLUniformLocation | null;
-  ghost: WebGLUniformLocation | null;
-  aaPad: WebGLUniformLocation | null;
-  color: WebGLUniformLocation | null;
-  alpha: WebGLUniformLocation | null;
-  roundCap: WebGLUniformLocation | null;
-  winPx: WebGLUniformLocation | null;
-}
-
-interface HeadUniforms {
-  res: WebGLUniformLocation | null;
-  dpr: WebGLUniformLocation | null;
-  pos: WebGLUniformLocation | null;
-  quad: WebGLUniformLocation | null;
-  color: WebGLUniformLocation | null;
-  falloff: WebGLUniformLocation | null;
-  intensity: WebGLUniformLocation | null;
-}
-
-interface CompositeUniforms {
-  ink: WebGLUniformLocation | null;
-  tint: WebGLUniformLocation | null;
-  gain: WebGLUniformLocation | null;
-  veilMax: WebGLUniformLocation | null;
-}
-
-// Interleaved ribbon vertex: center(2) + normal(2) + s(1) + side(1).
-const RIBBON_STRIDE = 6 * 4;
+// --- Renderer ---------------------------------------------------------------
 
 class TraceRendererImpl implements TraceRenderer {
-  private readonly gl: WebGL2RenderingContext;
+  readonly hdr: boolean;
+  readonly lost: Promise<void>;
 
-  private readonly ribbonProgram: WebGLProgram;
-  private readonly headProgram: WebGLProgram;
-  private readonly blurProgram: WebGLProgram;
-  private readonly compositeProgram: WebGLProgram;
+  private readonly device: GPUDevice;
+  private readonly context: GPUCanvasContext;
+  private readonly offscreenFormat: GPUTextureFormat;
 
-  private readonly ribbonU: RibbonUniforms;
-  private readonly headU: HeadUniforms;
-  private readonly compositeU: CompositeUniforms;
-  private readonly blurDirLoc: WebGLUniformLocation | null;
+  // Pipelines (built once; formats/blend are fixed for the renderer's life).
+  private readonly pRibbonEmissive: GPURenderPipeline; // additive → offscreen
+  private readonly pRibbonAddSwap: GPURenderPipeline; // additive → swapchain (glow sharp)
+  private readonly pRibbonOverSwap: GPURenderPipeline; // source-over → swapchain (ghost + ink sharp)
+  private readonly pHeadEmissive: GPURenderPipeline; // additive → offscreen
+  private readonly pHeadAddSwap: GPURenderPipeline; // additive → swapchain (glow sharp head)
+  private readonly pBlur: GPURenderPipeline; // replace → offscreen
+  private readonly pCompGlow: GPURenderPipeline; // additive → swapchain
+  private readonly pCompInk: GPURenderPipeline; // source-over → swapchain
 
-  private readonly ribbonVao: WebGLVertexArrayObject;
-  private readonly ribbonVbo: WebGLBuffer;
-  private readonly headVao: WebGLVertexArrayObject;
-  private readonly headVbo: WebGLBuffer;
-  private readonly emptyVao: WebGLVertexArrayObject;
+  // Bind-group layouts kept for rebuilding the texture-dependent bind groups.
+  private readonly blurBGL: GPUBindGroupLayout;
+  private readonly compBGL: GPUBindGroupLayout;
+  private readonly sampler: GPUSampler;
+
+  // Uniform buffers — one per distinct draw so multiple draws in one submit each
+  // read their own values. Every queue write lands before the command buffer
+  // runs, so a single shared buffer would give every draw only the LAST write.
+  private readonly ubRibbonEmissive: GPUBuffer;
+  private readonly ubRibbonGhost: GPUBuffer;
+  private readonly ubRibbonSharp: GPUBuffer;
+  private readonly ubHeadEmissive: GPUBuffer;
+  private readonly ubHeadSharp: GPUBuffer;
+  private readonly ubComposite: GPUBuffer;
+  private readonly ubBlurH: GPUBuffer;
+  private readonly ubBlurV: GPUBuffer;
+
+  // Uniform-only bind groups (persistent).
+  private readonly bgRibbonEmissive: GPUBindGroup;
+  private readonly bgRibbonGhost: GPUBindGroup;
+  private readonly bgRibbonSharp: GPUBindGroup;
+  private readonly bgHeadEmissive: GPUBindGroup;
+  private readonly bgHeadSharp: GPUBindGroup;
+
+  // Texture-dependent bind groups, rebuilt on resize.
+  private bgBlurH: GPUBindGroup | null = null;
+  private bgBlurV: GPUBindGroup | null = null;
+  private bgComposite: GPUBindGroup | null = null;
 
   // Half-res bloom targets, recreated on resize. `emissive` doubles as the
   // final-blur target (the vertical pass writes back into it).
-  private emissive: Target | null = null;
-  private blur: Target | null = null;
+  private emissiveTex: GPUTexture | null = null;
+  private emissiveView: GPUTextureView | null = null;
+  private blurTex: GPUTexture | null = null;
+  private blurView: GPUTextureView | null = null;
+
+  // Ribbon geometry (grow-only buffer, rebuilt in setPath).
+  private ribbonVB: GPUBuffer | null = null;
+  private ribbonVBSize = 0;
+
+  // One reusable staging array for every uniform write — writeBuffer snapshots
+  // its bytes immediately, so refilling it between draws allocates nothing.
+  private readonly staging = new Float32Array(RIBBON_U_FLOATS);
 
   // Frame geometry / size, updated in resize.
   private devW = 1;
@@ -501,6 +522,7 @@ class TraceRendererImpl implements TraceRenderer {
   private pointCount = 0;
   private vertexCount = 0;
   private pathLenPx = 0; // total arc length in CSS px, for the round-cap forward scale
+  private winPxDev = 0; // trail window length in device px (u → forward px)
   private headX = 0;
   private headY = 0;
 
@@ -509,85 +531,170 @@ class TraceRendererImpl implements TraceRenderer {
   // never drawn directly except as the ghost); recomputed in setTheme.
   private bodyCol: RGB = saturateCyan([0.6, 0.8, 1]);
   private headCol: RGB = saturateCyan([1, 1, 1]);
-  private ghost: RGB = [0.3, 0.4, 0.6];
+  private ghostCol: RGB = [0.3, 0.4, 0.6];
   private ghostAlpha = 0.15;
 
   private destroyed = false;
 
   constructor(
-    gl: WebGL2RenderingContext,
-    ribbonProgram: WebGLProgram,
-    headProgram: WebGLProgram,
-    blurProgram: WebGLProgram,
-    compositeProgram: WebGLProgram,
-    ribbonVao: WebGLVertexArrayObject,
-    ribbonVbo: WebGLBuffer,
-    headVao: WebGLVertexArrayObject,
-    headVbo: WebGLBuffer,
-    emptyVao: WebGLVertexArrayObject,
+    device: GPUDevice,
+    context: GPUCanvasContext,
+    hdr: boolean,
+    swapFormat: GPUTextureFormat,
+    offscreenFormat: GPUTextureFormat,
   ) {
-    this.gl = gl;
-    this.ribbonProgram = ribbonProgram;
-    this.headProgram = headProgram;
-    this.blurProgram = blurProgram;
-    this.compositeProgram = compositeProgram;
-    this.ribbonVao = ribbonVao;
-    this.ribbonVbo = ribbonVbo;
-    this.headVao = headVao;
-    this.headVbo = headVbo;
-    this.emptyVao = emptyVao;
+    this.device = device;
+    this.context = context;
+    this.hdr = hdr;
+    this.offscreenFormat = offscreenFormat;
+    // device.lost resolves on real loss AND on device.destroy() (reason
+    // "destroyed"); collapse either into a void resolution. It never rejects.
+    this.lost = device.lost.then(() => undefined);
 
-    this.ribbonU = {
-      res: gl.getUniformLocation(ribbonProgram, "uResolution"),
-      dpr: gl.getUniformLocation(ribbonProgram, "uDpr"),
-      phase: gl.getUniformLocation(ribbonProgram, "uPhase"),
-      winLen: gl.getUniformLocation(ribbonProgram, "uWinLen"),
-      wTail: gl.getUniformLocation(ribbonProgram, "uWTail"),
-      wHead: gl.getUniformLocation(ribbonProgram, "uWHead"),
-      ghost: gl.getUniformLocation(ribbonProgram, "uGhost"),
-      aaPad: gl.getUniformLocation(ribbonProgram, "uAAPad"),
-      color: gl.getUniformLocation(ribbonProgram, "uColor"),
-      alpha: gl.getUniformLocation(ribbonProgram, "uAlpha"),
-      roundCap: gl.getUniformLocation(ribbonProgram, "uRoundCap"),
-      winPx: gl.getUniformLocation(ribbonProgram, "uWinPx"),
-    };
-    this.headU = {
-      res: gl.getUniformLocation(headProgram, "uResolution"),
-      dpr: gl.getUniformLocation(headProgram, "uDpr"),
-      pos: gl.getUniformLocation(headProgram, "uHeadPos"),
-      quad: gl.getUniformLocation(headProgram, "uHeadQuad"),
-      color: gl.getUniformLocation(headProgram, "uColor"),
-      falloff: gl.getUniformLocation(headProgram, "uFalloff"),
-      intensity: gl.getUniformLocation(headProgram, "uIntensity"),
-    };
-    this.compositeU = {
-      ink: gl.getUniformLocation(compositeProgram, "uInk"),
-      tint: gl.getUniformLocation(compositeProgram, "uBodyTint"),
-      gain: gl.getUniformLocation(compositeProgram, "uGain"),
-      veilMax: gl.getUniformLocation(compositeProgram, "uVeilMax"),
-    };
-    this.blurDirLoc = gl.getUniformLocation(blurProgram, "uDir");
+    const ribbonModule = device.createShaderModule({ code: RIBBON_WGSL });
+    const headModule = device.createShaderModule({ code: HEAD_WGSL });
+    const blurModule = device.createShaderModule({ code: BLUR_WGSL });
+    const compModule = device.createShaderModule({ code: COMPOSITE_WGSL });
 
-    // Samplers only ever read from unit 0.
-    gl.activeTexture(gl.TEXTURE0);
-    gl.useProgram(blurProgram);
-    gl.uniform1i(gl.getUniformLocation(blurProgram, "uTex"), 0);
-    gl.useProgram(compositeProgram);
-    gl.uniform1i(gl.getUniformLocation(compositeProgram, "uTex"), 0);
-    gl.useProgram(null);
+    const uniformBGL = (): GPUBindGroupLayout =>
+      device.createBindGroupLayout({
+        entries: [
+          {
+            binding: 0,
+            visibility: GPUShaderStage.VERTEX | GPUShaderStage.FRAGMENT,
+            buffer: { type: "uniform" },
+          },
+        ],
+      });
+    // Fullscreen samplers (blur/composite) share this shape: uniform + a
+    // filtering sampler + a float texture, all fragment-stage.
+    const samplerBGL = (): GPUBindGroupLayout =>
+      device.createBindGroupLayout({
+        entries: [
+          {
+            binding: 0,
+            visibility: GPUShaderStage.FRAGMENT,
+            buffer: { type: "uniform" },
+          },
+          {
+            binding: 1,
+            visibility: GPUShaderStage.FRAGMENT,
+            sampler: { type: "filtering" },
+          },
+          {
+            binding: 2,
+            visibility: GPUShaderStage.FRAGMENT,
+            texture: { sampleType: "float" },
+          },
+        ],
+      });
 
-    gl.disable(gl.DEPTH_TEST);
-    gl.disable(gl.CULL_FACE);
+    const ribbonBGL = uniformBGL();
+    const headBGL = uniformBGL();
+    this.blurBGL = samplerBGL();
+    this.compBGL = samplerBGL();
+
+    const layoutFor = (bgl: GPUBindGroupLayout): GPUPipelineLayout =>
+      device.createPipelineLayout({ bindGroupLayouts: [bgl] });
+    const ribbonPL = layoutFor(ribbonBGL);
+    const headPL = layoutFor(headBGL);
+    const blurPL = layoutFor(this.blurBGL);
+    const compPL = layoutFor(this.compBGL);
+
+    const pipeline = (
+      pl: GPUPipelineLayout,
+      module: GPUShaderModule,
+      vsEntry: string,
+      fsEntry: string,
+      format: GPUTextureFormat,
+      blend: GPUBlendState | undefined,
+      topology: GPUPrimitiveTopology,
+      buffers: GPUVertexBufferLayout[],
+    ): GPURenderPipeline =>
+      device.createRenderPipeline({
+        layout: pl,
+        vertex: { module, entryPoint: vsEntry, buffers },
+        fragment: { module, entryPoint: fsEntry, targets: [{ format, blend }] },
+        primitive: { topology, cullMode: "none" },
+      });
+
+    const ribbonVB = [RIBBON_VB_LAYOUT];
+    const noVB: GPUVertexBufferLayout[] = [];
+    this.pRibbonEmissive = pipeline(ribbonPL, ribbonModule, "vs_ribbon", "fs_ribbon", offscreenFormat, BLEND_ADD, "triangle-strip", ribbonVB);
+    this.pRibbonAddSwap = pipeline(ribbonPL, ribbonModule, "vs_ribbon", "fs_ribbon", swapFormat, BLEND_ADD, "triangle-strip", ribbonVB);
+    this.pRibbonOverSwap = pipeline(ribbonPL, ribbonModule, "vs_ribbon", "fs_ribbon", swapFormat, BLEND_OVER, "triangle-strip", ribbonVB);
+    this.pHeadEmissive = pipeline(headPL, headModule, "vs_head", "fs_head", offscreenFormat, BLEND_ADD, "triangle-strip", noVB);
+    this.pHeadAddSwap = pipeline(headPL, headModule, "vs_head", "fs_head", swapFormat, BLEND_ADD, "triangle-strip", noVB);
+    this.pBlur = pipeline(blurPL, blurModule, "vs_full", "fs_blur", offscreenFormat, undefined, "triangle-list", noVB);
+    this.pCompGlow = pipeline(compPL, compModule, "vs_full", "fs_composite", swapFormat, BLEND_ADD, "triangle-list", noVB);
+    this.pCompInk = pipeline(compPL, compModule, "vs_full", "fs_composite", swapFormat, BLEND_OVER, "triangle-list", noVB);
+
+    this.sampler = device.createSampler({
+      magFilter: "linear",
+      minFilter: "linear",
+      addressModeU: "clamp-to-edge",
+      addressModeV: "clamp-to-edge",
+    });
+
+    const ub = (floats: number): GPUBuffer =>
+      device.createBuffer({
+        size: floats * 4,
+        usage: GPUBufferUsage.UNIFORM | GPUBufferUsage.COPY_DST,
+      });
+    this.ubRibbonEmissive = ub(RIBBON_U_FLOATS);
+    this.ubRibbonGhost = ub(RIBBON_U_FLOATS);
+    this.ubRibbonSharp = ub(RIBBON_U_FLOATS);
+    this.ubHeadEmissive = ub(HEAD_U_FLOATS);
+    this.ubHeadSharp = ub(HEAD_U_FLOATS);
+    this.ubComposite = ub(COMPOSITE_U_FLOATS);
+    this.ubBlurH = ub(BLUR_U_FLOATS);
+    this.ubBlurV = ub(BLUR_U_FLOATS);
+
+    const uniformBG = (
+      bgl: GPUBindGroupLayout,
+      buffer: GPUBuffer,
+    ): GPUBindGroup =>
+      device.createBindGroup({
+        layout: bgl,
+        entries: [{ binding: 0, resource: { buffer } }],
+      });
+    this.bgRibbonEmissive = uniformBG(ribbonBGL, this.ubRibbonEmissive);
+    this.bgRibbonGhost = uniformBG(ribbonBGL, this.ubRibbonGhost);
+    this.bgRibbonSharp = uniformBG(ribbonBGL, this.ubRibbonSharp);
+    this.bgHeadEmissive = uniformBG(headBGL, this.ubHeadEmissive);
+    this.bgHeadSharp = uniformBG(headBGL, this.ubHeadSharp);
   }
+
+  // Render-pass descriptors, reused across frames: they were the hot
+  // loop's only avoidable garbage (~11 objects/frame). The offscreen
+  // ones change only when resize() recreates the views; the on-screen
+  // one just gets the rotating swapchain view stamped in before every
+  // use. beginRenderPass reads the descriptor synchronously and does
+  // not retain it, so mutation-reuse is safe.
+  private readonly outAttachment: GPURenderPassColorAttachment = {
+    // Stamped with the live swapchain view before every beginRenderPass.
+    view: null as unknown as GPUTextureView,
+    clearValue: CLEAR,
+    loadOp: "clear",
+    storeOp: "store",
+  };
+  private readonly outPassDesc: GPURenderPassDescriptor = {
+    colorAttachments: [this.outAttachment],
+  };
+  private emPassDesc: GPURenderPassDescriptor | null = null;
+  private hPassDesc: GPURenderPassDescriptor | null = null;
+  private vPassDesc: GPURenderPassDescriptor | null = null;
+  private readonly submitBuf: GPUCommandBuffer[] = [];
 
   resize(width: number, height: number, dpr: number): void {
     if (this.destroyed) return;
-    const gl = this.gl;
+    const device = this.device;
     this.dpr = dpr;
     this.devW = Math.max(1, Math.round(width * dpr));
     this.devH = Math.max(1, Math.round(height * dpr));
     this.halfW = Math.max(1, Math.floor(this.devW / 2));
     this.halfH = Math.max(1, Math.floor(this.devH / 2));
+    this.winPxDev = TRAIL_WINDOW * this.pathLenPx * this.dpr;
 
     // Per-tap UV spacing so effective sigma ≈ SIGMA_CSS*dpr device px. The /2 is
     // the half-res factor; SIGMA_TAPS converts the CSS sigma into tap units.
@@ -595,23 +702,72 @@ class TraceRendererImpl implements TraceRenderer {
     this.blurDirH = spacingHalfPx / this.halfW;
     this.blurDirV = spacingHalfPx / this.halfH;
 
-    if (this.emissive) {
-      gl.deleteTexture(this.emissive.tex);
-      gl.deleteFramebuffer(this.emissive.fbo);
-      this.emissive = null;
-    }
-    if (this.blur) {
-      gl.deleteTexture(this.blur.tex);
-      gl.deleteFramebuffer(this.blur.fbo);
-      this.blur = null;
-    }
-    this.emissive = createTarget(gl, this.halfW, this.halfH);
-    this.blur = createTarget(gl, this.halfW, this.halfH);
+    this.emissiveTex?.destroy();
+    this.blurTex?.destroy();
+    // rgba16float (HDR) is renderable + blendable + filterable in core WebGPU,
+    // as is rgba8unorm (SDR) — neither needs a device feature.
+    const target = (): { tex: GPUTexture; view: GPUTextureView } => {
+      const tex = device.createTexture({
+        size: { width: this.halfW, height: this.halfH },
+        format: this.offscreenFormat,
+        usage:
+          GPUTextureUsage.RENDER_ATTACHMENT | GPUTextureUsage.TEXTURE_BINDING,
+      });
+      return { tex, view: tex.createView() };
+    };
+    const em = target();
+    const bl = target();
+    this.emissiveTex = em.tex;
+    this.emissiveView = em.view;
+    this.blurTex = bl.tex;
+    this.blurView = bl.view;
+
+    // Blur H reads emissive → writes blur; blur V reads blur → writes emissive.
+    // Composite reads the final emissive (post-V) field.
+    const texBG = (uniform: GPUBuffer, view: GPUTextureView): GPUBindGroup =>
+      device.createBindGroup({
+        layout: this.blurBGL,
+        entries: [
+          { binding: 0, resource: { buffer: uniform } },
+          { binding: 1, resource: this.sampler },
+          { binding: 2, resource: view },
+        ],
+      });
+    this.bgBlurH = texBG(this.ubBlurH, this.emissiveView);
+    this.bgBlurV = texBG(this.ubBlurV, this.blurView);
+    this.bgComposite = device.createBindGroup({
+      layout: this.compBGL,
+      entries: [
+        { binding: 0, resource: { buffer: this.ubComposite } },
+        { binding: 1, resource: this.sampler },
+        { binding: 2, resource: this.emissiveView },
+      ],
+    });
+
+    // Blur directions only change on resize; write them here, not per frame.
+    const s = this.staging;
+    s[0] = this.blurDirH;
+    s[1] = 0;
+    s[2] = 0;
+    s[3] = 0;
+    device.queue.writeBuffer(this.ubBlurH, 0, s, 0, BLUR_U_FLOATS);
+    s[0] = 0;
+    s[1] = this.blurDirV;
+    device.queue.writeBuffer(this.ubBlurV, 0, s, 0, BLUR_U_FLOATS);
+
+    // The offscreen pass descriptors follow the recreated views.
+    const offscreen = (view: GPUTextureView): GPURenderPassDescriptor => ({
+      colorAttachments: [
+        { view, clearValue: CLEAR, loadOp: "clear", storeOp: "store" },
+      ],
+    });
+    this.emPassDesc = offscreen(this.emissiveView);
+    this.hPassDesc = offscreen(this.blurView);
+    this.vPassDesc = offscreen(this.emissiveView);
   }
 
   setPath(points: Float32Array): void {
     if (this.destroyed) return;
-    const gl = this.gl;
     const n = points.length >> 1;
     if (n < 2) {
       this.pointCount = 0;
@@ -693,16 +849,25 @@ class TraceRendererImpl implements TraceRenderer {
       data[o++] = 1;
     }
 
-    gl.bindVertexArray(this.ribbonVao);
-    gl.bindBuffer(gl.ARRAY_BUFFER, this.ribbonVbo);
-    gl.bufferData(gl.ARRAY_BUFFER, data, gl.STATIC_DRAW);
-    gl.bindVertexArray(null);
+    // Grow-only: the track's point count is stable across resizes, so the buffer
+    // is allocated once and only reuploaded — never reallocated per fit().
+    const bytes = data.byteLength;
+    if (!this.ribbonVB || this.ribbonVBSize < bytes) {
+      this.ribbonVB?.destroy();
+      this.ribbonVB = this.device.createBuffer({
+        size: bytes,
+        usage: GPUBufferUsage.VERTEX | GPUBufferUsage.COPY_DST,
+      });
+      this.ribbonVBSize = bytes;
+    }
+    this.device.queue.writeBuffer(this.ribbonVB, 0, data, 0, data.length);
 
     this.pathPts = points.slice();
     this.cumS = sArr;
     this.pointCount = n;
     this.vertexCount = n * 2;
     this.pathLenPx = total;
+    this.winPxDev = TRAIL_WINDOW * this.pathLenPx * this.dpr;
   }
 
   setTheme(theme: TraceTheme): void {
@@ -714,24 +879,58 @@ class TraceRendererImpl implements TraceRenderer {
     const head = saturateCyan(theme.head);
     this.bodyCol = theme.mode === "ink" ? lighten(body, INK_LIGHTEN) : body;
     this.headCol = theme.mode === "ink" ? lighten(head, INK_LIGHTEN) : head;
-    this.ghost = [theme.ghost[0], theme.ghost[1], theme.ghost[2]];
+    this.ghostCol = [theme.ghost[0], theme.ghost[1], theme.ghost[2]];
     this.ghostAlpha = theme.ghostAlpha;
+
+    // Composite uniforms depend only on theme (not phase); upload them here.
+    const ink = theme.mode === "ink";
+    const s = this.staging;
+    s[0] = ink ? 1 : 0;
+    s[1] = ink ? BLOOM_GAIN_INK : BLOOM_GAIN_GLOW;
+    s[2] = VEIL_MAX;
+    s[3] = 0;
+    s[4] = this.bodyCol[0];
+    s[5] = this.bodyCol[1];
+    s[6] = this.bodyCol[2];
+    s[7] = 0;
+    this.device.queue.writeBuffer(this.ubComposite, 0, s, 0, COMPOSITE_U_FLOATS);
   }
 
   render(phase: number): void {
     if (this.destroyed) return;
-    const gl = this.gl;
+    const device = this.device;
+    const encoder = device.createCommandEncoder();
+    // getCurrentTexture() must be called every frame to advance the swapchain;
+    // its view is the one unavoidable per-frame allocation (the texture rotates).
+    const swapView = this.context.getCurrentTexture().createView();
 
-    // Always leave the default framebuffer in a clean transparent state so the
-    // page shows through even when there is nothing to draw.
-    gl.bindFramebuffer(gl.FRAMEBUFFER, null);
-    gl.viewport(0, 0, this.devW, this.devH);
-    gl.clearColor(0, 0, 0, 0);
-    gl.clear(gl.COLOR_BUFFER_BIT);
+    const emPassDesc = this.emPassDesc;
+    const hPassDesc = this.hPassDesc;
+    const vPassDesc = this.vPassDesc;
+    const bgBlurH = this.bgBlurH;
+    const bgBlurV = this.bgBlurV;
+    const bgComposite = this.bgComposite;
+    const ribbonVB = this.ribbonVB;
+    this.outAttachment.view = swapView;
 
-    const emissive = this.emissive;
-    const blur = this.blur;
-    if (this.pointCount < 2 || !emissive || !blur) return;
+    // Nothing to draw yet (no path, or not yet resized): still present a clean
+    // transparent frame so the page shows through.
+    if (
+      this.pointCount < 2 ||
+      !emPassDesc ||
+      !hPassDesc ||
+      !vPassDesc ||
+      !bgBlurH ||
+      !bgBlurV ||
+      !bgComposite ||
+      !ribbonVB
+    ) {
+      const pass = encoder.beginRenderPass(this.outPassDesc);
+      pass.end();
+      this.submitBuf[0] = encoder.finish();
+      device.queue.submit(this.submitBuf);
+      return;
+    }
 
     const ink = this.mode === "ink";
 
@@ -740,118 +939,160 @@ class TraceRendererImpl implements TraceRenderer {
     // drains off the far end with no wrap-around to the start.
     this.computeHead(Math.min(phase, 1.0));
     const headFade = 1.0 - smoothstep(LAND_START, LAND_END, phase);
+    const drawHead = !ink && headFade > 0;
+
+    // --- Uniform writes (all land on the queue before the command buffer runs) ---
+    const emColor = ink ? WHITE : this.bodyCol;
+    this.writeRibbonU(this.ubRibbonEmissive, 0, emColor, TRAIL_ALPHA, WIDTH_TAIL, WIDTH_HEAD, ROUND_HEAD ? 1 : 0, phase);
+    this.writeRibbonU(this.ubRibbonGhost, 1, this.ghostCol, this.ghostAlpha, GHOST_WIDTH, GHOST_WIDTH, 0, phase);
+    this.writeRibbonU(this.ubRibbonSharp, 0, this.bodyCol, TRAIL_ALPHA, WIDTH_TAIL, WIDTH_HEAD, ROUND_HEAD ? 1 : 0, phase);
+    if (drawHead) {
+      // Only the head gets HDR headroom: 2.5× emissive intensity + unclamped RGB
+      // so its bloom exceeds 1.0 and burns above SDR white on an HDR panel.
+      const emBoost = this.hdr ? HDR_HEAD_BOOST : 1;
+      const emClamp = this.hdr ? HDR_HEAD_RGB_MAX : SDR_RGB_MAX;
+      this.writeHeadU(this.ubHeadEmissive, this.headCol, HEAD_INTENSITY_EMISSIVE * headFade * emBoost, emClamp);
+      // The sharp core stays SDR-normalised (clamped); the head burns via bloom.
+      this.writeHeadU(this.ubHeadSharp, this.headCol, HEAD_INTENSITY_SHARP * headFade, SDR_RGB_MAX);
+    }
 
     // --- 1. EMISSIVE PASS (half-res, additive accumulation) ---
-    gl.bindFramebuffer(gl.FRAMEBUFFER, emissive.fbo);
-    gl.viewport(0, 0, this.halfW, this.halfH);
-    gl.clearColor(0, 0, 0, 0);
-    gl.clear(gl.COLOR_BUFFER_BIT);
-    gl.enable(gl.BLEND);
-    gl.blendFunc(gl.ONE, gl.ONE);
-    const emColor = ink ? WHITE : this.bodyCol;
-    this.drawRibbon(phase, false, emColor, TRAIL_ALPHA, WIDTH_TAIL, WIDTH_HEAD);
+    const emPass = encoder.beginRenderPass(emPassDesc);
+    emPass.setPipeline(this.pRibbonEmissive);
+    emPass.setBindGroup(0, this.bgRibbonEmissive);
+    emPass.setVertexBuffer(0, ribbonVB);
+    emPass.draw(this.vertexCount);
     // Ink mode has no head "dot": on white it read as a hard blob, and the pale
     // comet wants only its soft trail. Glow keeps the bright point of light.
-    if (!ink && headFade > 0) {
-      this.drawHead(this.headCol, HEAD_INTENSITY_EMISSIVE * headFade);
+    if (drawHead) {
+      emPass.setPipeline(this.pHeadEmissive);
+      emPass.setBindGroup(0, this.bgHeadEmissive);
+      emPass.draw(4);
     }
+    emPass.end();
 
     // --- 2. SEPARABLE GAUSSIAN: emissive → blur (H), blur → emissive (V) ---
-    gl.disable(gl.BLEND);
-    gl.bindVertexArray(this.emptyVao);
-    gl.useProgram(this.blurProgram);
+    const hPass = encoder.beginRenderPass(hPassDesc);
+    hPass.setPipeline(this.pBlur);
+    hPass.setBindGroup(0, bgBlurH);
+    hPass.draw(3);
+    hPass.end();
 
-    gl.bindFramebuffer(gl.FRAMEBUFFER, blur.fbo);
-    gl.viewport(0, 0, this.halfW, this.halfH);
-    gl.bindTexture(gl.TEXTURE_2D, emissive.tex);
-    gl.uniform2f(this.blurDirLoc, this.blurDirH, 0);
-    gl.drawArrays(gl.TRIANGLES, 0, 3);
-
-    gl.bindFramebuffer(gl.FRAMEBUFFER, emissive.fbo);
-    gl.viewport(0, 0, this.halfW, this.halfH);
-    gl.bindTexture(gl.TEXTURE_2D, blur.tex);
-    gl.uniform2f(this.blurDirLoc, 0, this.blurDirV);
-    gl.drawArrays(gl.TRIANGLES, 0, 3);
-    // emissive.tex now holds the final blurred glow.
+    const vPass = encoder.beginRenderPass(vPassDesc);
+    vPass.setPipeline(this.pBlur);
+    vPass.setBindGroup(0, bgBlurV);
+    vPass.draw(3);
+    vPass.end();
+    // emissiveView now holds the final blurred glow (sampled by the composite).
 
     // --- 3/4. ON-SCREEN: ghost (under) → bloom → sharp (over) ---
-    gl.bindFramebuffer(gl.FRAMEBUFFER, null);
-    gl.viewport(0, 0, this.devW, this.devH);
-    gl.enable(gl.BLEND);
+    const outPass = encoder.beginRenderPass(this.outPassDesc);
 
     // GHOST: plain source-over hairline, never bloomed, in both modes.
-    gl.blendFunc(gl.ONE, gl.ONE_MINUS_SRC_ALPHA);
-    this.drawRibbon(
-      phase,
-      true,
-      this.ghost,
-      this.ghostAlpha,
-      GHOST_WIDTH,
-      GHOST_WIDTH,
-    );
+    outPass.setPipeline(this.pRibbonOverSwap);
+    outPass.setBindGroup(0, this.bgRibbonGhost);
+    outPass.setVertexBuffer(0, ribbonVB);
+    outPass.draw(this.vertexCount);
 
     // BLOOM composite: additive light (glow) vs. tinted alpha veil (ink).
-    if (ink) {
-      gl.blendFunc(gl.ONE, gl.ONE_MINUS_SRC_ALPHA);
-    } else {
-      gl.blendFunc(gl.ONE, gl.ONE);
-    }
-    gl.bindVertexArray(this.emptyVao);
-    gl.useProgram(this.compositeProgram);
-    gl.bindTexture(gl.TEXTURE_2D, emissive.tex);
-    gl.uniform1f(this.compositeU.ink, ink ? 1 : 0);
-    gl.uniform3f(
-      this.compositeU.tint,
-      this.bodyCol[0],
-      this.bodyCol[1],
-      this.bodyCol[2],
-    );
-    gl.uniform1f(this.compositeU.gain, ink ? BLOOM_GAIN_INK : BLOOM_GAIN_GLOW);
-    gl.uniform1f(this.compositeU.veilMax, VEIL_MAX);
-    gl.drawArrays(gl.TRIANGLES, 0, 3);
+    outPass.setPipeline(ink ? this.pCompInk : this.pCompGlow);
+    outPass.setBindGroup(0, bgComposite);
+    outPass.draw(3);
 
-    // SHARP pass: crisp core on top of its own halo.
-    if (ink) {
-      gl.blendFunc(gl.ONE, gl.ONE_MINUS_SRC_ALPHA);
-    } else {
-      gl.blendFunc(gl.ONE, gl.ONE);
+    // SHARP trail: crisp ribbon on top of its own halo.
+    outPass.setPipeline(ink ? this.pRibbonOverSwap : this.pRibbonAddSwap);
+    outPass.setBindGroup(0, this.bgRibbonSharp);
+    outPass.setVertexBuffer(0, ribbonVB);
+    outPass.draw(this.vertexCount);
+
+    // SHARP head: hard point of light (glow only).
+    if (drawHead) {
+      outPass.setPipeline(this.pHeadAddSwap);
+      outPass.setBindGroup(0, this.bgHeadSharp);
+      outPass.draw(4);
     }
-    this.drawRibbon(
-      phase,
-      false,
-      this.bodyCol,
-      TRAIL_ALPHA,
-      WIDTH_TAIL,
-      WIDTH_HEAD,
-    );
-    if (!ink && headFade > 0) {
-      this.drawHead(this.headCol, HEAD_INTENSITY_SHARP * headFade);
-    }
+    outPass.end();
+
+    this.submitBuf[0] = encoder.finish();
+    device.queue.submit(this.submitBuf);
   }
 
   destroy(): void {
     if (this.destroyed) return;
     this.destroyed = true;
-    const gl = this.gl;
-    gl.deleteProgram(this.ribbonProgram);
-    gl.deleteProgram(this.headProgram);
-    gl.deleteProgram(this.blurProgram);
-    gl.deleteProgram(this.compositeProgram);
-    gl.deleteBuffer(this.ribbonVbo);
-    gl.deleteBuffer(this.headVbo);
-    gl.deleteVertexArray(this.ribbonVao);
-    gl.deleteVertexArray(this.headVao);
-    gl.deleteVertexArray(this.emptyVao);
-    if (this.emissive) {
-      gl.deleteTexture(this.emissive.tex);
-      gl.deleteFramebuffer(this.emissive.fbo);
-      this.emissive = null;
-    }
-    if (this.blur) {
-      gl.deleteTexture(this.blur.tex);
-      gl.deleteFramebuffer(this.blur.fbo);
-      this.blur = null;
-    }
+    this.emissiveTex?.destroy();
+    this.blurTex?.destroy();
+    this.ribbonVB?.destroy();
+    this.ubRibbonEmissive.destroy();
+    this.ubRibbonGhost.destroy();
+    this.ubRibbonSharp.destroy();
+    this.ubHeadEmissive.destroy();
+    this.ubHeadSharp.destroy();
+    this.ubComposite.destroy();
+    this.ubBlurH.destroy();
+    this.ubBlurV.destroy();
+    // Frees remaining GPU objects (pipelines, bind groups, sampler) and resolves
+    // device.lost (reason "destroyed"), which in turn fulfils this.lost.
+    this.device.destroy();
+  }
+
+  // Fill the shared staging array for a ribbon draw and upload it. Static fields
+  // (resolution, dpr, winLen, aaPad, winPx) come from instance state; only phase
+  // and the per-draw colour/width/ghost differ.
+  private writeRibbonU(
+    buf: GPUBuffer,
+    ghost: number,
+    color: RGB,
+    alpha: number,
+    wTail: number,
+    wHead: number,
+    roundCap: number,
+    phase: number,
+  ): void {
+    const s = this.staging;
+    s[0] = this.devW;
+    s[1] = this.devH;
+    s[2] = this.dpr;
+    s[3] = phase;
+    s[4] = TRAIL_WINDOW;
+    s[5] = wTail;
+    s[6] = wHead;
+    s[7] = ghost;
+    s[8] = AA_PAD;
+    s[9] = alpha;
+    s[10] = roundCap;
+    s[11] = this.winPxDev;
+    s[12] = color[0];
+    s[13] = color[1];
+    s[14] = color[2];
+    s[15] = 0;
+    this.device.queue.writeBuffer(buf, 0, s, 0, RIBBON_U_FLOATS);
+  }
+
+  private writeHeadU(
+    buf: GPUBuffer,
+    color: RGB,
+    intensity: number,
+    rgbClampMax: number,
+  ): void {
+    const s = this.staging;
+    s[0] = this.devW;
+    s[1] = this.devH;
+    s[2] = this.headX;
+    s[3] = this.headY;
+    s[4] = this.dpr;
+    s[5] = HEAD_QUAD;
+    s[6] = HEAD_FALLOFF;
+    s[7] = intensity;
+    s[8] = rgbClampMax;
+    s[9] = 0;
+    s[10] = 0;
+    s[11] = 0;
+    s[12] = color[0];
+    s[13] = color[1];
+    s[14] = color[2];
+    s[15] = 0;
+    this.device.queue.writeBuffer(buf, 0, s, 0, HEAD_U_FLOATS);
   }
 
   // Locate the head on the polyline at arc length s via binary search + lerp.
@@ -882,124 +1123,95 @@ class TraceRendererImpl implements TraceRenderer {
     this.headX = pp[2 * lo] + (pp[2 * lo + 2] - pp[2 * lo]) * t;
     this.headY = pp[2 * lo + 1] + (pp[2 * lo + 3] - pp[2 * lo + 1]) * t;
   }
-
-  private drawRibbon(
-    phase: number,
-    ghost: boolean,
-    color: RGB,
-    alpha: number,
-    wTail: number,
-    wHead: number,
-  ): void {
-    const gl = this.gl;
-    const u = this.ribbonU;
-    gl.useProgram(this.ribbonProgram);
-    gl.bindVertexArray(this.ribbonVao);
-    gl.uniform2f(u.res, this.devW, this.devH);
-    gl.uniform1f(u.dpr, this.dpr);
-    gl.uniform1f(u.phase, phase);
-    gl.uniform1f(u.winLen, TRAIL_WINDOW);
-    gl.uniform1f(u.wTail, wTail);
-    gl.uniform1f(u.wHead, wHead);
-    gl.uniform1f(u.ghost, ghost ? 1 : 0);
-    gl.uniform1f(u.aaPad, AA_PAD);
-    gl.uniform3f(u.color, color[0], color[1], color[2]);
-    gl.uniform1f(u.alpha, alpha);
-    // Round cap only on the trail's leading tip (never the ghost's full track).
-    gl.uniform1f(u.roundCap, !ghost && ROUND_HEAD ? 1 : 0);
-    gl.uniform1f(u.winPx, TRAIL_WINDOW * this.pathLenPx * this.dpr);
-    gl.drawArrays(gl.TRIANGLE_STRIP, 0, this.vertexCount);
-  }
-
-  private drawHead(color: RGB, intensity: number): void {
-    const gl = this.gl;
-    const u = this.headU;
-    gl.useProgram(this.headProgram);
-    gl.bindVertexArray(this.headVao);
-    gl.uniform2f(u.res, this.devW, this.devH);
-    gl.uniform1f(u.dpr, this.dpr);
-    gl.uniform2f(u.pos, this.headX, this.headY);
-    gl.uniform1f(u.quad, HEAD_QUAD);
-    gl.uniform3f(u.color, color[0], color[1], color[2]);
-    gl.uniform1f(u.falloff, HEAD_FALLOFF);
-    gl.uniform1f(u.intensity, intensity);
-    gl.drawArrays(gl.TRIANGLE_STRIP, 0, 4);
-  }
 }
 
-export function createTraceRenderer(
-  gl: WebGL2RenderingContext,
-): TraceRenderer | null {
-  const ribbonProgram = createProgram(gl, RIBBON_VERT, RIBBON_FRAG);
-  const headProgram = createProgram(gl, HEAD_VERT, HEAD_FRAG);
-  const blurProgram = createProgram(gl, FULLSCREEN_VERT, BLUR_FRAG);
-  const compositeProgram = createProgram(gl, FULLSCREEN_VERT, COMPOSITE_FRAG);
+// Full WebGPU bring-up. Returns null (never throws) when any step is
+// unavailable: no navigator.gpu, no adapter/device, or no canvas context.
+export async function createTraceRenderer(
+  canvas: HTMLCanvasElement,
+): Promise<TraceRenderer | null> {
+  if (typeof navigator === "undefined" || !navigator.gpu) return null;
 
-  const ribbonVao = gl.createVertexArray();
-  const ribbonVbo = gl.createBuffer();
-  const headVao = gl.createVertexArray();
-  const headVbo = gl.createBuffer();
-  const emptyVao = gl.createVertexArray();
+  let adapter: GPUAdapter | null;
+  try {
+    adapter = await navigator.gpu.requestAdapter({
+      powerPreference: "high-performance",
+    });
+  } catch {
+    return null;
+  }
+  if (!adapter) return null;
 
-  // Any failure here means a required core capability is missing (or the context
-  // is lost) — clean up whatever we made and report the miss with null.
-  if (
-    !ribbonProgram ||
-    !headProgram ||
-    !blurProgram ||
-    !compositeProgram ||
-    !ribbonVao ||
-    !ribbonVbo ||
-    !headVao ||
-    !headVbo ||
-    !emptyVao
-  ) {
-    if (ribbonProgram) gl.deleteProgram(ribbonProgram);
-    if (headProgram) gl.deleteProgram(headProgram);
-    if (blurProgram) gl.deleteProgram(blurProgram);
-    if (compositeProgram) gl.deleteProgram(compositeProgram);
-    if (ribbonVao) gl.deleteVertexArray(ribbonVao);
-    if (ribbonVbo) gl.deleteBuffer(ribbonVbo);
-    if (headVao) gl.deleteVertexArray(headVao);
-    if (headVbo) gl.deleteBuffer(headVbo);
-    if (emptyVao) gl.deleteVertexArray(emptyVao);
+  let device: GPUDevice;
+  try {
+    device = await adapter.requestDevice();
+  } catch {
     return null;
   }
 
-  // Ribbon VAO: interleaved center/normal/s/side. The buffer stays empty until
-  // setPath uploads geometry, but the attribute format lives in the VAO now.
-  gl.bindVertexArray(ribbonVao);
-  gl.bindBuffer(gl.ARRAY_BUFFER, ribbonVbo);
-  gl.enableVertexAttribArray(0);
-  gl.vertexAttribPointer(0, 2, gl.FLOAT, false, RIBBON_STRIDE, 0);
-  gl.enableVertexAttribArray(1);
-  gl.vertexAttribPointer(1, 2, gl.FLOAT, false, RIBBON_STRIDE, 8);
-  gl.enableVertexAttribArray(2);
-  gl.vertexAttribPointer(2, 1, gl.FLOAT, false, RIBBON_STRIDE, 16);
-  gl.enableVertexAttribArray(3);
-  gl.vertexAttribPointer(3, 1, gl.FLOAT, false, RIBBON_STRIDE, 20);
+  // No typed getContext("webgpu") overload in this workspace's DOM lib, so the
+  // string overload yields RenderingContext | null; assert the real type.
+  const context = canvas.getContext(
+    "webgpu",
+  ) as unknown as GPUCanvasContext | null;
+  if (!context) {
+    device.destroy();
+    return null;
+  }
 
-  // Head VAO: a static unit quad drawn as a triangle strip.
-  const quad = new Float32Array([-1, -1, 1, -1, -1, 1, 1, 1]);
-  gl.bindVertexArray(headVao);
-  gl.bindBuffer(gl.ARRAY_BUFFER, headVbo);
-  gl.bufferData(gl.ARRAY_BUFFER, quad, gl.STATIC_DRAW);
-  gl.enableVertexAttribArray(0);
-  gl.vertexAttribPointer(0, 2, gl.FLOAT, false, 0, 0);
+  // HDR gating. Try extended-range first; the head may exceed SDR white only
+  // when that succeeds AND the display reports high dynamic range. Otherwise
+  // fall back to a standard-tone-mapped preferred-format swapchain, where the
+  // whole path renders identically to the SDR original.
+  const dynamicRangeHigh =
+    typeof matchMedia === "function" &&
+    matchMedia("(dynamic-range: high)").matches;
 
-  gl.bindVertexArray(null);
-  gl.bindBuffer(gl.ARRAY_BUFFER, null);
+  let extendedConfigured: boolean;
+  try {
+    context.configure({
+      device,
+      format: "rgba16float",
+      toneMapping: { mode: "extended" },
+      alphaMode: "premultiplied",
+      colorSpace: "display-p3",
+    });
+    extendedConfigured = true;
+  } catch {
+    extendedConfigured = false;
+  }
+
+  const hdr = extendedConfigured && dynamicRangeHigh;
+  let swapFormat: GPUTextureFormat;
+  if (hdr) {
+    swapFormat = "rgba16float";
+  } else {
+    // Reconfigure standard when extended failed OR the display isn't HDR (an
+    // extended config we don't need is replaced so the scene stays SDR-normal).
+    swapFormat = navigator.gpu.getPreferredCanvasFormat();
+    try {
+      context.configure({
+        device,
+        format: swapFormat,
+        toneMapping: { mode: "standard" },
+        alphaMode: "premultiplied",
+        colorSpace: "display-p3",
+      });
+    } catch {
+      device.destroy();
+      return null;
+    }
+  }
+
+  // Offscreen bloom targets match the configured range: float16 to carry the
+  // head's >1.0 emissive energy in HDR, plain 8-bit otherwise.
+  const offscreenFormat: GPUTextureFormat = hdr ? "rgba16float" : "rgba8unorm";
 
   return new TraceRendererImpl(
-    gl,
-    ribbonProgram,
-    headProgram,
-    blurProgram,
-    compositeProgram,
-    ribbonVao,
-    ribbonVbo,
-    headVao,
-    headVbo,
-    emptyVao,
+    device,
+    context,
+    hdr,
+    swapFormat,
+    offscreenFormat,
   );
 }
