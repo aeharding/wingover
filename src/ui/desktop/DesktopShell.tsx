@@ -31,6 +31,7 @@ import { cx } from "../cx";
 import FlyPage from "../flight/FlyPage";
 import FlySplash from "../flight/FlySplash";
 import { useFlights } from "../logbook/useFlights";
+import AppearancePage from "../pages/AppearancePage";
 import MapProviderPage from "../pages/MapProviderPage";
 import PlanPage from "../pages/PlanPage";
 import SettingsPage from "../pages/SettingsPage";
@@ -319,5 +320,6 @@ function SettingsRoutes() {
   const { pathname } = useLocation();
   if (pathname === "/settings/map") return <MapProviderPage />;
   if (pathname === "/settings/units") return <UnitsPage />;
+  if (pathname === "/settings/appearance") return <AppearancePage />;
   return <SettingsPage />;
 }

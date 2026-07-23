@@ -23,6 +23,7 @@ import { isTauri } from "../engine/platform";
 import DesktopShell from "./desktop/DesktopShell";
 import FlightSurface from "./flight/FlyPage";
 import AllFlightsMapPage from "./pages/AllFlightsMapPage";
+import AppearancePage from "./pages/AppearancePage";
 import FlightDetailPage from "./pages/FlightDetailPage";
 import FlyFrame from "./pages/FlyFrame";
 import LogbookPage from "./pages/LogbookPage";
@@ -134,6 +135,7 @@ function TabShell() {
           <Route exact path="/settings" component={SettingsPage} />
           <Route exact path="/settings/map" component={MapProviderPage} />
           <Route exact path="/settings/units" component={UnitsPage} />
+          <Route exact path="/settings/appearance" component={AppearancePage} />
           <Route
             exact
             path="/home"

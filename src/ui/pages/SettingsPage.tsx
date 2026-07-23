@@ -47,7 +47,7 @@ const SETTINGS_TONE_CLASS: Record<SyncTone, string> = {
 };
 
 export default function SettingsPage() {
-  const { units } = useSettings();
+  const { units, appearance } = useSettings();
   const openSync = useSyncSheet();
   const history = useHistory();
   const canRecord = useCanRecord();
@@ -181,6 +181,17 @@ export default function SettingsPage() {
 
         <div className={settings.listHeader}>General</div>
         <IonList inset>
+          <IonItem
+            button
+            detail
+            onClick={() => history.push("/settings/appearance")}
+            data-testid="settings-appearance"
+          >
+            <IonLabel>Appearance</IonLabel>
+            <IonNote slot="end">
+              {appearance === "auto" ? "Auto" : "Dark"}
+            </IonNote>
+          </IonItem>
           <IonItem
             button
             detail
