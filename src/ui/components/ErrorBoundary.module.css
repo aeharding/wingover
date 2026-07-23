@@ -36,20 +36,20 @@
   opacity: 0.8;
 }
 
-/* Stock-adjacent: the app primary, so the retry reads as the one action. */
+/* A quiet text button (Ionic's clear-button look, per Alex): primary-blue
+   text, no fill — the panel is calm, not an alert. Generous hit box kept. */
 .retry {
-  min-width: 12rem;
   min-height: 48px;
-  padding: 0 1.5rem;
+  padding: 0 1rem;
   border: 0;
   border-radius: 12px;
   font-size: 1.05rem;
   font-weight: 600;
-  color: var(--ion-color-primary-contrast);
-  background: var(--ion-color-primary);
+  color: var(--ion-color-primary);
+  background: none;
 
   &:active {
-    background: var(--ion-color-primary-shade);
+    opacity: 0.6;
   }
 }
 

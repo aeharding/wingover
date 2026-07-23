@@ -2,6 +2,7 @@ import {
   IonApp,
   IonIcon,
   IonLabel,
+  IonPage,
   IonRouterOutlet,
   IonTabBar,
   IonTabButton,
@@ -146,7 +147,7 @@ function TabShell() {
                 // Ground variant: this framed page is the IDLE Start screen
                 // (AppBody sheds the whole shell the moment a flight is
                 // live), so a crash here is not mid-recording.
-                <ErrorBoundary name="fly">
+                <ErrorBoundary name="fly" shell={(f) => <IonPage>{f}</IonPage>}>
                   <FlyPage />
                 </ErrorBoundary>
               )}
@@ -160,7 +161,10 @@ function TabShell() {
             exact
             path="/logbook"
             render={() => (
-              <ErrorBoundary name="logbook">
+              <ErrorBoundary
+                name="logbook"
+                shell={(f) => <IonPage>{f}</IonPage>}
+              >
                 <LogbookPage />
               </ErrorBoundary>
             )}
@@ -169,7 +173,10 @@ function TabShell() {
             exact
             path="/logbook/map"
             render={() => (
-              <ErrorBoundary name="logbook">
+              <ErrorBoundary
+                name="logbook"
+                shell={(f) => <IonPage>{f}</IonPage>}
+              >
                 <AllFlightsMapPage />
               </ErrorBoundary>
             )}
@@ -178,7 +185,10 @@ function TabShell() {
             exact
             path="/logbook/:id(recorded-\d+|[0-9a-fA-F-]{36})"
             render={() => (
-              <ErrorBoundary name="logbook">
+              <ErrorBoundary
+                name="logbook"
+                shell={(f) => <IonPage>{f}</IonPage>}
+              >
                 <FlightDetailPage />
               </ErrorBoundary>
             )}
@@ -187,7 +197,7 @@ function TabShell() {
             exact
             path="/plan"
             render={() => (
-              <ErrorBoundary name="plan">
+              <ErrorBoundary name="plan" shell={(f) => <IonPage>{f}</IonPage>}>
                 <PlanPage />
               </ErrorBoundary>
             )}
@@ -196,7 +206,10 @@ function TabShell() {
             exact
             path="/settings"
             render={() => (
-              <ErrorBoundary name="settings">
+              <ErrorBoundary
+                name="settings"
+                shell={(f) => <IonPage>{f}</IonPage>}
+              >
                 <SettingsPage />
               </ErrorBoundary>
             )}
@@ -205,7 +218,10 @@ function TabShell() {
             exact
             path="/settings/map"
             render={() => (
-              <ErrorBoundary name="settings">
+              <ErrorBoundary
+                name="settings"
+                shell={(f) => <IonPage>{f}</IonPage>}
+              >
                 <MapProviderPage />
               </ErrorBoundary>
             )}
@@ -214,7 +230,10 @@ function TabShell() {
             exact
             path="/settings/units"
             render={() => (
-              <ErrorBoundary name="settings">
+              <ErrorBoundary
+                name="settings"
+                shell={(f) => <IonPage>{f}</IonPage>}
+              >
                 <UnitsPage />
               </ErrorBoundary>
             )}

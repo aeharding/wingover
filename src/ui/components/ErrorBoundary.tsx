@@ -21,6 +21,14 @@ interface Props {
    * `key` remount: healthy siblings are never torn down. See use sites.
    */
   resetKey?: unknown;
+  /**
+   * Wraps the FALLBACK only (children render untouched). Routed pages
+   * inside an IonRouterOutlet must stay .ion-page even when crashed, or
+   * the outlet's stack transitions and the iOS swipe-back gesture break —
+   * pass a shell like (f) => <IonPage>{f}</IonPage> there. The boundary
+   * itself stays Ionic-free so the flight surface may use it.
+   */
+  shell?: (fallback: ReactNode) => ReactNode;
   /** Extra cleanup to run when the pilot taps Try again (optional). */
   onRetry?: () => void;
 }
@@ -77,7 +85,7 @@ export default class ErrorBoundary extends Component<Props, State> {
   render() {
     if (!this.state.error) return this.props.children;
     const flight = this.props.variant === "flight";
-    return (
+    const fallback = (
       <div className={cx(styles.panel, flight && styles.flight)} role="alert">
         <div className={styles.card}>
           <p className={styles.message}>Something went wrong.</p>
@@ -92,5 +100,6 @@ export default class ErrorBoundary extends Component<Props, State> {
         </div>
       </div>
     );
+    return this.props.shell ? this.props.shell(fallback) : fallback;
   }
 }
