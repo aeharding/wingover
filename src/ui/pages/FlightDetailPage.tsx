@@ -47,6 +47,7 @@ import {
   formatSpeed,
 } from "../../flight/format";
 import { useAppearance } from "../appTheme";
+import ErrorBoundary from "../components/ErrorBoundary";
 import { cx } from "../cx";
 import { endpointMarker } from "../logbook/endpointMarker";
 import { useFlightDoc } from "../logbook/useFlightDoc";
@@ -115,7 +116,25 @@ function collapseMapVia(setMapFull: (value: boolean) => void) {
  * renders the logbook split instead (DesktopShell → LogbookSection →
  * FlightSeat); this page only ever mounts inside the Ionic tab shell.
  */
+/**
+ * The page shell: the OUTLET-REGISTERED IonPage stays mounted for the
+ * page's whole life, and the boundary swaps only its content — replacing
+ * the IonPage itself on a crash breaks the stack manager's gesture wiring
+ * (swipe-back attached to a dead element; found by Alex in review). All
+ * hooks and logic live in the Body, so a hook-level crash (the class that
+ * motivated this boundary, e.g. the old stats reduce) is still caught.
+ */
 export default function FlightDetailPage() {
+  return (
+    <>
+      <ErrorBoundary name="flight-detail">
+        <DetailBody />
+      </ErrorBoundary>
+    </>
+  );
+}
+
+function DetailBody() {
   const { id } = useParams<{ id: string }>();
   const router = useIonRouter();
   const { units } = useSettings();

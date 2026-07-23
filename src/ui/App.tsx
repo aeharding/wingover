@@ -184,14 +184,7 @@ function TabShell() {
           <Route
             exact
             path="/logbook/:id(recorded-\d+|[0-9a-fA-F-]{36})"
-            render={() => (
-              <ErrorBoundary
-                name="logbook"
-                shell={(f) => <IonPage>{f}</IonPage>}
-              >
-                <FlightDetailPage />
-              </ErrorBoundary>
-            )}
+            render={() => <FlightDetailPage />}
           />
           <Route
             exact
