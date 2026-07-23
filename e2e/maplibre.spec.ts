@@ -377,8 +377,19 @@ test("the unsnapped compass realigns north, instantly", async ({ page }) => {
   });
   await page.mouse.up();
 
+  // PRECONDITION, not the assertion: under CI load the drag can land a
+  // frame late, and clicking "Align north" before the unsnap registered
+  // races the button relabel. The follow chip going inactive is the
+  // definitive "unsnapped" signal (CI's top web flake, 3 of the last 7
+  // ci-job failures, always timing out right here).
+  await expect(
+    page.getByRole("button", { name: "Follow aircraft" }),
+  ).toHaveAttribute("data-active", "false");
+
   await page.getByRole("button", { name: "Align north" }).click();
-  await expect.poll(bearing).toBeLessThan(0.5);
+  // The realign itself is animate:false — the generous poll is for slow
+  // CI frames delivering the bearing read, not for an animation.
+  await expect.poll(bearing, { timeout: 10_000 }).toBeLessThan(0.5);
 });
 
 test("composite map draws all flights even with a slow style", async ({
