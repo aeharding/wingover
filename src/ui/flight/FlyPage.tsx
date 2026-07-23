@@ -101,16 +101,23 @@ export default function FlyPage() {
   }, []);
   // The waypoint the pilot tapped on the map — gates the "clear checkpoint"
   // control. Held as an id; the live active set decides whether it still exists.
-  const [selectedWaypointId, setSelectedWaypointId] = useState<string | null>(
-    null,
-  );
+  // selectedId: held as an id; the live active set decides existence.
+  // pending: a long-press PROPOSES a checkpoint; the pilot confirms in the
+  // flight dialog before it becomes the nav target (gloves-first: a mistap
+  // in turbulence must not silently retarget navigation). One state: both
+  // are transient waypoint-interaction UI, cleared on the same journeys.
+  const [waypointUi, setWaypointUi] = useState<{
+    selectedId: string | null;
+    pending: LngLat | null;
+  }>({ selectedId: null, pending: null });
   const instrumentsRef = useRef<HTMLDivElement>(null);
 
   const { track, latest, landingAt, nextWaypoint, error: gpsError } = snapshot;
   // Only a still-active selection surfaces the control; a reached/removed pin
   // drops out of activeWaypoints and the button hides on its own.
   const selectedWaypoint =
-    snapshot.activeWaypoints.find((w) => w.id === selectedWaypointId) ?? null;
+    snapshot.activeWaypoints.find((w) => w.id === waypointUi.selectedId) ??
+    null;
   const status: EngineStatus | "loading" = ready ? snapshot.status : "loading";
 
   function changeMapView(value: MapViewKind) {
@@ -433,15 +440,16 @@ export default function FlyPage() {
             plannedWaypoints={snapshot.waypoints}
             navWaypoints={snapshot.activeWaypoints}
             onMapReady={setLiveMap}
-            onAddWaypoint={(at) => {
-              // Long-press: the new ad-hoc point becomes the next target;
-              // tap it then clear if it was a mistap.
-              void engine.addAdhocWaypoint(at);
-            }}
+            onAddWaypoint={(at) =>
+              setWaypointUi((ui) => ({ ...ui, pending: at }))
+            }
             onSelectWaypoint={(id) => {
               // Only the next waypoint — the current target — can be selected
               // to clear. A tap on any other pin (or a deselect) clears.
-              setSelectedWaypointId(id === nextWaypoint?.id ? id : null);
+              setWaypointUi((ui) => ({
+                ...ui,
+                selectedId: id === nextWaypoint?.id ? id : null,
+              }));
             }}
             onFollowChange={changeFollow}
           />
@@ -465,7 +473,7 @@ export default function FlyPage() {
                 data-testid="remove-waypoint"
                 onClick={() => {
                   void engine.removeWaypoint(selectedWaypoint.id);
-                  setSelectedWaypointId(null);
+                  setWaypointUi((ui) => ({ ...ui, selectedId: null }));
                 }}
               >
                 {/* A location pin with a small trash badge: "delete this
@@ -538,6 +546,21 @@ export default function FlyPage() {
               }
             />
           </div>
+          {waypointUi.pending && (
+            /* Same surface as the stop confirm and landing prompt: one
+               dialog language in flight. Scrim = Cancel. */
+            <ConfirmSurface
+              scrimTestId="waypoint-confirm"
+              title="Add a checkpoint here?"
+              cancelLabel="Cancel"
+              action="Add"
+              onCancel={() => setWaypointUi((ui) => ({ ...ui, pending: null }))}
+              onAction={() => {
+                void engine.addAdhocWaypoint(waypointUi.pending!);
+                setWaypointUi((ui) => ({ ...ui, pending: null }));
+              }}
+            />
+          )}
           {status === "landed" && landingAt !== null && (
             /* The end-flight confirm's exact surface (ConfirmSurface):
                  one dialog language in flight. The scrim is the safe
