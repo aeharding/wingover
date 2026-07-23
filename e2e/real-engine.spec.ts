@@ -370,6 +370,40 @@ test("in-flight nav: planned distance, tap-select and clear a checkpoint", async
   await expect(page.getByText("Distance to waypoint")).toBeVisible();
 });
 
+test("a long-press mid-flight proposes a checkpoint behind a confirm", async ({
+  page,
+}) => {
+  await page.addInitScript(GEO_STUB);
+  const emit = makeEmitter(page);
+  await page.goto(URL);
+  await armAndFly(page, emit);
+  // Let the follow camera finish easing onto the first fixes: a zoomstart
+  // mid-hold cancels the adapter's press timer (by design — a moving map
+  // must not register a stationary press).
+  await page.waitForTimeout(1200);
+
+  const map = (await page.getByTestId("live-map").boundingBox())!;
+  const longPress = async () => {
+    await page.mouse.move(map.x + map.width / 2 + 80, map.y + map.height / 2);
+    await page.mouse.down();
+    await page.waitForTimeout(700);
+    await page.mouse.up();
+  };
+
+  // Cancel path: the scrim is the safe answer — no waypoint appears.
+  await longPress();
+  const dialog = page.getByRole("alertdialog");
+  await expect(dialog).toBeVisible();
+  await dialog.getByRole("button", { name: "Cancel" }).click();
+  await expect(page.getByTestId("waypoint-pin")).toHaveCount(0);
+
+  // Confirm path: Add sets the checkpoint and it becomes the nav target.
+  await longPress();
+  await expect(dialog).toBeVisible();
+  await dialog.getByRole("button", { name: "Add" }).click();
+  await expect(page.getByTestId("waypoint-pin")).toHaveCount(1);
+});
+
 test("track-up toggle rotates the camera immediately, not on a glide", async ({
   page,
 }) => {
