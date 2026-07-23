@@ -147,7 +147,9 @@ final class NewWindowToBrowserDelegate: NSObject, WKUIDelegate {
 // Rust core owns the durable session log, cursors, and all announcement
 // decisions. This class only bridges CoreLocation in (background delivery
 // on), speech out, and the system share sheet.
-class WingoverPlugin: Plugin, CLLocationManagerDelegate {
+class WingoverPlugin: Plugin, CLLocationManagerDelegate,
+  AVSpeechSynthesizerDelegate
+{
   private let locationManager = CLLocationManager()
   private let speechSynthesizer = AVSpeechSynthesizer()
   private var permissionRequests: [Invoke] = []
@@ -166,6 +168,7 @@ class WingoverPlugin: Plugin, CLLocationManagerDelegate {
   override init() {
     super.init()
     locationManager.delegate = self
+    speechSynthesizer.delegate = self
   }
 
   // The webview tuning that makes Ionic feel native (overscroll bounce,
@@ -279,6 +282,29 @@ class WingoverPlugin: Plugin, CLLocationManagerDelegate {
       self.speechSynthesizer.speak(utterance)
       invoke.resolve()
     }
+  }
+
+  // The other half of the duck: the session holds music quiet until it is
+  // DEACTIVATED, and notifyOthersOnDeactivation is the signal other apps
+  // swell back on. Without this, one announcement left the pilot's music
+  // quiet for the rest of the flight. Guarded on isSpeaking so a queued
+  // follow-up utterance keeps the duck instead of popping mid-sentence.
+  func speechSynthesizer(
+    _ synthesizer: AVSpeechSynthesizer, didFinish utterance: AVSpeechUtterance
+  ) {
+    releaseAudioSessionIfIdle(synthesizer)
+  }
+
+  func speechSynthesizer(
+    _ synthesizer: AVSpeechSynthesizer, didCancel utterance: AVSpeechUtterance
+  ) {
+    releaseAudioSessionIfIdle(synthesizer)
+  }
+
+  private func releaseAudioSessionIfIdle(_ synthesizer: AVSpeechSynthesizer) {
+    guard !synthesizer.isSpeaking else { return }
+    try? AVAudioSession.sharedInstance().setActive(
+      false, options: .notifyOthersOnDeactivation)
   }
 
   // WKWebView has no download manager, so an anchor-download is a silent
