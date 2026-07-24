@@ -1,18 +1,20 @@
 .frame {
-  /* Pinned black in both schemes: the flight surface's own CSS is hardcoded
-     dark already, and this keeps the ion-page chrome around it — route
-     transitions included — from flashing the light scheme through. The FLIGHT
-     surface is exempt from theming (STEERING: one sunlight-tuned design), so
-     the frame re-pins the tokens it hands down. */
-  --ion-background-color: #000000;
-  --ion-background-color-rgb: 0, 0, 0;
-  --ion-text-color: #ffffff;
-  --ion-text-color-rgb: 255, 255, 255;
+  /* Pinned black in the DARK scheme only: the idle page now themes with
+     the app (FlyTrace's backdrop has a light-mode ink design), so light
+     keeps the app's own tokens. The in-flight surface stays exempt from
+     theming (STEERING: one sunlight-tuned design) — armed and recording
+     paint their own black over either frame. */
+  :root:global(.ion-palette-dark) & {
+    --ion-background-color: #000000;
+    --ion-background-color-rgb: 0, 0, 0;
+    --ion-text-color: #ffffff;
+    --ion-text-color-rgb: 255, 255, 255;
+  }
 
   /* The page title: the Settings page's large-title idiom, rendered by the
-     FRAME (this file's IonPage — the flight surface is Ionic-free). The frame
-     pins --ion-background-color black (above), which would paint the toolbars
-     as bands over the sky — go transparent and let the splash through. BOTH
+     FRAME (this file's IonPage — the flight surface is Ionic-free). Either
+     scheme's background would paint the toolbars as bands over the comet —
+     go transparent and let the backdrop through. BOTH
      headers (the outer main one AND the condense one nested in the content)
      float over the surface — Ionic gives ion-header z-index 10, above the
      surface — so a descendant selector, not a direct child: either must never
@@ -31,9 +33,9 @@
      --ion-background-color) }` (the native nav-bar look) outranks the condense
      toolbar's shadow-DOM transparency, and for the condense toolbar specifically
      the plain `.frame ion-toolbar` above does not clear it — so the big
-     "Wingover" title renders on a black band over the sky. Same condense-scoped
-     fix the sync hero needs (sync.module.css). Desktop renders FlyPage
-     frameless, so this only ever showed on the phone. */
+     greeting title renders on a scheme-colored band over the backdrop. Same
+     condense-scoped fix the sync hero needs (sync.module.css). Desktop
+     renders FlyPage frameless, so this only ever showed on the phone. */
   ion-header[collapse="condense"] ion-toolbar {
     --background: transparent;
   }
@@ -47,12 +49,12 @@
   }
 }
 
-/* While the Fly tab is the active page, its splash paints under the bar
+/* While the Fly tab is the active page, its backdrop paints under the bar
    (fullscreen content + translucent bar; ionic-framework#28246), so thin the
-   frost to let the artwork read through and drop the hairline. The rgb var
+   frost to let the comet read through and drop the hairline. The rgb var
    resolves at the BAR (outside .frame), so the frost matches the app scheme:
-   white over the day splash, black over dusk. Other tabs never match the
-   :has() — they keep the stock bar. */
+   white over the light page, black over the night sky. Other tabs never match
+   the :has() — they keep the stock bar. */
 ion-tabs:has(.frame:not(:global(.ion-page-hidden))) ion-tab-bar {
   --background: rgba(var(--ion-background-color-rgb), 0.35);
   --border: none;

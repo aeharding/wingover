@@ -255,9 +255,10 @@
   --map-compass-south: color(display-p3 0.85 0.87 0.9);
 }
 
-/* The flight surface's Ionic frame black-pins its tokens and frosts the tab
-   bar while it shows — both rules moved to FlyFrame.module.css's .frame (the
-   last global-class holdout), scoped to the module. */
+/* The flight surface's Ionic frame black-pins its tokens (dark scheme only,
+   since the idle page themes with the app) and frosts the tab bar while it
+   shows — both rules live in FlyFrame.module.css's .frame, scoped to the
+   module. */
 
 /* On-screen keyboard: src/tauri-ionic/keyboard.ts adds `keyboard-open` to <html> while
    the keyboard is up (off the native plugin's keyboard events). The bottom safe

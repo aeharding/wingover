@@ -30,6 +30,7 @@ import {
 import { LANDING_GRACE_MS } from "../../flight/landing";
 import { bearingBetween, relativeBearing } from "../../flight/nav";
 import { computeStats, haversineMeters } from "../../flight/stats";
+import { sunFactLabel } from "../../flight/sun";
 import {
   inheritedLaunchName,
   listPins,
@@ -48,6 +49,7 @@ import { ConfirmSurface, useBigConfirm } from "./BigConfirm";
 import LiveTrackMap from "./LiveTrackMap";
 import Tile from "./Tile";
 import { showToast } from "./toast";
+import { useLatestFlight } from "./useLatestFlight";
 import { useLiveViewPrefs } from "./useLiveViewPrefs";
 
 import mapCss from "../map/map.module.css";
@@ -99,6 +101,9 @@ export default function FlyPage() {
     void listPins().then(setPlannedPins);
     return onDocsChanged("pin", () => void listPins().then(setPlannedPins));
   }, []);
+  // The newest logbook flight feeds the idle facts (the sun fact needs a
+  // location; its launch point is the best guess for the next one).
+  const lastFlight = useLatestFlight();
   // The waypoint the pilot tapped on the map — gates the "clear checkpoint"
   // control. Held as an id; the live active set decides whether it still exists.
   // selectedId: held as an id; the live active set decides existence.
@@ -119,6 +124,9 @@ export default function FlyPage() {
     snapshot.activeWaypoints.find((w) => w.id === waypointUi.selectedId) ??
     null;
   const status: EngineStatus | "loading" = ready ? snapshot.status : "loading";
+  // The sun fact is relative time through most of the cycle; re-render
+  // by the minute while idle so it cannot go stale on a propped phone.
+  useMinuteTick(status === "idle");
 
   function changeMapView(value: MapViewKind) {
     updateLiveView({ mapView: value });
@@ -285,6 +293,17 @@ export default function FlyPage() {
   // null). Same distance/bearing math either way.
   const navTarget = nextWaypoint ?? first ?? null;
   const navLabel = nextWaypoint ? "waypoint" : "launch";
+  // Idle facts, all derived offline (tiles stay the app's entire network
+  // surface). The sun fact needs a location: the last flight's launch,
+  // else the first planned pin — where they last flew or where they're
+  // planning is where a pilot flies next. No location, no line.
+  const sunLocation = lastFlight?.launchAt
+    ? { latitude: lastFlight.launchAt[1], longitude: lastFlight.launchAt[0] }
+    : (plannedPins[0] ?? null);
+  const sunFact =
+    status === "idle" && sunLocation
+      ? sunFactLabel(new Date(), sunLocation.latitude, sunLocation.longitude)
+      : null;
   const toTargetDistance =
     latest && navTarget ? haversineMeters(latest, navTarget) : 0;
   const toTargetRelative =
@@ -296,14 +315,17 @@ export default function FlyPage() {
     <div className={styles.content} data-testid="fly-content">
       {status === "idle" && (
         <div className={styles.idle}>
+          <div className={styles.facts} data-testid="idle-facts">
+            {sunFact && <div>{sunFact}</div>}
+            {plannedRouteMeters > 0 && (
+              <div data-testid="planned-route">
+                Planned route: {formatDistance(plannedRouteMeters, units)}
+              </div>
+            )}
+          </div>
           <button className={styles.start} onClick={armFlight}>
             Start Flight
           </button>
-          {plannedRouteMeters > 0 && (
-            <div className={styles.planned} data-testid="planned-route">
-              Planned route: {formatDistance(plannedRouteMeters, units)}
-            </div>
-          )}
           {gpsError && (
             <div className={styles.gpsError} data-testid="gps-error">
               {gpsError.message}
@@ -579,6 +601,16 @@ export default function FlyPage() {
       {confirmElement}
     </div>
   );
+}
+
+// A render heartbeat for the relative sun fact, only while it shows.
+function useMinuteTick(active: boolean) {
+  const [, bump] = useState(0);
+  useEffect(() => {
+    if (!active) return;
+    const id = setInterval(() => bump((n) => n + 1), 60_000);
+    return () => clearInterval(id);
+  }, [active]);
 }
 
 function Compass({ course }: { course: number }) {

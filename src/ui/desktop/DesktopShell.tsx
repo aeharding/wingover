@@ -29,7 +29,7 @@ import { resetSyncedData } from "../../storage/db";
 import * as sync from "../../sync";
 import { cx } from "../cx";
 import FlyPage from "../flight/FlyPage";
-import FlySplash from "../flight/FlySplash";
+import FlyTrace from "../flight/FlyTrace";
 import { useFlights } from "../logbook/useFlights";
 import AppearancePage from "../pages/AppearancePage";
 import MapProviderPage from "../pages/MapProviderPage";
@@ -157,9 +157,11 @@ function DesktopFrame() {
       <main className={styles.main} data-testid="desktop-main">
         {canRecord && visited.has("fly") && (
           <section className={styles.section} hidden={section !== "fly"}>
-            {/* The splash backdrop behind the frameless surface — same
-                element the phone frame uses as its content background. */}
-            <FlySplash />
+            {/* The comet backdrop behind the frameless surface — same
+                element the phone frame uses as its content background.
+                The section's hidden attribute is what parks its render
+                loop off-tab. */}
+            <FlyTrace />
             <FlyPage />
           </section>
         )}
