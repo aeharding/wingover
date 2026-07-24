@@ -26,21 +26,22 @@ const CYCLE_MIN_MS = 16000;
 const CYCLE_MAX_MS = 60000;
 const PHASE_SPAN = 1.25;
 
-// QUIRK_SAFARI_HDR — remount-on-resume for WebKit's lost HDR canvases.
+// QUIRK_SAFARI_HDR — late reconfigure-on-resume for WebKit's clamped
+// HDR canvases.
 //
 // On WebKit (Safari, WKWebView, every iOS browser shell), backgrounding
 // the app (screen lock, app switch) lets the compositor reclaim the
 // WebGPU canvas's layer. When it is rebuilt on resume, an
-// extended-tone-mapping (HDR) canvas comes back SDR-clamped: the
-// GPUDevice is NOT lost (so the `lost` reboot path never fires),
-// configure() on the same canvas does not restore extended range
-// (verified on device: iPhone 13, iOS 26), and getContext() returns the
-// same stuck context for the life of the element. The only recovery is
-// a fresh <canvas> element, which re-runs the cold-start negotiation
-// (known good) — and it must be created AFTER foregrounding completes:
-// remounting at the visibility flip itself negotiates against the
-// still-backgrounded compositor and is born clamped too (v2 lesson,
-// on-device). See canvasEpoch and the deferred scheduleRemount below.
+// extended-tone-mapping (HDR) canvas sometimes comes back SDR-clamped:
+// the GPUDevice is NOT lost (so the `lost` reboot path never fires) and
+// the context still believes it is configured extended. The recovery,
+// established by on-device experiment (iPhone 13, iOS 26), is a
+// context.configure() RE-ASSERT — but only once foregrounding has
+// actually completed: re-asserting at the visibility flip does nothing
+// (v1), and even a FRESH canvas element created 600ms later can be born
+// clamped (v3; observed epoch 3 + still SDR, healed by one late manual
+// reconfigure). The foregrounding window varies, so scheduleReconfigs
+// below re-asserts at staggered delays after every resume.
 //
 // Engine-gated via navigator.vendor (WebKit reports "Apple Computer,
 // Inc." everywhere its engine runs) so engines without the bug never
@@ -159,7 +160,7 @@ export default function FlyTrace() {
       const c = canvasRef.current;
       const dr = matchMedia("(dynamic-range: high)").matches ? "hi" : "std";
       setDebugStatus(
-        `hdr:${c?.dataset.hdr ?? "-"} ph:${c?.dataset.phase0 ?? "-"} dr:${dr}`,
+        `hdr:${c?.dataset.hdr ?? "-"} ph:${c?.dataset.phase0 ?? "-"} rc:${c?.dataset.reconfigs ?? "0"} dr:${dr}`,
       );
     }, 1000);
     return () => clearInterval(id);
@@ -383,22 +384,35 @@ export default function FlyTrace() {
     // shells where visibilitychange is unreliable; the matchMedia
     // clause lets a renderer that wrongly negotiated SDR during a bad
     // resume self-heal on the next one.
+    // v4, the on-device verdict (debug-panel experiment): a LATE
+    // context.configure() re-assert heals the clamp — while even a
+    // deferred FRESH CANVAS can be born clamped (observed: epoch 3,
+    // still SDR, then one manual Reconfig healed it). WebKit's
+    // foregrounding window evidently varies, so the cheapest mechanism
+    // runs at staggered delays after every resume: idempotent, one
+    // dropped drawable per call (repainted next frame, or still() when
+    // parked). The remount survives only as the fallback for a renderer
+    // that wrongly negotiated SDR on an HDR display — re-asserting its
+    // standard configuration could never upgrade it.
     let wasHidden = false;
-    let remountPending = false;
-    let remountTimer = 0;
-    const scheduleRemount = () => {
-      if (!QUIRK_SAFARI_HDR || remountPending) return;
-      remountPending = true;
-      requestAnimationFrame(() =>
-        requestAnimationFrame(() => {
-          remountTimer = window.setTimeout(() => {
-            remountPending = false;
-            if (disposed || document.hidden) return;
-            if (renderer?.hdr || matchMedia("(dynamic-range: high)").matches) {
-              setCanvasEpoch((e) => e + 1);
-            }
-          }, 600);
-        }),
+    let reconfigCount = 0;
+    let reconfigTimers: number[] = [];
+    const scheduleReconfigs = () => {
+      if (!QUIRK_SAFARI_HDR) return;
+      for (const t of reconfigTimers) clearTimeout(t);
+      reconfigTimers = [600, 2000, 5000].map((ms) =>
+        window.setTimeout(() => {
+          if (disposed || document.hidden) return;
+          if (renderer?.hdr) {
+            renderer.reconfigure();
+            // On-device/e2e observability (see the status panel).
+            reconfigCount += 1;
+            canvas.dataset.reconfigs = String(reconfigCount);
+            still();
+          } else if (renderer && matchMedia("(dynamic-range: high)").matches) {
+            setCanvasEpoch((e) => e + 1);
+          }
+        }, ms),
       );
     };
     const onHidden = () => {
@@ -408,7 +422,7 @@ export default function FlyTrace() {
     const onResumed = () => {
       if (wasHidden && !document.hidden) {
         wasHidden = false;
-        scheduleRemount();
+        scheduleReconfigs();
       }
       sync();
       still();
@@ -430,7 +444,7 @@ export default function FlyTrace() {
       phaseRef.current = ((performance.now() - started) % cycleMs) / cycleMs;
       cancelAnimationFrame(raf);
       clearTimeout(retryTimer);
-      clearTimeout(remountTimer);
+      for (const t of reconfigTimers) clearTimeout(t);
       document.removeEventListener("visibilitychange", onVisibility);
       window.removeEventListener("blur", onHidden);
       window.removeEventListener("focus", onResumed);

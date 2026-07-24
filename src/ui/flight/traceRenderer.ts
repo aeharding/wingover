@@ -111,9 +111,12 @@ export interface TraceRenderer {
   // Resolves when the GPUDevice is lost — real loss OR destroy() (reason
   // "destroyed"); the host recreates the renderer. Never rejects.
   readonly lost: Promise<void>;
-  // DEBUG (this branch only): re-assert the original context
-  // configuration — one of the candidate recovery mechanisms on the
-  // on-device HDR-resume test panel. Remove with the panel.
+  // Re-asserts the original context configuration. THE recovery for
+  // WebKit's HDR-resume quirk (see QUIRK_SAFARI_HDR in FlyTrace): after
+  // app backgrounding the compositor can rebuild the canvas layer
+  // SDR-clamped without losing the device; a configure() re-assert once
+  // foregrounding has completed restores extended range. Idempotent;
+  // drops the current drawable — repaint after.
   reconfigure(): void;
   resize(width: number, height: number, dpr: number): void; // CSS px + devicePixelRatio
   setPath(points: Float32Array): void; // [x0,y0, x1,y1, ...] in CSS px, ≥2 points, already smoothed/evenly spaced
@@ -507,7 +510,7 @@ class TraceRendererImpl implements TraceRenderer {
 
   private readonly device: GPUDevice;
   private readonly context: GPUCanvasContext;
-  private readonly swapFormat: GPUTextureFormat; // DEBUG: for reconfigure()
+  private readonly swapFormat: GPUTextureFormat; // kept for reconfigure()
   private readonly offscreenFormat: GPUTextureFormat;
 
   // Pipelines (built once; formats/blend are fixed for the renderer's life).
@@ -817,10 +820,10 @@ class TraceRendererImpl implements TraceRenderer {
   private vPassDesc: GPURenderPassDescriptor | null = null;
   private readonly submitBuf: GPUCommandBuffer[] = [];
 
-  // DEBUG (this branch only): candidate recovery mechanism for the
-  // on-device HDR-resume test panel. Remove with the panel.
   reconfigure(): void {
     if (this.destroyed) return;
+    // Same descriptor createTraceRenderer settled on; the catch keeps a
+    // teardown-adjacent call from surfacing (nothing to recover then).
     try {
       this.context.configure({
         device: this.device,
