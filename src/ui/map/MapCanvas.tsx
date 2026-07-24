@@ -249,6 +249,17 @@ export default function MapCanvas({
   // adversarial review, both pinned in e2e/inset-bridge.spec.ts).
   // box: "border-box" is load-bearing — the content box of a zero-width
   // padded div never changes.
+  //
+  // Plus one supplement for ANIMATED insets (the replay pane's bottom
+  // glide transitions the registered --ion-safe-area-bottom): the easing
+  // tail can interpolate below layout's 1/64px granularity, where the
+  // probe's used padding already snaps to its final value — so the
+  // transition's true endpoint changes no box, the observer never
+  // re-fires, and the bridge would hold the sub-pixel tail read forever
+  // (caught by CI: MapKit stuck at bottom 0.00999718). The end/cancel
+  // event (bubbling up from whichever ancestor ran the transition) forces
+  // one exact final read. A supplement, never the mechanism: transition
+  // events alone miss changes applied across a DOM move (see above).
   useEffect(() => {
     const probe = probeRef.current;
     const probeTL = probeTLRef.current;
@@ -257,7 +268,16 @@ export default function MapCanvas({
     const resize = new ResizeObserver(() => readInsets());
     resize.observe(probe, { box: "border-box" });
     resize.observe(probeTL, { box: "border-box" });
-    return () => resize.disconnect();
+    const settle = (event: TransitionEvent) => {
+      if (event.propertyName.startsWith("--ion-safe-area")) readInsets();
+    };
+    document.addEventListener("transitionend", settle);
+    document.addEventListener("transitioncancel", settle);
+    return () => {
+      resize.disconnect();
+      document.removeEventListener("transitionend", settle);
+      document.removeEventListener("transitioncancel", settle);
+    };
   }, []);
 
   // Modifier classes go through classList: maplibre writes its own classes to

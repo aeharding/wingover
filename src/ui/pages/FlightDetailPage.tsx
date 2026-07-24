@@ -144,11 +144,14 @@ export default function FlightDetailPage() {
   // What the map region consumes off the device edges, one class the
   // buttons AND the MapKit attribution both inherit (so they can never
   // disagree): inline it is a boxed mid-page preview (every edge covered);
-  // full screen it takes the real device insets, EXCEPT the bottom when
-  // the replay pane is open below and owns the home indicator itself.
+  // full screen it takes the real device insets, EXCEPT the bottom while
+  // the replay pane below holds the home indicator. ownsBottom (not
+  // isOpen) releases the edge on the close slide's first frame, so the
+  // region's inset transition glides concurrently with the slide instead
+  // of the buttons stepping up after it settles.
   const regionConsume = !mapFull
     ? "consume-all"
-    : replay.isOpen
+    : replay.ownsBottom
       ? "consume-bottom"
       : "";
 
@@ -512,7 +515,17 @@ export default function FlightDetailPage() {
               it (the region flexes above). The consume class rides here,
               on the region only, so the replay drawer (a sibling below)
               keeps its own home-indicator inset while the map drops it. */}
-          <div className={cx(styles.region, regionConsume)}>
+          <div
+            className={cx(
+              styles.region,
+              regionConsume,
+              // Arms the bottom-inset glide (see .region's transition) only
+              // while the pane exists — through the whole close slide, but
+              // never on expand or rotation with the pane closed, where the
+              // inset must step with the layout like everywhere else.
+              replay.isOpen && styles.paneOpen,
+            )}
+          >
             <MapCanvas
               base={view}
               appearance={appearance}
@@ -574,6 +587,11 @@ export default function FlightDetailPage() {
                 )
               )}
             </div>
+            {/* The single-finger edge zoom (the fly page control), up
+                exactly while the follow button is — the node gates itself
+                on the pane being open and live. Inside the region, so its
+                strip ends where the pane begins. */}
+            {replay.zoomControl}
             {/* A visible affordance for the tap-to-expand above. Replay
                 lives behind it: expand, then the floating play button. */}
             {!mapFull && (
