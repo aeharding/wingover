@@ -432,7 +432,13 @@ export default function FlyTrace() {
         scheduleReconfigs();
       }
       sync();
-      still();
+      // The background reclaim that clamps HDR also DESTROYS the
+      // presented drawable, so a resume can show a transparent canvas
+      // until the first rAF paints (~a frame later) — an intermittent
+      // blink on exactly the resumes where the quirk struck. Paint in
+      // the resume task itself instead of waiting for the tick.
+      if (running) renderer?.render(phaseNow());
+      else still();
     };
     const onVisibility = () => {
       if (document.hidden) onHidden();
