@@ -85,6 +85,10 @@ interface PrivateCamera {
   center: unknown;
   copy(): PrivateCamera;
 }
+interface PrivateMapPoint {
+  x: number;
+  y: number;
+}
 interface PrivateMapImpl {
   camera?: PrivateCamera;
   _visibleMapRect?: unknown;
@@ -94,9 +98,9 @@ interface PrivateMapImpl {
   };
   setCameraAnimated?(camera: PrivateCamera, animated: boolean): void;
   _offsetCenterWithPaddingAndRotation?(
-    point: unknown,
+    point: PrivateMapPoint,
     direction: number,
-  ): unknown;
+  ): PrivateMapPoint | undefined;
 }
 
 export async function createMapKitMapView(
@@ -234,7 +238,7 @@ export async function createMapKitMapView(
   function atomicPanZoom(center: LngLat, delta: number): boolean {
     const camera = impl?.camera;
     const point = (
-      toCoord(center) as Coordinate & { toMapPoint?(): unknown }
+      toCoord(center) as Coordinate & { toMapPoint?(): PrivateMapPoint }
     ).toMapPoint?.();
     if (
       !impl?.setCameraAnimated ||
@@ -246,8 +250,22 @@ export async function createMapKitMapView(
     }
     try {
       const target = camera.copy();
-      target.center =
-        impl._offsetCenterWithPaddingAndRotation?.(point, -1) || point;
+      // The offset helper sizes the padding compensation for the CURRENT
+      // zoom (pixel asymmetry over the live worldSize) — MapKit itself only
+      // calls it in same-zoom pans. This move lands at a different zoom,
+      // where the same map-point vector covers 2^delta times the pixels:
+      // the "flies close, second press snaps exact" miss. Rescale it to the
+      // landing scale. Rotation-safe (the vector bakes rotation in; uniform
+      // scaling preserves it); symmetric padding returns undefined and the
+      // raw point is already right. Apple's own user-location control lands
+      // exact the same way, by building its rect at the TARGET zoom.
+      const off = impl._offsetCenterWithPaddingAndRotation?.(point, -1);
+      if (off && delta !== 0) {
+        const k = Math.pow(2, -delta);
+        off.x = point.x + (off.x - point.x) * k;
+        off.y = point.y + (off.y - point.y) * k;
+      }
+      target.center = off ?? point;
       // Validate BEFORE assigning: the camera's zoom setter launders
       // garbage (`this._zoom = e || 3`), so a post-assignment isFinite
       // check would read back a plausible 3 and animate to continental.
