@@ -14,7 +14,16 @@ import styles from "./FlyTrace.module.css";
 
 // One full cycle: the comet flies the track (phase 0..1), drains off the
 // end, and a dark beat separates the relaunch (..1.25). See traceRenderer.
-const CYCLE_MS = 24000;
+//
+// The cycle length is NOT fixed: the head flies at a constant PHYSICAL
+// speed (CSS px/s ~ 1/96 in), so a desktop-sized track takes
+// proportionally longer than a phone-sized one instead of visibly
+// sprinting. Clamped so a stubby track doesn't get frantic and a huge
+// one doesn't turn glacial. HEAD_SPEED is tuned so a typical phone
+// projection (~1150 px arc) keeps the original 24 s cycle.
+const HEAD_SPEED = 60; // CSS px per second along the arc
+const CYCLE_MIN_MS = 16000;
+const CYCLE_MAX_MS = 60000;
 const PHASE_SPAN = 1.25;
 
 function parseP3(value: string): [number, number, number] {
@@ -112,7 +121,8 @@ export default function FlyTrace() {
     let lastW = 0;
     let lastH = 0;
     let lastDpr = 0;
-    const started = performance.now();
+    let started = performance.now();
+    let cycleMs = 24000; // re-derived from the projected arc length in fit()
     const reducedMotion = matchMedia("(prefers-reduced-motion: reduce)");
 
     // The reduced-motion (or otherwise parked-but-visible) single frame.
@@ -124,9 +134,29 @@ export default function FlyTrace() {
 
     const frame = () => {
       renderer?.render(
-        (((performance.now() - started) % CYCLE_MS) / CYCLE_MS) * PHASE_SPAN,
+        (((performance.now() - started) % cycleMs) / cycleMs) * PHASE_SPAN,
       );
       raf = requestAnimationFrame(frame);
+    };
+
+    // Constant physical speed: the cycle follows the projected arc
+    // length. The clock is rebased so the head's phase is continuous
+    // across a pace change (a resize already re-projects the whole path,
+    // but the comet shouldn't also teleport along it).
+    const setPace = (pts: Float32Array) => {
+      let len = 0;
+      for (let i = 2; i < pts.length; i += 2) {
+        len += Math.hypot(pts[i] - pts[i - 2], pts[i + 1] - pts[i - 1]);
+      }
+      if (len === 0) return; // empty path renders nothing; keep the pace
+      const next = Math.min(
+        CYCLE_MAX_MS,
+        Math.max(CYCLE_MIN_MS, (len / HEAD_SPEED) * PHASE_SPAN * 1000),
+      );
+      if (next === cycleMs) return;
+      const now = performance.now();
+      started = now - (((now - started) % cycleMs) / cycleMs) * next;
+      cycleMs = next;
     };
 
     const sync = () => {
@@ -172,7 +202,9 @@ export default function FlyTrace() {
       renderer.resize(w, h, dpr);
       // A box too small to project into clears the path — never leave a
       // ribbon fitted to the previous box on screen.
-      renderer.setPath(projectTrack(track, w, h) ?? new Float32Array(0));
+      const path = projectTrack(track, w, h) ?? new Float32Array(0);
+      renderer.setPath(path);
+      setPace(path);
       watchDpr();
       still();
     };
@@ -252,7 +284,19 @@ export default function FlyTrace() {
       still();
     });
     viewWatcher.observe(canvas);
-    document.addEventListener("visibilitychange", sync);
+    // Resume is more than sync: WKWebView can recycle the canvas's
+    // compositor layer while the app is backgrounded (screen lock, app
+    // switch) without losing the GPUDevice, and the new layer doesn't
+    // always carry extended tone mapping back — the HDR head comes home
+    // SDR-clamped. Re-asserting the configuration is idempotent-cheap;
+    // it drops the drawable, so repaint (rAF restart via sync, or
+    // still() when parked under reduced motion).
+    const onVisibility = () => {
+      if (!document.hidden) renderer?.reconfigure();
+      sync();
+      still();
+    };
+    document.addEventListener("visibilitychange", onVisibility);
     reducedMotion.addEventListener("change", sync);
 
     void boot();
@@ -261,7 +305,7 @@ export default function FlyTrace() {
       disposed = true;
       cancelAnimationFrame(raf);
       clearTimeout(retryTimer);
-      document.removeEventListener("visibilitychange", sync);
+      document.removeEventListener("visibilitychange", onVisibility);
       reducedMotion.removeEventListener("change", sync);
       dprWatcher?.removeEventListener("change", onDprChange);
       themeWatcher.disconnect();

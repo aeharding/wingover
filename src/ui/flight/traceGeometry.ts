@@ -49,6 +49,42 @@ function relax(pts: XY[], passes: number): XY[] {
   return out;
 }
 
+// The resample/relax output still TURNS in ~8 px straight segments, which
+// reads as visible stepping on tight curves now that the lines carry real
+// brightness. A uniform Catmull-Rom spline through the smoothed points
+// bends genuinely through each corner; SUB subdivisions per segment takes
+// joins down to ~2 px, below what the eye picks out of a feathered line.
+const SUB = 4;
+function spline(pts: XY[]): XY[] {
+  if (pts.length < 3) return pts;
+  const out: XY[] = [];
+  for (let i = 0; i < pts.length - 1; i++) {
+    const p0 = pts[Math.max(i - 1, 0)];
+    const p1 = pts[i];
+    const p2 = pts[i + 1];
+    const p3 = pts[Math.min(i + 2, pts.length - 1)];
+    for (let s = 0; s < SUB; s++) {
+      const t = s / SUB;
+      const t2 = t * t;
+      const t3 = t2 * t;
+      out.push([
+        0.5 *
+          (2 * p1[0] +
+            (p2[0] - p0[0]) * t +
+            (2 * p0[0] - 5 * p1[0] + 4 * p2[0] - p3[0]) * t2 +
+            (3 * p1[0] - p0[0] - 3 * p2[0] + p3[0]) * t3),
+        0.5 *
+          (2 * p1[1] +
+            (p2[1] - p0[1]) * t +
+            (2 * p0[1] - 5 * p1[1] + 4 * p2[1] - p3[1]) * t2 +
+            (3 * p1[1] - p0[1] - 3 * p2[1] + p3[1]) * t3),
+      ]);
+    }
+  }
+  out.push(pts[pts.length - 1]);
+  return out;
+}
+
 // The frame the flight is fitted into, in CSS px of the actual element:
 // clear of the large-title band above, edge padding at the sides, and
 // deliberately reaching toward the bottom edge — the element's box spans
@@ -121,7 +157,7 @@ export function projectTrack(
   }
   const count = Math.min(256, Math.max(90, Math.round(lengthPx / 8)));
 
-  const smoothed = relax(resample(projected, count), 2);
+  const smoothed = spline(relax(resample(projected, count), 2));
   const out = new Float32Array(smoothed.length * 2);
   smoothed.forEach(([x, y], i) => {
     out[i * 2] = x;

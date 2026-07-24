@@ -111,6 +111,13 @@ export interface TraceRenderer {
   // Resolves when the GPUDevice is lost — real loss OR destroy() (reason
   // "destroyed"); the host recreates the renderer. Never rejects.
   readonly lost: Promise<void>;
+  // Re-runs context.configure() with the original descriptor. WKWebView can
+  // recycle the canvas's compositor layer while the app is backgrounded
+  // WITHOUT losing the GPUDevice; the re-created layer does not always carry
+  // the extended-range tone mapping back with it, so the HDR head silently
+  // returns SDR-clamped. Idempotent and cheap; the host calls it on every
+  // visibility resume. Drops the current drawable — repaint after.
+  reconfigure(): void;
   resize(width: number, height: number, dpr: number): void; // CSS px + devicePixelRatio
   setPath(points: Float32Array): void; // [x0,y0, x1,y1, ...] in CSS px, ≥2 points, already smoothed/evenly spaced
   setTheme(theme: TraceTheme): void;
@@ -130,6 +137,14 @@ const TRAIL_WINDOW = 0.18;
 const WIDTH_TAIL = 1.5;
 const WIDTH_HEAD = 6.0;
 const GHOST_WIDTH = 1.5;
+
+// Ghost "silvering": the hairline gleams where the head's light falls on it,
+// like a wire catching lamplight. GAIN multiplies the ghost's alpha at the
+// glint peak (base × (1 + GAIN), capped at full coverage in the shader);
+// RADIUS is the gaussian sigma in CSS px. The gleam fades with the head's
+// landing fade so it dies with the light source.
+const SILVER_GAIN = 4.5;
+const SILVER_RADIUS = 44;
 
 // Round the leading tip of the trail into a semicircular cap instead of a flat
 // cut. Flip to false for a blunt end.
@@ -247,6 +262,10 @@ struct RibbonU {
   roundCap: f32,       // 1 = round the leading tip into a cap, 0 = flat cut
   winPx: f32,          // trail window length in device px (maps u → forward px)
   color: vec3f,
+  silver: f32,         // ghost glint alpha gain near the head; 0 disables
+  silverColor: vec3f,  // what the glint tints toward (white in glow, body in ink)
+  silverRad: f32,      // glint gaussian sigma (CSS px)
+  headPos: vec2f,      // head point (CSS px), for the glint distance
 }
 @group(0) @binding(0) var<uniform> ru: RibbonU;
 
@@ -261,6 +280,7 @@ struct VOut {
   @location(0) u: f32,          // 0 at tail edge → 1 at head
   @location(1) dist: f32,       // signed distance from centreline (device px)
   @location(2) radius: f32,     // half-width coverage radius (device px)
+  @location(3) wnormal: vec2f,  // wire normal (screen space), for the glint's facing term
 }
 @vertex fn vs_ribbon(in: VIn) -> VOut {
   let u = (in.s - (ru.phase - ru.winLen)) / ru.winLen;
@@ -275,6 +295,7 @@ struct VOut {
   out.u = u;
   out.dist = off;
   out.radius = halfW;
+  out.wnormal = in.normal;
   return out;
 }
 @fragment fn fs_ribbon(in: VOut) -> @location(0) vec4f {
@@ -300,9 +321,35 @@ struct VOut {
     cov = 1.0 - smoothstep(in.radius - aa, in.radius + aa, abs(in.dist));
     wa = smoothstep(0.0, 1.0, in.u);             // eased 0→1 toward the head
   }
-  let a = cov * wa * ru.alpha;
+  var a = cov * wa * ru.alpha;
+  var rgb = ru.color;
+  if (ru.silver > 0.0) {
+    // "Silvering": the hairline itself catches the head's light — brightening
+    // and tinting toward silverColor with a gaussian falloff around the head
+    // point, distinct from the bloom halo merely passing over it. Alpha is
+    // capped at full coverage so the gleam can't over-saturate the wire.
+    //
+    // The gleam is DIRECTIONAL, like walls under a streetlamp: the wire's
+    // face (screen-space normal) catches the light Lambert-style, so a
+    // segment passing broadside to the head gleams fully while one running
+    // radially away stays near-dark. The Lambert term is SQUARED to sharpen
+    // the lobe (oblique walls drop off harder — the accentuated "wall"
+    // look), with a small floor keeping a dim scattered-light residual —
+    // the wire through the head is itself radial, and the gleam at the
+    // source shouldn't vanish entirely.
+    let dd = in.pos.xy - ru.headPos * ru.dpr;
+    let d = length(dd);
+    let lightDir = dd / max(d, 1e-3);
+    let n = in.wnormal / max(length(in.wnormal), 1e-3);
+    let lam = abs(dot(lightDir, n));
+    let facing = mix(0.12, 1.0, lam * lam);
+    let sigma = max(ru.silverRad * ru.dpr, 1.0);
+    let glint = facing * exp(-0.5 * d * d / (sigma * sigma));
+    rgb = mix(rgb, ru.silverColor, 0.85 * glint);
+    a = min(a * (1.0 + ru.silver * glint), cov);
+  }
   if (a <= 0.0) { discard; }
-  return vec4f(ru.color * a, a);                 // premultiplied
+  return vec4f(rgb * a, a);                      // premultiplied
 }`;
 
 const HEAD_WGSL = `
@@ -333,7 +380,12 @@ struct HOut { @builtin(position) pos: vec4f, @location(0) corner: vec2f, }
 }
 @fragment fn fs_head(@location(0) corner: vec2f) -> @location(0) vec4f {
   let r2 = dot(corner, corner);                  // 0 at centre → 2 at corner
-  let g = exp(-r2 * hu.falloff);                 // gaussian radial falloff
+  // Windowed gaussian: the raw tail is still ~1.5% bright where the quad
+  // clips it (edge midpoints, r=1), which reads as a faint SQUARE plateau
+  // over pure black. Subtracting the r=1 floor (renormalised) zeroes the
+  // sprite at the quad's inscribed circle; the core is visually unchanged.
+  let gf = exp(-hu.falloff);
+  let g = max(exp(-r2 * hu.falloff) - gf, 0.0) / (1.0 - gf);
   let e = g * hu.intensity;
   let a = clamp(e, 0.0, 1.0);
   if (a <= 0.0) { discard; }
@@ -388,8 +440,16 @@ const BLEND_ADD: GPUBlendState = {
 // Premultiplied source-over (ONE, ONE_MINUS_SRC_ALPHA) — the ghost hairline in
 // both modes and every ink-mode on-screen draw.
 const BLEND_OVER: GPUBlendState = {
-  color: { srcFactor: "one", dstFactor: "one-minus-src-alpha", operation: "add" },
-  alpha: { srcFactor: "one", dstFactor: "one-minus-src-alpha", operation: "add" },
+  color: {
+    srcFactor: "one",
+    dstFactor: "one-minus-src-alpha",
+    operation: "add",
+  },
+  alpha: {
+    srcFactor: "one",
+    dstFactor: "one-minus-src-alpha",
+    operation: "add",
+  },
 };
 
 const CLEAR: GPUColor = { r: 0, g: 0, b: 0, a: 0 };
@@ -407,9 +467,9 @@ const RIBBON_VB_LAYOUT: GPUVertexBufferLayout = {
 };
 
 // Uniform-buffer element counts (Float32 slots) for the shared staging array;
-// byte sizes are 4× these. Ribbon/head structs pad to 64 B, composite to 32 B,
-// blur to 16 B.
-const RIBBON_U_FLOATS = 16;
+// byte sizes are 4× these. Ribbon pads to 96 B (silvering members), head to
+// 64 B, composite to 32 B, blur to 16 B.
+const RIBBON_U_FLOATS = 24;
 const HEAD_U_FLOATS = 16;
 const COMPOSITE_U_FLOATS = 8;
 const BLUR_U_FLOATS = 4;
@@ -450,6 +510,7 @@ class TraceRendererImpl implements TraceRenderer {
 
   private readonly device: GPUDevice;
   private readonly context: GPUCanvasContext;
+  private readonly swapFormat: GPUTextureFormat;
   private readonly offscreenFormat: GPUTextureFormat;
 
   // Pipelines (built once; formats/blend are fixed for the renderer's life).
@@ -546,6 +607,7 @@ class TraceRendererImpl implements TraceRenderer {
     this.device = device;
     this.context = context;
     this.hdr = hdr;
+    this.swapFormat = swapFormat;
     this.offscreenFormat = offscreenFormat;
     // device.lost resolves on real loss AND on device.destroy() (reason
     // "destroyed"); collapse either into a void resolution. It never rejects.
@@ -620,14 +682,86 @@ class TraceRendererImpl implements TraceRenderer {
 
     const ribbonVB = [RIBBON_VB_LAYOUT];
     const noVB: GPUVertexBufferLayout[] = [];
-    this.pRibbonEmissive = pipeline(ribbonPL, ribbonModule, "vs_ribbon", "fs_ribbon", offscreenFormat, BLEND_ADD, "triangle-strip", ribbonVB);
-    this.pRibbonAddSwap = pipeline(ribbonPL, ribbonModule, "vs_ribbon", "fs_ribbon", swapFormat, BLEND_ADD, "triangle-strip", ribbonVB);
-    this.pRibbonOverSwap = pipeline(ribbonPL, ribbonModule, "vs_ribbon", "fs_ribbon", swapFormat, BLEND_OVER, "triangle-strip", ribbonVB);
-    this.pHeadEmissive = pipeline(headPL, headModule, "vs_head", "fs_head", offscreenFormat, BLEND_ADD, "triangle-strip", noVB);
-    this.pHeadAddSwap = pipeline(headPL, headModule, "vs_head", "fs_head", swapFormat, BLEND_ADD, "triangle-strip", noVB);
-    this.pBlur = pipeline(blurPL, blurModule, "vs_full", "fs_blur", offscreenFormat, undefined, "triangle-list", noVB);
-    this.pCompGlow = pipeline(compPL, compModule, "vs_full", "fs_composite", swapFormat, BLEND_ADD, "triangle-list", noVB);
-    this.pCompInk = pipeline(compPL, compModule, "vs_full", "fs_composite", swapFormat, BLEND_OVER, "triangle-list", noVB);
+    this.pRibbonEmissive = pipeline(
+      ribbonPL,
+      ribbonModule,
+      "vs_ribbon",
+      "fs_ribbon",
+      offscreenFormat,
+      BLEND_ADD,
+      "triangle-strip",
+      ribbonVB,
+    );
+    this.pRibbonAddSwap = pipeline(
+      ribbonPL,
+      ribbonModule,
+      "vs_ribbon",
+      "fs_ribbon",
+      swapFormat,
+      BLEND_ADD,
+      "triangle-strip",
+      ribbonVB,
+    );
+    this.pRibbonOverSwap = pipeline(
+      ribbonPL,
+      ribbonModule,
+      "vs_ribbon",
+      "fs_ribbon",
+      swapFormat,
+      BLEND_OVER,
+      "triangle-strip",
+      ribbonVB,
+    );
+    this.pHeadEmissive = pipeline(
+      headPL,
+      headModule,
+      "vs_head",
+      "fs_head",
+      offscreenFormat,
+      BLEND_ADD,
+      "triangle-strip",
+      noVB,
+    );
+    this.pHeadAddSwap = pipeline(
+      headPL,
+      headModule,
+      "vs_head",
+      "fs_head",
+      swapFormat,
+      BLEND_ADD,
+      "triangle-strip",
+      noVB,
+    );
+    this.pBlur = pipeline(
+      blurPL,
+      blurModule,
+      "vs_full",
+      "fs_blur",
+      offscreenFormat,
+      undefined,
+      "triangle-list",
+      noVB,
+    );
+    this.pCompGlow = pipeline(
+      compPL,
+      compModule,
+      "vs_full",
+      "fs_composite",
+      swapFormat,
+      BLEND_ADD,
+      "triangle-list",
+      noVB,
+    );
+    this.pCompInk = pipeline(
+      compPL,
+      compModule,
+      "vs_full",
+      "fs_composite",
+      swapFormat,
+      BLEND_OVER,
+      "triangle-list",
+      noVB,
+    );
 
     this.sampler = device.createSampler({
       magFilter: "linear",
@@ -685,6 +819,25 @@ class TraceRendererImpl implements TraceRenderer {
   private hPassDesc: GPURenderPassDescriptor | null = null;
   private vPassDesc: GPURenderPassDescriptor | null = null;
   private readonly submitBuf: GPUCommandBuffer[] = [];
+
+  reconfigure(): void {
+    if (this.destroyed) return;
+    // Same descriptor createTraceRenderer settled on: hdr === true implies the
+    // extended configuration took AND the display is HDR, so re-asserting
+    // extended can't newly fail; the catch is sheer paranoia (a throw here
+    // must not take down the visibility handler).
+    try {
+      this.context.configure({
+        device: this.device,
+        format: this.swapFormat,
+        toneMapping: { mode: this.hdr ? "extended" : "standard" },
+        alphaMode: "premultiplied",
+        colorSpace: "display-p3",
+      });
+    } catch {
+      /* keep whatever configuration the layer still has */
+    }
+  }
 
   resize(width: number, height: number, dpr: number): void {
     if (this.destroyed) return;
@@ -893,7 +1046,13 @@ class TraceRendererImpl implements TraceRenderer {
     s[5] = this.bodyCol[1];
     s[6] = this.bodyCol[2];
     s[7] = 0;
-    this.device.queue.writeBuffer(this.ubComposite, 0, s, 0, COMPOSITE_U_FLOATS);
+    this.device.queue.writeBuffer(
+      this.ubComposite,
+      0,
+      s,
+      0,
+      COMPOSITE_U_FLOATS,
+    );
   }
 
   render(phase: number): void {
@@ -943,17 +1102,58 @@ class TraceRendererImpl implements TraceRenderer {
 
     // --- Uniform writes (all land on the queue before the command buffer runs) ---
     const emColor = ink ? WHITE : this.bodyCol;
-    this.writeRibbonU(this.ubRibbonEmissive, 0, emColor, TRAIL_ALPHA, WIDTH_TAIL, WIDTH_HEAD, ROUND_HEAD ? 1 : 0, phase);
-    this.writeRibbonU(this.ubRibbonGhost, 1, this.ghostCol, this.ghostAlpha, GHOST_WIDTH, GHOST_WIDTH, 0, phase);
-    this.writeRibbonU(this.ubRibbonSharp, 0, this.bodyCol, TRAIL_ALPHA, WIDTH_TAIL, WIDTH_HEAD, ROUND_HEAD ? 1 : 0, phase);
+    this.writeRibbonU(
+      this.ubRibbonEmissive,
+      0,
+      emColor,
+      TRAIL_ALPHA,
+      WIDTH_TAIL,
+      WIDTH_HEAD,
+      ROUND_HEAD ? 1 : 0,
+      phase,
+    );
+    // The silvering is a DARK-mode effect only: light mode is daytime, and
+    // daylight has no flashlight to catch on the track (per Alex; the cyan
+    // gleam on white just read as a smudge).
+    this.writeRibbonU(
+      this.ubRibbonGhost,
+      1,
+      this.ghostCol,
+      this.ghostAlpha,
+      GHOST_WIDTH,
+      GHOST_WIDTH,
+      0,
+      phase,
+      ink ? 0 : SILVER_GAIN * headFade,
+    );
+    this.writeRibbonU(
+      this.ubRibbonSharp,
+      0,
+      this.bodyCol,
+      TRAIL_ALPHA,
+      WIDTH_TAIL,
+      WIDTH_HEAD,
+      ROUND_HEAD ? 1 : 0,
+      phase,
+    );
     if (drawHead) {
       // Only the head gets HDR headroom: 2.5× emissive intensity + unclamped RGB
       // so its bloom exceeds 1.0 and burns above SDR white on an HDR panel.
       const emBoost = this.hdr ? HDR_HEAD_BOOST : 1;
       const emClamp = this.hdr ? HDR_HEAD_RGB_MAX : SDR_RGB_MAX;
-      this.writeHeadU(this.ubHeadEmissive, this.headCol, HEAD_INTENSITY_EMISSIVE * headFade * emBoost, emClamp);
+      this.writeHeadU(
+        this.ubHeadEmissive,
+        this.headCol,
+        HEAD_INTENSITY_EMISSIVE * headFade * emBoost,
+        emClamp,
+      );
       // The sharp core stays SDR-normalised (clamped); the head burns via bloom.
-      this.writeHeadU(this.ubHeadSharp, this.headCol, HEAD_INTENSITY_SHARP * headFade, SDR_RGB_MAX);
+      this.writeHeadU(
+        this.ubHeadSharp,
+        this.headCol,
+        HEAD_INTENSITY_SHARP * headFade,
+        SDR_RGB_MAX,
+      );
     }
 
     // --- 1. EMISSIVE PASS (half-res, additive accumulation) ---
@@ -1048,6 +1248,8 @@ class TraceRendererImpl implements TraceRenderer {
     wHead: number,
     roundCap: number,
     phase: number,
+    silver = 0,
+    silverColor: RGB = WHITE,
   ): void {
     const s = this.staging;
     s[0] = this.devW;
@@ -1065,7 +1267,15 @@ class TraceRendererImpl implements TraceRenderer {
     s[12] = color[0];
     s[13] = color[1];
     s[14] = color[2];
-    s[15] = 0;
+    s[15] = silver;
+    s[16] = silverColor[0];
+    s[17] = silverColor[1];
+    s[18] = silverColor[2];
+    s[19] = SILVER_RADIUS;
+    s[20] = this.headX;
+    s[21] = this.headY;
+    s[22] = 0;
+    s[23] = 0;
     this.device.queue.writeBuffer(buf, 0, s, 0, RIBBON_U_FLOATS);
   }
 
