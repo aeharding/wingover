@@ -175,6 +175,14 @@ class WingoverPlugin: Plugin, CLLocationManagerDelegate,
   // keyboard resize + pinning, accessory bar, programmatic focus) lives in
   // tauri-plugin-ionic — this load keeps only the app-specific bits.
   @objc public override func load(webview: WKWebView) {
+    // Between the launch screen and the first web paint, an opaque WKWebView
+    // shows solid white regardless of scheme — no CSS or meta can reach that
+    // window because nothing has painted yet. Paint systemBackground (what
+    // LaunchScreen.storyboard shows) until the page's own background lands.
+    webview.isOpaque = false
+    webview.backgroundColor = .systemBackground
+    webview.scrollView.backgroundColor = .clear
+
     // WKWebView opens no window for target=_blank / window.open, so links
     // that request one die on tap — the Apple Maps "Legal" credit lives in a
     // closed shadow root no JS handler can reach. Route those to Safari,
