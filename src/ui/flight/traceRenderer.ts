@@ -111,13 +111,6 @@ export interface TraceRenderer {
   // Resolves when the GPUDevice is lost — real loss OR destroy() (reason
   // "destroyed"); the host recreates the renderer. Never rejects.
   readonly lost: Promise<void>;
-  // Re-runs context.configure() with the original descriptor. WKWebView can
-  // recycle the canvas's compositor layer while the app is backgrounded
-  // WITHOUT losing the GPUDevice; the re-created layer does not always carry
-  // the extended-range tone mapping back with it, so the HDR head silently
-  // returns SDR-clamped. Idempotent and cheap; the host calls it on every
-  // visibility resume. Drops the current drawable — repaint after.
-  reconfigure(): void;
   resize(width: number, height: number, dpr: number): void; // CSS px + devicePixelRatio
   setPath(points: Float32Array): void; // [x0,y0, x1,y1, ...] in CSS px, ≥2 points, already smoothed/evenly spaced
   setTheme(theme: TraceTheme): void;
@@ -510,7 +503,6 @@ class TraceRendererImpl implements TraceRenderer {
 
   private readonly device: GPUDevice;
   private readonly context: GPUCanvasContext;
-  private readonly swapFormat: GPUTextureFormat;
   private readonly offscreenFormat: GPUTextureFormat;
 
   // Pipelines (built once; formats/blend are fixed for the renderer's life).
@@ -607,7 +599,6 @@ class TraceRendererImpl implements TraceRenderer {
     this.device = device;
     this.context = context;
     this.hdr = hdr;
-    this.swapFormat = swapFormat;
     this.offscreenFormat = offscreenFormat;
     // device.lost resolves on real loss AND on device.destroy() (reason
     // "destroyed"); collapse either into a void resolution. It never rejects.
@@ -819,25 +810,6 @@ class TraceRendererImpl implements TraceRenderer {
   private hPassDesc: GPURenderPassDescriptor | null = null;
   private vPassDesc: GPURenderPassDescriptor | null = null;
   private readonly submitBuf: GPUCommandBuffer[] = [];
-
-  reconfigure(): void {
-    if (this.destroyed) return;
-    // Same descriptor createTraceRenderer settled on: hdr === true implies the
-    // extended configuration took AND the display is HDR, so re-asserting
-    // extended can't newly fail; the catch is sheer paranoia (a throw here
-    // must not take down the visibility handler).
-    try {
-      this.context.configure({
-        device: this.device,
-        format: this.swapFormat,
-        toneMapping: { mode: this.hdr ? "extended" : "standard" },
-        alphaMode: "premultiplied",
-        colorSpace: "display-p3",
-      });
-    } catch {
-      /* keep whatever configuration the layer still has */
-    }
-  }
 
   resize(width: number, height: number, dpr: number): void {
     if (this.destroyed) return;

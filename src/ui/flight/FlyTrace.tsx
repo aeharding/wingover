@@ -108,6 +108,14 @@ function useLastTrack(): Fix[] | null {
 export default function FlyTrace() {
   const track = useLastTrack();
   const canvasRef = useRef<HTMLCanvasElement>(null);
+  // Keys the <canvas> ELEMENT. Bumped on app-resume when the renderer is
+  // HDR: WKWebView recycles the compositor layer while backgrounded and
+  // extended tone mapping does not survive it. configure() on the same
+  // canvas proved insufficient on-device, and getContext() returns the
+  // SAME stuck context for the life of the element — only a fresh canvas
+  // re-runs the cold-start negotiation, which is known good. SDR
+  // canvases resume fine and never pay the remount.
+  const [canvasEpoch, setCanvasEpoch] = useState(0);
 
   useEffect(() => {
     const canvas = canvasRef.current;
@@ -284,15 +292,16 @@ export default function FlyTrace() {
       still();
     });
     viewWatcher.observe(canvas);
-    // Resume is more than sync: WKWebView can recycle the canvas's
-    // compositor layer while the app is backgrounded (screen lock, app
-    // switch) without losing the GPUDevice, and the new layer doesn't
-    // always carry extended tone mapping back — the HDR head comes home
-    // SDR-clamped. Re-asserting the configuration is idempotent-cheap;
-    // it drops the drawable, so repaint (rAF restart via sync, or
-    // still() when parked under reduced motion).
+    // Resume is more than sync. An HDR canvas comes back from the
+    // background SDR-clamped (see canvasEpoch above); the remount tears
+    // this whole effect down and boots a fresh canvas, so sync/still
+    // for the outgoing one is moot. Everything else (SDR, no renderer
+    // yet, going hidden) just re-syncs the loop.
     const onVisibility = () => {
-      if (!document.hidden) renderer?.reconfigure();
+      if (!document.hidden && renderer?.hdr) {
+        setCanvasEpoch((e) => e + 1);
+        return;
+      }
       sync();
       still();
     };
@@ -314,10 +323,11 @@ export default function FlyTrace() {
       renderer?.destroy();
       renderer = null;
     };
-  }, [track]);
+  }, [track, canvasEpoch]);
 
   return (
     <canvas
+      key={canvasEpoch}
       ref={canvasRef}
       slot="fixed"
       className={styles.trace}
