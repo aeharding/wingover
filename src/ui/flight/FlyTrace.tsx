@@ -217,10 +217,11 @@ export default function FlyTrace() {
       }
     };
 
+    const phaseNow = () =>
+      (((performance.now() - started) % cycleMs) / cycleMs) * PHASE_SPAN;
+
     const frame = () => {
-      renderer?.render(
-        (((performance.now() - started) % cycleMs) / cycleMs) * PHASE_SPAN,
-      );
+      renderer?.render(phaseNow());
       raf = requestAnimationFrame(frame);
     };
 
@@ -405,10 +406,16 @@ export default function FlyTrace() {
           if (disposed || document.hidden) return;
           if (renderer?.hdr) {
             renderer.reconfigure();
+            // Repaint IN THE SAME TASK: configure() drops the presented
+            // drawable, and waiting for the next rAF lets the compositor
+            // show a transparent frame — a visible blink, once per
+            // staggered re-assert. A same-task render hands it a fresh
+            // drawable inside the same rendering update instead.
+            if (running) renderer.render(phaseNow());
+            else still();
             // On-device/e2e observability (see the status panel).
             reconfigCount += 1;
             canvas.dataset.reconfigs = String(reconfigCount);
-            still();
           } else if (renderer && matchMedia("(dynamic-range: high)").matches) {
             setCanvasEpoch((e) => e + 1);
           }
