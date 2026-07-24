@@ -26,6 +26,30 @@ const CYCLE_MIN_MS = 16000;
 const CYCLE_MAX_MS = 60000;
 const PHASE_SPAN = 1.25;
 
+// QUIRK_SAFARI_HDR — remount-on-resume for WebKit's lost HDR canvases.
+//
+// On WebKit (Safari, WKWebView, every iOS browser shell), backgrounding
+// the app (screen lock, app switch) lets the compositor reclaim the
+// WebGPU canvas's layer. When it is rebuilt on resume, an
+// extended-tone-mapping (HDR) canvas comes back SDR-clamped: the
+// GPUDevice is NOT lost (so the `lost` reboot path never fires),
+// configure() on the same canvas does not restore extended range
+// (verified on device: iPhone 13, iOS 26), and getContext() returns the
+// same stuck context for the life of the element. The only recovery is
+// a fresh <canvas> element, which re-runs the cold-start negotiation
+// (known good). See canvasEpoch below.
+//
+// Engine-gated via navigator.vendor (WebKit reports "Apple Computer,
+// Inc." everywhere its engine runs) so engines without the bug never
+// pay the remount. No upstream WebKit bug exists for this exact
+// behavior as of 2026-07; the nearest documented relative is the
+// backgrounding GPU-reclaim family where WebGL loses its whole context:
+// https://bugs.webkit.org/show_bug.cgi?id=261331. Drop this quirk when
+// WebKit preserves toneMapping across compositor layer rebuilds.
+const QUIRK_SAFARI_HDR =
+  typeof navigator !== "undefined" &&
+  navigator.vendor === "Apple Computer, Inc.";
+
 function parseP3(value: string): [number, number, number] {
   const m = /display-p3\s+([\d.]+)\s+([\d.]+)\s+([\d.]+)/.exec(value);
   return m ? [Number(m[1]), Number(m[2]), Number(m[3])] : [1, 1, 1];
@@ -109,13 +133,16 @@ export default function FlyTrace() {
   const track = useLastTrack();
   const canvasRef = useRef<HTMLCanvasElement>(null);
   // Keys the <canvas> ELEMENT. Bumped on app-resume when the renderer is
-  // HDR: WKWebView recycles the compositor layer while backgrounded and
-  // extended tone mapping does not survive it. configure() on the same
-  // canvas proved insufficient on-device, and getContext() returns the
-  // SAME stuck context for the life of the element — only a fresh canvas
-  // re-runs the cold-start negotiation, which is known good. SDR
-  // canvases resume fine and never pay the remount.
+  // HDR and the engine has the quirk (QUIRK_SAFARI_HDR above) — a fresh
+  // element is the only way to re-negotiate extended tone mapping. SDR
+  // canvases and unaffected engines never pay the remount.
   const [canvasEpoch, setCanvasEpoch] = useState(0);
+  // The comet's phase fraction survives canvas remounts: the outgoing
+  // effect stores it on teardown, the next boot rebases its clock from
+  // it (setPace's continuity rebase then maps it onto the re-derived
+  // cycle). Without this every HDR app-resume restarted the flight
+  // from launch.
+  const phaseRef = useRef(0);
 
   useEffect(() => {
     const canvas = canvasRef.current;
@@ -129,8 +156,16 @@ export default function FlyTrace() {
     let lastW = 0;
     let lastH = 0;
     let lastDpr = 0;
-    let started = performance.now();
     let cycleMs = 24000; // re-derived from the projected arc length in fit()
+    // Resume at the saved fraction; against the placeholder cycle is fine,
+    // setPace preserves the fraction when the real cycle lands.
+    let started = performance.now() - phaseRef.current * cycleMs;
+    // Debug + testability: which fraction this mount resumed from. WebGPU
+    // canvases defeat drawImage readback, so e2e proves phase continuity
+    // through this stamp (and on-device it answers "did it resume or
+    // restart" at a glance).
+    // (clamped: toFixed can round a 0.9995+ fraction up to "1.000")
+    canvas.dataset.phase0 = Math.min(phaseRef.current, 0.999).toFixed(3);
     const reducedMotion = matchMedia("(prefers-reduced-motion: reduce)");
 
     // The reduced-motion (or otherwise parked-but-visible) single frame.
@@ -292,13 +327,14 @@ export default function FlyTrace() {
       still();
     });
     viewWatcher.observe(canvas);
-    // Resume is more than sync. An HDR canvas comes back from the
-    // background SDR-clamped (see canvasEpoch above); the remount tears
-    // this whole effect down and boots a fresh canvas, so sync/still
-    // for the outgoing one is moot. Everything else (SDR, no renderer
-    // yet, going hidden) just re-syncs the loop.
+    // Resume is more than sync on quirky engines: an HDR canvas comes
+    // back from the background SDR-clamped (QUIRK_SAFARI_HDR above);
+    // the remount tears this whole effect down and boots a fresh
+    // canvas, so sync/still for the outgoing one is moot. Everything
+    // else (SDR, unaffected engines, no renderer yet, going hidden)
+    // just re-syncs the loop.
     const onVisibility = () => {
-      if (!document.hidden && renderer?.hdr) {
+      if (!document.hidden && QUIRK_SAFARI_HDR && renderer?.hdr) {
         setCanvasEpoch((e) => e + 1);
         return;
       }
@@ -312,6 +348,7 @@ export default function FlyTrace() {
 
     return () => {
       disposed = true;
+      phaseRef.current = ((performance.now() - started) % cycleMs) / cycleMs;
       cancelAnimationFrame(raf);
       clearTimeout(retryTimer);
       document.removeEventListener("visibilitychange", onVisibility);
