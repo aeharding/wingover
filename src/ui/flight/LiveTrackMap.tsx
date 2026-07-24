@@ -20,7 +20,7 @@ import {
   PLANNED_COLOR,
   TRACK_LINE_WIDTH_PX,
 } from "../map/types";
-import ZoomControl from "./ZoomControl";
+import ZoomControl from "../map/ZoomControl";
 
 import styles from "./LiveTrackMap.module.css";
 

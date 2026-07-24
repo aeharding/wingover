@@ -31,7 +31,11 @@ Two facts that drive everything:
    inset change moves an observed box: transition-event observers missed
    changes across a DOM move, and a container observer missed sum-preserving
    swaps (180° rotation) and post-animation class flips — all three pinned
-   in e2e/inset-bridge.spec.ts.
+   in e2e/inset-bridge.spec.ts. One supplement (not a replacement): when an
+   inset var itself TRANSITIONS (the replay pane's bottom glide), the easing
+   tail can dip below layout's 1/64px granularity, where the endpoint no
+   longer changes any box — a document-level transitionend/cancel listener
+   in MapCanvas forces the exact final read.
 
 ### Consuming
 

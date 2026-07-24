@@ -19,6 +19,7 @@ import NativeIcon from "../components/NativeIcon";
 import { cx } from "../cx";
 import { afterNextFrame } from "../map/afterFrame";
 import type { MapView } from "../map/types";
+import ZoomControl from "../map/ZoomControl";
 import { replayAvailable } from "./available";
 import ClipDock, { type ClipMode } from "./ClipDock";
 import ReplayDock from "./ReplayDock";
@@ -101,6 +102,14 @@ export function useReplayDrawer(
 ): {
   available: boolean;
   isOpen: boolean;
+  // True while the pane HOLDS the bottom edge: exactly phase "open" — the
+  // frame the open slide starts (opening's 0fr mount frame is excluded, or
+  // the inset glide would head down a frame before the slide pushes up)
+  // through the frame the close slide starts. The host keys its
+  // bottom-inset consumption off this (not isOpen) so the consume flip
+  // runs concurrently with the slide and the region's inset transition
+  // glides it, instead of stepping after the slide settles.
+  ownsBottom: boolean;
   // True while the pane owns the track line: draw-along replay (the
   // driver draws the flown prefix) or a clip preview (the dock draws the
   // dimmed/kept lines). The host blanks its full line either way.
@@ -112,6 +121,11 @@ export function useReplayDrawer(
   playButton: ReactNode;
   followButton: ReactNode;
   trackUpButton: ReactNode;
+  // The fly page's single-finger edge zoom, up exactly when the follow
+  // button is: zooming by pinch means touching the map, and a map touch is
+  // one slip away from the drag that breaks follow. The host lays it over
+  // its map region.
+  zoomControl: ReactNode;
   drawer: ReactNode;
 } {
   // phase + WHICH flight's dock should auto-play (only the one the play
@@ -364,6 +378,7 @@ export function useReplayDrawer(
   return {
     available: availableNow,
     isOpen,
+    ownsBottom: session.phase === "open",
     trackHidden: isOpen && ((active && hideAhead) || session.mode !== "replay"),
     open,
     beginClip,
@@ -397,6 +412,17 @@ export function useReplayDrawer(
         >
           <NativeIcon icon={locateOutline} />
         </button>
+      ) : null,
+    zoomControl:
+      isOpen && active && map ? (
+        <ZoomControl
+          variant="detail"
+          map={map}
+          // Jump, never animate — the finger IS the animation (the
+          // LiveTrackMap applyZoom rule), and while following, the driver's
+          // center-locked anchor keeps the aircraft pinned through it.
+          onInput={(zoom) => map.moveTo({ zoom }, { animate: false })}
+        />
       ) : null,
     trackUpButton:
       isOpen && active ? (

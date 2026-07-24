@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from "react";
 
-import type { MapView } from "../map/types";
+import type { MapView } from "./types";
 
 import styles from "./ZoomControl.module.css";
 
@@ -54,9 +54,18 @@ function clamp01(v: number): number {
 interface ZoomControlProps {
   map: MapView;
   onInput: (zoom: number) => void;
+  // Where the strip is riding: "fly" (default) spans the fly page's
+  // full-viewport map; "detail" spans the flight-detail fullscreen map's
+  // region while the replay pane is docked below it (ZoomControl.module.css
+  // keys the vertical extent off this).
+  variant?: "fly" | "detail";
 }
 
-export default function ZoomControl({ map, onInput }: ZoomControlProps) {
+export default function ZoomControl({
+  map,
+  onInput,
+  variant = "fly",
+}: ZoomControlProps) {
   const dragRef = useRef<{
     startY: number;
     min: number;
@@ -97,6 +106,7 @@ export default function ZoomControl({ map, onInput }: ZoomControlProps) {
     <div
       className={styles.strip}
       data-active={active}
+      data-variant={variant}
       role="slider"
       aria-label="Zoom"
       aria-orientation="vertical"

@@ -14,6 +14,14 @@
   justify-content: flex-end; /* ...against the screen edge */
 }
 
+/* The flight-detail fullscreen map with the replay pane docked below: the
+   region's bottom edge sits ON the pane, which owns the home indicator, so
+   no safe-area term — and the cluster is the stock 3.25rem 2x2 (top edge
+   8rem up), not the fly page's 3.5rem. Same clearance above it. */
+.strip[data-variant="detail"] {
+  bottom: 8.75rem;
+}
+
 /* The gauge is purely an indicator (the whole strip takes the touch), so it
    never intercepts pointers. It is short — floating between the stats and
    the buttons — and hidden at rest, fading in only while dragging. The

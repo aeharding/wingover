@@ -141,8 +141,25 @@
     background: var(--map-chip-bg-active);
   }
 
+  /* Engaged = GREEN on every map, never the accent: the accent cyan is the
+     flown track's color wherever these chips appear (the fly page set the
+     rule; replay draws the same cyan track). The fill washes green too —
+     glyph + ring alone was easy to miss over a busy basemap. */
   &[data-active="true"] {
-    color: var(--wingover-accent);
-    border-color: var(--wingover-accent);
+    color: var(--map-chip-engaged);
+    border-color: var(--map-chip-engaged);
+    background: color-mix(
+      in oklab,
+      var(--map-chip-bg),
+      var(--map-chip-engaged) 18%
+    );
+
+    &:active {
+      background: color-mix(
+        in oklab,
+        var(--map-chip-bg),
+        var(--map-chip-engaged) 32%
+      );
+    }
   }
 }

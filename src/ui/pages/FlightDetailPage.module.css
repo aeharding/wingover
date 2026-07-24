@@ -60,6 +60,26 @@
   position: relative;
   flex: 1;
   min-height: 0;
+
+  /* The bottom inset GLIDES when the replay pane seats/unseats the edge
+     below (the consume-bottom flip lands on the slide's first frame —
+     see ownsBottom in the tsx): same duration and curve as the drawer
+     slide (ReplayDrawer.css — keep in lockstep), so the bottom-anchored
+     chrome rides one continuous path with the moving region edge instead
+     of stepping by the inset at either end. Both attributions come along
+     free: MapLibre's margin reads the interpolating var directly, MapKit
+     re-reads it per frame via the probe bridge's ResizeObserver. Needs
+     the @property registration in theme.css. Gated on BOTH classes: only
+     fullscreen AND only while the pane exists (paneOpen spans the whole
+     close slide) — armed by .full alone, expand and rotation with the
+     pane closed would glide an inset that must step with the layout. */
+  .full &.paneOpen {
+    transition: --ion-safe-area-bottom 300ms cubic-bezier(0.32, 0.72, 0, 1);
+
+    @media (prefers-reduced-motion: reduce) {
+      transition: none;
+    }
+  }
 }
 
 /* Snappier than the UA's default morph; the group is the moving box. */

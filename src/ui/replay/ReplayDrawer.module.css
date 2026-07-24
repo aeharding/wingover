@@ -1,6 +1,9 @@
 /* The replay pane slides open IN FLOW: grid-template-rows 0fr → 1fr
    animates to the dock's natural height, so the map region above is
-   pushed up smoothly (the backends track their container). */
+   pushed up smoothly (the backends track their container). The duration
+   and curve are mirrored by the host region's bottom-inset glide
+   (FlightDetailPage.css) — keep them in lockstep or the map buttons
+   drift off the moving edge. */
 .drawer {
   position: relative;
   display: grid;
