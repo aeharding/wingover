@@ -26,6 +26,34 @@ const CYCLE_MIN_MS = 16000;
 const CYCLE_MAX_MS = 60000;
 const PHASE_SPAN = 1.25;
 
+// QUIRK_SAFARI_HDR — late reconfigure-on-resume for WebKit's clamped
+// HDR canvases.
+//
+// On WebKit (Safari, WKWebView, every iOS browser shell), backgrounding
+// the app (screen lock, app switch) lets the compositor reclaim the
+// WebGPU canvas's layer. When it is rebuilt on resume, an
+// extended-tone-mapping (HDR) canvas sometimes comes back SDR-clamped:
+// the GPUDevice is NOT lost (so the `lost` reboot path never fires) and
+// the context still believes it is configured extended. The recovery,
+// established by on-device experiment (iPhone 13, iOS 26), is a
+// context.configure() RE-ASSERT — but only once foregrounding has
+// actually completed: re-asserting at the visibility flip does nothing
+// (v1), and even a FRESH canvas element created 600ms later can be born
+// clamped (v3; observed epoch 3 + still SDR, healed by one late manual
+// reconfigure). The foregrounding window varies, so scheduleReconfigs
+// below re-asserts at staggered delays after every resume.
+//
+// Engine-gated via navigator.vendor (WebKit reports "Apple Computer,
+// Inc." everywhere its engine runs) so engines without the bug never
+// pay the re-asserts. No upstream WebKit bug exists for this exact
+// behavior as of 2026-07; the nearest documented relative is the
+// backgrounding GPU-reclaim family where WebGL loses its whole context:
+// https://bugs.webkit.org/show_bug.cgi?id=261331. Drop this quirk when
+// WebKit preserves toneMapping across compositor layer rebuilds.
+const QUIRK_SAFARI_HDR =
+  typeof navigator !== "undefined" &&
+  navigator.vendor === "Apple Computer, Inc.";
+
 function parseP3(value: string): [number, number, number] {
   const m = /display-p3\s+([\d.]+)\s+([\d.]+)\s+([\d.]+)/.exec(value);
   return m ? [Number(m[1]), Number(m[2]), Number(m[3])] : [1, 1, 1];
@@ -121,8 +149,8 @@ export default function FlyTrace() {
     let lastW = 0;
     let lastH = 0;
     let lastDpr = 0;
-    let started = performance.now();
     let cycleMs = 24000; // re-derived from the projected arc length in fit()
+    let started = performance.now();
     const reducedMotion = matchMedia("(prefers-reduced-motion: reduce)");
 
     // The reduced-motion (or otherwise parked-but-visible) single frame.
@@ -132,10 +160,11 @@ export default function FlyTrace() {
       }
     };
 
+    const phaseNow = () =>
+      (((performance.now() - started) % cycleMs) / cycleMs) * PHASE_SPAN;
+
     const frame = () => {
-      renderer?.render(
-        (((performance.now() - started) % cycleMs) / cycleMs) * PHASE_SPAN,
-      );
+      renderer?.render(phaseNow());
       raf = requestAnimationFrame(frame);
     };
 
@@ -278,25 +307,78 @@ export default function FlyTrace() {
     const resizeWatcher = new ResizeObserver(fit);
     resizeWatcher.observe(canvas);
 
+    // Tab switches are display:none, not visibilitychange — and a long
+    // stay on another tab (especially GPU-heavy ones: live map, replay)
+    // lets WebKit reclaim this hidden canvas's layer just like app
+    // backgrounding does (observed on device: minutes of flight
+    // playback, then a clamped comet on return). The offscreen→onscreen
+    // transition is the resume signal here, so it takes the same
+    // staggered re-asserts.
+    let wasOffscreen = false;
     const viewWatcher = new IntersectionObserver((entries) => {
-      intersecting = entries[entries.length - 1].isIntersecting;
+      const nowIntersecting = entries[entries.length - 1].isIntersecting;
+      if (nowIntersecting && !intersecting && wasOffscreen) {
+        wasOffscreen = false;
+        scheduleReconfigs();
+      }
+      if (!nowIntersecting) wasOffscreen = true;
+      intersecting = nowIntersecting;
       sync();
       still();
     });
     viewWatcher.observe(canvas);
-    // Resume is more than sync: WKWebView can recycle the canvas's
-    // compositor layer while the app is backgrounded (screen lock, app
-    // switch) without losing the GPUDevice, and the new layer doesn't
-    // always carry extended tone mapping back — the HDR head comes home
-    // SDR-clamped. Re-asserting the configuration is idempotent-cheap;
-    // it drops the drawable, so repaint (rAF restart via sync, or
-    // still() when parked under reduced motion).
-    const onVisibility = () => {
-      if (!document.hidden) renderer?.reconfigure();
+    // The quirk recovery (QUIRK_SAFARI_HDR above): after every resume,
+    // re-assert the canvas configuration at staggered delays — the
+    // foregrounding window varies on-device, and a re-assert inside it
+    // is a no-op, so one early attempt is not enough. Idempotent and
+    // ~free; each call drops the presented drawable, so a SAME-TASK
+    // repaint follows (waiting for the next rAF let the compositor show
+    // a transparent frame — a visible blink).
+    let wasHidden = false;
+    let reconfigCount = 0;
+    let reconfigTimers: number[] = [];
+    const scheduleReconfigs = () => {
+      if (!QUIRK_SAFARI_HDR) return;
+      for (const t of reconfigTimers) clearTimeout(t);
+      reconfigTimers = [600, 2000, 5000].map((ms) =>
+        window.setTimeout(() => {
+          if (disposed || document.hidden || !renderer?.hdr) return;
+          renderer.reconfigure();
+          if (running) renderer.render(phaseNow());
+          else still();
+          // Observability (e2e + on-device Web Inspector): how many
+          // re-asserts this canvas has taken.
+          reconfigCount += 1;
+          canvas.dataset.reconfigs = String(reconfigCount);
+        }, ms),
+      );
+    };
+    const onHidden = () => {
+      wasHidden = true;
       sync();
-      still();
+    };
+    const onResumed = () => {
+      if (wasHidden && !document.hidden) {
+        wasHidden = false;
+        scheduleReconfigs();
+      }
+      sync();
+      // The background reclaim that clamps HDR also DESTROYS the
+      // presented drawable, so a resume can show a transparent canvas
+      // until the first rAF paints (~a frame later) — an intermittent
+      // blink on exactly the resumes where the quirk struck. Paint in
+      // the resume task itself instead of waiting for the tick.
+      if (running) renderer?.render(phaseNow());
+      else still();
+    };
+    const onVisibility = () => {
+      if (document.hidden) onHidden();
+      else onResumed();
     };
     document.addEventListener("visibilitychange", onVisibility);
+    window.addEventListener("blur", onHidden);
+    window.addEventListener("focus", onResumed);
+    window.addEventListener("pageshow", onResumed);
     reducedMotion.addEventListener("change", sync);
 
     void boot();
@@ -305,7 +387,11 @@ export default function FlyTrace() {
       disposed = true;
       cancelAnimationFrame(raf);
       clearTimeout(retryTimer);
+      for (const t of reconfigTimers) clearTimeout(t);
       document.removeEventListener("visibilitychange", onVisibility);
+      window.removeEventListener("blur", onHidden);
+      window.removeEventListener("focus", onResumed);
+      window.removeEventListener("pageshow", onResumed);
       reducedMotion.removeEventListener("change", sync);
       dprWatcher?.removeEventListener("change", onDprChange);
       themeWatcher.disconnect();

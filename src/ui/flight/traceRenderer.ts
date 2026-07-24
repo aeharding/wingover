@@ -111,12 +111,12 @@ export interface TraceRenderer {
   // Resolves when the GPUDevice is lost — real loss OR destroy() (reason
   // "destroyed"); the host recreates the renderer. Never rejects.
   readonly lost: Promise<void>;
-  // Re-runs context.configure() with the original descriptor. WKWebView can
-  // recycle the canvas's compositor layer while the app is backgrounded
-  // WITHOUT losing the GPUDevice; the re-created layer does not always carry
-  // the extended-range tone mapping back with it, so the HDR head silently
-  // returns SDR-clamped. Idempotent and cheap; the host calls it on every
-  // visibility resume. Drops the current drawable — repaint after.
+  // Re-asserts the original context configuration. THE recovery for
+  // WebKit's HDR-resume quirk (see QUIRK_SAFARI_HDR in FlyTrace): after
+  // app backgrounding the compositor can rebuild the canvas layer
+  // SDR-clamped without losing the device; a configure() re-assert once
+  // foregrounding has completed restores extended range. Idempotent;
+  // drops the current drawable — repaint after.
   reconfigure(): void;
   resize(width: number, height: number, dpr: number): void; // CSS px + devicePixelRatio
   setPath(points: Float32Array): void; // [x0,y0, x1,y1, ...] in CSS px, ≥2 points, already smoothed/evenly spaced
@@ -510,7 +510,7 @@ class TraceRendererImpl implements TraceRenderer {
 
   private readonly device: GPUDevice;
   private readonly context: GPUCanvasContext;
-  private readonly swapFormat: GPUTextureFormat;
+  private readonly swapFormat: GPUTextureFormat; // kept for reconfigure()
   private readonly offscreenFormat: GPUTextureFormat;
 
   // Pipelines (built once; formats/blend are fixed for the renderer's life).
@@ -822,10 +822,8 @@ class TraceRendererImpl implements TraceRenderer {
 
   reconfigure(): void {
     if (this.destroyed) return;
-    // Same descriptor createTraceRenderer settled on: hdr === true implies the
-    // extended configuration took AND the display is HDR, so re-asserting
-    // extended can't newly fail; the catch is sheer paranoia (a throw here
-    // must not take down the visibility handler).
+    // Same descriptor createTraceRenderer settled on; the catch keeps a
+    // teardown-adjacent call from surfacing (nothing to recover then).
     try {
       this.context.configure({
         device: this.device,
