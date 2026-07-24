@@ -111,6 +111,10 @@ export interface TraceRenderer {
   // Resolves when the GPUDevice is lost — real loss OR destroy() (reason
   // "destroyed"); the host recreates the renderer. Never rejects.
   readonly lost: Promise<void>;
+  // DEBUG (this branch only): re-assert the original context
+  // configuration — one of the candidate recovery mechanisms on the
+  // on-device HDR-resume test panel. Remove with the panel.
+  reconfigure(): void;
   resize(width: number, height: number, dpr: number): void; // CSS px + devicePixelRatio
   setPath(points: Float32Array): void; // [x0,y0, x1,y1, ...] in CSS px, ≥2 points, already smoothed/evenly spaced
   setTheme(theme: TraceTheme): void;
@@ -503,6 +507,7 @@ class TraceRendererImpl implements TraceRenderer {
 
   private readonly device: GPUDevice;
   private readonly context: GPUCanvasContext;
+  private readonly swapFormat: GPUTextureFormat; // DEBUG: for reconfigure()
   private readonly offscreenFormat: GPUTextureFormat;
 
   // Pipelines (built once; formats/blend are fixed for the renderer's life).
@@ -599,6 +604,7 @@ class TraceRendererImpl implements TraceRenderer {
     this.device = device;
     this.context = context;
     this.hdr = hdr;
+    this.swapFormat = swapFormat;
     this.offscreenFormat = offscreenFormat;
     // device.lost resolves on real loss AND on device.destroy() (reason
     // "destroyed"); collapse either into a void resolution. It never rejects.
@@ -810,6 +816,23 @@ class TraceRendererImpl implements TraceRenderer {
   private hPassDesc: GPURenderPassDescriptor | null = null;
   private vPassDesc: GPURenderPassDescriptor | null = null;
   private readonly submitBuf: GPUCommandBuffer[] = [];
+
+  // DEBUG (this branch only): candidate recovery mechanism for the
+  // on-device HDR-resume test panel. Remove with the panel.
+  reconfigure(): void {
+    if (this.destroyed) return;
+    try {
+      this.context.configure({
+        device: this.device,
+        format: this.swapFormat,
+        toneMapping: { mode: this.hdr ? "extended" : "standard" },
+        alphaMode: "premultiplied",
+        colorSpace: "display-p3",
+      });
+    } catch {
+      /* keep whatever configuration the layer still has */
+    }
+  }
 
   resize(width: number, height: number, dpr: number): void {
     if (this.destroyed) return;

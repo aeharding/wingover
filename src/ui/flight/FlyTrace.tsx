@@ -146,6 +146,44 @@ export default function FlyTrace() {
   // cycle). Without this every HDR app-resume restarted the flight
   // from launch.
   const phaseRef = useRef(0);
+  // ---- DEBUG PANEL (this branch only, revert before merge) ----------
+  // On-device experiment matrix for the HDR-resume quirk: after
+  // backgrounding kills HDR, press each button and watch whether the
+  // head re-ignites. The status line mirrors the canvas data stamps +
+  // the live dynamic-range query so no Web Inspector is needed.
+  const rendererRef = useRef<TraceRenderer | null>(null);
+  const [debugCover, setDebugCover] = useState(false);
+  const [debugStatus, setDebugStatus] = useState("");
+  useEffect(() => {
+    const id = window.setInterval(() => {
+      const c = canvasRef.current;
+      const dr = matchMedia("(dynamic-range: high)").matches ? "hi" : "std";
+      setDebugStatus(
+        `hdr:${c?.dataset.hdr ?? "-"} ph:${c?.dataset.phase0 ?? "-"} dr:${dr}`,
+      );
+    }, 1000);
+    return () => clearInterval(id);
+  }, []);
+  const debugAct = (act: string) => () => {
+    const c = canvasRef.current;
+    if (act === "remount") {
+      setCanvasEpoch((e) => e + 1);
+    } else if (act === "hide" && c) {
+      // display:none tears the compositor layer down; restoring rebuilds
+      // it (same canvas, same context, same configuration).
+      c.style.display = "none";
+      window.setTimeout(() => (c.style.display = ""), 120);
+    } else if (act === "cover") {
+      // Opaque overlay = the exact start-flight-and-cancel mechanism
+      // (occlusion culling) that healed HDR on device.
+      setDebugCover(true);
+      window.setTimeout(() => setDebugCover(false), 1200);
+    } else if (act === "reconfig") {
+      // The v1 mechanism, but pressed LATE (fully foregrounded).
+      rendererRef.current?.reconfigure();
+    }
+  };
+  // ---- end DEBUG PANEL ----------------------------------------------
 
   useEffect(() => {
     const canvas = canvasRef.current;
@@ -297,6 +335,7 @@ export default function FlyTrace() {
         return;
       }
       renderer = created;
+      rendererRef.current = created; // DEBUG panel access
       // Debuggability + the on-device HDR probe: one glance at the DOM
       // answers "did extended-range configuration take".
       canvas.dataset.hdr = String(created.hdr);
@@ -403,17 +442,31 @@ export default function FlyTrace() {
       viewWatcher.disconnect();
       renderer?.destroy();
       renderer = null;
+      rendererRef.current = null; // DEBUG panel access
     };
   }, [track, canvasEpoch]);
 
   return (
-    <canvas
-      key={canvasEpoch}
-      ref={canvasRef}
-      slot="fixed"
-      className={styles.trace}
-      data-testid="fly-splash"
-      aria-hidden="true"
-    />
+    <>
+      <canvas
+        key={canvasEpoch}
+        ref={canvasRef}
+        slot="fixed"
+        className={styles.trace}
+        data-testid="fly-splash"
+        aria-hidden="true"
+      />
+      {/* DEBUG PANEL (this branch only, revert before merge) */}
+      {debugCover && <div className={styles.debugCover} slot="fixed" />}
+      <div className={styles.debug} slot="fixed">
+        <div>
+          {debugStatus} ep:{canvasEpoch}
+        </div>
+        <button onClick={debugAct("remount")}>Remount</button>
+        <button onClick={debugAct("hide")}>Hide/show</button>
+        <button onClick={debugAct("cover")}>Cover 1.2s</button>
+        <button onClick={debugAct("reconfig")}>Reconfig</button>
+      </div>
+    </>
   );
 }
