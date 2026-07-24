@@ -37,7 +37,10 @@ const PHASE_SPAN = 1.25;
 // (verified on device: iPhone 13, iOS 26), and getContext() returns the
 // same stuck context for the life of the element. The only recovery is
 // a fresh <canvas> element, which re-runs the cold-start negotiation
-// (known good). See canvasEpoch below.
+// (known good) — and it must be created AFTER foregrounding completes:
+// remounting at the visibility flip itself negotiates against the
+// still-backgrounded compositor and is born clamped too (v2 lesson,
+// on-device). See canvasEpoch and the deferred scheduleRemount below.
 //
 // Engine-gated via navigator.vendor (WebKit reports "Apple Computer,
 // Inc." everywhere its engine runs) so engines without the bug never
@@ -328,20 +331,57 @@ export default function FlyTrace() {
     });
     viewWatcher.observe(canvas);
     // Resume is more than sync on quirky engines: an HDR canvas comes
-    // back from the background SDR-clamped (QUIRK_SAFARI_HDR above);
-    // the remount tears this whole effect down and boots a fresh
-    // canvas, so sync/still for the outgoing one is moot. Everything
-    // else (SDR, unaffected engines, no renderer yet, going hidden)
-    // just re-syncs the loop.
-    const onVisibility = () => {
-      if (!document.hidden && QUIRK_SAFARI_HDR && renderer?.hdr) {
-        setCanvasEpoch((e) => e + 1);
-        return;
+    // back from the background SDR-clamped (QUIRK_SAFARI_HDR above) and
+    // needs the remount. The v2 lesson from on-device testing: firing
+    // the remount AT the visibility flip is still too early — the fresh
+    // canvas's compositor layer is created while WebKit is
+    // mid-foregrounding and is born clamped exactly like the one it
+    // replaced, while a layer rebuilt seconds later (observed via the
+    // armed surface covering and uncovering the canvas) comes back with
+    // extended range intact. So the remount is DEFERRED: two rAFs
+    // (compositing is demonstrably running again) plus a settle, then
+    // re-checked and fired. wasHidden + blur/focus/pageshow belts cover
+    // shells where visibilitychange is unreliable; the matchMedia
+    // clause lets a renderer that wrongly negotiated SDR during a bad
+    // resume self-heal on the next one.
+    let wasHidden = false;
+    let remountPending = false;
+    let remountTimer = 0;
+    const scheduleRemount = () => {
+      if (!QUIRK_SAFARI_HDR || remountPending) return;
+      remountPending = true;
+      requestAnimationFrame(() =>
+        requestAnimationFrame(() => {
+          remountTimer = window.setTimeout(() => {
+            remountPending = false;
+            if (disposed || document.hidden) return;
+            if (renderer?.hdr || matchMedia("(dynamic-range: high)").matches) {
+              setCanvasEpoch((e) => e + 1);
+            }
+          }, 600);
+        }),
+      );
+    };
+    const onHidden = () => {
+      wasHidden = true;
+      sync();
+    };
+    const onResumed = () => {
+      if (wasHidden && !document.hidden) {
+        wasHidden = false;
+        scheduleRemount();
       }
       sync();
       still();
     };
+    const onVisibility = () => {
+      if (document.hidden) onHidden();
+      else onResumed();
+    };
     document.addEventListener("visibilitychange", onVisibility);
+    window.addEventListener("blur", onHidden);
+    window.addEventListener("focus", onResumed);
+    window.addEventListener("pageshow", onResumed);
     reducedMotion.addEventListener("change", sync);
 
     void boot();
@@ -351,7 +391,11 @@ export default function FlyTrace() {
       phaseRef.current = ((performance.now() - started) % cycleMs) / cycleMs;
       cancelAnimationFrame(raf);
       clearTimeout(retryTimer);
+      clearTimeout(remountTimer);
       document.removeEventListener("visibilitychange", onVisibility);
+      window.removeEventListener("blur", onHidden);
+      window.removeEventListener("focus", onResumed);
+      window.removeEventListener("pageshow", onResumed);
       reducedMotion.removeEventListener("change", sync);
       dprWatcher?.removeEventListener("change", onDprChange);
       themeWatcher.disconnect();
