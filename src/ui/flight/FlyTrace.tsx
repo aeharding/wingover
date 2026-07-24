@@ -45,7 +45,7 @@ const PHASE_SPAN = 1.25;
 //
 // Engine-gated via navigator.vendor (WebKit reports "Apple Computer,
 // Inc." everywhere its engine runs) so engines without the bug never
-// pay the remount. No upstream WebKit bug exists for this exact
+// pay the re-asserts. No upstream WebKit bug exists for this exact
 // behavior as of 2026-07; the nearest documented relative is the
 // backgrounding GPU-reclaim family where WebGL loses its whole context:
 // https://bugs.webkit.org/show_bug.cgi?id=261331. Drop this quirk when
@@ -136,55 +136,6 @@ function useLastTrack(): Fix[] | null {
 export default function FlyTrace() {
   const track = useLastTrack();
   const canvasRef = useRef<HTMLCanvasElement>(null);
-  // Keys the <canvas> ELEMENT. Bumped on app-resume when the renderer is
-  // HDR and the engine has the quirk (QUIRK_SAFARI_HDR above) — a fresh
-  // element is the only way to re-negotiate extended tone mapping. SDR
-  // canvases and unaffected engines never pay the remount.
-  const [canvasEpoch, setCanvasEpoch] = useState(0);
-  // The comet's phase fraction survives canvas remounts: the outgoing
-  // effect stores it on teardown, the next boot rebases its clock from
-  // it (setPace's continuity rebase then maps it onto the re-derived
-  // cycle). Without this every HDR app-resume restarted the flight
-  // from launch.
-  const phaseRef = useRef(0);
-  // ---- DEBUG PANEL (this branch only, revert before merge) ----------
-  // On-device experiment matrix for the HDR-resume quirk: after
-  // backgrounding kills HDR, press each button and watch whether the
-  // head re-ignites. The status line mirrors the canvas data stamps +
-  // the live dynamic-range query so no Web Inspector is needed.
-  const rendererRef = useRef<TraceRenderer | null>(null);
-  const [debugCover, setDebugCover] = useState(false);
-  const [debugStatus, setDebugStatus] = useState("");
-  useEffect(() => {
-    const id = window.setInterval(() => {
-      const c = canvasRef.current;
-      const dr = matchMedia("(dynamic-range: high)").matches ? "hi" : "std";
-      setDebugStatus(
-        `hdr:${c?.dataset.hdr ?? "-"} ph:${c?.dataset.phase0 ?? "-"} rc:${c?.dataset.reconfigs ?? "0"} dr:${dr}`,
-      );
-    }, 1000);
-    return () => clearInterval(id);
-  }, []);
-  const debugAct = (act: string) => () => {
-    const c = canvasRef.current;
-    if (act === "remount") {
-      setCanvasEpoch((e) => e + 1);
-    } else if (act === "hide" && c) {
-      // display:none tears the compositor layer down; restoring rebuilds
-      // it (same canvas, same context, same configuration).
-      c.style.display = "none";
-      window.setTimeout(() => (c.style.display = ""), 120);
-    } else if (act === "cover") {
-      // Opaque overlay = the exact start-flight-and-cancel mechanism
-      // (occlusion culling) that healed HDR on device.
-      setDebugCover(true);
-      window.setTimeout(() => setDebugCover(false), 1200);
-    } else if (act === "reconfig") {
-      // The v1 mechanism, but pressed LATE (fully foregrounded).
-      rendererRef.current?.reconfigure();
-    }
-  };
-  // ---- end DEBUG PANEL ----------------------------------------------
 
   useEffect(() => {
     const canvas = canvasRef.current;
@@ -199,15 +150,7 @@ export default function FlyTrace() {
     let lastH = 0;
     let lastDpr = 0;
     let cycleMs = 24000; // re-derived from the projected arc length in fit()
-    // Resume at the saved fraction; against the placeholder cycle is fine,
-    // setPace preserves the fraction when the real cycle lands.
-    let started = performance.now() - phaseRef.current * cycleMs;
-    // Debug + testability: which fraction this mount resumed from. WebGPU
-    // canvases defeat drawImage readback, so e2e proves phase continuity
-    // through this stamp (and on-device it answers "did it resume or
-    // restart" at a glance).
-    // (clamped: toFixed can round a 0.9995+ fraction up to "1.000")
-    canvas.dataset.phase0 = Math.min(phaseRef.current, 0.999).toFixed(3);
+    let started = performance.now();
     const reducedMotion = matchMedia("(prefers-reduced-motion: reduce)");
 
     // The reduced-motion (or otherwise parked-but-visible) single frame.
@@ -337,7 +280,6 @@ export default function FlyTrace() {
         return;
       }
       renderer = created;
-      rendererRef.current = created; // DEBUG panel access
       // Debuggability + the on-device HDR probe: one glance at the DOM
       // answers "did extended-range configuration take".
       canvas.dataset.hdr = String(created.hdr);
@@ -365,36 +307,33 @@ export default function FlyTrace() {
     const resizeWatcher = new ResizeObserver(fit);
     resizeWatcher.observe(canvas);
 
+    // Tab switches are display:none, not visibilitychange — and a long
+    // stay on another tab (especially GPU-heavy ones: live map, replay)
+    // lets WebKit reclaim this hidden canvas's layer just like app
+    // backgrounding does (observed on device: minutes of flight
+    // playback, then a clamped comet on return). The offscreen→onscreen
+    // transition is the resume signal here, so it takes the same
+    // staggered re-asserts.
+    let wasOffscreen = false;
     const viewWatcher = new IntersectionObserver((entries) => {
-      intersecting = entries[entries.length - 1].isIntersecting;
+      const nowIntersecting = entries[entries.length - 1].isIntersecting;
+      if (nowIntersecting && !intersecting && wasOffscreen) {
+        wasOffscreen = false;
+        scheduleReconfigs();
+      }
+      if (!nowIntersecting) wasOffscreen = true;
+      intersecting = nowIntersecting;
       sync();
       still();
     });
     viewWatcher.observe(canvas);
-    // Resume is more than sync on quirky engines: an HDR canvas comes
-    // back from the background SDR-clamped (QUIRK_SAFARI_HDR above) and
-    // needs the remount. The v2 lesson from on-device testing: firing
-    // the remount AT the visibility flip is still too early — the fresh
-    // canvas's compositor layer is created while WebKit is
-    // mid-foregrounding and is born clamped exactly like the one it
-    // replaced, while a layer rebuilt seconds later (observed via the
-    // armed surface covering and uncovering the canvas) comes back with
-    // extended range intact. So the remount is DEFERRED: two rAFs
-    // (compositing is demonstrably running again) plus a settle, then
-    // re-checked and fired. wasHidden + blur/focus/pageshow belts cover
-    // shells where visibilitychange is unreliable; the matchMedia
-    // clause lets a renderer that wrongly negotiated SDR during a bad
-    // resume self-heal on the next one.
-    // v4, the on-device verdict (debug-panel experiment): a LATE
-    // context.configure() re-assert heals the clamp — while even a
-    // deferred FRESH CANVAS can be born clamped (observed: epoch 3,
-    // still SDR, then one manual Reconfig healed it). WebKit's
-    // foregrounding window evidently varies, so the cheapest mechanism
-    // runs at staggered delays after every resume: idempotent, one
-    // dropped drawable per call (repainted next frame, or still() when
-    // parked). The remount survives only as the fallback for a renderer
-    // that wrongly negotiated SDR on an HDR display — re-asserting its
-    // standard configuration could never upgrade it.
+    // The quirk recovery (QUIRK_SAFARI_HDR above): after every resume,
+    // re-assert the canvas configuration at staggered delays — the
+    // foregrounding window varies on-device, and a re-assert inside it
+    // is a no-op, so one early attempt is not enough. Idempotent and
+    // ~free; each call drops the presented drawable, so a SAME-TASK
+    // repaint follows (waiting for the next rAF let the compositor show
+    // a transparent frame — a visible blink).
     let wasHidden = false;
     let reconfigCount = 0;
     let reconfigTimers: number[] = [];
@@ -403,22 +342,14 @@ export default function FlyTrace() {
       for (const t of reconfigTimers) clearTimeout(t);
       reconfigTimers = [600, 2000, 5000].map((ms) =>
         window.setTimeout(() => {
-          if (disposed || document.hidden) return;
-          if (renderer?.hdr) {
-            renderer.reconfigure();
-            // Repaint IN THE SAME TASK: configure() drops the presented
-            // drawable, and waiting for the next rAF lets the compositor
-            // show a transparent frame — a visible blink, once per
-            // staggered re-assert. A same-task render hands it a fresh
-            // drawable inside the same rendering update instead.
-            if (running) renderer.render(phaseNow());
-            else still();
-            // On-device/e2e observability (see the status panel).
-            reconfigCount += 1;
-            canvas.dataset.reconfigs = String(reconfigCount);
-          } else if (renderer && matchMedia("(dynamic-range: high)").matches) {
-            setCanvasEpoch((e) => e + 1);
-          }
+          if (disposed || document.hidden || !renderer?.hdr) return;
+          renderer.reconfigure();
+          if (running) renderer.render(phaseNow());
+          else still();
+          // Observability (e2e + on-device Web Inspector): how many
+          // re-asserts this canvas has taken.
+          reconfigCount += 1;
+          canvas.dataset.reconfigs = String(reconfigCount);
         }, ms),
       );
     };
@@ -454,7 +385,6 @@ export default function FlyTrace() {
 
     return () => {
       disposed = true;
-      phaseRef.current = ((performance.now() - started) % cycleMs) / cycleMs;
       cancelAnimationFrame(raf);
       clearTimeout(retryTimer);
       for (const t of reconfigTimers) clearTimeout(t);
@@ -469,31 +399,16 @@ export default function FlyTrace() {
       viewWatcher.disconnect();
       renderer?.destroy();
       renderer = null;
-      rendererRef.current = null; // DEBUG panel access
     };
-  }, [track, canvasEpoch]);
+  }, [track]);
 
   return (
-    <>
-      <canvas
-        key={canvasEpoch}
-        ref={canvasRef}
-        slot="fixed"
-        className={styles.trace}
-        data-testid="fly-splash"
-        aria-hidden="true"
-      />
-      {/* DEBUG PANEL (this branch only, revert before merge) */}
-      {debugCover && <div className={styles.debugCover} slot="fixed" />}
-      <div className={styles.debug} slot="fixed">
-        <div>
-          {debugStatus} ep:{canvasEpoch}
-        </div>
-        <button onClick={debugAct("remount")}>Remount</button>
-        <button onClick={debugAct("hide")}>Hide/show</button>
-        <button onClick={debugAct("cover")}>Cover 1.2s</button>
-        <button onClick={debugAct("reconfig")}>Reconfig</button>
-      </div>
-    </>
+    <canvas
+      ref={canvasRef}
+      slot="fixed"
+      className={styles.trace}
+      data-testid="fly-splash"
+      aria-hidden="true"
+    />
   );
 }
