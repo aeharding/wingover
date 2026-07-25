@@ -86,21 +86,25 @@ export default function App() {
 // simply does not exist in the DOM. IonApp and the sheets remount with the
 // shell when the flight ends.
 function AppBody() {
-  // sessionInPlay, not `status !== "idle"`. The two say the same thing once
-  // the engine has read its WAL, and they differ for the frames before that
-  // — where status is honestly "idle" because IndexedDB cannot be read
-  // synchronously. Committing this render to that is what flashed the
-  // homescreen at a pilot who relaunched mid-flight: tab bar, idle surface,
-  // then a swap to the flight a few frames later. Reading the field instead
-  // means boot commits to the flight surface immediately and the pilot sees
-  // that surface's own loading state (STEERING, Reliability 3: after any
-  // interruption, foregrounding shows the recording in progress). The engine
-  // owns the whole judgement, including when to stop trusting its boot
-  // mirror; this stays one subscription and one read.
-  const inFlight = useSyncExternalStore(
-    engine.subscribe,
-    () => engine.snapshotSync().sessionInPlay,
-  );
+  // sessionInPlay, where this used to read `status !== "idle"`. The two
+  // agree once the engine has read its WAL, and differ for the frames
+  // before that — where status is honestly "idle" because IndexedDB cannot
+  // be read synchronously. Committing this render to that is what flashed
+  // the homescreen at a pilot who relaunched mid-flight: tab bar, idle
+  // surface, then a swap to the flight a few frames later. Off the field,
+  // boot commits to the flight surface immediately and the pilot sees that
+  // surface's own loading state (STEERING, Reliability 3: after any
+  // interruption, foregrounding shows the recording in progress).
+  //
+  // Plus "blocked", the one status that is not session presence: a start
+  // refused by another tab's recorder lock never creates a session, and
+  // that takeover has always owned this surface. Two terms of ONE snapshot,
+  // not two stores — the engine still owns the whole judgement, including
+  // when to stop trusting its boot mirror.
+  const inFlight = useSyncExternalStore(engine.subscribe, () => {
+    const snapshot = engine.snapshotSync();
+    return snapshot.sessionInPlay || snapshot.status === "blocked";
+  });
   const isDesktop = useIsDesktop();
   if (inFlight) return <FlightSurface shellShed />;
   // Desktop gets its own shell: plain react-router, no Ionic outlet (see

@@ -1373,6 +1373,26 @@ describe("boot session mirror", () => {
     expect(mirrorSaysInPlay()).toBe(true);
   });
 
+  it("a hydrated tab refused the lock is blocked with no session at all", async () => {
+    // The one status that is not session presence, and why App reads
+    // "blocked" alongside the field: a refused start returns before it
+    // creates a session, so the busy takeover would otherwise render behind
+    // the nav shell instead of owning the surface the way it always has.
+    installFakeLocks();
+    // This tab was already open and idle, so it hydrated an empty WAL and
+    // adopted nothing. Then the other tab takes the recorder, and the pilot
+    // comes back here and taps Start.
+    const second = createEngine();
+    await second.getSnapshot();
+    const first = createEngine();
+    await first.start();
+    await second.start();
+
+    expect(second.snapshotSync().status).toBe("blocked");
+    expect(second.snapshotSync().error?.code).toBe("busy");
+    expect(second.snapshotSync().sessionInPlay).toBe(false);
+  });
+
   it("a tab refused the recorder lock neither claims nor releases the flag", async () => {
     installFakeLocks();
     const first = createEngine();
