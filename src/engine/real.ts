@@ -567,14 +567,24 @@ export class GeolocationRecordingEngine implements RecordingEngine {
   // The sanctioned exit from "blocked" besides discard()/start(): clear
   // the blocking error and bounce the watch with the session intact, so
   // the UI recovers straight back into acquiring — never through idle
-  // (the homepage must not flash behind the error screen). busy is
-  // excluded: it means another holder owns the recorder lock, and
-  // restarting the watch here would not contest it.
+  // (the homepage must not flash behind the error screen).
+  //
+  // Also the pre-takeoff foreground heal: Safari can silently kill a
+  // watch while the app is backgrounded (a Settings trip is exactly
+  // that), leaving acquiring frozen on the last pre-trip fix with no
+  // error to show for it. Bouncing even when not blocked costs nothing
+  // — a fresh watch gets an immediate delivery — and revives the dead
+  // ones. busy is excluded: another holder owns the recorder lock, and
+  // a new watch here would not contest it. Post-takeoff this is a
+  // no-op: a started flight's source is never touched.
   retry(): void {
-    const code = this.error?.code;
-    if (code !== "permission-denied" && code !== "imprecise") return;
     if (!this.session) return;
-    this.error = null;
+    if (this.session.takeoffIndex !== null || this.session.stoppedAt != null)
+      return;
+    if (this.error?.code === "busy") return;
+    // A storage error rides through the bounce: it is not the watch's
+    // problem, and only a successful write may clear it.
+    if (this.error !== null && this.error.code !== "storage") this.error = null;
     this.clearWatch();
     this.ensureWatch();
     this.invalidate();

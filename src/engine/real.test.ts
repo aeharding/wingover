@@ -260,6 +260,21 @@ describe("GeolocationRecordingEngine", () => {
     expect(engine.snapshotSync().latest).not.toBeNull();
   });
 
+  it("retry() while acquiring bounces the watch and keeps the session", async () => {
+    const engine = createEngine();
+    await engine.start();
+    geolocation.emit(position());
+    const before = engine.snapshotSync().latest;
+    expect(before).not.toBeNull();
+    engine.retry();
+    // Still the same acquiring session with its buffer...
+    expect(engine.snapshotSync().status).toBe("acquiring");
+    expect(engine.snapshotSync().latest).toBe(before);
+    // ...and the fresh watch delivers.
+    geolocation.emit(position());
+    expect(engine.snapshotSync().latest).not.toBe(before);
+  });
+
   it("latches imprecise from a LONE reduced fix after the sustain window", async () => {
     const engine = createEngine();
     await engine.start();
