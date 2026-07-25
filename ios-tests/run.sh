@@ -45,6 +45,24 @@ TEST_RUNNER_WINGOVER_DATA="$DATA_DIR" xcodebuild test \
   -project WingoverUITests.xcodeproj \
   -scheme WingoverUITests \
   -destination "id=$UDID" \
+  -skip-testing:WingoverUITests/PermissionUITests \
   -collect-test-diagnostics never
 
+# The blocked-state drills run in their own invocation with the OPPOSITE
+# preconditions: no motion scenario (acquiring must persist so
+# pre-takeoff blocking is observable) and location REVOKED host-side
+# (test1 asserts the takeover; test2 re-grants through the real Settings
+# app; test3 flips Precise Location there and back).
 xcrun simctl location "$UDID" clear
+xcrun simctl terminate "$UDID" app.wingover.wingover 2>/dev/null || true
+xcrun simctl privacy "$UDID" revoke location app.wingover.wingover
+
+xcodebuild test \
+  -project WingoverUITests.xcodeproj \
+  -scheme WingoverUITests \
+  -destination "id=$UDID" \
+  -only-testing:WingoverUITests/PermissionUITests \
+  -collect-test-diagnostics never
+
+# Leave the sim as the main suite expects, for local re-runs.
+xcrun simctl privacy "$UDID" grant location app.wingover.wingover
