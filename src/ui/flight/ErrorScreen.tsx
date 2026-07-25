@@ -1,3 +1,5 @@
+import { useState } from "react";
+
 import { isTauri } from "../../engine/platform";
 import type { BlockingError, BlockingErrorCode } from "../../engine/types";
 import { cx } from "../cx";
@@ -33,6 +35,17 @@ const CONTENT: Record<
   },
 };
 
+// The web has no app Settings page to deep-link, and a browser that
+// remembered a denial will NOT re-prompt: a bare retry comes straight
+// back blocked. The copy must point at where the unblock actually
+// lives, or Try Again reads as broken.
+const WEB_BODY: Partial<Record<BlockingErrorCode, string>> = {
+  "permission-denied":
+    "Your browser is blocking location for this site and will not ask again. In Safari, tap the menu in the address bar, open Website Settings, and allow Location; then try again.",
+  imprecise:
+    "Fixes are kilometers coarse; recording needs your exact position. On iPhone: Settings, Privacy, Location Services, Safari Websites; turn on Precise Location, then come back.",
+};
+
 // The capability scopes opener to this exact URL; iOS routes it to the
 // app's own page in Settings. The button only renders under isTauri(),
 // where openExternal takes the opener path.
@@ -49,10 +62,21 @@ export default function ErrorScreen({
 }) {
   const content = CONTENT[error.code];
   const settings = content.settings && isTauri();
+  const body = (!isTauri() && WEB_BODY[error.code]) || content.body;
   // Native never shows Try Again: the app polls the real authorization
   // API and proceeds by itself the moment the pilot flips the switch.
   // The web has no such API, so the button is the recovery path there.
   const retry = onRetry && !isTauri() ? onRetry : undefined;
+  // A retry that lands straight back here re-renders an identical
+  // screen — without transient feedback the button reads as dead.
+  const [checking, setChecking] = useState(false);
+  const retryWithFeedback =
+    retry &&
+    (() => {
+      setChecking(true);
+      window.setTimeout(() => setChecking(false), 1500);
+      retry();
+    });
   // Location-class errors mean the pilot is about to pocket a phone
   // that cannot record: full alarm red, unmissable at arm's length.
   // busy stays calm; it is a coordination note, not a preflight abort.
@@ -63,15 +87,15 @@ export default function ErrorScreen({
       data-testid="gps-error"
     >
       <h2>{content.title}</h2>
-      <p>{content.body}</p>
+      <p>{body}</p>
       {settings && (
         <button className={styles.action} onClick={openAppSettings}>
           Open Settings
         </button>
       )}
-      {retry && (
-        <button className={styles.action} onClick={retry}>
-          Try Again
+      {retryWithFeedback && (
+        <button className={styles.action} onClick={retryWithFeedback}>
+          {checking ? "Checking…" : "Try Again"}
         </button>
       )}
       {onCancel && (
