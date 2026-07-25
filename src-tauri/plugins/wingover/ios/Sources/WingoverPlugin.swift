@@ -406,9 +406,20 @@ class WingoverPlugin: Plugin, CLLocationManagerDelegate,
       positionRequests = []
       for request in requests { request.reject(error.localizedDescription) }
     }
-    if let clError = error as? CLError, clError.code == .locationUnknown {
-      // Transient: CoreLocation keeps trying, updates resume on their own.
-      return
+    if let clError = error as? CLError {
+      if clError.code == .locationUnknown {
+        // Transient: CoreLocation keeps trying, updates resume on their own.
+        return
+      }
+      if clError.code == .denied {
+        // Revoking authorization mid-watch fires BOTH delegates:
+        // didChangeAuthorization sets the code, then this error arrives
+        // with localized prose that would overwrite it — and prose fails
+        // the JS classifier, downgrading a permission loss to a generic
+        // "unavailable". Keep it a stable code.
+        lastError = "permission-denied"
+        return
+      }
     }
     Logger.error(error)
     lastError = error.localizedDescription
