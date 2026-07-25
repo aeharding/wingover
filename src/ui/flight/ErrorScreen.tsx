@@ -36,45 +36,16 @@ const CONTENT: Record<
 };
 
 // The web has no app Settings page to deep-link, and a browser that
-// remembered a denial will NOT re-prompt in the same page load: the
-// copy must point at where the unblock actually lives, per browser, and
-// the way to a fresh prompt is a reload.
-function isIos(): boolean {
-  // iPadOS masquerades as macOS; multitouch gives it away.
-  return (
-    /iPhone|iPad|iPod/.test(navigator.userAgent) ||
-    (/Macintosh/.test(navigator.userAgent) && navigator.maxTouchPoints > 1)
-  );
-}
-
-function deniedWebBody(): string {
-  const ua = navigator.userAgent;
-  const site = /CriOS|FxiOS|EdgiOS/.test(ua)
-    ? "your browser's site settings allow this site to use location"
-    : isIos()
-      ? "this site is allowed to ask (Safari's address bar menu, Website Settings)"
-      : /Firefox/.test(ua)
-        ? "the permissions icon by the address bar is not blocking location"
-        : /Edg|Chrome|Chromium/.test(ua)
-          ? "the icon next to the address opens Site settings with Location allowed"
-          : "your browser's site settings allow location for this site";
-  const system = isIos()
-    ? "Location Services is on and your browser can use it (iOS Settings, Privacy and Security, Location Services)"
-    : "your system's location service is on and your browser may use it";
-  return `Your browser is not allowed to use your location here. Check that ${system}, and that ${site}. Then reload this page to be asked again.`;
-}
-
-function impreciseWebBody(): string {
-  return isIos()
-    ? "Fixes are kilometers coarse; recording needs your exact position. In iOS Settings: Privacy and Security, Location Services, Safari Websites; turn on Precise Location, then come back."
-    : "Your device is reporting only a rough position, kilometers coarse. Recording needs GPS-grade fixes; check your system location settings or use a device with GPS.";
-}
-
-function webBody(code: BlockingErrorCode): string | undefined {
-  if (code === "permission-denied") return deniedWebBody();
-  if (code === "imprecise") return impreciseWebBody();
-  return undefined;
-}
+// remembered a denial will NOT re-prompt in the same page load: state
+// the three conditions and reload for a fresh prompt. Deliberately no
+// menu click-paths or browser sniffing — that copy goes stale the day
+// a browser moves a button.
+const WEB_BODY: Partial<Record<BlockingErrorCode, string>> = {
+  "permission-denied":
+    "Your browser cannot use your location. Make sure location is on for this device, allowed for your browser, and allowed for this site. Then reload this page to be asked again.",
+  imprecise:
+    "Recording needs your exact position, but fixes are kilometers coarse. Turn on precise location for your browser in your device's settings, then come back.",
+};
 
 // The capability scopes opener to this exact URL; iOS routes it to the
 // app's own page in Settings. The button only renders under isTauri(),
@@ -92,7 +63,7 @@ export default function ErrorScreen({
 }) {
   const content = CONTENT[error.code];
   const settings = content.settings && isTauri();
-  const body = (!isTauri() && webBody(error.code)) || content.body;
+  const body = (!isTauri() && WEB_BODY[error.code]) || content.body;
   // Web denied is a dead end for in-page retries — the browser will not
   // re-prompt until a fresh page load after the settings are fixed — so
   // it gets Reload, not a Try Again that reads as broken. Pilot-
