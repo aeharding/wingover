@@ -1,77 +1,21 @@
-import {
-  closeOutline,
-  compassOutline,
-  locateOutline,
-  locationOutline,
-  stop as stopIcon,
-} from "ionicons/icons";
-import {
-  useEffect,
-  useEffectEvent,
-  useLayoutEffect,
-  useRef,
-  useState,
-  useSyncExternalStore,
-} from "react";
+import { useSyncExternalStore } from "react";
 
 import { engine } from "../../engine";
 import { startFlight } from "../../engine/session";
-import type { EngineStatus, Fix, LngLat, Waypoint } from "../../engine/types";
-import {
-  formatAltitude,
-  formatClimb,
-  formatCourse,
-  formatDistance,
-  formatDuration,
-  formatRelativeDegrees,
-  formatSpeed,
-} from "../../flight/format";
-import { LANDING_GRACE_MS } from "../../flight/landing";
-import { bearingBetween, relativeBearing } from "../../flight/nav";
-import { computeStats, haversineMeters } from "../../flight/stats";
-import { sunFactLabel } from "../../flight/sun";
-import { isTauri } from "../../platform";
-import {
-  inheritedLaunchName,
-  listPins,
-  onDocsChanged,
-  type Pin,
-  saveFlight,
-} from "../../storage/db";
-import NativeIcon from "../components/NativeIcon";
-import { cx } from "../cx";
-import type { MapViewKind } from "../map/config";
-import MapCluster from "../map/MapCluster";
-import type { MapView } from "../map/types";
-import ViewToggle from "../map/ViewToggle";
+import type { EngineStatus } from "../../engine/types";
 import { useSettings } from "../settings/SettingsContext";
-import { ConfirmSurface, useBigConfirm } from "./BigConfirm";
+import ArmedSurface from "./ArmedSurface";
+import { useBigConfirm } from "./BigConfirm";
 import ErrorScreen from "./ErrorScreen";
-import LiveTrackMap from "./LiveTrackMap";
-import Tile from "./Tile";
-import { showToast } from "./toast";
+import IdleSurface from "./IdleSurface";
+import RecordingSurface from "./RecordingSurface";
+import { useFlightCollection } from "./useFlightCollection";
+import { useHydrationGate } from "./useHydrationGate";
 import { useLatestFlight } from "./useLatestFlight";
 import { useLiveViewPrefs } from "./useLiveViewPrefs";
+import { usePlannedPins } from "./usePlannedPins";
 
-import mapCss from "../map/map.module.css";
 import styles from "./FlyPage.module.css";
-
-// WAL hydration happens once per app launch. The App swaps the whole nav shell
-// for a bare <FlyPage> when a flight is active, so FlyPage remounts mid-session
-// (the moment a flight starts, and again when it ends). Seeding `ready` from
-// this module flag keeps that remount from flashing the pre-hydration blank —
-// the engine is already hydrated by then.
-let hydratedOnce = false;
-
-// Locking the phone is only safe where the native layer records through
-// it (background location); the PWA is foreground-only.
-const ACQUIRING_HINT = isTauri()
-  ? "Make sure you're in an open, unobstructed area. It's safe to lock your phone."
-  : "Make sure you're in an open, unobstructed area.";
-
-const ARMED_HINT = isTauri()
-  ? "Recording starts automatically when you launch. It's safe to lock your phone."
-  : "Recording starts automatically when you launch.";
 
 export default function FlyPage() {
   const { units } = useSettings();
@@ -80,194 +24,24 @@ export default function FlyPage() {
   // signal is coalesced per task, so a replay burst lands as one render of
   // a complete track — there is no per-fix mirror to fall behind.
   const snapshot = useSyncExternalStore(engine.subscribe, engine.snapshotSync);
-  // Hydration gate: before the WAL read the engine reports "idle", which
-  // must not flash the Start button during a live-flight reload.
-  const [ready, setReady] = useState(hydratedOnce);
+  const ready = useHydrationGate();
   const { confirm: bigConfirm, element: confirmElement } = useBigConfirm();
-  const {
-    mapView,
-    follow,
-    trackUp,
-    update: updateLiveView,
-  } = useLiveViewPrefs();
-  const [liveMap, setLiveMap] = useState<MapView | null>(null);
-  // The instruments' footprint as map insets: {top} under the portrait
-  // strip, {left} beside the landscape rail. Shape is inferred from the
-  // measured box (full-width = strip), so CSS stays the one layout owner.
-  const [mapInsets, setMapInsets] = useState({ top: 0, left: 0 });
-  // The planned route, for the idle-screen distance. Reloaded on every entry
-  // to the Fly tab so edits made on the Plan tab are reflected.
-  const [plannedPins, setPlannedPins] = useState<Pin[]>([]);
-  // Loaded on mount and then LIVE: edits on the Plan tab, or a synced
-  // pull from another device, land here through the store's own feed. No
-  // shell lifecycle involved; the flight surface subscribes directly.
-  useEffect(() => {
-    void listPins().then(setPlannedPins);
-    return onDocsChanged("pin", () => void listPins().then(setPlannedPins));
-  }, []);
+  const liveView = useLiveViewPrefs();
+  const plannedPins = usePlannedPins();
   // The newest logbook flight feeds the idle facts (the sun fact needs a
   // location; its launch point is the best guess for the next one).
   const lastFlight = useLatestFlight();
-  // The waypoint the pilot tapped on the map — gates the "clear checkpoint"
-  // control. Held as an id; the live active set decides whether it still exists.
-  // selectedId: held as an id; the live active set decides existence.
-  // pending: a long-press PROPOSES a checkpoint; the pilot confirms in the
-  // flight dialog before it becomes the nav target (gloves-first: a mistap
-  // in turbulence must not silently retarget navigation). One state: both
-  // are transient waypoint-interaction UI, cleared on the same journeys.
-  const [waypointUi, setWaypointUi] = useState<{
-    selectedId: string | null;
-    pending: LngLat | null;
-  }>({ selectedId: null, pending: null });
-  const instrumentsRef = useRef<HTMLDivElement>(null);
 
-  const { track, latest, landingAt, nextWaypoint } = snapshot;
-  // Only a still-active selection surfaces the control; a reached/removed pin
-  // drops out of activeWaypoints and the button hides on its own.
-  const selectedWaypoint =
-    snapshot.activeWaypoints.find((w) => w.id === waypointUi.selectedId) ??
-    null;
   const status: EngineStatus | "loading" = ready ? snapshot.status : "loading";
-  // The sun fact is relative time through most of the cycle; re-render
-  // by the minute while idle so it cannot go stale on a propped phone.
-  useMinuteTick(status === "idle");
 
-  function changeMapView(value: MapViewKind) {
-    updateLiveView({ mapView: value });
-  }
-
-  function changeFollow(value: boolean) {
-    // Unsnapping drops track-up WITH it: resuming is two deliberate
-    // presses (snap, then compass), never one button silently re-enabling
-    // a second mode.
-    updateLiveView(
-      value ? { follow: true } : { follow: false, trackUp: false },
-    );
-  }
-
-  function changeTrackUp(value: boolean) {
-    updateLiveView({ trackUp: value });
-  }
-
-  async function persistFlight(flown: Fix[], plannedWaypoints: Waypoint[]) {
-    if (flown.length <= 1) return;
-    const startedAt = flown[0].timestamp;
-    // The planned pins ([lng, lat], in order) so the flight detail map can
-    // draw the grey optimal-path line alongside the flown track.
-    const plannedRoute: LngLat[] = plannedWaypoints.map((w) => [
-      w.longitude,
-      w.latitude,
-    ]);
-    const launchAt: LngLat = [flown[0].longitude, flown[0].latitude];
-    // The label is decorative; the save is sacred. A failed logbook read
-    // must never block persisting the flight (STEERING: no recoverable
-    // failure loses track data) — an error here just means no name today.
-    const launchName = await inheritedLaunchName(launchAt).catch(
-      () => undefined,
-    );
-    try {
-      await saveFlight(
-        {
-          // Deterministic id: re-running collection after a crash between
-          // save and WAL-clear must not duplicate the flight.
-          id: `recorded-${startedAt}`,
-          // No minted name: a display default baked into storage reads as
-          // something the pilot typed, and every surface then needs
-          // string-matching to un-bake it. Empty means "untitled"; the UI
-          // falls back launch site, then date (flightTitle).
-          name: "",
-          notes: "",
-          startedAt,
-          stats: computeStats(flown),
-          updatedAt: Date.now(),
-          launchAt,
-          launchName,
-          ...(plannedRoute.length > 0 ? { plannedRoute } : {}),
-        },
-        flown,
-      );
-    } catch (error) {
-      if ((error as { name?: string }).name !== "conflict") throw error;
-    }
-    // Body-level and imperative (see toast.ts): it survives this
-    // component unmounting the instant the flight ends and the nav shell
-    // swaps back in.
-    showToast("Flight saved to logbook");
-  }
-
-  // "ended" is a durable state: the finalized flight waits in the WAL.
-  // Persist first, discard after — a crash in between just repeats this
-  // on next launch, and the deterministic flight id makes it idempotent.
-  const collectEndedFlight = useEffectEvent(async () => {
-    const snapshot = await engine.getSnapshot();
-    if (snapshot.status !== "ended") return;
-    try {
-      await persistFlight(snapshot.track, snapshot.waypoints);
-    } catch (error) {
-      // The one storage failure that is genuinely possession-losing —
-      // surface loudly (STEERING). The WAL keeps the flight; collection
-      // retries on the next mount/foreground.
-      console.error("flight persist failed:", error);
-      showToast("Could not save the flight yet. It is safe; will retry.");
-      return;
-    }
-    // Persisted — the engine's durable copy can go; idle follows.
-    await engine.discard();
-  });
-
-  useEffect(() => {
-    // Kick the one-time WAL hydration; the subscription picks up the
-    // resulting state change like any other.
-    void engine.getSnapshot().then(() => {
-      hydratedOnce = true;
-      setReady(true);
-    });
-  }, []);
-
-  // A flight that ended — now, or while the app was away (durable "ended"
-  // hydrated from the WAL) — is collected the moment the view sees it.
-  // Deferred a tick: collection drives the engine (persist, stop), it does
-  // not synchronize render state.
-  useEffect(() => {
-    if (status !== "ended") return;
-    void Promise.resolve().then(() => collectEndedFlight());
-  }, [status]);
-
-  // Blocked recovery (foreground retry + the native refusal loop) is wired
-  // engine-side in src/engine/session.ts, not here: it must run
-  // regardless of which page is mounted.
-
-  useLayoutEffect(() => {
-    if (status !== "recording" && status !== "landed") return;
-    const el = instrumentsRef.current;
-    const host = el?.parentElement;
-    if (!el || !host) return;
-    const measure = () => {
-      const rect = el.getBoundingClientRect();
-      // The rail is LEFT-ANCHORED and FULL-HEIGHT — width alone also
-      // matches the >=768px floating card (right-anchored, 400px), which
-      // must keep insetting the TOP like the portrait strip does, or
-      // iPad/desktop center the aircraft toward the card. Shape, not
-      // breakpoint, so CSS stays the one layout owner.
-      const rail = rect.left <= 1 && rect.height >= host.clientHeight - 1;
-      setMapInsets(
-        rail ? { top: 0, left: rect.width } : { top: rect.height, left: 0 },
-      );
-    };
-    measure();
-    // ResizeObserver, not window.resize: WKWebView can fire resize before
-    // rotated env() insets settle (the exact stale-read class INSETS.md's
-    // probe bridge exists for); the observer fires again when the boxes
-    // themselves land.
-    const observer = new ResizeObserver(measure);
-    observer.observe(el);
-    observer.observe(host);
-    return () => observer.disconnect();
-  }, [status]);
+  useFlightCollection(status);
 
   async function armFlight() {
-    changeFollow(true);
-    changeTrackUp(false);
+    // Arming resets the live view to the flight's default: snapped to the
+    // aircraft, north-up. (Unsnapping later takes track-up down with it —
+    // see RecordingSurface's changeFollow.)
+    liveView.update({ follow: true });
+    liveView.update({ trackUp: false });
     await startFlight();
   }
 
@@ -292,59 +66,60 @@ export default function FlyPage() {
   // there.
   function confirmEndFlight() {
     // No takeoff on record = nothing to finalize: discard instead of end.
-    const stop =
-      status === "acquiring" || status === "armed" ? cancelArmed : endFlight;
+    const stop = beforeTakeoff() ? cancelArmed : endFlight;
     bigConfirm({ title: "End flight?", action: "Stop", onAction: stop });
+  }
+
+  function beforeTakeoff() {
+    return status === "acquiring" || status === "armed";
   }
 
   function dismissLandingPrompt() {
     engine.dismissLanding();
   }
 
-  const landingSecondsLeft =
-    landingAt !== null && latest
-      ? Math.max(
-          0,
-          Math.ceil((LANDING_GRACE_MS - (latest.timestamp - landingAt)) / 1000),
-        )
-      : 0;
-
-  const first = track[0];
-  const durationSeconds =
-    latest && first && (status === "recording" || status === "landed")
-      ? (latest.timestamp - first.timestamp) / 1000
-      : 0;
-  // Total planned-route length = sum of the legs between consecutive pins.
-  const plannedRouteMeters =
-    plannedPins.length >= 2
-      ? plannedPins.reduce(
-          (sum, pin, i) =>
-            i === 0 ? 0 : sum + haversineMeters(plannedPins[i - 1], pin),
-          0,
-        )
-      : 0;
-  // Nav points at the next waypoint whenever a route target remains, and
-  // falls back to the launch point once the route is exhausted (nextWaypoint
-  // null). Same distance/bearing math either way.
-  const navTarget = nextWaypoint ?? first ?? null;
-  const navLabel = nextWaypoint ? "waypoint" : "launch";
-  // Idle facts, all derived offline (tiles stay the app's entire network
-  // surface). The sun fact needs a location: the last flight's launch,
-  // else the first planned pin — where they last flew or where they're
-  // planning is where a pilot flies next. No location, no line.
-  const sunLocation = lastFlight?.launchAt
-    ? { latitude: lastFlight.launchAt[1], longitude: lastFlight.launchAt[0] }
-    : (plannedPins[0] ?? null);
-  const sunFact =
-    status === "idle" && sunLocation
-      ? sunFactLabel(new Date(), sunLocation.latitude, sunLocation.longitude)
-      : null;
-  const toTargetDistance =
-    latest && navTarget ? haversineMeters(latest, navTarget) : 0;
-  const toTargetRelative =
-    latest && navTarget
-      ? relativeBearing(latest.course, bearingBetween(latest, navTarget))
-      : 0;
+  // One surface per engine state. "loading" (the frames before the WAL read
+  // lands) and "ended" (collection is already running) deliberately paint
+  // nothing but the surface's own background.
+  function surface() {
+    switch (status) {
+      case "idle":
+        return (
+          <IdleSurface
+            units={units}
+            plannedPins={plannedPins}
+            lastFlight={lastFlight}
+            onStart={armFlight}
+          />
+        );
+      case "acquiring":
+      case "armed":
+        return (
+          <ArmedSurface
+            status={status}
+            latest={snapshot.latest}
+            units={units}
+            errorCode={snapshot.error?.code}
+            onCancel={confirmEndFlight}
+          />
+        );
+      case "recording":
+      case "landed":
+        return (
+          <RecordingSurface
+            snapshot={snapshot}
+            landed={status === "landed"}
+            units={units}
+            liveView={liveView}
+            onStop={confirmEndFlight}
+            onEndNow={endFlight}
+            onDismissLanding={dismissLandingPrompt}
+          />
+        );
+      default:
+        return null;
+    }
+  }
 
   // "blocked" is engine state like any other status: an error the pilot
   // must act on owns the surface (ErrorScreen) — never inline prose.
@@ -370,324 +145,8 @@ export default function FlyPage() {
 
   return (
     <div className={styles.content} data-testid="fly-content">
-      {status === "idle" && (
-        <div className={styles.idle}>
-          <div className={styles.facts} data-testid="idle-facts">
-            {sunFact && <div>{sunFact}</div>}
-            {plannedRouteMeters > 0 && (
-              <div data-testid="planned-route">
-                Planned route: {formatDistance(plannedRouteMeters, units)}
-              </div>
-            )}
-          </div>
-          <button className={styles.start} onClick={armFlight}>
-            Start Flight
-          </button>
-        </div>
-      )}
-      {(status === "acquiring" || status === "armed") && (
-        <div className={styles.armed} data-testid="armed">
-          <div className={styles.armedMessage}>
-            <div
-              className={cx(
-                styles.pulse,
-                status !== "armed" && styles.acquiring,
-              )}
-              aria-hidden="true"
-            />
-            <h2>
-              {status === "acquiring" ? "Acquiring GPS" : "Waiting for takeoff"}
-            </h2>
-            <p>
-              {status === "acquiring"
-                ? // A dead GPS (Location Services off system-wide) is as
-                  // actionable as a permission problem; the diagnostic
-                  // replaces the generic hint rather than sitting mute
-                  // in the snapshot.
-                  snapshot.error?.code === "unavailable"
-                  ? "GPS unavailable. Check that Location Services are on."
-                  : ACQUIRING_HINT
-                : ARMED_HINT}
-            </p>
-          </div>
-          {status === "acquiring" ? (
-            <div className={styles.armedAccuracy} data-testid="armed-accuracy">
-              {latest
-                ? `±${formatAltitude(latest.horizontalAccuracy, units)} H · ±${formatAltitude(latest.verticalAccuracy, units)} V`
-                : "—"}
-            </div>
-          ) : (
-            <div className={styles.armedSpeed} data-testid="armed-speed">
-              {latest ? formatSpeed(latest.speed, units) : "—"}
-            </div>
-          )}
-          <button className={styles.cancel} onClick={confirmEndFlight}>
-            Cancel
-          </button>
-        </div>
-      )}
-      {(status === "recording" || status === "landed") && (
-        <div className={styles.recording} data-testid="recording">
-          <div className={styles.instruments} ref={instrumentsRef}>
-            <Tile
-              label="Above launch"
-              value={
-                latest && first
-                  ? formatAltitude(latest.altitude - first.altitude, units)
-                  : "—"
-              }
-              accent="cyan"
-              testId="instrument-agl"
-            />
-            <Tile
-              label="Duration"
-              value={formatDuration(durationSeconds)}
-              testId="instrument-duration"
-            />
-            <Tile
-              label="Altitude MSL"
-              value={latest ? formatAltitude(latest.altitude, units) : "—"}
-              testId="instrument-msl"
-            />
-            <Tile
-              label="Climb rate"
-              value={latest ? formatClimb(latest.climbRate, units) : "—"}
-              testId="instrument-climb"
-            />
-            <Tile
-              label="Ground speed"
-              value={latest ? formatSpeed(latest.speed, units) : "—"}
-              accent="green"
-              testId="instrument-speed"
-            />
-            <Tile
-              label={`Distance to ${navLabel}`}
-              value={
-                latest && navTarget
-                  ? formatDistance(toTargetDistance, units)
-                  : "—"
-              }
-              accent="green"
-              testId="instrument-target-distance"
-            />
-            <Tile
-              label="Course"
-              value={latest ? formatCourse(latest.course) : "—"}
-              icon={latest ? <Compass course={latest.course} /> : undefined}
-              accent="yellow"
-              testId="instrument-course"
-            />
-            <Tile
-              label={`Direction to ${navLabel}`}
-              value={
-                latest && navTarget
-                  ? formatRelativeDegrees(toTargetRelative)
-                  : "—"
-              }
-              icon={
-                latest && navTarget ? (
-                  <span
-                    className={styles.launchArrow}
-                    style={{ rotate: `${toTargetRelative}deg` }}
-                    aria-hidden="true"
-                  >
-                    {/* The same chevron as the map's blue location arrow,
-                          so "direction to launch" reads as an obvious
-                          pointer, not a thin glyph. */}
-                    <svg
-                      viewBox="-8 -11 16 20"
-                      className={styles.launchArrowSvg}
-                      data-testid="launch-arrow-svg"
-                    >
-                      <polygon points="0,-10 7,8 0,4 -7,8" />
-                    </svg>
-                  </span>
-                ) : undefined
-              }
-              accent="yellow"
-              testId="instrument-target-direction"
-            />
-          </div>
-          <LiveTrackMap
-            className={styles.liveMap}
-            track={track}
-            latest={latest}
-            view={mapView}
-            follow={follow}
-            trackUp={trackUp}
-            topInset={mapInsets.top}
-            leftInset={mapInsets.left}
-            plannedWaypoints={snapshot.waypoints}
-            navWaypoints={snapshot.activeWaypoints}
-            onMapReady={setLiveMap}
-            onAddWaypoint={(at) =>
-              setWaypointUi((ui) => ({ ...ui, pending: at }))
-            }
-            onSelectWaypoint={(id) => {
-              // Only the next waypoint — the current target — can be selected
-              // to clear. A tap on any other pin (or a deselect) clears.
-              setWaypointUi((ui) => ({
-                ...ui,
-                selectedId: id === nextWaypoint?.id ? id : null,
-              }));
-            }}
-            onFollowChange={changeFollow}
-          />
-          <div className={styles.controls}>
-            {/* Contextual: floats ABOVE the fixed control grid (which is
-                  bottom-anchored) so appearing/disappearing never nudges the
-                  four regular controls out of their fixed positions. */}
-            {selectedWaypoint && (
-              <button
-                className={mapCss.button}
-                aria-label="Clear selected waypoint"
-                data-testid="remove-waypoint"
-                onClick={() => {
-                  void engine.removeWaypoint(selectedWaypoint.id);
-                  setWaypointUi((ui) => ({ ...ui, selectedId: null }));
-                }}
-              >
-                {/* A location pin with a small trash badge: "delete this
-                      selected checkpoint". */}
-                <span className={styles.skipIcon} aria-hidden="true">
-                  <span className={styles.skipIconPin}>
-                    <NativeIcon icon={locationOutline} />
-                  </span>
-                  <NativeIcon
-                    className={styles.skipIconBadge}
-                    icon={closeOutline}
-                  />
-                </span>
-              </button>
-            )}
-            {/* The app-wide corner cluster (MapCluster): this page IS
-                the reference layout the replay hosts mirror. Explicit
-                cells also pin stop to BR on builds without satellite
-                (flow order used to slide it into globe's cell). */}
-            <MapCluster
-              tl={
-                <button
-                  className={mapCss.button}
-                  aria-label={follow ? "Track up" : "Align north"}
-                  // The mode light shows only while the mode is in
-                  // effect (unsnapping also clears the pref; the gate
-                  // guards any future unsnap path that forgets to).
-                  data-active={follow && trackUp}
-                  onClick={() => {
-                    if (follow) {
-                      changeTrackUp(!trackUp);
-                      return;
-                    }
-                    // Unsnapped, the compass is a north reset: bearing
-                    // zero, immediately, mode untouched. No animation,
-                    // ever, in flight. Always present — a control that
-                    // comes and goes is worse than one that occasionally
-                    // has nothing to do.
-                    liveMap?.moveTo({ bearing: 0 }, { animate: false });
-                  }}
-                >
-                  <NativeIcon icon={compassOutline} />
-                </button>
-              }
-              tr={
-                <button
-                  className={mapCss.button}
-                  aria-label="Follow aircraft"
-                  data-active={follow}
-                  // A toggle: pressing while snapped unsnaps (and takes
-                  // track-up down with it, via changeFollow).
-                  onClick={() => changeFollow(!follow)}
-                >
-                  <NativeIcon icon={locateOutline} />
-                </button>
-              }
-              bl={
-                liveMap?.supportsSatellite ? (
-                  <ViewToggle view={mapView} onChange={changeMapView} />
-                ) : undefined
-              }
-              br={
-                <button
-                  className={cx(mapCss.button, styles.stop)}
-                  aria-label="Stop flight"
-                  onClick={confirmEndFlight}
-                >
-                  <NativeIcon icon={stopIcon} />
-                </button>
-              }
-            />
-          </div>
-          {waypointUi.pending && (
-            /* Same surface as the stop confirm and landing prompt: one
-               dialog language in flight. Scrim = Cancel. */
-            <ConfirmSurface
-              scrimTestId="waypoint-confirm"
-              title="Add a checkpoint here?"
-              cancelLabel="Cancel"
-              action="Add"
-              onCancel={() => setWaypointUi((ui) => ({ ...ui, pending: null }))}
-              onAction={() => {
-                void engine.addAdhocWaypoint(waypointUi.pending!);
-                setWaypointUi((ui) => ({ ...ui, pending: null }));
-              }}
-            />
-          )}
-          {status === "landed" && landingAt !== null && (
-            /* The end-flight confirm's exact surface (ConfirmSurface):
-                 one dialog language in flight. The scrim is the safe
-                 answer, like Cancel there. */
-            <ConfirmSurface
-              scrimTestId="landing-prompt"
-              title="Landing detected"
-              cancelLabel="Still flying"
-              action={`Stop${snapshot.autoEnd ? ` (${landingSecondsLeft})` : ""}`}
-              onCancel={dismissLandingPrompt}
-              onAction={endFlight}
-            />
-          )}
-        </div>
-      )}
+      {surface()}
       {confirmElement}
     </div>
-  );
-}
-
-// A render heartbeat for the relative sun fact, only while it shows.
-function useMinuteTick(active: boolean) {
-  const [, bump] = useState(0);
-  useEffect(() => {
-    if (!active) return;
-    const id = setInterval(() => bump((n) => n + 1), 60_000);
-    return () => clearInterval(id);
-  }, [active]);
-}
-
-function Compass({ course }: { course: number }) {
-  return (
-    <svg className={styles.compass} viewBox="0 0 44 44" aria-hidden="true">
-      <circle cx="22" cy="22" r="20.5" />
-      <text x="22" y="8.5">
-        N
-      </text>
-      <text x="36" y="22">
-        E
-      </text>
-      <text x="22" y="35.5">
-        S
-      </text>
-      <text x="8" y="22">
-        W
-      </text>
-      <g transform={`rotate(${course} 22 22)`}>
-        <polygon
-          className={styles.needleNorth}
-          points="22,9 25.5,24 22,21 18.5,24"
-        />
-        <polygon
-          className={styles.needleSouth}
-          points="22,35 18.5,20 22,23 25.5,20"
-        />
-      </g>
-    </svg>
   );
 }

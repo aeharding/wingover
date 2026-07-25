@@ -4,7 +4,7 @@ import { getSetting, setSetting } from "../../storage/local";
 import type { MapViewKind } from "../map/config";
 import { readLiveViewState, writeLiveViewState } from "../map/liveViewState";
 
-interface LiveViewPrefs {
+export interface LiveViewPrefs {
   mapView: MapViewKind;
   follow: boolean;
   trackUp: boolean;
@@ -15,9 +15,12 @@ interface LiveViewPrefs {
  * updates written through to liveViewState (and mapView to settings, so
  * the ground maps follow the same street/satellite choice).
  */
-export function useLiveViewPrefs(): LiveViewPrefs & {
+/** The prefs plus the one writer, as consumers hold them. */
+export type LiveView = LiveViewPrefs & {
   update: (patch: Partial<LiveViewPrefs>) => void;
-} {
+};
+
+export function useLiveViewPrefs(): LiveView {
   const [prefs, setPrefs] = useState<LiveViewPrefs>(() => {
     const saved = readLiveViewState();
     return {

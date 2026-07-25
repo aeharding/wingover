@@ -194,8 +194,17 @@
 }
 
 /* The live map fills the recording screen (LiveTrackMap takes this as its
-   host-placement class — the seat sizes it with flex instead). */
-.liveMap {
+   host-placement class — the seat sizes it with flex instead).
+
+   Scoped under .recording ON PURPOSE: this class rides the same element as
+   LiveTrackMap's own .root (position: relative; flex: 1), and two single
+   classes from different modules tie on specificity — the winner is bundle
+   emission order, which differs dev vs prod (docs/CSS-MODULES.md). It won
+   here only because FlyPage.tsx happened to import LiveTrackMap above its
+   own stylesheet; splitting this surface into components moved that import
+   and the map collapsed to zero height. A local ancestor decides it by
+   descendant specificity instead, in any order. */
+.recording .liveMap {
   position: absolute;
   inset: 0;
 
