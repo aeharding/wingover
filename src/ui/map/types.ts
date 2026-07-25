@@ -190,9 +190,10 @@ export interface MapView {
   // disagree. MapKit sets map.padding; MapLibre/fake no-op (their
   // attribution reads the vars directly). Live — reapplied whenever the
   // resolved inset moves (rotation, a consume class toggling). An inset
-  // change must not move the CAMERA: MapKit's own setPadding zeroes
-  // rotation, and the adapter re-asserts it (a track-up pilot rotating
-  // the phone must not be snapped to north).
+  // change must not move the CAMERA: MapKit's default setPadding path
+  // zeroes rotation and re-derives the visible rect, and the adapter opts
+  // out of it (a track-up pilot rotating the phone must not be snapped to
+  // north).
   setInsets(insets: Insets): void;
   destroy(): void;
 
