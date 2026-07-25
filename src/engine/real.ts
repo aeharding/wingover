@@ -222,6 +222,14 @@ export class GeolocationRecordingEngine implements RecordingEngine {
   // lands the block it was asked about may be long over; the epoch it
   // captured at arm is how it proves it still speaks for the CURRENT one.
   private pollEpoch = 0;
+  // A readiness question is out with the platform. One at a time: a
+  // source slower than the interval would otherwise have several in
+  // flight at once, and their answers need not land in the order they
+  // were asked — an older refusal overwriting the takeover's reason is
+  // exactly the staleness this poll exists to kill, and a burst of
+  // "ready" would bounce the watch once per stacked answer. nativeSource's
+  // own fix poller gates itself the same way.
+  private pollInFlight = false;
   // A readiness-driven bounce whose fresh watch has not yet proven itself
   // by delivering a fix. Set at the attempt; NOT cleared by the bounce's
   // own optimistic error clear, so a blocking error landing again is read
@@ -236,6 +244,8 @@ export class GeolocationRecordingEngine implements RecordingEngine {
     if (wants && this.recoveryPoll === null) {
       const epoch = ++this.pollEpoch;
       const check = () => {
+        if (this.pollInFlight) return;
+        this.pollInFlight = true;
         void readiness()
           .then((refusal) => {
             // A stale answer is silent. Two ways to be stale: it belongs
@@ -248,6 +258,13 @@ export class GeolocationRecordingEngine implements RecordingEngine {
             const standing = this.blockingError();
             if (standing === null) return;
             if (refusal !== null) {
+              // busy never arms this poll, but an answer asked before
+              // another tab took the recorder lock can land after it: the
+              // passive tab's takeover must not be replaced by a source
+              // refusal, or the next ready would start a second recorder
+              // on one WAL. (The ready path is guarded inside
+              // bounceWatch, at the single mutation site.)
+              if (standing.code === "busy") return;
               // Not ready — but the answer names WHICH refusal stands
               // now, and the pilot can swap one for another while the
               // takeover is up (Precise Location off, then Location
@@ -269,7 +286,13 @@ export class GeolocationRecordingEngine implements RecordingEngine {
               // A different reason is a NEW episode. Whatever attempt
               // this episode already spent was made against the old
               // refusal, so the new one's eventual ready deserves the
-              // immediate check back.
+              // immediate check back. Belt and braces today: every route
+              // from here to a re-arm (start, discard, a fix, the poll's
+              // own bounce) sets the flag itself, and the one route that
+              // would not — retry() on a source declaring BOTH
+              // watchCanDieSilently and readiness — has no implementation
+              // yet. It is the episode's meaning, so it is stated here
+              // rather than left to be re-derived.
               this.recoveryAttempted = false;
               this.invalidate();
               return;
@@ -279,7 +302,10 @@ export class GeolocationRecordingEngine implements RecordingEngine {
           })
           // A readiness that rejects is simply not ready; the interval
           // asks again. It must not spam unhandled rejections at 0.5 Hz.
-          .catch(() => {});
+          .catch(() => {})
+          .finally(() => {
+            this.pollInFlight = false;
+          });
       };
       this.recoveryPoll = setInterval(check, RECOVERY_POLL_MS);
       // First check at arm, not one interval from now: where this poll is
@@ -302,6 +328,10 @@ export class GeolocationRecordingEngine implements RecordingEngine {
       clearInterval(this.recoveryPoll);
       this.recoveryPoll = null;
       this.pollEpoch++;
+      // The outstanding question belongs to the episode that just ended
+      // (its epoch makes the answer silent), so it must not swallow the
+      // next arming's immediate check.
+      this.pollInFlight = false;
     }
   }
 
@@ -965,10 +995,12 @@ export class GeolocationRecordingEngine implements RecordingEngine {
     // gated, not error-gated: mid-flight these codes never block, and
     // ingest must keep running.
     const blocking = this.blockingError();
+    let healed = false;
     if (blocking !== null) {
       if (blocking.code !== "imprecise") return;
       if (!positions.some((p) => !coordsLookReduced(p.coords))) return;
       this.error = null;
+      healed = true;
     }
     let ingested = false;
     let reachedChanged = false;
@@ -1023,7 +1055,17 @@ export class GeolocationRecordingEngine implements RecordingEngine {
       }
       ingested = true;
     }
-    if (!ingested) return;
+    if (!ingested) {
+      // The good fix that disproved the takeover can still be dropped by
+      // the duplicate filter below (a burst double, 44 ms apart). The
+      // heal already happened, so it has to be PUBLISHED: an error
+      // cleared without an invalidation leaves the takeover on a cached
+      // snapshot that is never rebuilt, and the recovery poll — which
+      // now sees no blocking error — goes quiet for good. On native that
+      // is a screen with no way out but Cancel.
+      if (healed) this.invalidate();
+      return;
+    }
     // Fixes flowing again means GPS has recovered; a storage error is a
     // different channel — only a successful write clears it.
     if (this.error?.code !== "storage") this.error = null;

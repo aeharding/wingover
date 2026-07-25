@@ -105,8 +105,10 @@ function position(
 
 // The same fix as `position()`, in the shape a non-browser source
 // delivers: full accuracy and an altitude, so nothing reads as reduced.
-function sourceFix(): SourcePosition {
-  timestamp += 1000;
+// stepMs under MIN_FIX_INTERVAL_MS makes it a duplicate the ingest filter
+// drops — still evidence, just not a fix worth buffering.
+function sourceFix(stepMs = 1000): SourcePosition {
+  timestamp += stepMs;
   return {
     timestamp,
     coords: {
@@ -425,34 +427,22 @@ describe("GeolocationRecordingEngine", () => {
 
     // Precise Location off: a blocking error that self-heals on evidence,
     // so the poll can be left holding an answer to a dead question.
-    state.fail({
-      permissionDenied: false,
-      imprecise: true,
-      message: "precise location disabled",
-    });
+    state.fail(IMPRECISE);
     await settle();
     expect(engine.snapshotSync().status).toBe("blocked");
     expect(pending).toHaveLength(1);
 
     // Precise flipped back on, proven by a good fix: the block ends
-    // through ingest, and the watch that ingested is live.
+    // through ingest, and the watch that ingested is live. Arming 1's
+    // question is still out with the platform.
     state.feed([sourceFix()]);
     await settle();
     expect(engine.snapshotSync().status).toBe("acquiring");
 
-    // The stale ready lands. Nothing is blocked, so nothing is bounced.
-    pending[0](null);
-    await settle();
-    expect(state.watches).toBe(1);
-    expect(engine.snapshotSync().status).toBe("acquiring");
-
-    // Second guard: a NEW block arms a new poll, and the answer from the
-    // OLD one is still not this block's evidence.
-    state.fail({
-      permissionDenied: false,
-      imprecise: true,
-      message: "precise location disabled",
-    });
+    // A NEW block arms a new poll — so a block IS standing when arming
+    // 1's answer finally lands, and only the epoch can tell that the
+    // answer is not about THIS block.
+    state.fail(IMPRECISE);
     await settle();
     expect(engine.snapshotSync().status).toBe("blocked");
     expect(pending).toHaveLength(2);
@@ -467,6 +457,29 @@ describe("GeolocationRecordingEngine", () => {
     await settle();
     expect(state.watches).toBe(2);
     expect(engine.snapshotSync().status).toBe("acquiring");
+
+    // A delivered fix proves the attempt worked, ending the episode, so
+    // the next block gets its immediate check back.
+    state.feed([sourceFix()]);
+    await settle();
+
+    // The other guard, on its own: an answer from the CURRENT arming
+    // whose block healed while it travelled. Resolved before the healing
+    // fix, so the disarm (and the epoch bump it carries) has not run yet
+    // — the standing-error check is the only thing that can stop it, and
+    // the watch it would tear down is the one now delivering.
+    state.fail(IMPRECISE);
+    await settle();
+    expect(engine.snapshotSync().status).toBe("blocked");
+    expect(pending).toHaveLength(3);
+
+    pending[2](null);
+    state.feed([sourceFix()]);
+    await settle();
+    // Healed (the fix count has it armed by now), on the SAME watch.
+    expect(engine.snapshotSync().status).not.toBe("blocked");
+    expect(engine.snapshotSync().error).toBeNull();
+    expect(state.watches).toBe(2);
   });
 
   it("a readiness that rejects is simply not ready, never an unhandled rejection", async () => {
@@ -567,11 +580,20 @@ describe("GeolocationRecordingEngine", () => {
       expect(engine.snapshotSync().error?.code).toBe("imprecise");
       expect(state.watches).toBe(1);
 
-      // A refusal that has not changed says nothing new: no re-render
-      // churn, no attempt, still the same single watch.
+      // A refusal that has not changed says nothing new — and "nothing"
+      // means nothing published: no notify, the same snapshot object, no
+      // attempt, still the same single watch. A poll that re-installed an
+      // equal error every 2 s would satisfy a code-only assertion while
+      // waking every subscriber for the life of the takeover.
+      let notifications = 0;
+      const unsubscribe = engine.subscribe(() => notifications++);
+      const steady = engine.snapshotSync();
       await vi.advanceTimersByTimeAsync(POLL_MS * 3);
+      expect(notifications).toBe(0);
+      expect(engine.snapshotSync()).toBe(steady);
       expect(engine.snapshotSync().error?.code).toBe("imprecise");
       expect(state.watches).toBe(1);
+      unsubscribe();
     } finally {
       vi.useRealTimers();
     }
@@ -612,6 +634,136 @@ describe("GeolocationRecordingEngine", () => {
     } finally {
       vi.useRealTimers();
     }
+  });
+
+  // Only a Settings-level refusal may stand in for another. A source
+  // answering with something that classifies as merely unavailable is not
+  // evidence the takeover is wrong — installing it would drop the screen
+  // to acquiring behind a watch that is still refused, and the poll,
+  // seeing no blocking error left, would go quiet for good: a dead
+  // session with a hopeful screen, the worst of both.
+  it("a refusal that classifies as non-blocking never replaces the takeover", async () => {
+    let refusal: SourceError | null = DENIED;
+    const { source, state } = refusingSource(() => refusal);
+    const engine = new GeolocationRecordingEngine({
+      source,
+      setWaypoints: () => {},
+    });
+    engines.push(engine);
+    await engine.start();
+
+    vi.useFakeTimers();
+    try {
+      state.fail(DENIED);
+      await vi.advanceTimersByTimeAsync(0);
+      expect(engine.snapshotSync().error?.code).toBe("permission-denied");
+
+      refusal = { permissionDenied: false, message: "gps unavailable" };
+      await vi.advanceTimersByTimeAsync(POLL_MS * 3);
+      expect(engine.snapshotSync().status).toBe("blocked");
+      expect(engine.snapshotSync().error?.code).toBe("permission-denied");
+      expect(state.watches).toBe(1);
+
+      // And the poll is still the live recovery path underneath it.
+      refusal = null;
+      await vi.advanceTimersByTimeAsync(POLL_MS);
+      expect(engine.snapshotSync().status).toBe("acquiring");
+      expect(state.watches).toBe(2);
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
+  // One question at a time. A platform slower than the interval would
+  // otherwise have several answers in flight, and nothing makes them land
+  // in the order they were asked: an older refusal would overwrite the
+  // takeover's reason (the exact staleness this poll exists to kill) and a
+  // batch of readys would bounce the watch once each, breaking the
+  // one-attempt-per-interval bound the poll promises against ANY source.
+  it("a readiness slower than the interval is asked once, never stacked", async () => {
+    const pending: ((refusal: SourceError | null) => void)[] = [];
+    const state = {
+      watches: 0,
+      fail: (() => {}) as (error: SourceError) => void,
+    };
+    const source: PositionSource = {
+      reportsAccuracyAuthorization: true,
+      readiness: () =>
+        new Promise<SourceError | null>((resolve) => pending.push(resolve)),
+      watch(_onPositions, onError) {
+        state.watches++;
+        if (state.watches === 1) state.fail = onError;
+        return () => {};
+      },
+    };
+    const engine = new GeolocationRecordingEngine({
+      source,
+      setWaypoints: () => {},
+    });
+    engines.push(engine);
+    await engine.start();
+
+    vi.useFakeTimers();
+    try {
+      state.fail(IMPRECISE);
+      await vi.advanceTimersByTimeAsync(0);
+      expect(pending).toHaveLength(1);
+
+      // Five intervals of platform silence: no queue builds up behind it.
+      await vi.advanceTimersByTimeAsync(POLL_MS * 5);
+      expect(pending).toHaveLength(1);
+      expect(state.watches).toBe(1);
+
+      // The one answer still recovers, and buys exactly one attempt.
+      pending[0](null);
+      await vi.advanceTimersByTimeAsync(0);
+      expect(engine.snapshotSync().status).toBe("acquiring");
+      expect(state.watches).toBe(2);
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
+  // The imprecise takeover is a DIAGNOSIS, disproven by one good fix — but
+  // the fix that disproves it can also be a duplicate the ingest filter
+  // drops. The heal still has to be published: an error cleared without an
+  // invalidation leaves the takeover standing on a cached snapshot that is
+  // never rebuilt, while the recovery poll (no blocking error to see) goes
+  // quiet for good. On native that is a screen whose only exit is Cancel.
+  it("a good fix inside the duplicate filter still lifts the imprecise takeover", async () => {
+    const { source, state } = refusingSource(() => IMPRECISE);
+    const feeder = {
+      feed: (() => {}) as (positions: SourcePosition[]) => void,
+    };
+    const watch = source.watch.bind(source);
+    source.watch = (onPositions, onError, options) => {
+      feeder.feed = onPositions;
+      return watch(onPositions, onError, options);
+    };
+    const engine = new GeolocationRecordingEngine({
+      source,
+      setWaypoints: () => {},
+    });
+    engines.push(engine);
+    await engine.start();
+
+    feeder.feed([sourceFix()]);
+    await settle();
+    state.fail(IMPRECISE);
+    await settle();
+    expect(engine.snapshotSync().status).toBe("blocked");
+
+    // Precise back on, proven by a full-accuracy fix 100 ms after the
+    // last one: below MIN_FIX_INTERVAL_MS, so it is evidence without
+    // being a fix worth buffering.
+    const buffered = engine.snapshotSync().latest;
+    feeder.feed([sourceFix(100)]);
+    await settle();
+    expect(engine.snapshotSync().status).not.toBe("blocked");
+    expect(engine.snapshotSync().error).toBeNull();
+    // Dropped as a duplicate, exactly as before: the heal is the only
+    // thing this publishes.
+    expect(engine.snapshotSync().latest).toBe(buffered);
   });
 
   // The manual escape hatch, and what made a stale takeover survivable
