@@ -15,12 +15,13 @@ import {
   navigateOutline,
   settingsOutline,
 } from "ionicons/icons";
-import { useEffect, useSyncExternalStore } from "react";
+import { useSyncExternalStore } from "react";
 import { Redirect, Route } from "react-router-dom";
 
 import { engine } from "../engine";
 import { isTauri } from "../platform";
 import DesktopShell from "./desktop/DesktopShell";
+import { BootFailedScreen } from "./flight/ErrorScreen";
 import FlightSurface from "./flight/FlyPage";
 import AllFlightsMapPage from "./pages/AllFlightsMapPage";
 import AppearancePage from "./pages/AppearancePage";
@@ -34,7 +35,6 @@ import UnitsPage from "./pages/UnitsPage";
 import { SettingsProvider } from "./settings/SettingsContext";
 import { SyncSheetsProvider } from "./sync/SyncSheets";
 import { useCanRecord } from "./useCanRecord";
-import { useHydrationGate } from "./useHydrationGate";
 import { useIsDesktop } from "./useIsDesktop";
 
 setupIonicReact({
@@ -60,11 +60,6 @@ setupIonicReact({
 });
 
 export default function App() {
-  useEffect(() => {
-    // Kick the one-time WAL hydration (idempotent; FlyPage kicks it too).
-    void engine.getSnapshot();
-  }, []);
-
   return (
     <SettingsProvider>
       <AppBody />
@@ -80,21 +75,31 @@ export default function App() {
 // Rendering only the flight surface in flight makes the footprint the single
 // live map and nothing else. The tab bar is unreachable during a flight
 // anyway, so this is invisible to the pilot, and the full shell returns the
-// instant the flight ends. "idle" is the only non-flight state;
-// pre-hydration the engine reports it, so the shell shows during load.
+// instant the flight ends. "idle" is the only non-flight state; the boot
+// gate below keeps everything unrendered until the engine has read the WAL
+// and actually knows it.
 //
 // Shed means SHED: ion-app itself goes too. The flight surface is a plain
 // div tree (src/ui/flight, Ionic-free by lint), so while recording, Ionic
 // simply does not exist in the DOM. IonApp and the sheets remount with the
 // shell when the flight ends.
 function AppBody() {
-  const hydrated = useHydrationGate();
+  const hydration = useSyncExternalStore(
+    engine.subscribe,
+    engine.hydrationSync,
+  );
   const inFlight = useSyncExternalStore(
     engine.subscribe,
     () => engine.snapshotSync().status !== "idle",
   );
   const isDesktop = useIsDesktop();
-  if (!hydrated) return null;
+  // Boot gate. Until the WAL is read the engine would report "idle", and
+  // rendering on that guess flashes the wrong surface during a mid-flight
+  // relaunch — so render nothing (the body paints the palette color). A
+  // read that FAILED gets a visible way out, never the idle screen: Start
+  // Flight clears the WAL a live flight may be sitting in, unread.
+  if (hydration === "pending") return null;
+  if (hydration === "failed") return <BootFailedScreen />;
   if (inFlight) return <FlightSurface />;
   // Desktop gets its own shell: plain react-router, no Ionic outlet (see
   // DesktopShell). Phones keep the Ionic tab shell untouched.

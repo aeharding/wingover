@@ -29,6 +29,10 @@ export default function FlyPage() {
   // location; its launch point is the best guess for the next one).
   const lastFlight = useLatestFlight();
 
+  // This page renders only behind the app root's boot gate: pre-hydration
+  // the engine reports "idle", and IdleSurface's Start Flight clears the
+  // WAL — on an ungated render that destroys the live flight still sitting
+  // in it, unread. If the gate ever narrows, this dependency moves with it.
   const status = snapshot.status;
 
   useFlightCollection(status);

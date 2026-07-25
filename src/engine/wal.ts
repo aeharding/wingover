@@ -86,12 +86,15 @@ export async function readWal(): Promise<{
         fixes: (fixesRequest.result as Fix[]) ?? [],
       });
     };
+    // Both handlers, both with a real Error: an abort with a request in
+    // flight bubbles to onerror first (with tx.error still null), while an
+    // abort with none fires only onabort. Missing either leaves the promise
+    // pending forever — and boot now waits on it; rejecting a bare null
+    // strands every consumer that reads error.message.
     tx.onerror = () => {
       db.close();
-      reject(tx.error);
+      reject(tx.error ?? new Error("wal read failed"));
     };
-    // Aborted is not errored: without this, an aborted read leaves the
-    // promise pending forever - and boot now waits on it.
     tx.onabort = () => {
       db.close();
       reject(tx.error ?? new Error("wal read aborted"));

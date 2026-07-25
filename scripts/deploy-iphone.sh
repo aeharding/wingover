@@ -25,6 +25,9 @@ REF="${1:-$(git rev-parse HEAD)}"
 # Hence: normalize, resolve the expected sha locally, and make the Mac
 # PROVE it checked that exact sha out before it builds anything.
 REF="${REF#origin/}"
+# REF and WANT are spliced into the remote shell command below; a quote in
+# a crafted ref name would escape it and run on the Mac.
+[[ "$REF" =~ ^[A-Za-z0-9._/-]+$ ]] || { echo "DEPLOY-ABORT: ref has unsafe characters"; exit 1; }
 WANT="$(git ls-remote origin "$REF" | head -1 | cut -f1)"
 [ -n "$WANT" ] || WANT="$REF" # a raw sha resolves to nothing on ls-remote
 echo "deploying $WANT ($REF)"

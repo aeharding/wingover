@@ -1481,6 +1481,40 @@ describe("stale-flight gap detection (app gone mid-flight)", () => {
   });
 });
 
+describe("hydration", () => {
+  it("reports ready once the WAL is read", async () => {
+    const engine = createEngine();
+    expect(engine.hydrationSync()).toBe("pending");
+    await engine.getSnapshot();
+    expect(engine.hydrationSync()).toBe("ready");
+  });
+
+  // The boot gate renders NOTHING until hydration settles, so a failed
+  // read must resolve getSnapshot rather than reject, land as a readable
+  // "failed", and notify subscribers. Miss any one of the three and the
+  // app is a blank rectangle forever.
+  it("reports failed (and notifies) when the WAL cannot be read", async () => {
+    const workingIndexedDB = globalThis.indexedDB;
+    globalThis.indexedDB = {
+      open() {
+        throw new Error("boot: storage broken");
+      },
+    } as unknown as IDBFactory;
+
+    const engine = createEngine();
+    let notified = false;
+    engine.subscribe(() => {
+      notified = true;
+    });
+    await engine.getSnapshot();
+    await settle();
+
+    expect(engine.hydrationSync()).toBe("failed");
+    expect(notified).toBe(true);
+    globalThis.indexedDB = workingIndexedDB;
+  });
+});
+
 describe("storage failure", () => {
   it("surfaces WAL write failure, retains the fixes, and recovers", async () => {
     const engine = createEngine();

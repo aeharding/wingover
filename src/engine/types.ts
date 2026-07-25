@@ -43,6 +43,9 @@ export type EngineStatus =
   // until it clears (retry, or the error self-heals).
   "idle" | "acquiring" | "armed" | "recording" | "landed" | "ended" | "blocked";
 
+// Outcome of the one-time WAL read at boot (see RecordingEngine.hydrationSync).
+export type HydrationState = "pending" | "ready" | "failed";
+
 // The error classes that block the session outright (drive "blocked").
 // storage and transient unavailability do NOT block: the engine retries
 // storage on its own, and GPS shadows self-heal.
@@ -126,6 +129,11 @@ export interface RecordingEngine {
   // Pure, cached view of in-memory state: stable identity between changes,
   // fresh after every change (useSyncExternalStore-compatible).
   snapshotSync(): EngineSnapshot;
+  // Outcome of the one-time WAL read, for the app root's boot gate.
+  // "failed" is a state, not an exception: getSnapshot still resolves, and
+  // the UI must offer a way out rather than an idle screen (Start Flight
+  // clears the WAL a live flight may be sitting in, unread).
+  hydrationSync(): HydrationState;
   // Coalesced change signal; returns unsubscribe.
   subscribe(listener: () => void): () => void;
   start(options?: StartOptions): Promise<void>;
