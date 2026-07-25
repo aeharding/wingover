@@ -159,6 +159,61 @@ describe("nativePositionSource", () => {
     expect(commands()).toContain("plugin:wingover|start_watch");
   });
 
+  it("refuses reduced accuracy in JS, before capture ever starts", async () => {
+    core.invoke.mockImplementation((cmd: string) => {
+      switch (cmd) {
+        case "plugin:wingover|check_permissions":
+          return Promise.resolve({ location: "granted", precise: false });
+        default:
+          return Promise.resolve(null);
+      }
+    });
+
+    const errors: unknown[] = [];
+    nativePositionSource.watch(
+      () => {},
+      (error) => errors.push(error),
+    );
+    await vi.advanceTimersByTimeAsync(0);
+
+    expect(commands()).not.toContain("plugin:wingover|start_watch");
+    expect(errors).toEqual([
+      {
+        permissionDenied: false,
+        imprecise: true,
+        message: "precise location disabled",
+      },
+    ]);
+  });
+
+  it("a bounced watch's stale permission round-trip never reports", async () => {
+    let resolvePermissions: (value: unknown) => void = () => {};
+    core.invoke.mockImplementation((cmd: string) => {
+      switch (cmd) {
+        case "plugin:wingover|check_permissions":
+          return new Promise((resolve) => {
+            resolvePermissions = resolve;
+          });
+        default:
+          return Promise.resolve(null);
+      }
+    });
+
+    const errors: unknown[] = [];
+    const stop = nativePositionSource.watch(
+      () => {},
+      (error) => errors.push(error),
+    );
+    await vi.advanceTimersByTimeAsync(0);
+    // The bounce: this watch is dead before its permission check lands.
+    stop();
+    resolvePermissions({ location: "denied" });
+    await vi.advanceTimersByTimeAsync(0);
+
+    expect(errors).toEqual([]);
+    expect(commands()).not.toContain("plugin:wingover|start_watch");
+  });
+
   it("surfaces permission denial without starting the watch", async () => {
     core.invoke.mockImplementation((cmd: string) => {
       switch (cmd) {
@@ -193,7 +248,30 @@ describe("nativePositionSource", () => {
     await vi.advanceTimersByTimeAsync(0);
 
     expect(errors).toEqual([
-      { permissionDenied: true, message: "location permission denied" },
+      {
+        permissionDenied: true,
+        imprecise: false,
+        message: "location permission denied",
+      },
+    ]);
+  });
+
+  it("classifies a reduced-accuracy refusal as imprecise", async () => {
+    stubPlugin([], "precise location disabled");
+
+    const errors: SourceError[] = [];
+    nativePositionSource.watch(
+      () => {},
+      (error) => errors.push(error),
+    );
+    await vi.advanceTimersByTimeAsync(0);
+
+    expect(errors).toEqual([
+      {
+        permissionDenied: false,
+        imprecise: true,
+        message: "precise location disabled",
+      },
     ]);
   });
 

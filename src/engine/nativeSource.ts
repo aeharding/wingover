@@ -32,6 +32,18 @@ interface FixesResponse {
 
 interface PermissionStatus {
   location: "granted" | "denied" | "prompt";
+  // false when iOS Precise Location is off for Wingover. Optional so an
+  // older native shell (missing the key) never reads as imprecise.
+  precise?: boolean;
+}
+
+// Poll-friendly readiness check for the blocked screen: the pilot can
+// record only with granted authorization AND full accuracy.
+export async function nativeLocationReady(): Promise<boolean> {
+  const status = await invoke<PermissionStatus>(
+    "plugin:wingover|check_permissions",
+  );
+  return status.location === "granted" && status.precise !== false;
 }
 
 function toSourcePosition(fix: NativeFix): SourcePosition {
@@ -50,6 +62,12 @@ function toSourcePosition(fix: NativeFix): SourcePosition {
 }
 
 export const nativePositionSource: PositionSource = {
+  // CoreLocation reports accuracyAuthorization directly — the engine's
+  // fix-signature heuristic must stay out of the way. Capture is
+  // process-level and survives webview visibility, so no foreground
+  // bounce either; recovery is the readiness poll.
+  reportsAccuracyAuthorization: true,
+  readiness: nativeLocationReady,
   watch(onPositions, onError, options) {
     let stopped = false;
     let timer: ReturnType<typeof setInterval> | undefined;
@@ -74,15 +92,26 @@ export const nativePositionSource: PositionSource = {
           onPositions(response.fixes.map(toSourcePosition));
         }
         // A stale error with fixes still flowing is already resolved.
-        if (response.error !== undefined && response.fixes.length === 0) {
+        // Codes are the wire contract (see WingoverPlugin.swift); the
+        // prose fallbacks cover didFailWithError's localized messages.
+        if (response.error != null && response.fixes.length === 0) {
           onError({
-            permissionDenied: /denied|permission/i.test(response.error),
+            permissionDenied:
+              response.error === "permission-denied" ||
+              /denied|permission/i.test(response.error),
+            imprecise:
+              response.error === "reduced-accuracy" ||
+              /precise/i.test(response.error),
             message: response.error,
           });
         }
       } catch (error) {
         if (!stopped)
-          onError({ permissionDenied: false, message: String(error) });
+          onError({
+            permissionDenied: false,
+            imprecise: /precise/i.test(String(error)),
+            message: String(error),
+          });
       } finally {
         inFlight = false;
       }
@@ -98,6 +127,9 @@ export const nativePositionSource: PositionSource = {
             "plugin:wingover|request_permissions",
           );
         }
+        // A bounced watch's stale permission round-trip must not push an
+        // error at the engine after a newer watch took over.
+        if (stopped) return;
         if (status.location !== "granted") {
           onError({
             permissionDenied: true,
@@ -105,13 +137,30 @@ export const nativePositionSource: PositionSource = {
           });
           return;
         }
-        if (stopped) return;
+        // The refusal DECISION lives here, not in Swift (the sensor
+        // layer senses and actuates; it does not decide): reduced
+        // accuracy can never pass the accuracy gate, so refuse before
+        // capture starts and let the error screen walk the pilot to
+        // Settings.
+        if (status.precise === false) {
+          onError({
+            permissionDenied: false,
+            imprecise: true,
+            message: "precise location disabled",
+          });
+          return;
+        }
         await invoke("plugin:wingover|start_watch");
         if (stopped) return;
         void poll();
         timer = setInterval(() => void poll(), POLL_MS);
       } catch (error) {
-        onError({ permissionDenied: false, message: String(error) });
+        if (stopped) return;
+        onError({
+          permissionDenied: /denied|permission/i.test(String(error)),
+          imprecise: /precise/i.test(String(error)),
+          message: String(error),
+        });
       }
     })();
 

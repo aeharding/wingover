@@ -122,14 +122,18 @@ final class WaypointUITests: XCTestCase {
     locate.tap()
     Thread.sleep(forTimeInterval: 2)
     let before = routeValue(app)
-    // 0.444: the visual center of the map area (the tab bar is excluded
-    // from the map but not from the webview's frame).
-    map.coordinate(withNormalizedOffset: CGVector(dx: 0.5, dy: 0.444))
-      .press(forDuration: 1.2)
-    Thread.sleep(forTimeInterval: 1)
-    map.coordinate(withNormalizedOffset: CGVector(dx: 0.5, dy: 0.32))
-      .press(forDuration: 1.2)
-    Thread.sleep(forTimeInterval: 1)
+    // A vertical FENCE of candidate pins across the center band, not one
+    // pin at a magic offset: the old 0.444 encoded exactly where fly-to
+    // happened to land the camera, and PR #145's padding-offset fix moved
+    // that landing (padded-viewport center, not screen center) — the pin
+    // fell > 322 m (WAYPOINT_RADIUS_M) off the corridor and the announcer
+    // never fired. One rung near the corridor row is all the assertion
+    // needs, wherever the camera legitimately centers.
+    for dy in [0.34, 0.39, 0.444, 0.49, 0.54] {
+      map.coordinate(withNormalizedOffset: CGVector(dx: 0.5, dy: dy))
+        .press(forDuration: 1.2)
+      Thread.sleep(forTimeInterval: 1)
+    }
     let after = routeValue(app)
     XCTAssertTrue(
       after != nil && after != before,

@@ -108,6 +108,13 @@ export function withWebCore(inner: PositionSource): CoreClient {
   const core = new WebCore();
   return {
     source: {
+      // The wrapper adds ingest/wake-lock plumbing, not platform
+      // behavior: the inner source's capabilities pass through
+      // unchanged, or the engine would treat every wrapped source as
+      // the most pessimistic one.
+      reportsAccuracyAuthorization: inner.reportsAccuracyAuthorization,
+      watchCanDieSilently: inner.watchCanDieSilently,
+      readiness: inner.readiness,
       watch(onPositions, onError, options) {
         core.start();
         // The watch carries every capability, wake lock included — the

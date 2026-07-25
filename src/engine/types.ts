@@ -37,10 +37,41 @@ export interface StartOptions {
 }
 
 export type EngineStatus =
-  "idle" | "acquiring" | "armed" | "recording" | "landed" | "ended";
+  // "blocked": an error the pilot must act on owns the surface — the
+  // watch is dead (permission, precise-location) or another tab holds
+  // the recorder. Engine state, not view policy: nothing can proceed
+  // until it clears (retry, or the error self-heals).
+  "idle" | "acquiring" | "armed" | "recording" | "landed" | "ended" | "blocked";
 
-export interface EngineSnapshot {
-  status: EngineStatus;
+// The error classes that block the session outright (drive "blocked").
+// storage and transient unavailability do NOT block: the engine retries
+// storage on its own, and GPS shadows self-heal.
+export type BlockingErrorCode = "permission-denied" | "imprecise" | "busy";
+
+export interface BlockingError extends EngineError {
+  code: BlockingErrorCode;
+}
+
+export function isBlockingError(error: EngineError): error is BlockingError {
+  return (
+    error.code === "permission-denied" ||
+    error.code === "imprecise" ||
+    error.code === "busy"
+  );
+}
+
+// The discriminant the type system enforces: status "blocked" ALWAYS
+// carries a blocking error — consumers narrow on status alone, no
+// null-checking hand-written invariants.
+export type EngineSnapshot =
+  | (EngineSnapshotBase & { status: "blocked"; error: BlockingError })
+  | (EngineSnapshotBase & {
+      status: Exclude<EngineStatus, "blocked">;
+      // Sticky GPS failure; cleared by the next fix or start/stop.
+      error: EngineError | null;
+    });
+
+interface EngineSnapshotBase {
   startedAt: number | null;
   // CONTRACT: within a session the track is append-only and prefix-stable
   // by timestamp — a new array identity per change, but content only ever
@@ -66,12 +97,13 @@ export interface EngineSnapshot {
   activeWaypoints: Waypoint[];
   // Whether grace expiry will auto-finalize this flight (session-scoped).
   autoEnd: boolean;
-  // Sticky GPS/permission failure; cleared by the next fix or start/stop.
-  error: EngineError | null;
 }
 
 export type EngineErrorCode =
   | "permission-denied"
+  // iOS Precise Location is off: reduced-accuracy fixes (~kilometers)
+  // can never pass the accuracy gate, so acquiring would hang forever.
+  | "imprecise"
   | "unavailable"
   // WAL writes are failing: fixes survive only in memory until it clears.
   | "storage"
@@ -114,6 +146,11 @@ export interface RecordingEngine {
   // snapshot BEFORE discarding; there is no track handed out at the
   // moment the durable copy is destroyed.
   discard(): Promise<void>;
+  // Pre-takeoff heal: bounce the watch with the session intact,
+  // clearing a permission-denied/imprecise error if one is up —
+  // recovery lands in acquiring, never idle. Safe to call on any
+  // foreground: no-op for busy, after takeoff, or without a session.
+  retry(): void;
   // landed → recording: pilot overrides a detected touchdown.
   dismissLanding(): void;
 }

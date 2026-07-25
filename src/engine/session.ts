@@ -4,6 +4,21 @@ import { getBooleanSetting } from "../storage/local";
 import { engine } from "./index";
 import type { Waypoint } from "./types";
 
+// Foreground heal, wired HERE and not in a component (STEERING:
+// anything that must happen regardless of which page is mounted is
+// wired engine-side): coming back from Settings must PROCEED, not sit
+// on a frozen screen. Safari can silently kill a watch while
+// backgrounded; engine.retry() bounces it pre-takeoff (clearing a
+// blocking error if one is up) and is a no-op wherever it could do
+// harm (mid-flight, busy, healthy native capture). The other recovery
+// mechanism — polling the source's readiness while blocked — is wired
+// inside the engine itself, off the source's capability.
+if (typeof document !== "undefined") {
+  document.addEventListener("visibilitychange", () => {
+    if (document.visibilityState === "visible") engine.retry();
+  });
+}
+
 // Pins are planning documents; waypoints are anonymous geofence config.
 // This projection is the only place one becomes the other — deliberately
 // field-by-field so pin data (name, notes, whatever comes later) never

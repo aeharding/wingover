@@ -16,6 +16,13 @@ const GEO_STUB = `(() => {
       }
     },
     watcherCount: () => watchers.size,
+    // Safari can silently kill a watch while the page is backgrounded
+    // (e.g. a Settings trip): callbacks just stop, the page is never
+    // told. Drop the watchers without notifying anyone.
+    killWatches: () => {
+      watchers.clear();
+      errorWatchers.clear();
+    },
   };
   const errorWatchers = new Map();
   window.__geo.fail = (code) => {
@@ -58,7 +65,8 @@ const URL = "/?map-style=blank";
 interface FixSpec {
   speed?: number;
   accuracy?: number;
-  altitudeAccuracy?: number;
+  // null = the source has no altitude solution (reduced accuracy).
+  altitudeAccuracy?: number | null;
   latitude?: number;
   longitude?: number;
   heading?: number;
@@ -78,7 +86,8 @@ function makeEmitter(page: Page) {
           longitude: spec.longitude ?? -89.4,
           altitude: 300,
           accuracy: spec.accuracy ?? 5,
-          altitudeAccuracy: spec.altitudeAccuracy ?? 8,
+          altitudeAccuracy:
+            spec.altitudeAccuracy === undefined ? 8 : spec.altitudeAccuracy,
           heading: spec.heading ?? 0,
           speed: spec.speed ?? 0,
         },
@@ -248,7 +257,7 @@ test("backgrounded landing: a burst-replayed flight finalizes retroactively", as
   await expect(page.getByText(/1 flights/)).toBeVisible();
 });
 
-test("permission denied surfaces on the arming screen and clears on fix", async ({
+test("permission denied blocks with the error screen and recovers via reload", async ({
   page,
 }) => {
   await page.addInitScript(GEO_STUB);
@@ -265,12 +274,60 @@ test("permission denied surfaces on the arming screen and clears on fix", async 
     );
   });
   await expect(page.getByTestId("gps-error")).toContainText(
-    "Location permission denied",
+    "Location Access Needed",
   );
 
-  // A fix arriving clears the banner
+  // Blocked is absorbing: stray fixes are ignored. Web denied recovers
+  // via Reload (browsers only re-prompt on a fresh page load); the WAL
+  // rehydrates the session and the watch comes back on boot.
+  await emit([{}]);
+  await expect(page.getByTestId("gps-error")).toBeVisible();
+  await expect(page.getByRole("button", { name: "Try Again" })).toBeHidden();
+
+  await page.getByRole("button", { name: "Reload" }).click();
+  await waitForWatch(page);
   await emit([{}]);
   await expect(page.getByTestId("gps-error")).toBeHidden();
+  await expect(page.getByTestId("armed")).toBeVisible();
+});
+
+test("precise off during a Settings trip surfaces the screen despite a dead watch", async ({
+  page,
+}) => {
+  // Burns the real 12 s sustain window by design (the latch is the thing
+  // under test); the default 30 s budget leaves too little margin for CI
+  // under the zero-retry policy.
+  test.setTimeout(60_000);
+  await page.addInitScript(GEO_STUB);
+  const emit = makeEmitter(page);
+  await page.goto(URL);
+
+  await page.getByRole("button", { name: "Start Flight" }).click();
+  await expect(page.getByTestId("armed")).toBeVisible();
+  await waitForWatch(page);
+
+  // Mediocre fixes: acquiring, never armed.
+  await emit([{ accuracy: 40 }, { accuracy: 40 }]);
+
+  // The Settings trip: Safari silently kills the watch (the engine is
+  // never told), the pilot flips Precise off and comes back, which
+  // fires visibilitychange. The foreground bounce must revive the
+  // watch...
+  await page.evaluate(() => {
+    (
+      window as unknown as { __geo: { killWatches: () => void } }
+    ).__geo.killWatches();
+    document.dispatchEvent(new Event("visibilitychange"));
+  });
+  await waitForWatch(page);
+
+  // ...so the reduced fix reaches the engine, and the wall-clock latch
+  // surfaces the screen even though this single fix is all we get.
+  await emit([{ accuracy: 13_000, altitudeAccuracy: null }]);
+  await expect(page.getByTestId("gps-error")).toContainText(
+    "Precise Location Is Off",
+    { timeout: 15_000 },
+  );
 });
 
 test("a pin becomes a spoken waypoint announcement mid-flight", async ({

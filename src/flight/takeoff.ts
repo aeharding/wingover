@@ -31,6 +31,40 @@ function hasCredibleSpeed(fix: Fix): boolean {
   return fix.horizontalAccuracy <= MAX_SPEED_ACCURACY_M;
 }
 
+// Reduced-accuracy sources (iOS Precise Location off) sit kilometers
+// coarse indefinitely (observed 13 km+ in Safari); real GPS converges
+// far below this within seconds of sky view, and even cell
+// triangulation lands under ~2 km. Sustained gross coarseness is a
+// source-level problem, not a slow first fix.
+export const IMPRECISE_M = 2000;
+export const IMPRECISE_SUSTAIN_MS = 12_000;
+
+// The reduced-accuracy signature: kilometer-coarse horizontal AND no
+// altitude solution at all (verticalAccuracy normalizes to Infinity on
+// both sources). Cell-triangulated cold-start fixes are coarse but sit
+// under ~2 km; anything GPS-assisted has an altitude. Judged per fix,
+// not per run: with Precise Location off the browser pins to a grid
+// tile and may deliver ONE fix then go silent, so the engine latches on
+// wall clock (IMPRECISE_SUSTAIN_MS), not on a count of arrivals.
+export function fixLooksReduced(fix: Fix): boolean {
+  return (
+    fix.horizontalAccuracy > IMPRECISE_M &&
+    !Number.isFinite(fix.verticalAccuracy)
+  );
+}
+
+// Twin of fixLooksReduced for raw source coordinates, judged before Fix
+// normalization (null altitudeAccuracy = no altitude solution).
+export function coordsLookReduced(coords: {
+  accuracy: number;
+  altitudeAccuracy: number | null;
+}): boolean {
+  return (
+    coords.accuracy > IMPRECISE_M &&
+    !Number.isFinite(coords.altitudeAccuracy ?? Number.POSITIVE_INFINITY)
+  );
+}
+
 export function gpsReadyIndex(track: Fix[]): number | null {
   let run = 0;
   for (let i = 0; i < track.length; i++) {

@@ -49,13 +49,14 @@ fn spawn_ingest_thread<R: Runtime>(app: tauri::AppHandle<R>) {
             continue;
         }
         let sensor = app.wingover();
-        let batch = match sensor.drain() {
-            Ok(batch) => batch,
+        let (batch, sensor_error) = match sensor.drain() {
+            Ok(drained) => drained,
             Err(error) => {
                 eprintln!("wingover plugin drain failed: {error}");
                 continue;
             }
         };
+        core.set_sensor_error(sensor_error);
         match core.ingest(&batch) {
             Ok(announcements) => {
                 for text in announcements {
@@ -91,8 +92,12 @@ mod commands {
         app: AppHandle<R>,
         ts: i64,
     ) -> Result<serde_json::Value> {
-        let fixes = app.state::<Core>().fixes_since(ts)?;
-        Ok(serde_json::json!({ "fixes": fixes }))
+        let core = app.state::<Core>();
+        let fixes = core.fixes_since(ts)?;
+        // Sensor health rides along with every poll: fixes with no error
+        // is a healthy stream; an error with no fixes is a dead or
+        // reduced source the engine must surface.
+        Ok(serde_json::json!({ "fixes": fixes, "error": core.sensor_error() }))
     }
 
     #[command]

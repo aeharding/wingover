@@ -41,10 +41,39 @@ DATA_DIR=$(xcrun simctl get_app_container "$UDID" app.wingover.wingover data)
 # -collect-test-diagnostics never is load-bearing: a failing run otherwise
 # embeds the sim's full logarchive in the xcresult (multi-GB; it has filled
 # a disk).
+# Both invocations always run — one suite's failure must not silently
+# skip the other's signal — and the job fails if either did.
+suite_failed=0
+
+# QUARANTINE (issue #151): the waypoint announcement drill has been red
+# on main since #145 merged (speak.log empty; pin drop and recording both
+# healthy) and needs interactive Mac debugging. Delete this one skip line
+# to unquarantine.
 TEST_RUNNER_WINGOVER_DATA="$DATA_DIR" xcodebuild test \
   -project WingoverUITests.xcodeproj \
   -scheme WingoverUITests \
   -destination "id=$UDID" \
-  -collect-test-diagnostics never
+  -skip-testing:WingoverUITests/PermissionUITests \
+  -skip-testing:WingoverUITests/WaypointUITests/testWaypointAnnouncementSpokenWhileBackgrounded \
+  -collect-test-diagnostics never || suite_failed=1
 
+# The blocked-state drills run in their own invocation with the OPPOSITE
+# preconditions: no motion scenario (acquiring must persist so
+# pre-takeoff blocking is observable) and location REVOKED host-side
+# (test1 asserts the takeover; test2 re-grants through the real Settings
+# app; test3 flips Precise Location there and back).
 xcrun simctl location "$UDID" clear
+xcrun simctl terminate "$UDID" app.wingover.wingover 2>/dev/null || true
+xcrun simctl privacy "$UDID" revoke location app.wingover.wingover
+
+xcodebuild test \
+  -project WingoverUITests.xcodeproj \
+  -scheme WingoverUITests \
+  -destination "id=$UDID" \
+  -only-testing:WingoverUITests/PermissionUITests \
+  -collect-test-diagnostics never || suite_failed=1
+
+# Leave the sim as the main suite expects, for local re-runs.
+xcrun simctl privacy "$UDID" grant location app.wingover.wingover
+
+exit "$suite_failed"

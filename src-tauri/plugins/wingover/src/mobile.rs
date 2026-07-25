@@ -20,6 +20,10 @@ pub fn init<R: Runtime, C: DeserializeOwned>(
 #[derive(Deserialize)]
 struct DrainResponse {
     fixes: Vec<Fix>,
+    // The sensor's current health (reduced-accuracy / permission codes,
+    // or CoreLocation failure prose); absent when healthy. Reasserted by
+    // the sensor on every delivery, so it tracks the truth continuously.
+    error: Option<String>,
 }
 
 #[derive(Deserialize)]
@@ -58,9 +62,9 @@ impl<R: Runtime> Wingover<R> {
             .map_err(Into::into)
     }
 
-    pub fn drain(&self) -> crate::Result<Vec<Fix>> {
+    pub fn drain(&self) -> crate::Result<(Vec<Fix>, Option<String>)> {
         let response: DrainResponse = self.0.run_mobile_plugin("drain", ())?;
-        Ok(response.fixes)
+        Ok((response.fixes, response.error))
     }
 
     pub fn keychain_available(&self) -> crate::Result<bool> {

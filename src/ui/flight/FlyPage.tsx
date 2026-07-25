@@ -46,6 +46,7 @@ import type { MapView } from "../map/types";
 import ViewToggle from "../map/ViewToggle";
 import { useSettings } from "../settings/SettingsContext";
 import { ConfirmSurface, useBigConfirm } from "./BigConfirm";
+import ErrorScreen from "./ErrorScreen";
 import LiveTrackMap from "./LiveTrackMap";
 import Tile from "./Tile";
 import { showToast } from "./toast";
@@ -120,7 +121,7 @@ export default function FlyPage() {
   }>({ selectedId: null, pending: null });
   const instrumentsRef = useRef<HTMLDivElement>(null);
 
-  const { track, latest, landingAt, nextWaypoint, error: gpsError } = snapshot;
+  const { track, latest, landingAt, nextWaypoint } = snapshot;
   // Only a still-active selection surfaces the control; a reached/removed pin
   // drops out of activeWaypoints and the button hides on its own.
   const selectedWaypoint =
@@ -200,7 +201,16 @@ export default function FlyPage() {
   const collectEndedFlight = useEffectEvent(async () => {
     const snapshot = await engine.getSnapshot();
     if (snapshot.status !== "ended") return;
-    await persistFlight(snapshot.track, snapshot.waypoints);
+    try {
+      await persistFlight(snapshot.track, snapshot.waypoints);
+    } catch (error) {
+      // The one storage failure that is genuinely possession-losing —
+      // surface loudly (STEERING). The WAL keeps the flight; collection
+      // retries on the next mount/foreground.
+      console.error("flight persist failed:", error);
+      showToast("Could not save the flight yet. It is safe; will retry.");
+      return;
+    }
     // Persisted — the engine's durable copy can go; idle follows.
     await engine.discard();
   });
@@ -222,6 +232,10 @@ export default function FlyPage() {
     if (status !== "ended") return;
     void Promise.resolve().then(() => collectEndedFlight());
   }, [status]);
+
+  // Blocked recovery (foreground heal + native readiness poll) is wired
+  // engine-side in src/engine/session.ts, not here: it must run
+  // regardless of which page is mounted.
 
   useLayoutEffect(() => {
     if (status !== "recording" && status !== "landed") return;
@@ -277,6 +291,7 @@ export default function FlyPage() {
   // The landing prompt's own button stays direct — it IS the confirmation
   // there.
   function confirmEndFlight() {
+    // No takeoff on record = nothing to finalize: discard instead of end.
     const stop =
       status === "acquiring" || status === "armed" ? cancelArmed : endFlight;
     bigConfirm({ title: "End flight?", action: "Stop", onAction: stop });
@@ -331,6 +346,28 @@ export default function FlyPage() {
       ? relativeBearing(latest.course, bearingBetween(latest, navTarget))
       : 0;
 
+  // "blocked" is engine state like any other status: an error the pilot
+  // must act on owns the surface (ErrorScreen) — never inline prose.
+  // Narrowing on snapshot.status types the error as BlockingError; the
+  // engine's discriminant guarantees it. Non-blocking errors (storage,
+  // transient GPS shadows) surface nothing here: storage retries on its
+  // own with the native track durably held in Rust, and the acquiring
+  // screen's guidance covers a slow first fix.
+  if (ready && snapshot.status === "blocked") {
+    return (
+      <div className={styles.content} data-testid="fly-content">
+        <ErrorScreen
+          error={snapshot.error}
+          onRetry={
+            snapshot.error.code === "busy" ? undefined : () => engine.retry()
+          }
+          onCancel={() => void engine.discard()}
+        />
+        {confirmElement}
+      </div>
+    );
+  }
+
   return (
     <div className={styles.content} data-testid="fly-content">
       {status === "idle" && (
@@ -346,11 +383,6 @@ export default function FlyPage() {
           <button className={styles.start} onClick={armFlight}>
             Start Flight
           </button>
-          {gpsError && (
-            <div className={styles.gpsError} data-testid="gps-error">
-              {gpsError.message}
-            </div>
-          )}
         </div>
       )}
       {(status === "acquiring" || status === "armed") && (
@@ -366,13 +398,18 @@ export default function FlyPage() {
             <h2>
               {status === "acquiring" ? "Acquiring GPS" : "Waiting for takeoff"}
             </h2>
-            <p>{status === "acquiring" ? ACQUIRING_HINT : ARMED_HINT}</p>
+            <p>
+              {status === "acquiring"
+                ? // A dead GPS (Location Services off system-wide) is as
+                  // actionable as a permission problem; the diagnostic
+                  // replaces the generic hint rather than sitting mute
+                  // in the snapshot.
+                  snapshot.error?.code === "unavailable"
+                  ? "GPS unavailable. Check that Location Services are on."
+                  : ACQUIRING_HINT
+                : ARMED_HINT}
+            </p>
           </div>
-          {gpsError && (
-            <div className={styles.gpsError} data-testid="gps-error">
-              {gpsError.message}
-            </div>
-          )}
           {status === "acquiring" ? (
             <div className={styles.armedAccuracy} data-testid="armed-accuracy">
               {latest
@@ -496,21 +533,6 @@ export default function FlyPage() {
             }}
             onFollowChange={changeFollow}
           />
-          {gpsError && (
-            <div
-              className={cx(styles.gpsError, styles.recordingError)}
-              // Centered over the MAP: pushed below the strip, or right of
-              // the rail (half the rail shifts the 50% anchor to the open
-              // half's midpoint).
-              style={{
-                top: mapInsets.top + 12,
-                left: `calc(50% + ${mapInsets.left / 2}px)`,
-              }}
-              data-testid="gps-error"
-            >
-              {gpsError.message}
-            </div>
-          )}
           <div className={styles.controls}>
             {/* Contextual: floats ABOVE the fixed control grid (which is
                   bottom-anchored) so appearing/disappearing never nudges the

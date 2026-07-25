@@ -4,7 +4,9 @@ import { FlightSimulator } from "../engine/simulator";
 import type { Fix } from "../engine/types";
 import {
   detectTakeoff,
+  fixLooksReduced,
   gpsReadyIndex,
+  IMPRECISE_M,
   MOVEMENT_SPEED_MPS,
   TAKEOFF_SPEED_MPS,
 } from "./takeoff";
@@ -48,6 +50,40 @@ describe("gpsReadyIndex", () => {
       { speed: 0, horizontalAccuracy: 30, verticalAccuracy: 45 },
     ]);
     expect(gpsReadyIndex(track)).toBe(null);
+  });
+});
+
+describe("fixLooksReduced", () => {
+  const reduced = (fix: FixSpec) => fixLooksReduced(fixesFrom([fix])[0]);
+
+  it("flags the reduced-accuracy signature: km-coarse, no altitude", () => {
+    expect(
+      reduced({
+        speed: 0,
+        horizontalAccuracy: 13_000,
+        verticalAccuracy: Number.POSITIVE_INFINITY,
+      }),
+    ).toBe(true);
+  });
+
+  it("passes a coarse fix that still has an altitude solution", () => {
+    expect(
+      reduced({ speed: 0, horizontalAccuracy: 3000, verticalAccuracy: 30 }),
+    ).toBe(false);
+  });
+
+  it("passes a cell-grade fix under the coarseness bar", () => {
+    expect(
+      reduced({
+        speed: 0,
+        horizontalAccuracy: IMPRECISE_M - 1,
+        verticalAccuracy: Number.POSITIVE_INFINITY,
+      }),
+    ).toBe(false);
+  });
+
+  it("passes a sharp fix", () => {
+    expect(reduced({ speed: 0, horizontalAccuracy: 5 })).toBe(false);
   });
 });
 

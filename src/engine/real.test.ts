@@ -1,7 +1,8 @@
 import { IDBFactory } from "fake-indexeddb";
-import { afterEach, beforeEach, describe, expect, it } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 import { LANDING_SUSTAIN_FIXES } from "../flight/landing";
+import { IMPRECISE_SUSTAIN_MS } from "../flight/takeoff";
 import { createWaypointTracker, WAYPOINT_RADIUS_M } from "../flight/waypoints";
 import {
   GeolocationRecordingEngine,
@@ -9,6 +10,7 @@ import {
   type PositionSource,
   type SourcePosition,
 } from "./real";
+import { readWal } from "./wal";
 
 class FakeGeolocation {
   private watchers = new Map<
@@ -231,6 +233,212 @@ describe("GeolocationRecordingEngine", () => {
     expect(engine.snapshotSync().error?.code).toBe("unavailable");
     geolocation.emit(position());
     expect(engine.snapshotSync().error).toBeNull();
+  });
+
+  it("a watch error after takeoff never blocks the flight", async () => {
+    const engine = createEngine();
+    await armAndTakeOff(engine);
+    expect(engine.snapshotSync().status).toBe("recording");
+    geolocation.emitError(1);
+    const snapshot = engine.snapshotSync();
+    expect(snapshot.status).toBe("recording");
+    expect(snapshot.error).toBeNull();
+    // Whatever fixes still arrive keep being consumed.
+    const length = snapshot.track.length;
+    geolocation.emit(position({ speed: 6 }));
+    expect(engine.snapshotSync().track.length).toBe(length + 1);
+  });
+
+  it("retry() exits blocked straight back into acquiring, never idle", async () => {
+    const engine = createEngine();
+    await engine.start();
+    geolocation.emitError(1);
+    expect(engine.snapshotSync().status).toBe("blocked");
+    engine.retry();
+    expect(engine.snapshotSync().status).toBe("acquiring");
+    // The bounced watch is live again.
+    geolocation.emit(position());
+    expect(engine.snapshotSync().latest).not.toBeNull();
+  });
+
+  it("a passive (busy) tab can never destroy the owner's WAL, and mid-flight adoption stays a viewer", async () => {
+    // Owner records a flight (lock-less env: owner by default).
+    const owner = createEngine();
+    await armAndTakeOff(owner);
+    await owner.getSnapshot(); // drain WAL queue: session + fixes durable
+    // Second tab: the recorder lock is now refused.
+    (globalThis.navigator as unknown as { locks: unknown }).locks = {
+      request: (_name: string, _opts: unknown, cb: (lock: null) => unknown) =>
+        Promise.resolve(cb(null)),
+    };
+    const viewer = createEngine();
+    await viewer.getSnapshot();
+    // Mid-flight adoption: read-only viewer, never a blocking screen.
+    expect(viewer.snapshotSync().status).toBe("recording");
+    expect(viewer.snapshotSync().error).toBeNull();
+    // Cancel in the second tab (discard) must not touch the owner's WAL.
+    await viewer.discard();
+    const { session } = await readWal();
+    expect(session).not.toBeNull();
+    expect(session?.takeoffIndex).not.toBeNull();
+  });
+
+  it("a pre-takeoff busy tab blocks, and its only exit still preserves the owner's WAL", async () => {
+    const owner = createEngine();
+    await owner.start();
+    await owner.getSnapshot();
+    (globalThis.navigator as unknown as { locks: unknown }).locks = {
+      request: (_name: string, _opts: unknown, cb: (lock: null) => unknown) =>
+        Promise.resolve(cb(null)),
+    };
+    const passive = createEngine();
+    await passive.getSnapshot();
+    const snapshot = passive.snapshotSync();
+    expect(snapshot.status).toBe("blocked");
+    expect(snapshot.error?.code).toBe("busy");
+    // retry() must not bounce a watch it does not own.
+    passive.retry();
+    expect(passive.snapshotSync().status).toBe("blocked");
+    await passive.discard();
+    const { session } = await readWal();
+    expect(session).not.toBeNull();
+  });
+
+  it("retry() during recording is a no-op: a started flight's source is never touched", async () => {
+    const engine = createEngine();
+    await armAndTakeOff(engine);
+    const before = engine.snapshotSync();
+    engine.retry();
+    const after = engine.snapshotSync();
+    expect(after.status).toBe("recording");
+    expect(after).toBe(before);
+    // The original watch is still the live one.
+    geolocation.emit(position({ speed: 6 }));
+    expect(engine.snapshotSync().track.length).toBe(before.track.length + 1);
+  });
+
+  it("a storage failure never tears down an installed blocking takeover", async () => {
+    const engine = createEngine();
+    await engine.start();
+    geolocation.emitError(1);
+    expect(engine.snapshotSync().status).toBe("blocked");
+    // The real path needs a live IndexedDB connection severed mid-write
+    // (fake-indexeddb cannot express it), so drive the WAL queue's
+    // rejection handler directly.
+    (
+      engine as unknown as {
+        enqueueWal: (op: () => Promise<void>) => void;
+      }
+    ).enqueueWal(() => Promise.reject(new Error("severed")));
+    await settle();
+    const snapshot = engine.snapshotSync();
+    expect(snapshot.status).toBe("blocked");
+    expect(snapshot.error?.code).toBe("permission-denied");
+  });
+
+  it("blocked imprecise self-heals on a good fix; the others absorb", async () => {
+    const engine = createEngine();
+    await engine.start();
+    vi.useFakeTimers();
+    try {
+      geolocation.emit(
+        position({ accuracy: 13_000, altitude: null, altitudeAccuracy: null }),
+      );
+      await vi.advanceTimersByTimeAsync(IMPRECISE_SUSTAIN_MS + 1);
+      expect(engine.snapshotSync().status).toBe("blocked");
+      // Still-coarse fixes keep absorbing (no flap)...
+      geolocation.emit(
+        position({ accuracy: 13_000, altitude: null, altitudeAccuracy: null }),
+      );
+      expect(engine.snapshotSync().status).toBe("blocked");
+      // ...but one good fix disproves the diagnosis and resumes ingest.
+      geolocation.emit(position());
+      const snapshot = engine.snapshotSync();
+      expect(snapshot.status).toBe("acquiring");
+      expect(snapshot.error).toBeNull();
+      expect(snapshot.latest).not.toBeNull();
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
+  it("retry() while acquiring bounces the watch and keeps the session", async () => {
+    const engine = createEngine();
+    await engine.start();
+    geolocation.emit(position());
+    const before = engine.snapshotSync().latest;
+    expect(before).not.toBeNull();
+    engine.retry();
+    // Still the same acquiring session with its buffer...
+    expect(engine.snapshotSync().status).toBe("acquiring");
+    expect(engine.snapshotSync().latest).toBe(before);
+    // ...and the fresh watch delivers.
+    geolocation.emit(position());
+    expect(engine.snapshotSync().latest).not.toBe(before);
+  });
+
+  it("latches imprecise from a LONE reduced fix after the sustain window", async () => {
+    const engine = createEngine();
+    await engine.start();
+    vi.useFakeTimers();
+    try {
+      // One kilometer-coarse, altitude-less fix, then silence — the
+      // grid-pinned source shape that a count-based check never catches.
+      geolocation.emit(
+        position({ accuracy: 13_000, altitude: null, altitudeAccuracy: null }),
+      );
+      expect(engine.snapshotSync().status).toBe("acquiring");
+      await vi.advanceTimersByTimeAsync(IMPRECISE_SUSTAIN_MS + 1);
+      const snapshot = engine.snapshotSync();
+      expect(snapshot.status).toBe("blocked");
+      expect(snapshot.error?.code).toBe("imprecise");
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
+  it("a pending storage error does not mask the imprecise latch", async () => {
+    const engine = createEngine();
+    await engine.start();
+    vi.useFakeTimers();
+    try {
+      geolocation.emit(
+        position({ accuracy: 13_000, altitude: null, altitudeAccuracy: null }),
+      );
+      // A Settings trip backgrounds Safari and severs IndexedDB, so the
+      // WAL flush fails right after the reduced fix ingests — plant the
+      // resulting storage error between arm and fire (private-field
+      // poke: the real failure path needs a severed live connection,
+      // which fake-indexeddb cannot express).
+      (engine as unknown as { error: unknown }).error = {
+        code: "storage",
+        message: "severed",
+      };
+      await vi.advanceTimersByTimeAsync(IMPRECISE_SUSTAIN_MS + 1);
+      const snapshot = engine.snapshotSync();
+      expect(snapshot.status).toBe("blocked");
+      expect(snapshot.error?.code).toBe("imprecise");
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
+  it("a non-reduced fix disarms the imprecise latch", async () => {
+    const engine = createEngine();
+    await engine.start();
+    vi.useFakeTimers();
+    try {
+      geolocation.emit(
+        position({ accuracy: 13_000, altitude: null, altitudeAccuracy: null }),
+      );
+      await vi.advanceTimersByTimeAsync(IMPRECISE_SUSTAIN_MS / 2);
+      geolocation.emit(position());
+      await vi.advanceTimersByTimeAsync(IMPRECISE_SUSTAIN_MS * 2);
+      expect(engine.snapshotSync().status).toBe("acquiring");
+      expect(engine.snapshotSync().error).toBeNull();
+    } finally {
+      vi.useRealTimers();
+    }
   });
 
   it("walks recording → landed → ended on fix time, trimming the tail", async () => {
@@ -695,10 +903,11 @@ describe("recorder lock", () => {
     await first.start();
     expect(first.snapshotSync().status).toBe("acquiring");
 
-    // Second tab: start refuses BEFORE touching the WAL.
+    // Second tab: start refuses BEFORE touching the WAL, and the refusal
+    // is a first-class blocked state (the error screen owns the surface).
     const second = createEngine();
     await second.start();
-    expect(second.snapshotSync().status).toBe("idle");
+    expect(second.snapshotSync().status).toBe("blocked");
     expect(second.snapshotSync().error?.code).toBe("busy");
 
     // Only the holder consumes fixes.
