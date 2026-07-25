@@ -643,4 +643,170 @@ describe("nativePositionSource.revive", () => {
 
     expect(reports).toHaveLength(1);
   });
+  // AUDIT (#160). A permission takeover absorbs its own fixes at the
+  // engine (real.ts handlePositions returns early for every blocking code
+  // but imprecise), so fixes flowing are NOT evidence that the takeover is
+  // over. If they retired the held refusal, revive would go silent and the
+  // red screen would have no exit but Cancel — and this is the ordinary
+  // case, not a corner: background capture resumes the moment the pilot
+  // re-grants, so fixes are already draining before they reach the app.
+  it("keeps asking after a permission refusal even while fixes drain", async () => {
+    let location = "granted";
+    let error: string | undefined;
+    core.invoke.mockImplementation((cmd: string, args?: { ts: number }) => {
+      switch (cmd) {
+        case "plugin:wingover|check_permissions":
+          return Promise.resolve({
+            location,
+            precise: true,
+            servicesEnabled: true,
+          });
+        case "plugin:wingover|fixes_since":
+          return Promise.resolve({
+            fixes: error === undefined ? [fix(args!.ts + 1000)] : [],
+            ...(error !== undefined && { error }),
+          });
+        default:
+          return Promise.resolve(null);
+      }
+    });
+
+    const reports: (SourceError | null)[] = [];
+    const stop = nativePositionSource.watch(
+      () => {},
+      (refusal) => reports.push(refusal),
+    );
+    await vi.advanceTimersByTimeAsync(0);
+
+    // Authorization revoked mid-capture: the drain mirrors the code.
+    location = "denied";
+    error = "permission-denied";
+    await vi.advanceTimersByTimeAsync(1000);
+    expect(reports).toHaveLength(1);
+
+    // The pilot re-grants in Settings. Background capture resumes and
+    // fixes drain BEFORE they switch back to the app — the engine keeps
+    // absorbing them under the takeover.
+    location = "granted";
+    error = undefined;
+    await vi.advanceTimersByTimeAsync(1000);
+
+    // Now they come back. This must still be able to ask.
+    (nativePositionSource as unknown as { revive: () => void }).revive();
+    await vi.advanceTimersByTimeAsync(0);
+    expect(reports[reports.length - 1]).toBeNull();
+    stop();
+  });
+
+  // A refusal a fresh watch cannot judge is not worth a bounce: a bounce
+  // is stop_watch, and stop_watch deletes the native session log. Swift's
+  // lastError is sticky across drains, so a GPS shadow would otherwise
+  // hand every single foreground a capture teardown.
+  it("never asks for a bounce over a refusal a fresh watch cannot clear", async () => {
+    stubPlugin([], "kCLErrorDomain error 0");
+    const reports: (SourceError | null)[] = [];
+    const stop = nativePositionSource.watch(
+      () => {},
+      (refusal) => reports.push(refusal),
+    );
+    await vi.advanceTimersByTimeAsync(0);
+    // The engine hears about it (it renders as a non-blocking
+    // "unavailable")...
+    expect(reports).toHaveLength(1);
+
+    // ...but a foreground must not turn it into a capture teardown.
+    core.invoke.mockClear();
+    (nativePositionSource as unknown as { revive: () => void }).revive();
+    await vi.advanceTimersByTimeAsync(0);
+    expect(reports).toHaveLength(1);
+    expect(commands()).not.toContain("plugin:wingover|check_permissions");
+    stop();
+  });
+
+  // Reduced accuracy is the one refusal a delivery CAN retire, because the
+  // engine retires the matching takeover on the same evidence.
+  it("stops asking once a non-reduced fix disproves reduced accuracy", async () => {
+    let error: string | undefined = "reduced-accuracy";
+    core.invoke.mockImplementation((cmd: string, args?: { ts: number }) => {
+      switch (cmd) {
+        case "plugin:wingover|check_permissions":
+          return Promise.resolve({
+            location: "granted",
+            precise: true,
+            servicesEnabled: true,
+          });
+        case "plugin:wingover|fixes_since":
+          return Promise.resolve({
+            fixes: error === undefined ? [fix(args!.ts + 1000)] : [],
+            ...(error !== undefined && { error }),
+          });
+        default:
+          return Promise.resolve(null);
+      }
+    });
+
+    const reports: (SourceError | null)[] = [];
+    const stop = nativePositionSource.watch(
+      () => {},
+      (refusal) => reports.push(refusal),
+    );
+    await vi.advanceTimersByTimeAsync(0);
+    expect(reports).toHaveLength(1);
+
+    error = undefined;
+    await vi.advanceTimersByTimeAsync(1000);
+
+    core.invoke.mockClear();
+    (nativePositionSource as unknown as { revive: () => void }).revive();
+    await vi.advanceTimersByTimeAsync(0);
+    expect(reports).toHaveLength(1);
+    expect(commands()).not.toContain("plugin:wingover|check_permissions");
+    stop();
+  });
+
+  // A reduced fix proves authorization exists but not that accuracy is
+  // back, so a permission refusal that the pilot half-fixed must follow
+  // the platform to its real reason instead of going quiet.
+  it("a coarse fix under a permission refusal still leads to the current reason", async () => {
+    let status: Record<string, unknown> = {
+      location: "denied",
+      precise: true,
+      servicesEnabled: true,
+    };
+    core.invoke.mockImplementation((cmd: string, args?: { ts: number }) => {
+      switch (cmd) {
+        case "plugin:wingover|check_permissions":
+          return Promise.resolve(status);
+        case "plugin:wingover|fixes_since":
+          return Promise.resolve({
+            fixes: [
+              fix(args!.ts + 1000, {
+                horizontalAccuracy: 13_000,
+                verticalAccuracy: undefined,
+                altitude: undefined,
+              }),
+            ],
+          });
+        default:
+          return Promise.resolve(null);
+      }
+    });
+
+    const reports: (SourceError | null)[] = [];
+    const stop = nativePositionSource.watch(
+      () => {},
+      (refusal) => reports.push(refusal),
+    );
+    await vi.advanceTimersByTimeAsync(0);
+
+    status = { location: "granted", precise: false, servicesEnabled: true };
+    (nativePositionSource as unknown as { revive: () => void }).revive();
+    await vi.advanceTimersByTimeAsync(0);
+    expect(reports[reports.length - 1]).toStrictEqual({
+      permissionDenied: false,
+      imprecise: true,
+      message: "precise location disabled",
+    });
+    stop();
+  });
 });
