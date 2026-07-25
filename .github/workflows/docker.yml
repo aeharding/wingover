@@ -85,8 +85,12 @@ jobs:
           build-args: |
             VITE_MAPKIT_TOKEN_WINGOVER_APP=${{ vars.VITE_MAPKIT_TOKEN_WINGOVER_APP }}
             VITE_MAPKIT_TOKEN_BETA_WINGOVER_APP=${{ vars.VITE_MAPKIT_TOKEN_BETA_WINGOVER_APP }}
-            # The footer sha marks a continuous build (:main -> beta.wingover.app);
-            # a version-tag build (-> wingover.app) sends an empty sha and the
-            # footer shows the clean version alone. Gated on the ref from the
-            # Actions context (Voyager-style) — no git read in the build.
-            GIT_SHA=${{ startsWith(github.ref, 'refs/tags/') && '' || github.sha }}
+            # The settings footer's build identity, Voyager-style: the REF picks
+            # the ring (a version tag reads as a clean release, `main` as beta,
+            # a PR ref as development), the run number names the build and the
+            # sha names the commit. All three come from the Actions context, so
+            # the build reads no git; the container inherits none of the
+            # runner's env, hence build args.
+            GIT_SHA=${{ github.sha }}
+            GIT_REF=${{ github.ref_name }}
+            BUILD_NUMBER=${{ github.run_number }}

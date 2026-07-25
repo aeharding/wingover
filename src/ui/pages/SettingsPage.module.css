@@ -35,12 +35,30 @@
   color: var(--status-bad);
 }
 
-/* Build footer. Centered note; on a dev server the sha reads "dev", on a
-   hand-rolled build "local" — an unstamped bundle must never render like
-   a clean release. */
+/* Build footer. Centered note; the release ring is a colored stamp after the
+   version, so an unstamped bundle can never render like a clean release
+   (buildStamp in SettingsPage). Production is the one ring with no stamp. */
 .build {
   display: flex;
   flex-direction: column;
   align-items: center;
   padding-top: 2rem;
+}
+
+/* Beta ring (TestFlight, beta.wingover.app): amber, deepened for light the way
+   the sync tones are. Ionic's --ion-color-warning is the dark-scheme value —
+   that same yellow on the light list background is barely there (theme.css,
+   the --status-* precedent). */
+.beta {
+  color: color(display-p3 0.55 0.36 0);
+
+  :root:global(.ion-palette-dark) & {
+    color: var(--ion-color-warning);
+  }
+}
+
+/* Development ring (dev server, hand-rolled build, PR image): the same red the
+   page uses for "this is not the good state". */
+.dev {
+  color: var(--status-bad);
 }

@@ -12,26 +12,52 @@ import { version } from "./package.json";
 // device gets a connection refused.
 const tauriDevHost = process.env.TAURI_DEV_HOST;
 
-// The commit this build was cut from, for the settings footer (Voyager-style
-// version + sha). Not read from git: the Docker build context excludes .git
-// (see .dockerignore), and a dev working copy is not a release. CI passes it
-// from the Actions context instead — docker.yml sends github.sha as GIT_SHA for
-// a continuous build (:main -> beta.wingover.app) and an empty sha for a version
-// tag (-> wingover.app / App Store), so a release footer shows the clean version
-// alone. GITHUB_SHA is the same value auto-exported on the direct runner, the
-// fallback for the TestFlight build (which only ever builds main). Sliced
-// to 8 chars. "" stays reserved for the CI version-tag build (a release
-// footer shows the clean version alone); a hand-rolled local `pnpm build`
-// is NOT a release, so it says so. The dev server is handled in the
-// component via import.meta.env.DEV, which keeps `vite preview` honest.
-const gitSha =
-  (process.env.GIT_SHA ?? process.env.GITHUB_SHA ?? "").slice(0, 8) ||
-  (process.env.GITHUB_ACTIONS ? "" : "local");
+// ---- Build identity (Voyager's model: version + build number + the ref the
+// build was cut from) -------------------------------------------------------
+//
+// Three rings, and the settings footer must never let one impersonate another:
+//
+//   development  a dev server, a hand-rolled `pnpm build`, or a PR image
+//   beta         a main build: TestFlight, and :main -> beta.wingover.app
+//   production   a build cut from the version tag: :latest -> wingover.app,
+//                and the App Store binary promoted from that same tag
+//
+// Nothing here reads git. The Docker build context excludes .git (see
+// .dockerignore) and a working copy is not a release, so CI hands the facts in
+// from the Actions context. GITHUB_* are auto-exported on a direct runner, so
+// testflight.yml needs no wiring past the BUILD_NUMBER it already gives
+// fastlane; a container inherits none of that env, so docker.yml forwards all
+// three as build args. Every value is honest or empty: nothing is overloaded
+// to mean "release" by omission.
+const fullSha = process.env.GIT_SHA ?? process.env.GITHUB_SHA ?? "";
+const gitSha = fullSha.slice(0, 8);
+const gitRef = process.env.GIT_REF ?? process.env.GITHUB_REF_NAME ?? "";
+// The number fastlane stamps into the IPA (`--build-number`), so a TestFlight
+// tester can name the exact build from the footer. Same number on the web side:
+// both are github.run_number.
+const appBuild =
+  process.env.BUILD_NUMBER ?? process.env.GITHUB_RUN_NUMBER ?? "";
+
+// Production iff the ref IS the version being built. release-it tags bare
+// `0.3.0` (.release-it.json), so `ref === package.json version` is exactly
+// Voyager's check; a tag that disagrees with package.json is not a release and
+// stays out of the production ring instead of claiming it. Main is the beta
+// ring. Everything else (PR image, local build, dev server) is development and
+// says so in the footer. The dev SERVER is decided in the component via
+// import.meta.env.DEV, which keeps `vite preview` of a local build honest.
+const channel =
+  gitRef && gitRef === version
+    ? "production"
+    : gitRef === "main"
+      ? "beta"
+      : "development";
 
 export default defineConfig({
   define: {
     __APP_VERSION__: JSON.stringify(version),
     __APP_GIT_SHA__: JSON.stringify(gitSha),
+    __APP_BUILD__: JSON.stringify(appBuild),
+    __APP_CHANNEL__: JSON.stringify(channel),
   },
   plugins: [
     react(),

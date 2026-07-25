@@ -31,11 +31,18 @@ ENV VITE_MAPKIT_TOKEN_WINGOVER_APP=${VITE_MAPKIT_TOKEN_WINGOVER_APP}
 ARG VITE_MAPKIT_TOKEN_BETA_WINGOVER_APP
 ENV VITE_MAPKIT_TOKEN_BETA_WINGOVER_APP=${VITE_MAPKIT_TOKEN_BETA_WINGOVER_APP}
 
-# The commit SHA this image was built from. The build context excludes .git
-# (see .dockerignore), so vite cannot read it from git — CI passes it in and
-# vite bakes the first 8 chars into the settings footer.
+# The build identity vite bakes into the settings footer: the commit, the ref
+# (which picks the release ring: version tag = production, main = beta) and the
+# run number. The build context excludes .git (see .dockerignore) and a
+# container inherits none of the runner's env, so CI passes all three in.
 ARG GIT_SHA
 ENV GIT_SHA=${GIT_SHA}
+
+ARG GIT_REF
+ENV GIT_REF=${GIT_REF}
+
+ARG BUILD_NUMBER
+ENV BUILD_NUMBER=${BUILD_NUMBER}
 
 # tsc --noEmit && vite build -> /app/dist
 RUN pnpm build

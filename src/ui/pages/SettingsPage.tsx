@@ -46,6 +46,38 @@ const SETTINGS_TONE_CLASS: Record<SyncTone, string> = {
   neutral: "",
 };
 
+// What the footer says after the version, per release ring (the three rings
+// and how they are derived: vite.config.ts). Production is the only ring that
+// adds nothing, because a version tag already pins the commit; every other
+// ring names itself, so an unstamped bundle can never pass for a release.
+// Colored like Voyager's About line (amber beta, red for anything that is not
+// a shippable build at all), but through this module's scheme-aware tones
+// rather than Ionic's palette colors, which wash out on the light list.
+function buildStamp(dev: boolean): { text: string; tone: string } {
+  // Decided at runtime, not baked: one build config serves `vite dev` and
+  // `vite preview`, and only the former is a dev server.
+  if (dev) return { text: "dev", tone: styles.dev };
+
+  // Build number first (what a TestFlight tester quotes in a report), then the
+  // commit. Either can be missing; the ring still reads correctly without them.
+  const id = [
+    __APP_BUILD__ && `build ${__APP_BUILD__}`,
+    __APP_GIT_SHA__ && `(${__APP_GIT_SHA__})`,
+  ]
+    .filter(Boolean)
+    .join(" ");
+
+  switch (__APP_CHANNEL__) {
+    case "production":
+      return { text: "", tone: "" };
+    case "beta":
+      return { text: `beta ${id}`.trim(), tone: styles.beta };
+    default:
+      // A PR image carries a sha; a hand-rolled build carries nothing at all.
+      return { text: id || "local", tone: styles.dev };
+  }
+}
+
 export default function SettingsPage() {
   const { units, appearance } = useSettings();
   const openSync = useSyncSheet();
@@ -71,9 +103,7 @@ export default function SettingsPage() {
   // internal checked state, so a cancelled enable leaves it visually ON
   // (and the next tap a silent no-op) unless the element is remounted.
   const [toggleReset, setToggleReset] = useState(0);
-  // A dev-server bundle must not render like a clean release: an empty
-  // sha is reserved for the CI version-tag build.
-  const jsSha = import.meta.env.DEV ? "dev" : __APP_GIT_SHA__;
+  const stamp = buildStamp(import.meta.env.DEV);
 
   function loadSettings() {
     getSetting("mapBackend").then((value) => {
@@ -259,7 +289,11 @@ export default function SettingsPage() {
 
         <div className={styles.build}>
           <IonNote>
-            {`Wingover ${__APP_VERSION__}${jsSha ? ` (${jsSha})` : ""} · AGPL-3.0`}
+            {`Wingover ${__APP_VERSION__} `}
+            {stamp.text ? (
+              <span className={stamp.tone}>{`${stamp.text} `}</span>
+            ) : null}
+            {`· AGPL-3.0`}
           </IonNote>
         </div>
       </IonContent>
