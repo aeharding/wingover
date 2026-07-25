@@ -44,6 +44,27 @@ plugin from `src-tauri/plugins/wingover/` when touching Rust.
   `src/engine/nativeSource.contract.test.ts`) — serde drops unknown fields
   silently, so an untested field is an unsent field.
 
+## Code style
+
+- **Self-explaining over explained.** If code needs a lot of explanation,
+  refactor the code, not the comment. Comments state constraints the code
+  cannot show — doctrine, a platform quirk, why the obvious thing is
+  wrong. A comment apologizing for structure means the structure is
+  wrong. (PR #158: a fifty-line readiness closure became
+  `onReadinessAnswer` + `reclassifyTakeover`, the comments shrank 5x, and
+  behavior did not change.)
+- **`switch` and small early-return functions over ternary chains** —
+  `switch (true)` included, when the arms are ranges rather than a
+  discriminant. Nested ternaries are lint-banned repo-wide.
+- **`{cond && <X />}` only as a simple guard**: one condition (an
+  identifier, member read or call), one element. Anything composite gets a
+  named boolean or an extracted early-return render function
+  (`wingover/simple-jsx-guard`).
+- **Size and complexity ceilings are ratchets** (`eslint.config.js`),
+  tightest on the flight surface. The fix for a violation is
+  decomposition; never an exception, and inline disables are banned
+  anyway.
+
 ## Environment traps (all have drawn blood)
 
 - Two dev servers: 5173 must serve the worktree under test; check the

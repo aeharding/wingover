@@ -143,17 +143,19 @@ export default function FlightDetailPage() {
 
   // What the map region consumes off the device edges, one class the
   // buttons AND the MapKit attribution both inherit (so they can never
-  // disagree): inline it is a boxed mid-page preview (every edge covered);
-  // full screen it takes the real device insets, EXCEPT the bottom while
-  // the replay pane below holds the home indicator. ownsBottom (not
-  // isOpen) releases the edge on the close slide's first frame, so the
-  // region's inset transition glides concurrently with the slide instead
-  // of the buttons stepping up after it settles.
-  const regionConsume = !mapFull
-    ? "consume-all"
-    : replay.ownsBottom
-      ? "consume-bottom"
-      : "";
+  // disagree). ownsBottom (not isOpen) releases the edge on the close
+  // slide's first frame, so the region's inset transition glides
+  // concurrently with the slide instead of the buttons stepping up after
+  // it settles.
+  function regionConsumeClass() {
+    // Inline: a boxed mid-page preview, every edge covered.
+    if (!mapFull) return "consume-all";
+    // Full screen: the real device insets, EXCEPT the bottom while the
+    // replay pane below holds the home indicator.
+    if (replay.ownsBottom) return "consume-bottom";
+    return "";
+  }
+  const regionConsume = regionConsumeClass();
 
   // Full screen REPARENTS the map surface (same instance — reverse portal, no
   // remount) into a fixed overlay on document.body. Outside the scroller,

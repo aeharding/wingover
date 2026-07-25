@@ -93,6 +93,15 @@ export default function ReplayDock({
     rememberPosition(timelineKey, feed.simTime),
   );
 
+  // The play button is one control in three states, so its glyph and its
+  // label are decided once, together — they used to be two ternary chains
+  // over the same two flags, free to disagree.
+  function transport() {
+    if (feed.playing) return { icon: pause, label: "Pause" };
+    if (feed.atEnd) return { icon: refresh, label: "Replay again" };
+    return { icon: play, label: "Play" };
+  }
+
   useEffect(() => {
     reportPosition();
   }, [feed.simTime]);
@@ -192,17 +201,13 @@ export default function ReplayDock({
         <button
           className={mapCss.button}
           data-testid="replay-play"
-          aria-label={
-            feed.playing ? "Pause" : feed.atEnd ? "Replay again" : "Play"
-          }
+          aria-label={transport().label}
           onClick={() => {
             onActiveChange(true);
             feed.togglePlay();
           }}
         >
-          <NativeIcon
-            icon={feed.playing ? pause : feed.atEnd ? refresh : play}
-          />
+          <NativeIcon icon={transport().icon} />
         </button>
         <div className={styles.time} data-testid="replay-time">
           {formatDuration(feed.elapsedSeconds)}

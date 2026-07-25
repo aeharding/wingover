@@ -10,6 +10,7 @@ import globals from "globals";
 import tseslint from "typescript-eslint";
 
 import maxUseState from "./eslint-rules/max-usestate.js";
+import simpleJsxGuard from "./eslint-rules/simple-jsx-guard.js";
 
 // ─── The seams, as restriction entries ──────────────────────────────────
 //
@@ -231,7 +232,12 @@ export default defineConfig(
   reactHooks.configs.flat["recommended-latest"],
   {
     plugins: {
-      wingover: { rules: { "max-usestate": maxUseState } },
+      wingover: {
+        rules: {
+          "max-usestate": maxUseState,
+          "simple-jsx-guard": simpleJsxGuard,
+        },
+      },
     },
     rules: {
       // >5 useState in one component = state that wants a hook/object.
@@ -486,6 +492,116 @@ export default defineConfig(
         NO_RELOAD,
         ...NO_DYNAMIC_HEADLESS,
         ...NO_WALL_CLOCK,
+      ],
+    },
+  },
+  {
+    // ─── The size ceilings ────────────────────────────────────────────
+    //
+    // A component may not become the whole app. Both counts SKIP comments
+    // and blank lines on purpose: this codebase carries its doctrine in
+    // prose next to the code it governs, and a budget that taxes the
+    // explanation buys shorter files by deleting the reason for them.
+    //
+    // The numbers are ceilings set just above today's runner-up, not
+    // targets — a ratchet, to be lowered as each file below them is
+    // decomposed (see the PR that introduced this). At the time of
+    // writing the whole repo passes, and the runner-ups are
+    // FlightDetailPage.tsx (471 code lines, one 389-line component) and
+    // Barogram.tsx (395-line component).
+    //
+    // Scoped to components: .ts modules under src/ui (the trace renderer,
+    // the map adapters) are pipelines and state machines whose shape is
+    // not a screen's, and they answer to the per-function limits instead.
+    files: ["src/ui/**/*.tsx"],
+    ignores: ["src/ui/**/*.test.tsx"],
+    rules: {
+      "max-lines": [
+        "error",
+        { max: 500, skipBlankLines: true, skipComments: true },
+      ],
+      "max-lines-per-function": [
+        "error",
+        { max: 400, skipBlankLines: true, skipComments: true, IIFEs: true },
+      ],
+    },
+  },
+  {
+    // Cyclomatic complexity, everywhere but the tests (a table-driven
+    // spec's branches are its cases). The "modified" variant counts a
+    // whole switch as ONE, which is the point: a switch — including
+    // switch (true) — is the house answer to a ternary pile, and a metric
+    // that charges per case would push code back toward the thing being
+    // replaced. Generous by default-standards (ESLint's default is 20)
+    // because in TSX every `?.`, `??` and `&&` guard also scores, so a
+    // component's number measures null-safety as much as tangled logic.
+    // Same ratchet as above: today's runner-up is useReplayDrawer.tsx (53).
+    //
+    // no-nested-ternary rides along, repo-wide, for the same reason and
+    // with the same exemption. A ternary inside a ternary is the shape the
+    // house style exists to prevent: the branches stop lining up with the
+    // conditions and the reader has to rebuild the decision from operator
+    // precedence. The answer is never a tidier expression — it is a
+    // function with early returns, or a switch (switch (true) when the
+    // arms are ranges rather than a discriminant). Turned on here it cost
+    // 11 sites; all 11 were converted, none suppressed.
+    files: ["src/**"],
+    ignores: ["src/**/*.test.ts", "src/**/*.test.tsx"],
+    rules: {
+      complexity: ["error", { max: 55, variant: "modified" }],
+      "no-nested-ternary": "error",
+    },
+  },
+  {
+    // ─── The flight surface's own budget ──────────────────────────────
+    //
+    // The flight surface is already this config's strictest scope (see
+    // the Ionic-free block above, and STEERING's "Reliability over
+    // features: a smaller app that never drops a track beats a bigger one
+    // that sometimes does"). It is also where the size rules were earned:
+    // FlyPage was 717 lines and complexity 65 before the decomposition
+    // that shipped these rules. So the ceilings here are the real budget,
+    // and the house ones above are the backstop.
+    // Runner-ups on this surface: LiveTrackMap.tsx (274 code lines, a
+    // 226-line component) and traceRenderer.ts (complexity 22).
+    //
+    // Tests exempt, like the two blocks above: a table-driven spec's
+    // branches are its cases, and src/engine/real.test.ts is 2000 lines by
+    // design. There is no flight test file yet; without this the first one
+    // written would be the only spec in the repo held to a 25 complexity.
+    files: ["src/ui/flight/**"],
+    ignores: ["src/ui/flight/**/*.test.ts", "src/ui/flight/**/*.test.tsx"],
+    rules: {
+      "max-lines-per-function": [
+        "error",
+        { max: 250, skipBlankLines: true, skipComments: true, IIFEs: true },
+      ],
+      complexity: ["error", { max: 25, variant: "modified" }],
+      // `{cond && <X />}` for one named guard; anything composite gets a
+      // name or an early-return render function (eslint-rules/
+      // simple-jsx-guard.js).
+      //
+      // STILL SCOPED TO THIS SURFACE, deliberately, now that its former
+      // travelling companion no-nested-ternary has gone repo-wide (see the
+      // complexity block above). The two are not the same kind of rule. A
+      // nested ternary is wrong everywhere and the fix is mechanical, so
+      // it graduated. This one draws a taste line — how much logic may sit
+      // in a render position — and it costs 21 sites across the ground
+      // app (MapCluster ×4, ClipDock ×4, DesktopShell ×4, FlightDetailPage
+      // ×3, Barogram ×3, plus SettingsPage, PlanPage, LogbookPage,
+      // SyncConnection, MapProviderPage, ConnectFunnel, FlightSeat,
+      // LogbookSection). Widening it is a decision to make on its own,
+      // against the ground app's own surfaces, not a rider on this PR.
+      "wingover/simple-jsx-guard": "error",
+    },
+  },
+  {
+    files: ["src/ui/flight/**/*.tsx"],
+    ignores: ["src/ui/flight/**/*.test.tsx"],
+    rules: {
+      "max-lines": [
+        "error",
+        { max: 300, skipBlankLines: true, skipComments: true },
       ],
     },
   },

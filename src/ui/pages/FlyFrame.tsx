@@ -18,6 +18,19 @@ function greetingForHour(hour: number) {
   return "Good evening";
 }
 
+// When the greeting above next changes: noon, 18:00, or tomorrow's
+// midnight. switch (true) because the arms are ranges, not a discriminant.
+function nextBoundaryHour(hour: number) {
+  switch (true) {
+    case hour < 12:
+      return 12;
+    case hour < 18:
+      return 18;
+    default:
+      return 24;
+  }
+}
+
 /**
  * Re-arms a timeout for the next boundary (noon, 6pm, midnight) rather
  * than polling: the page idles mounted for hours and the flight surface
@@ -36,7 +49,7 @@ function useGreeting() {
       const now = new Date();
       const boundary = new Date(now);
       const hour = now.getHours();
-      boundary.setHours(hour < 12 ? 12 : hour < 18 ? 18 : 24, 0, 0, 0);
+      boundary.setHours(nextBoundaryHour(hour), 0, 0, 0);
 
       timer = window.setTimeout(
         () => {

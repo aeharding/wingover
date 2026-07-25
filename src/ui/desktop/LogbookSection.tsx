@@ -44,6 +44,18 @@ function clampPane(width: number): number {
  * of truth — plain react-router, no Ionic outlet, so /logbook/:id updates
  * in place with real history entries.
  */
+/** Arrow keys nudge the pane; anything else is not a resize. */
+function paneKeyDelta(key: string): number {
+  switch (key) {
+    case "ArrowLeft":
+      return -16;
+    case "ArrowRight":
+      return 16;
+    default:
+      return 0;
+  }
+}
+
 export default function LogbookSection() {
   const { units } = useSettings();
   const history = useHistory();
@@ -175,12 +187,7 @@ export default function LogbookSection() {
           onPointerDown={startPaneDrag}
           onDoubleClick={() => rememberPane(PANE_DEFAULT)}
           onKeyDown={(event) => {
-            const delta =
-              event.key === "ArrowLeft"
-                ? -16
-                : event.key === "ArrowRight"
-                  ? 16
-                  : 0;
+            const delta = paneKeyDelta(event.key);
             if (!delta) return;
             event.preventDefault();
             rememberPane(clampPane(paneWidthRef.current + delta));

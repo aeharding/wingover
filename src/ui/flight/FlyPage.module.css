@@ -194,8 +194,17 @@
 }
 
 /* The live map fills the recording screen (LiveTrackMap takes this as its
-   host-placement class — the seat sizes it with flex instead). */
-.liveMap {
+   host-placement class — the seat sizes it with flex instead).
+
+   Scoped under .recording ON PURPOSE: this class rides the same element as
+   LiveTrackMap's own .root (position: relative; flex: 1), and two single
+   classes from different modules tie on specificity — the winner is bundle
+   emission order, which differs dev vs prod (docs/CSS-MODULES.md). It won
+   here only because FlyPage.tsx happened to import LiveTrackMap above its
+   own stylesheet; splitting this surface into components moved that import
+   and the map collapsed to zero height. A local ancestor decides it by
+   descendant specificity instead, in any order. */
+.recording .liveMap {
   position: absolute;
   inset: 0;
 
@@ -277,7 +286,13 @@
   );
 }
 
-.skipIconBadge {
+/* Scoped under .skipIcon for the same reason .liveMap is scoped under
+   .recording: this class rides the same element as NativeIcon's own
+   .nativeIcon, and the split flipped their emission order too. The two
+   rules happen to share no property today, so nothing moved — but
+   "inert until someone adds a width" is exactly the tie the conventions
+   ban (docs/CSS-MODULES.md). */
+.skipIcon .skipIconBadge {
   position: absolute;
   left: 80%;
   top: 20%;
