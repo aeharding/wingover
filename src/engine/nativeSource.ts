@@ -77,12 +77,17 @@ export const nativePositionSource: PositionSource = {
         if (response.error !== undefined && response.fixes.length === 0) {
           onError({
             permissionDenied: /denied|permission/i.test(response.error),
+            imprecise: /precise/i.test(response.error),
             message: response.error,
           });
         }
       } catch (error) {
         if (!stopped)
-          onError({ permissionDenied: false, message: String(error) });
+          onError({
+            permissionDenied: false,
+            imprecise: /precise/i.test(String(error)),
+            message: String(error),
+          });
       } finally {
         inFlight = false;
       }
@@ -111,7 +116,13 @@ export const nativePositionSource: PositionSource = {
         void poll();
         timer = setInterval(() => void poll(), POLL_MS);
       } catch (error) {
-        onError({ permissionDenied: false, message: String(error) });
+        // start_watch rejections carry the native reason verbatim —
+        // "precise location disabled" is the reduced-accuracy refusal.
+        onError({
+          permissionDenied: false,
+          imprecise: /precise/i.test(String(error)),
+          message: String(error),
+        });
       }
     })();
 

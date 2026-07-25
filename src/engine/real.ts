@@ -65,6 +65,8 @@ export interface SourcePosition {
 
 export interface SourceError {
   permissionDenied: boolean;
+  // iOS Precise Location off (native source only).
+  imprecise?: boolean;
   message: string;
 }
 
@@ -620,16 +622,21 @@ export class GeolocationRecordingEngine implements RecordingEngine {
 
   private handleWatchError(error: SourceError) {
     console.warn("geolocation error:", error.message);
-    this.error = error.permissionDenied
+    this.error = error.imprecise
       ? {
-          code: "permission-denied",
-          message:
-            "Location permission denied. Allow location access for Wingover, then try again.",
+          code: "imprecise",
+          message: "Precise Location is off for Wingover.",
         }
-      : {
-          code: "unavailable",
-          message: "GPS unavailable. Check that location services are on.",
-        };
+      : error.permissionDenied
+        ? {
+            code: "permission-denied",
+            message:
+              "Location permission denied. Allow location access for Wingover, then try again.",
+          }
+        : {
+            code: "unavailable",
+            message: "GPS unavailable. Check that location services are on.",
+          };
     this.invalidate();
   }
 

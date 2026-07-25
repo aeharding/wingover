@@ -46,6 +46,7 @@ import type { MapView } from "../map/types";
 import ViewToggle from "../map/ViewToggle";
 import { useSettings } from "../settings/SettingsContext";
 import { ConfirmSurface, useBigConfirm } from "./BigConfirm";
+import ErrorScreen, { actionableError } from "./ErrorScreen";
 import LiveTrackMap from "./LiveTrackMap";
 import Tile from "./Tile";
 import { showToast } from "./toast";
@@ -118,13 +119,14 @@ export default function FlyPage() {
   const instrumentsRef = useRef<HTMLDivElement>(null);
 
   const { track, latest, landingAt, nextWaypoint } = snapshot;
-  // Storage failures never reach the pilot: they are non-actionable
-  // mid-air, the native track is durably held in Rust regardless of what
-  // webview storage does, and the engine already retains and retries
-  // every failed batch (the console carries the detail). What still
-  // surfaces is what a pilot can act on: GPS/permission problems and the
-  // recorder-busy conflict.
-  const gpsError = snapshot.error?.code === "storage" ? null : snapshot.error;
+  // Errors the pilot must ACT on take the whole surface as a dedicated
+  // screen (ErrorScreen) — never inline prose. Everything else stays off
+  // the flight surface entirely: storage failures are non-actionable
+  // mid-air (native fixes are durably held in Rust; the engine retains
+  // and retries every batch), and transient GPS shadows ("unavailable")
+  // self-heal — the acquiring screen's own guidance covers a slow first
+  // fix.
+  const takeover = actionableError(snapshot.error);
   // Only a still-active selection surfaces the control; a reached/removed pin
   // drops out of activeWaypoints and the button hides on its own.
   const selectedWaypoint =
@@ -318,6 +320,24 @@ export default function FlyPage() {
       ? relativeBearing(latest.course, bearingBetween(latest, navTarget))
       : 0;
 
+  if (takeover) {
+    return (
+      <div className={styles.content} data-testid="fly-content">
+        <ErrorScreen
+          error={takeover}
+          onCancel={
+            status === "acquiring" || status === "armed"
+              ? confirmEndFlight
+              : takeover.code === "busy"
+                ? () => void engine.discard()
+                : undefined
+          }
+        />
+        {confirmElement}
+      </div>
+    );
+  }
+
   return (
     <div className={styles.content} data-testid="fly-content">
       {status === "idle" && (
@@ -333,11 +353,6 @@ export default function FlyPage() {
           <button className={styles.start} onClick={armFlight}>
             Start Flight
           </button>
-          {gpsError && (
-            <div className={styles.gpsError} data-testid="gps-error">
-              {gpsError.message}
-            </div>
-          )}
         </div>
       )}
       {(status === "acquiring" || status === "armed") && (
@@ -355,11 +370,6 @@ export default function FlyPage() {
             </h2>
             <p>{status === "acquiring" ? ACQUIRING_HINT : ARMED_HINT}</p>
           </div>
-          {gpsError && (
-            <div className={styles.gpsError} data-testid="gps-error">
-              {gpsError.message}
-            </div>
-          )}
           {status === "acquiring" ? (
             <div className={styles.armedAccuracy} data-testid="armed-accuracy">
               {latest
@@ -482,15 +492,6 @@ export default function FlyPage() {
             }}
             onFollowChange={changeFollow}
           />
-          {gpsError && (
-            <div
-              className={cx(styles.gpsError, styles.recordingError)}
-              style={{ top: mapTopInset + 12 }}
-              data-testid="gps-error"
-            >
-              {gpsError.message}
-            </div>
-          )}
           <div className={styles.controls}>
             {/* Contextual: floats ABOVE the fixed control grid (which is
                   bottom-anchored) so appearing/disappearing never nudges the

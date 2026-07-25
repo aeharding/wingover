@@ -72,6 +72,9 @@ export interface EngineSnapshot {
 
 export type EngineErrorCode =
   | "permission-denied"
+  // iOS Precise Location is off: reduced-accuracy fixes (~kilometers)
+  // can never pass the accuracy gate, so acquiring would hang forever.
+  | "imprecise"
   | "unavailable"
   // WAL writes are failing: fixes survive only in memory until it clears.
   | "storage"

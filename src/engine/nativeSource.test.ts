@@ -193,7 +193,30 @@ describe("nativePositionSource", () => {
     await vi.advanceTimersByTimeAsync(0);
 
     expect(errors).toEqual([
-      { permissionDenied: true, message: "location permission denied" },
+      {
+        permissionDenied: true,
+        imprecise: false,
+        message: "location permission denied",
+      },
+    ]);
+  });
+
+  it("classifies a reduced-accuracy refusal as imprecise", async () => {
+    stubPlugin([], "precise location disabled");
+
+    const errors: SourceError[] = [];
+    nativePositionSource.watch(
+      () => {},
+      (error) => errors.push(error),
+    );
+    await vi.advanceTimersByTimeAsync(0);
+
+    expect(errors).toEqual([
+      {
+        permissionDenied: false,
+        imprecise: true,
+        message: "precise location disabled",
+      },
     ]);
   });
 

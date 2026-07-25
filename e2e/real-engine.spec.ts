@@ -265,7 +265,7 @@ test("permission denied surfaces on the arming screen and clears on fix", async 
     );
   });
   await expect(page.getByTestId("gps-error")).toContainText(
-    "Location permission denied",
+    "Location Access Needed",
   );
 
   // A fix arriving clears the banner
