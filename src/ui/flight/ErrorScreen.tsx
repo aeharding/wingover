@@ -64,10 +64,7 @@ export default function ErrorScreen({
         </button>
       )}
       {retry && (
-        <button
-          className={settings ? styles.secondary : styles.action}
-          onClick={retry}
-        >
+        <button className={styles.action} onClick={retry}>
           Try Again
         </button>
       )}

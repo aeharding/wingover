@@ -222,23 +222,14 @@ export default function FlyPage() {
     void Promise.resolve().then(() => collectEndedFlight());
   }, [status]);
 
-  // Coming back from Settings must PROCEED, not sit on the error screen:
-  // a failed watch is dead (nothing restarts it on its own — native iOS
-  // usually masks this by killing the app on a permission change, but the
-  // Precise Location toggle and the browser grant flow do not force a
-  // relaunch). Re-arm silently when the app foregrounds while a
-  // permission-class screen is up; if it is still broken, the error
-  // re-surfaces and the screen simply stays.
-  // engine.retry() recovers straight back into acquiring with the
-  // session intact — never through idle, so the homepage cannot flash
-  // behind the error screen.
-  const retryTakeover = () => engine.retry();
-  // Returning from Settings foregrounds the app; retry silently so the
-  // screen simply disappears when the fix took.
-  const retrySilently = useEffectEvent(retryTakeover);
+  // Coming back from Settings must PROCEED, not sit on a frozen screen:
+  // Safari can silently kill the watch while backgrounded, and nothing
+  // restarts it on its own. engine.retry() is the heal — it bounces the
+  // watch pre-takeoff (clearing a blocking error if one is up) and
+  // recovers straight into acquiring, never through idle.
   useEffect(() => {
     const onVisible = () => {
-      if (document.visibilityState === "visible") retrySilently();
+      if (document.visibilityState === "visible") engine.retry();
     };
     document.addEventListener("visibilitychange", onVisible);
     return () => document.removeEventListener("visibilitychange", onVisible);
@@ -255,7 +246,7 @@ export default function FlyPage() {
       return;
     const poll = setInterval(() => {
       void nativeLocationReady().then((ok) => {
-        if (ok) retrySilently();
+        if (ok) engine.retry();
       });
     }, 2000);
     return () => clearInterval(poll);
@@ -298,8 +289,7 @@ export default function FlyPage() {
   // The landing prompt's own button stays direct — it IS the confirmation
   // there.
   function confirmEndFlight() {
-    // No takeoff on record = nothing to finalize (incl. "blocked" before
-    // launch): discard instead of end.
+    // No takeoff on record = nothing to finalize: discard instead of end.
     const stop =
       status === "acquiring" || status === "armed" || track.length === 0
         ? cancelArmed
@@ -369,7 +359,7 @@ export default function FlyPage() {
         <ErrorScreen
           error={snapshot.error}
           onRetry={
-            snapshot.error.code === "busy" ? undefined : () => retryTakeover()
+            snapshot.error.code === "busy" ? undefined : () => engine.retry()
           }
           onCancel={() => void engine.discard()}
         />
