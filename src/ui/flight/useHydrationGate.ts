@@ -11,10 +11,7 @@ let hydratedOnce = false;
 
 /**
  * Hydration gate: before the WAL read the engine reports "idle", which
- * must not flash the Start button during a live-flight reload. This is
- * only the in-surface half. Whether that surface is mounted AT ALL on a
- * mid-flight launch is decided a layer up, off snapshot.sessionInPlay —
- * "loading" is what the pilot sees for the frames in between.
+ * must not flash the Start button during a live-flight reload.
  */
 export function useHydrationGate(): boolean {
   const [ready, setReady] = useState(hydratedOnce);

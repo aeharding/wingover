@@ -54,16 +54,15 @@ async function persistFlight(flown: Fix[], plannedWaypoints: Waypoint[]) {
  * Collection: the finalized flight goes to the logbook, then out of the
  * engine's durable hands.
  *
- * Blocked recovery (foreground heal + native readiness poll) is wired
+ * Blocked recovery (foreground retry + the native refusal loop) is wired
  * engine-side in src/engine/session.ts, not here: it must run regardless
  * of which page is mounted (docs/ENGINE-AUDIT.md asks exactly this of any
  * new component effect). Collection may live view-side because that
- * question has a mechanical answer here: "ended" still holds a session,
- * so snapshot.sessionInPlay is true, and src/ui/App.tsx renders THIS
- * surface and nothing else for the whole window. There is no other page
- * to be mounted. src/engine/real.test.ts pins the half that could drift
- * ("a finalized flight is still in play until collection"); if App's shed
- * predicate is ever narrowed, this has to move engine-side with it.
+ * question has a mechanical answer here: src/ui/App.tsx sheds the shell
+ * for anything that is not "idle", and "ended" is not "idle" — so this
+ * surface, and nothing else, is mounted for the whole collection window.
+ * There is no other page to be in. If that predicate is ever narrowed,
+ * this has to move engine-side with it.
  */
 export function useFlightCollection(status: EngineStatus | "loading") {
   // "ended" is a durable state: the finalized flight waits in the WAL.
