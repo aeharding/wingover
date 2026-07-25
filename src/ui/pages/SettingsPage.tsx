@@ -71,6 +71,9 @@ export default function SettingsPage() {
   // internal checked state, so a cancelled enable leaves it visually ON
   // (and the next tap a silent no-op) unless the element is remounted.
   const [toggleReset, setToggleReset] = useState(0);
+  // A dev-server bundle must not render like a clean release: an empty
+  // sha is reserved for the CI version-tag build.
+  const jsSha = import.meta.env.DEV ? "dev" : __APP_GIT_SHA__;
 
   function loadSettings() {
     getSetting("mapBackend").then((value) => {
@@ -254,11 +257,9 @@ export default function SettingsPage() {
           ]}
         />
 
-        <div style={{ textAlign: "center", paddingTop: "2rem" }}>
+        <div className={styles.build}>
           <IonNote>
-            {`Wingover ${__APP_VERSION__}${
-              __APP_GIT_SHA__ ? ` (${__APP_GIT_SHA__})` : ""
-            } · AGPL-3.0`}
+            {`Wingover ${__APP_VERSION__}${jsSha ? ` (${jsSha})` : ""} · AGPL-3.0`}
           </IonNote>
         </div>
       </IonContent>

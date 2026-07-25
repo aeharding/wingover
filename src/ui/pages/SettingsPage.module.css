@@ -34,3 +34,13 @@
 .error {
   color: var(--status-bad);
 }
+
+/* Build footer. Centered note; on a dev server the sha reads "dev", on a
+   hand-rolled build "local" — an unstamped bundle must never render like
+   a clean release. */
+.build {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  padding-top: 2rem;
+}

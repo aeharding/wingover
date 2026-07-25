@@ -19,12 +19,14 @@ const tauriDevHost = process.env.TAURI_DEV_HOST;
 // a continuous build (:main -> beta.wingover.app) and an empty sha for a version
 // tag (-> wingover.app / App Store), so a release footer shows the clean version
 // alone. GITHUB_SHA is the same value auto-exported on the direct runner, the
-// fallback for the TestFlight build (which only ever builds main). Empty for
-// local dev builds. Sliced to 8 chars.
-const gitSha = (process.env.GIT_SHA ?? process.env.GITHUB_SHA ?? "").slice(
-  0,
-  8,
-);
+// fallback for the TestFlight build (which only ever builds main). Sliced
+// to 8 chars. "" stays reserved for the CI version-tag build (a release
+// footer shows the clean version alone); a hand-rolled local `pnpm build`
+// is NOT a release, so it says so. The dev server is handled in the
+// component via import.meta.env.DEV, which keeps `vite preview` honest.
+const gitSha =
+  (process.env.GIT_SHA ?? process.env.GITHUB_SHA ?? "").slice(0, 8) ||
+  (process.env.GITHUB_ACTIONS ? "" : "local");
 
 export default defineConfig({
   define: {
