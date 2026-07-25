@@ -128,21 +128,23 @@ export interface PositionSource {
 // recovery poll's reclassification: the same refusal cannot render as two
 // different screens depending on which path carried it.
 function toEngineError(error: SourceError): EngineError {
-  return error.imprecise
-    ? {
-        code: "imprecise",
-        message: "Precise Location is off for Wingover.",
-      }
-    : error.permissionDenied
-      ? {
-          code: "permission-denied",
-          message:
-            "Location permission denied. Allow location access for Wingover, then try again.",
-        }
-      : {
-          code: "unavailable",
-          message: "GPS unavailable. Check that location services are on.",
-        };
+  if (error.imprecise) {
+    return {
+      code: "imprecise",
+      message: "Precise Location is off for Wingover.",
+    };
+  }
+  if (error.permissionDenied) {
+    return {
+      code: "permission-denied",
+      message:
+        "Location permission denied. Allow location access for Wingover, then try again.",
+    };
+  }
+  return {
+    code: "unavailable",
+    message: "GPS unavailable. Check that location services are on.",
+  };
 }
 
 // The plugin surface as the engine sees it, identical on every platform:
