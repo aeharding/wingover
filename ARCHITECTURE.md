@@ -98,7 +98,7 @@ It is derived from an in-memory error, never journaled, and strictly
 pre-takeoff — the error setters refuse to install a blocking error once a
 flight has started, so nothing can block a flight in progress. Detection
 of source health is the one place wall-clock time is legitimate (the
-signature is partly an *absence* of fixes, which no function of fix
+signature is partly an _absence_ of fixes, which no function of fix
 timestamps can observe); it never touches the WAL, the track, or
 finalization, so burst-replay byte-identity is unaffected. Sources declare
 their capabilities (`reportsAccuracyAuthorization`, `watchCanDieSilently`,

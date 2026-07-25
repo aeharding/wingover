@@ -41,13 +41,7 @@ export type EngineStatus =
   // watch is dead (permission, precise-location) or another tab holds
   // the recorder. Engine state, not view policy: nothing can proceed
   // until it clears (retry, or the error self-heals).
-  | "idle"
-  | "acquiring"
-  | "armed"
-  | "recording"
-  | "landed"
-  | "ended"
-  | "blocked";
+  "idle" | "acquiring" | "armed" | "recording" | "landed" | "ended" | "blocked";
 
 // The error classes that block the session outright (drive "blocked").
 // storage and transient unavailability do NOT block: the engine retries

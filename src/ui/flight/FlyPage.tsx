@@ -293,9 +293,7 @@ export default function FlyPage() {
   function confirmEndFlight() {
     // No takeoff on record = nothing to finalize: discard instead of end.
     const stop =
-      status === "acquiring" || status === "armed"
-        ? cancelArmed
-        : endFlight;
+      status === "acquiring" || status === "armed" ? cancelArmed : endFlight;
     bigConfirm({ title: "End flight?", action: "Stop", onAction: stop });
   }
 

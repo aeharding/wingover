@@ -267,14 +267,9 @@ describe("GeolocationRecordingEngine", () => {
     await armAndTakeOff(owner);
     await owner.getSnapshot(); // drain WAL queue: session + fixes durable
     // Second tab: the recorder lock is now refused.
-    (
-      globalThis.navigator as unknown as { locks: unknown }
-    ).locks = {
-      request: (
-        _name: string,
-        _opts: unknown,
-        cb: (lock: null) => unknown,
-      ) => Promise.resolve(cb(null)),
+    (globalThis.navigator as unknown as { locks: unknown }).locks = {
+      request: (_name: string, _opts: unknown, cb: (lock: null) => unknown) =>
+        Promise.resolve(cb(null)),
     };
     const viewer = createEngine();
     await viewer.getSnapshot();
@@ -292,14 +287,9 @@ describe("GeolocationRecordingEngine", () => {
     const owner = createEngine();
     await owner.start();
     await owner.getSnapshot();
-    (
-      globalThis.navigator as unknown as { locks: unknown }
-    ).locks = {
-      request: (
-        _name: string,
-        _opts: unknown,
-        cb: (lock: null) => unknown,
-      ) => Promise.resolve(cb(null)),
+    (globalThis.navigator as unknown as { locks: unknown }).locks = {
+      request: (_name: string, _opts: unknown, cb: (lock: null) => unknown) =>
+        Promise.resolve(cb(null)),
     };
     const passive = createEngine();
     await passive.getSnapshot();

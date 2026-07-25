@@ -314,8 +314,9 @@ test("precise off during a Settings trip surfaces the screen despite a dead watc
   // fires visibilitychange. The foreground bounce must revive the
   // watch...
   await page.evaluate(() => {
-    (window as unknown as { __geo: { killWatches: () => void } }).__geo
-      .killWatches();
+    (
+      window as unknown as { __geo: { killWatches: () => void } }
+    ).__geo.killWatches();
     document.dispatchEvent(new Event("visibilitychange"));
   });
   await waitForWatch(page);
