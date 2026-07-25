@@ -233,7 +233,7 @@ export default function FlyPage() {
     void Promise.resolve().then(() => collectEndedFlight());
   }, [status]);
 
-  // Blocked recovery (foreground heal + native readiness poll) is wired
+  // Blocked recovery (foreground retry + the native refusal loop) is wired
   // engine-side in src/engine/session.ts, not here: it must run
   // regardless of which page is mounted.
 

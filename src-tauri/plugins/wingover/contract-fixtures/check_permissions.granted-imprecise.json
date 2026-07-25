@@ -16,8 +16,7 @@
         "permissionDenied": false,
         "imprecise": true,
         "message": "precise location disabled"
-      },
-      "ready": false
+      }
     }
   }
 }

@@ -31,7 +31,7 @@ import { getCurrentPosition } from "../platform/currentPosition";
 import {
   classifyDrainError,
   nativeCore,
-  nativeLocationReady,
+  nativeLocationRefusal,
   nativePositionSource,
   permissionRefusal,
   type PermissionStatus,
@@ -139,13 +139,17 @@ describe("the engine reads every fixture it owns through the real path", () => {
         case "check_permissions":
         case "request_permissions": {
           const status = payload as PermissionStatus;
-          expect(permissionRefusal(status)).toStrictEqual(
-            expectJs(fixture, "refusal"),
-          );
-          // Readiness always asks check_permissions; a request_permissions
-          // fixture is here to prove the two shapes are interchangeable.
+          const refusal = expectJs(fixture, "refusal");
+          expect(permissionRefusal(status)).toStrictEqual(refusal);
+          // The capability always asks check_permissions; a
+          // request_permissions fixture is here to prove the two shapes
+          // are interchangeable. It answers with the refusal ITSELF, not
+          // a yes/no: while a takeover is up this is the only channel
+          // that can say the reason changed (Precise Location off traded
+          // for Location Services off), and the blocked screen re-renders
+          // on it. null is the whole of "nothing refuses".
           stub({ "plugin:wingover|check_permissions": status });
-          expect(await nativeLocationReady()).toBe(expectJs(fixture, "ready"));
+          expect(await nativeLocationRefusal()).toStrictEqual(refusal);
           break;
         }
         case "current_position": {
@@ -299,10 +303,10 @@ describe("the Swift source declares every key and code the fixtures name", () =>
     expect(literals).toHaveLength(1);
     expect(literals[0]).toContain('"precise"');
     // Every input the refusal rule reads travels in that one dictionary,
-    // so readiness and the watch's pre-capture gate can never be looking
-    // at different state: a device-wide Location Services switch visible
-    // to one and not the other is exactly a poll that says ready against
-    // a watch that keeps refusing.
+    // so the recovery loop and the watch's pre-capture gate can never be
+    // looking at different state: a device-wide Location Services switch
+    // visible to one and not the other is exactly a probe that answers
+    // null against a watch that keeps refusing.
     expect(literals[0]).toContain('"servicesEnabled"');
   });
 });

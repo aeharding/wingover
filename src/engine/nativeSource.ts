@@ -61,13 +61,13 @@ export function classifyDrainError(message: string): SourceError {
 
 // The refusal DECISION lives here, not in Swift (the sensor layer senses
 // and actuates; it does not decide). One rule serving both the watch's
-// pre-capture gate and the blocked screen's readiness poll, so the two
+// pre-capture gate and the blocked screen's recovery loop, so the two
 // can never drift apart.
 //
 // "prompt" is NOT a refusal: the question has not been asked, and asking
 // is the app's job, not a trip to Settings. Both callers resolve it the
 // same way — the watch requests permissions before judging (below), and
-// readiness answers true so the engine retries, which bounces the watch
+// currentRefusal answers null so the engine retries, which bounces the watch
 // into that same request with the app frontmost and the system alert
 // finally appears. Treating it as a refusal is what left Settings ->
 // Never -> Ask Next Time stuck on the red takeover until a SECOND trip
@@ -105,16 +105,20 @@ export function permissionRefusal(
   return null;
 }
 
-// Poll-friendly readiness check for the blocked screen. Ready means the
-// watch would get somewhere: recordable (granted, full accuracy) or
-// merely unasked ("prompt"), since the engine's answer to ready is
-// retry() and the bounced watch does the ask. Only what the pilot must
-// change in Settings — denied, Precise Location off — holds the screen.
-export async function nativeLocationReady(): Promise<boolean> {
+// What refuses to record right now, for the blocked screen's recovery
+// loop. null means nothing does: recordable (granted, full accuracy) or
+// merely unasked ("prompt"), since the engine's answer to null is a watch
+// bounce and the fresh watch does the ask. Only what the pilot must
+// change in Settings — denied, Location Services off, Precise Location
+// off — holds the screen, and the answer says WHICH of them stands at
+// this moment: the pilot can trade one for another with no watch running,
+// and the takeover must follow the current reason rather than the one
+// that first raised it.
+export async function nativeLocationRefusal(): Promise<SourceError | null> {
   const status = await invoke<PermissionStatus>(
     "plugin:wingover|check_permissions",
   );
-  return permissionRefusal(status) === null;
+  return permissionRefusal(status);
 }
 
 function toSourcePosition(fix: NativeFix): SourcePosition {
@@ -136,9 +140,9 @@ export const nativePositionSource: PositionSource = {
   // CoreLocation reports accuracyAuthorization directly — the engine's
   // fix-signature heuristic must stay out of the way. Capture is
   // process-level and survives webview visibility, so no foreground
-  // bounce either; recovery is the readiness poll.
+  // bounce either; recovery is the currentRefusal loop.
   reportsAccuracyAuthorization: true,
-  readiness: nativeLocationReady,
+  currentRefusal: nativeLocationRefusal,
   watch(onPositions, onError, options) {
     let stopped = false;
     let timer: ReturnType<typeof setInterval> | undefined;
