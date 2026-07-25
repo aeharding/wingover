@@ -280,6 +280,32 @@ describe("GeolocationRecordingEngine", () => {
     }
   });
 
+  it("a pending storage error does not mask the imprecise latch", async () => {
+    const engine = createEngine();
+    await engine.start();
+    vi.useFakeTimers();
+    try {
+      geolocation.emit(
+        position({ accuracy: 13_000, altitude: null, altitudeAccuracy: null }),
+      );
+      // A Settings trip backgrounds Safari and severs IndexedDB, so the
+      // WAL flush fails right after the reduced fix ingests — plant the
+      // resulting storage error between arm and fire (private-field
+      // poke: the real failure path needs a severed live connection,
+      // which fake-indexeddb cannot express).
+      (engine as unknown as { error: unknown }).error = {
+        code: "storage",
+        message: "severed",
+      };
+      await vi.advanceTimersByTimeAsync(IMPRECISE_SUSTAIN_MS + 1);
+      const snapshot = engine.snapshotSync();
+      expect(snapshot.status).toBe("blocked");
+      expect(snapshot.error?.code).toBe("imprecise");
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
   it("a non-reduced fix disarms the imprecise latch", async () => {
     const engine = createEngine();
     await engine.start();

@@ -736,8 +736,13 @@ export class GeolocationRecordingEngine implements RecordingEngine {
     this.impreciseTimer = setTimeout(() => {
       this.impreciseTimer = null;
       const latest = this.buffer[this.buffer.length - 1];
+      // Non-blocking errors must not mask the latch: a Settings trip
+      // backgrounds Safari, WKWebView severs IndexedDB, and the WAL
+      // failure sets a storage error that only a successful write
+      // clears — exactly when this latch is about to matter. Storage
+      // retries silently; imprecise needs the pilot.
       if (
-        this.error === null &&
+        (this.error === null || !isBlockingError(this.error)) &&
         this.deriveStatus() === "acquiring" &&
         latest &&
         fixLooksReduced(latest)
