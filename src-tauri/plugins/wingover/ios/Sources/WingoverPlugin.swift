@@ -158,11 +158,6 @@ class WingoverPlugin: Plugin, CLLocationManagerDelegate,
   private var lastError: String?
   // WKWebView.uiDelegate is weak, so the plugin retains ours for the app's life.
   private var newWindowDelegate: NewWindowToBrowserDelegate?
-  // Guards load() against Tauri re-running it: a second webview re-fires
-  // onWebviewCreated for every plugin without marking handles loaded, and
-  // a second pass would wrap our OWN uiDelegate then drop the only strong
-  // reference to the previous wrapper — killing the GPX file picker.
-  private var didLoad = false
 
   // In-memory buffer between drains (~1 s of fixes). Mutated on the main
   // thread only. A hard process kill loses only this window — the accepted
@@ -180,21 +175,6 @@ class WingoverPlugin: Plugin, CLLocationManagerDelegate,
   // keyboard resize + pinning, accessory bar, programmatic focus) lives in
   // tauri-plugin-ionic — this load keeps only the app-specific bits.
   @objc public override func load(webview: WKWebView) {
-    guard !didLoad else { return }
-    didLoad = true
-    // Between the launch screen and the first web paint, an opaque WKWebView
-    // shows solid white regardless of scheme — no CSS or meta can reach that
-    // window because nothing has painted yet. BLACK, not systemBackground:
-    // the app's palette is decoupled from the OS scheme and its boot paint
-    // is always dark by construction (appTheme.ts defaults dark; a stored
-    // "auto" only settles light a beat AFTER first paint), so the system
-    // color would stay white on a light-mode phone while the app paints
-    // black — the exact flash this exists to kill, and it recurs on the
-    // WebContent-terminate reload mid-flight.
-    webview.isOpaque = false
-    webview.backgroundColor = .black
-    webview.scrollView.backgroundColor = .clear
-
     // WKWebView opens no window for target=_blank / window.open, so links
     // that request one die on tap — the Apple Maps "Legal" credit lives in a
     // closed shadow root no JS handler can reach. Route those to Safari,
