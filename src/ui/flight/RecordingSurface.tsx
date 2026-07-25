@@ -23,7 +23,6 @@ import styles from "./FlyPage.module.css";
  */
 export default function RecordingSurface({
   snapshot,
-  landed,
   units,
   liveView,
   onStop,
@@ -31,7 +30,6 @@ export default function RecordingSurface({
   onDismissLanding,
 }: {
   snapshot: EngineSnapshot;
-  landed: boolean;
   units: Units;
   liveView: LiveView;
   onStop: () => void;
@@ -46,7 +44,7 @@ export default function RecordingSurface({
 
   const first = track[0];
   const pending = waypoints.pending;
-  const showLandingPrompt = landed && landingAt !== null;
+  const showLandingPrompt = snapshot.status === "landed" && landingAt !== null;
 
   function changeMapView(value: MapViewKind) {
     update({ mapView: value });

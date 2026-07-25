@@ -545,12 +545,13 @@ export default defineConfig(
   {
     // ─── The flight surface's own budget ──────────────────────────────
     //
-    // The surface that must stay ultra reliable and battery sensitive,
-    // and that will one day run with Ionic fully disabled (STEERING), is
-    // already this config's strictest scope. It is also where the size
-    // rules were earned: FlyPage was 717 lines and complexity 65 before
-    // the decomposition that shipped these rules. So the ceilings here
-    // are the real budget, and the house ones above are the backstop.
+    // The flight surface is already this config's strictest scope (see
+    // the Ionic-free block above, and STEERING's "Reliability over
+    // features: a smaller app that never drops a track beats a bigger one
+    // that sometimes does"). It is also where the size rules were earned:
+    // FlyPage was 717 lines and complexity 65 before the decomposition
+    // that shipped these rules. So the ceilings here are the real budget,
+    // and the house ones above are the backstop.
     // Runner-ups on this surface: LiveTrackMap.tsx (274 code lines, a
     // 226-line component) and traceRenderer.ts (complexity 22).
     files: ["src/ui/flight/**"],
@@ -564,6 +565,13 @@ export default defineConfig(
       // name or an early-return render function (eslint-rules/
       // simple-jsx-guard.js). Nested ternaries are banned outright — the
       // house answer is a function with early returns, or a switch.
+      //
+      // Scoped like the ceilings above, and for the same ratchet reason,
+      // which is worth stating plainly: turned on repo-wide TODAY these
+      // two would flag 21 and 11 more sites across the ground app
+      // (MapCluster, ClipDock, DesktopShell, FlightDetailPage, Barogram,
+      // PlanPage, SettingsPage, ReplayDock…). Widening them is the next
+      // turn of the ratchet, not an argument against the rule.
       "wingover/simple-jsx-guard": "error",
       "no-nested-ternary": "error",
     },

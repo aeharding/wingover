@@ -10,16 +10,21 @@ export interface LiveViewPrefs {
   trackUp: boolean;
 }
 
-/**
- * The live map's three persisted preferences as one piece of state, with
- * updates written through to liveViewState (and mapView to settings, so
- * the ground maps follow the same street/satellite choice).
- */
-/** The prefs plus the one writer, as consumers hold them. */
+/** The prefs plus their one writer, as consumers hold them. */
 export type LiveView = LiveViewPrefs & {
   update: (patch: Partial<LiveViewPrefs>) => void;
 };
 
+/**
+ * The live map's three persisted preferences as one piece of state, with
+ * updates written through to liveViewState (and mapView to settings, so
+ * the ground maps follow the same street/satellite choice).
+ *
+ * Per-component state, not a shared store: call it in exactly ONE place
+ * and pass the result down (FlyPage owns it, because arming resets follow
+ * and track-up before the recording surface exists). Two call sites would
+ * be two disagreeing copies.
+ */
 export function useLiveViewPrefs(): LiveView {
   const [prefs, setPrefs] = useState<LiveViewPrefs>(() => {
     const saved = readLiveViewState();

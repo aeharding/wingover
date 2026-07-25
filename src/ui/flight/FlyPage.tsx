@@ -108,7 +108,6 @@ export default function FlyPage() {
         return (
           <RecordingSurface
             snapshot={snapshot}
-            landed={status === "landed"}
             units={units}
             liveView={liveView}
             onStop={confirmEndFlight}
