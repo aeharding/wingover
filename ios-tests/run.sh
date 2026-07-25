@@ -41,12 +41,16 @@ DATA_DIR=$(xcrun simctl get_app_container "$UDID" app.wingover.wingover data)
 # -collect-test-diagnostics never is load-bearing: a failing run otherwise
 # embeds the sim's full logarchive in the xcresult (multi-GB; it has filled
 # a disk).
+# Both invocations always run — one suite's failure must not silently
+# skip the other's signal — and the job fails if either did.
+suite_failed=0
+
 TEST_RUNNER_WINGOVER_DATA="$DATA_DIR" xcodebuild test \
   -project WingoverUITests.xcodeproj \
   -scheme WingoverUITests \
   -destination "id=$UDID" \
   -skip-testing:WingoverUITests/PermissionUITests \
-  -collect-test-diagnostics never
+  -collect-test-diagnostics never || suite_failed=1
 
 # The blocked-state drills run in their own invocation with the OPPOSITE
 # preconditions: no motion scenario (acquiring must persist so
@@ -62,7 +66,9 @@ xcodebuild test \
   -scheme WingoverUITests \
   -destination "id=$UDID" \
   -only-testing:WingoverUITests/PermissionUITests \
-  -collect-test-diagnostics never
+  -collect-test-diagnostics never || suite_failed=1
 
 # Leave the sim as the main suite expects, for local re-runs.
 xcrun simctl privacy "$UDID" grant location app.wingover.wingover
+
+exit "$suite_failed"
