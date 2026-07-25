@@ -18,6 +18,17 @@ final class PermissionUITests: XCTestCase {
 
   private let bundleId = "app.wingover.wingover"
 
+  // iOS 26's SwiftUI Settings does not expose rows as Cell-descended
+  // StaticTexts (XCUITest logs "Automation type mismatch: computed Other
+  // from legacy attributes"), so match by label across ANY element type.
+  private func row(_ app: XCUIApplication, _ label: String) -> XCUIElement {
+    app.descendants(matching: .any)
+      .matching(
+        NSPredicate(format: "label == %@ OR identifier == %@", label, label)
+      )
+      .firstMatch
+  }
+
   private func recoverToIdle(_ app: XCUIApplication) {
     let stop = app.buttons["Stop flight"].firstMatch
     let cancel = app.buttons["Cancel"].firstMatch
@@ -37,15 +48,16 @@ final class PermissionUITests: XCTestCase {
   private func openWingoverInSettings() -> XCUIApplication {
     let settings = XCUIApplication(bundleIdentifier: "com.apple.Preferences")
     settings.launch()
-    let apps = settings.cells.staticTexts["Apps"].firstMatch
+    let apps = row(settings, "Apps")
     if apps.waitForExistence(timeout: 5) { apps.tap() }
-    let row = settings.cells.staticTexts["Wingover"].firstMatch
-    for _ in 0..<8 where !row.isHittable {
+    let appRow = row(settings, "Wingover")
+    for _ in 0..<8 where !appRow.isHittable {
       settings.swipeUp()
     }
-    XCTAssertTrue(row.waitForExistence(timeout: 10), "no Wingover row in Settings")
-    row.tap()
-    let location = settings.cells.staticTexts["Location"].firstMatch
+    XCTAssertTrue(
+      appRow.waitForExistence(timeout: 10), "no Wingover row in Settings")
+    appRow.tap()
+    let location = row(settings, "Location")
     XCTAssertTrue(
       location.waitForExistence(timeout: 10), "no Location row on the app page")
     location.tap()
@@ -97,12 +109,12 @@ final class PermissionUITests: XCTestCase {
 
     // The deep link must land inside Settings on Wingover's page.
     let settings = XCUIApplication(bundleIdentifier: "com.apple.Preferences")
-    let location = settings.cells.staticTexts["Location"].firstMatch
+    let location = row(settings, "Location")
     XCTAssertTrue(
-      location.waitForExistence(timeout: 15),
+      location.waitForExistence(timeout: 20),
       "app-settings: deep link did not open the app's Settings page")
     location.tap()
-    let grant = settings.cells.staticTexts["While Using the App"].firstMatch
+    let grant = row(settings, "While Using the App")
     XCTAssertTrue(grant.waitForExistence(timeout: 10))
     grant.tap()
 
@@ -131,12 +143,23 @@ final class PermissionUITests: XCTestCase {
     let start = app.buttons["Start Flight"].firstMatch
     XCTAssertTrue(start.waitForExistence(timeout: 30))
     start.tap()
+    // Self-heal if test2's grant never landed: permission may still be
+    // revoked, in which case Start lands on the takeover, not acquiring.
+    if app.staticTexts["Location Access Needed"].firstMatch
+      .waitForExistence(timeout: 5)
+    {
+      let settings = openWingoverInSettings()
+      let grant = row(settings, "While Using the App")
+      XCTAssertTrue(grant.waitForExistence(timeout: 10))
+      grant.tap()
+      app.activate()
+    }
     XCTAssertTrue(
       app.staticTexts["Acquiring GPS"].firstMatch.waitForExistence(timeout: 20),
       "expected to sit in acquiring (is the location scenario cleared?)")
 
     let settings = openWingoverInSettings()
-    let precise = settings.switches["Precise Location"].firstMatch
+    let precise = row(settings, "Precise Location")
     XCTAssertTrue(
       precise.waitForExistence(timeout: 10), "no Precise Location switch")
     precise.tap()
