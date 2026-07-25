@@ -3,7 +3,13 @@
    below the slider and still drag. It stops short of the button cluster. */
 .strip {
   position: absolute;
-  right: 0;
+  /* Inboard of the safe area: zero in portrait; in landscape the strip
+     (and the rail/thumb riding its right edge) steps clear of the notch
+     side's rounded corner instead of hugging unreachable glass. The
+     DERIVED var, not env(): this control is shared beyond the fly page,
+     and an inboard host that consumed the right edge must reach here
+     (INSETS.md). On the fly page the var equals env anyway. */
+  right: var(--ion-safe-area-right, 0px);
   top: 25%;
   bottom: calc(9.5rem + env(safe-area-inset-bottom));
   width: 2.2rem;

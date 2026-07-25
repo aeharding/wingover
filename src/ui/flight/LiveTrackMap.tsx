@@ -59,6 +59,8 @@ interface LiveTrackMapProps {
   follow: boolean;
   trackUp: boolean;
   topInset?: number;
+  // The landscape instrument rail's width — chrome on the map's LEFT.
+  leftInset?: number;
   // All planned pins (immutable) — the grey optimal-path reference line.
   plannedWaypoints: Waypoint[];
   // The active nav sequence in steer-to order — the numbered markers.
@@ -83,6 +85,7 @@ export default function LiveTrackMap({
   follow,
   trackUp,
   topInset = 0,
+  leftInset = 0,
   plannedWaypoints,
   navWaypoints,
   onAddWaypoint,
@@ -105,10 +108,13 @@ export default function LiveTrackMap({
   const positionInitializedRef = useRef(false);
   const interactingRef = useRef(false);
 
-  // Only the real top-panel offset now (keeps the aircraft below the header
-  // overlay). The map container is exactly viewport-sized — no overscan.
+  // The real instrument-chrome offsets only (keeps the aircraft clear of
+  // the portrait strip / landscape rail). The map container is exactly
+  // viewport-sized — no overscan. MapKit ignores moveTo padding and gets
+  // the rail via the safe-area publish instead (FlyPage.module.css);
+  // MapLibre centers off this.
   function cameraPadding(): Insets {
-    return { top: topInset, bottom: 0, left: 0, right: 0 };
+    return { top: topInset, bottom: 0, left: leftInset, right: 0 };
   }
 
   // Draw the current state: the aircraft snaps to the newest fix and, while
