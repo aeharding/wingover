@@ -32,6 +32,18 @@ interface FixesResponse {
 
 interface PermissionStatus {
   location: "granted" | "denied" | "prompt";
+  // false when iOS Precise Location is off for Wingover. Optional so an
+  // older native shell (missing the key) never reads as imprecise.
+  precise?: boolean;
+}
+
+// Poll-friendly readiness check for the blocked screen: the pilot can
+// record only with granted authorization AND full accuracy.
+export async function nativeLocationReady(): Promise<boolean> {
+  const status = await invoke<PermissionStatus>(
+    "plugin:wingover|check_permissions",
+  );
+  return status.location === "granted" && status.precise !== false;
 }
 
 function toSourcePosition(fix: NativeFix): SourcePosition {

@@ -5,8 +5,14 @@ import {
 } from "../flight/landing";
 import { bearingBetween } from "../flight/nav";
 import { haversineMeters } from "../flight/stats";
-import { detectTakeoff, gpsReadyIndex, looksImprecise } from "../flight/takeoff";
+import {
+  detectTakeoff,
+  fixLooksReduced,
+  gpsReadyIndex,
+  IMPRECISE_SUSTAIN_MS,
+} from "../flight/takeoff";
 import { WAYPOINT_RADIUS_M } from "../flight/waypoints";
+import { isTauri } from "./platform";
 import type {
   EngineError,
   EngineSnapshot,
@@ -268,10 +274,14 @@ export class GeolocationRecordingEngine implements RecordingEngine {
   // The single predicate behind the "blocked" discriminant: deriveStatus
   // and deriveSnapshot both consult it, so the type-level promise that
   // blocked always carries a BlockingError is enforced at one site.
+  // No takeoff check here: a blocking error cannot exist once a flight
+  // has started, and that invariant lives at the SETTERS —
+  // handleWatchError refuses to install one mid-flight, the imprecise
+  // latch requires "acquiring", and busy only arises from start().
+  // Pre-takeoff blocked is absorbing, so a flight can never begin with
+  // one still set.
   private blockingError(): BlockingError | null {
-    return this.error !== null &&
-      isBlockingError(this.error) &&
-      this.session?.stoppedAt == null
+    return this.error !== null && isBlockingError(this.error)
       ? this.error
       : null;
   }
@@ -281,20 +291,16 @@ export class GeolocationRecordingEngine implements RecordingEngine {
     const error = this.error;
     const blocking = this.blockingError();
     if (blocking) {
-      // Track survives into the blocked snapshot: a flight interrupted
-      // mid-air must still be endable-with-save from the error screen.
-      const track =
-        session && session.takeoffIndex !== null
-          ? this.buffer.slice(session.takeoffIndex)
-          : [];
+      // Blocked is strictly pre-takeoff, so there is never a track to
+      // preserve here.
       const nav = session ? this.navState() : null;
       return {
         status: "blocked",
         error: blocking,
-        startedAt: track[0]?.timestamp ?? null,
-        track,
+        startedAt: null,
+        track: [],
         latest: this.buffer[this.buffer.length - 1] ?? null,
-        landingAt: this.landingAt(),
+        landingAt: null,
         waypoints: session?.waypoints ?? [],
         adhocWaypoints: nav?.adhocActive ?? [],
         waypointsCursor: nav?.waypointsCursor ?? 0,
@@ -558,6 +564,22 @@ export class GeolocationRecordingEngine implements RecordingEngine {
     }
   }
 
+  // The sanctioned exit from "blocked" besides discard()/start(): clear
+  // the blocking error and bounce the watch with the session intact, so
+  // the UI recovers straight back into acquiring — never through idle
+  // (the homepage must not flash behind the error screen). busy is
+  // excluded: it means another holder owns the recorder lock, and
+  // restarting the watch here would not contest it.
+  retry(): void {
+    const code = this.error?.code;
+    if (code !== "permission-denied" && code !== "imprecise") return;
+    if (!this.session) return;
+    this.error = null;
+    this.clearWatch();
+    this.ensureWatch();
+    this.invalidate();
+  }
+
   async discard(): Promise<void> {
     this.clearWatch();
     this.hydrated = true;
@@ -671,6 +693,12 @@ export class GeolocationRecordingEngine implements RecordingEngine {
 
   private handleWatchError(error: SourceError) {
     console.warn("geolocation error:", error.message);
+    // Once the flight starts, we're going: no source error may
+    // transition a started flight toward "blocked" (or any error state).
+    // Whatever fixes still arrive get consumed; a permanently dead
+    // source ends the flight through the stale-gap path, never through
+    // an error screen.
+    if (this.session && this.session.takeoffIndex !== null) return;
     this.error = error.imprecise
       ? {
           code: "imprecise",
@@ -690,9 +718,44 @@ export class GeolocationRecordingEngine implements RecordingEngine {
   }
 
   private clearWatch() {
+    this.clearImpreciseTimer();
     if (this.stopWatch !== null) {
       this.stopWatch();
       this.stopWatch = null;
+    }
+  }
+
+  // Wall-clock latch for the reduced-accuracy signature: armed by the
+  // first reduced fix while acquiring, disarmed by any non-reduced fix
+  // (or the watch going away). If it survives the sustain window and the
+  // latest fix still looks reduced, Precise Location is off.
+  private impreciseTimer: ReturnType<typeof setTimeout> | null = null;
+
+  private armImpreciseTimer() {
+    if (this.impreciseTimer !== null) return;
+    this.impreciseTimer = setTimeout(() => {
+      this.impreciseTimer = null;
+      const latest = this.buffer[this.buffer.length - 1];
+      if (
+        this.error === null &&
+        this.deriveStatus() === "acquiring" &&
+        latest &&
+        fixLooksReduced(latest)
+      ) {
+        this.error = {
+          code: "imprecise",
+          message:
+            "Kilometer-coarse fixes with no altitude; Precise Location is likely off.",
+        };
+        this.invalidate();
+      }
+    }, IMPRECISE_SUSTAIN_MS);
+  }
+
+  private clearImpreciseTimer() {
+    if (this.impreciseTimer !== null) {
+      clearTimeout(this.impreciseTimer);
+      this.impreciseTimer = null;
     }
   }
 
@@ -706,8 +769,10 @@ export class GeolocationRecordingEngine implements RecordingEngine {
     // engine stops consuming — a coarse source may still deliver fixes
     // (browser with Precise Location off), and letting them trickle in
     // would make the state flap. The only exits are explicit restarts
-    // (discard/start both clear the error).
-    if (this.error !== null && isBlockingError(this.error)) return;
+    // (discard/start/retry all clear the error). Status-gated, not
+    // error-gated: mid-flight the same error codes never block, and
+    // ingest must keep running.
+    if (this.blockingError() !== null) return;
     let ingested = false;
     let reachedChanged = false;
     for (const position of positions) {
@@ -765,20 +830,25 @@ export class GeolocationRecordingEngine implements RecordingEngine {
     // Fixes flowing again means GPS has recovered; a storage error is a
     // different channel — only a successful write clears it.
     if (this.error?.code !== "storage") this.error = null;
-    // Precise Location off (or any persistently coarse source) can never
-    // pass the accuracy gate — without this, acquiring hangs forever
-    // with no explanation. Native refuses reduced accuracy up front;
-    // this is the platform-independent net, and it self-heals: the next
-    // accurate fix breaks the window and the clear above stands.
+    // WEB ONLY: Precise Location off (or any persistently coarse
+    // source) can never pass the accuracy gate — without this,
+    // acquiring hangs forever with no explanation, and the web
+    // Geolocation API offers no way to ask. Native never guesses: it
+    // has the real accuracyAuthorization API (refused at start, pushed
+    // through the drain error channel on a mid-acquiring flip).
+    // Wall-clock latched, because a grid-pinned coarse source may
+    // deliver ONE fix then go silent — a count of arrivals would never
+    // accumulate. Self-healing: any non-reduced fix disarms the latch.
+    const latestFix = this.buffer[this.buffer.length - 1];
     if (
-      this.error === null &&
+      !isTauri() &&
       this.deriveStatus() === "acquiring" &&
-      looksImprecise(this.buffer)
+      latestFix &&
+      fixLooksReduced(latestFix)
     ) {
-      this.error = {
-        code: "imprecise",
-        message: "Sustained kilometer-coarse fixes; Precise Location is likely off.",
-      };
+      this.armImpreciseTimer();
+    } else {
+      this.clearImpreciseTimer();
     }
     // The flight of record is final: stop consuming. The WAL is retained
     // until the consumer persists the flight and calls discard().

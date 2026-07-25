@@ -346,7 +346,10 @@ class WingoverPlugin: Plugin, CLLocationManagerDelegate,
 
   @objc override public func checkPermissions(_ invoke: Invoke) {
     DispatchQueue.main.async {
-      invoke.resolve(["location": self.authorizationString()])
+      invoke.resolve([
+        "location": self.authorizationString(),
+        "precise": self.locationManager.accuracyAuthorization == .fullAccuracy,
+      ])
     }
   }
 
@@ -372,7 +375,15 @@ class WingoverPlugin: Plugin, CLLocationManagerDelegate,
   public func locationManager(
     _ manager: CLLocationManager, didUpdateLocations locations: [CLLocation]
   ) {
-    lastError = nil
+    // Deliveries reassert the accuracy-authorization truth rather than
+    // blindly clearing: with Precise Location off, coarse fixes keep
+    // arriving and must not wipe the imprecise error before a drain
+    // ships it. Flipping Precise back on clears it with the first
+    // delivery. Capture itself is never stopped here — mid-flight the
+    // app ignores this error by design and keeps consuming.
+    lastError =
+      manager.accuracyAuthorization == .fullAccuracy
+      ? nil : "precise location disabled"
     for location in locations {
       guard location.horizontalAccuracy >= 0 else { continue }
       let fix = convertLocation(location)
@@ -421,6 +432,13 @@ class WingoverPlugin: Plugin, CLLocationManagerDelegate,
     }
     if status == .denied || status == .restricted {
       lastError = "location permission denied"
+    } else if manager.accuracyAuthorization != .fullAccuracy {
+      // Precise Location flipped off while we're running (this delegate
+      // fires without an app relaunch for accuracy-only changes). Under
+      // reduced accuracy CoreLocation may deliver very sparsely, so
+      // don't wait for the next fix to reassert — surface it now; the
+      // next drain ships it.
+      lastError = "precise location disabled"
     }
   }
 

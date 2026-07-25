@@ -50,6 +50,10 @@ export default function ErrorScreen({
 }) {
   const content = CONTENT[error.code];
   const settings = content.settings && isTauri();
+  // Native never shows Try Again: the app polls the real authorization
+  // API and proceeds by itself the moment the pilot flips the switch.
+  // The web has no such API, so the button is the recovery path there.
+  const retry = onRetry && !isTauri() ? onRetry : undefined;
   return (
     <div className={styles.screen} data-testid="gps-error">
       <h2>{content.title}</h2>
@@ -59,10 +63,10 @@ export default function ErrorScreen({
           Open Settings
         </button>
       )}
-      {onRetry && (
+      {retry && (
         <button
           className={settings ? styles.secondary : styles.action}
-          onClick={onRetry}
+          onClick={retry}
         >
           Try Again
         </button>

@@ -15,6 +15,7 @@ import {
 } from "react";
 
 import { engine } from "../../engine";
+import { nativeLocationReady } from "../../engine/nativeSource";
 import { isTauri } from "../../engine/platform";
 import { startFlight } from "../../engine/session";
 import type { EngineStatus, Fix, LngLat, Waypoint } from "../../engine/types";
@@ -228,21 +229,37 @@ export default function FlyPage() {
   // relaunch). Re-arm silently when the app foregrounds while a
   // permission-class screen is up; if it is still broken, the error
   // re-surfaces and the screen simply stays.
-  const retryTakeover = () => {
-    const code = snapshot.error?.code;
-    if (code !== "permission-denied" && code !== "imprecise") return;
-    void engine.discard().then(() => startFlight());
-  };
+  // engine.retry() recovers straight back into acquiring with the
+  // session intact — never through idle, so the homepage cannot flash
+  // behind the error screen.
+  const retryTakeover = () => engine.retry();
   // Returning from Settings foregrounds the app; retry silently so the
   // screen simply disappears when the fix took.
-  const retryOnForeground = useEffectEvent(retryTakeover);
+  const retrySilently = useEffectEvent(retryTakeover);
   useEffect(() => {
     const onVisible = () => {
-      if (document.visibilityState === "visible") retryOnForeground();
+      if (document.visibilityState === "visible") retrySilently();
     };
     document.addEventListener("visibilitychange", onVisible);
     return () => document.removeEventListener("visibilitychange", onVisible);
   }, []);
+  // Native has the real authorization API, so no Try Again button there:
+  // while a permission-class screen is up, poll it and proceed the
+  // moment the pilot flips the switch — covers iPad Split View, where
+  // the app never backgrounds on a Settings trip.
+  const blockedCode =
+    ready && snapshot.status === "blocked" ? snapshot.error.code : null;
+  useEffect(() => {
+    if (!isTauri()) return;
+    if (blockedCode !== "permission-denied" && blockedCode !== "imprecise")
+      return;
+    const poll = setInterval(() => {
+      void nativeLocationReady().then((ok) => {
+        if (ok) retrySilently();
+      });
+    }, 2000);
+    return () => clearInterval(poll);
+  }, [blockedCode]);
 
   useLayoutEffect(() => {
     if (status !== "recording" && status !== "landed") return;
@@ -354,11 +371,7 @@ export default function FlyPage() {
           onRetry={
             snapshot.error.code === "busy" ? undefined : () => retryTakeover()
           }
-          onCancel={
-            snapshot.track.length > 0
-              ? confirmEndFlight
-              : () => void engine.discard()
-          }
+          onCancel={() => void engine.discard()}
         />
         {confirmElement}
       </div>

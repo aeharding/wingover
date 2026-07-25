@@ -4,9 +4,9 @@ import { FlightSimulator } from "../engine/simulator";
 import type { Fix } from "../engine/types";
 import {
   detectTakeoff,
+  fixLooksReduced,
   gpsReadyIndex,
-  IMPRECISE_SUSTAIN_FIXES,
-  looksImprecise,
+  IMPRECISE_M,
   MOVEMENT_SPEED_MPS,
   TAKEOFF_SPEED_MPS,
 } from "./takeoff";
@@ -53,32 +53,37 @@ describe("gpsReadyIndex", () => {
   });
 });
 
-describe("looksImprecise", () => {
-  const coarse = { speed: 0, horizontalAccuracy: 3000 };
-  const sharp = { speed: 0, horizontalAccuracy: 5 };
+describe("fixLooksReduced", () => {
+  const reduced = (fix: FixSpec) => fixLooksReduced(fixesFrom([fix])[0]);
 
-  it("flags a sustained run of kilometer-coarse fixes", () => {
-    const track = fixesFrom(Array(IMPRECISE_SUSTAIN_FIXES).fill(coarse));
-    expect(looksImprecise(track)).toBe(true);
+  it("flags the reduced-accuracy signature: km-coarse, no altitude", () => {
+    expect(
+      reduced({
+        speed: 0,
+        horizontalAccuracy: 13_000,
+        verticalAccuracy: Number.POSITIVE_INFINITY,
+      }),
+    ).toBe(true);
   });
 
-  it("stays quiet until the run is sustained", () => {
-    const track = fixesFrom(Array(IMPRECISE_SUSTAIN_FIXES - 1).fill(coarse));
-    expect(looksImprecise(track)).toBe(false);
+  it("passes a coarse fix that still has an altitude solution", () => {
+    expect(
+      reduced({ speed: 0, horizontalAccuracy: 3000, verticalAccuracy: 30 }),
+    ).toBe(false);
   });
 
-  it("resets on any precise fix inside the window", () => {
-    const specs = Array(IMPRECISE_SUSTAIN_FIXES).fill(coarse);
-    specs[IMPRECISE_SUSTAIN_FIXES - 2] = sharp;
-    expect(looksImprecise(fixesFrom(specs))).toBe(false);
+  it("passes a cell-grade fix under the coarseness bar", () => {
+    expect(
+      reduced({
+        speed: 0,
+        horizontalAccuracy: IMPRECISE_M - 1,
+        verticalAccuracy: Number.POSITIVE_INFINITY,
+      }),
+    ).toBe(false);
   });
 
-  it("only judges the tail of a long track", () => {
-    const track = fixesFrom([
-      ...Array(20).fill(sharp),
-      ...Array(IMPRECISE_SUSTAIN_FIXES).fill(coarse),
-    ]);
-    expect(looksImprecise(track)).toBe(true);
+  it("passes a sharp fix", () => {
+    expect(reduced({ speed: 0, horizontalAccuracy: 5 })).toBe(false);
   });
 });
 

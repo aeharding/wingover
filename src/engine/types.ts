@@ -152,6 +152,11 @@ export interface RecordingEngine {
   // snapshot BEFORE discarding; there is no track handed out at the
   // moment the durable copy is destroyed.
   discard(): Promise<void>;
+  // The sanctioned exit from "blocked" besides discard()/start(): clear
+  // a permission-denied/imprecise error and bounce the watch with the
+  // session intact, recovering straight back into acquiring without
+  // passing through idle. No-op for busy or when not blocked.
+  retry(): void;
   // landed → recording: pilot overrides a detected touchdown.
   dismissLanding(): void;
 }

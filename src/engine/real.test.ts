@@ -1,7 +1,8 @@
 import { IDBFactory } from "fake-indexeddb";
-import { afterEach, beforeEach, describe, expect, it } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 import { LANDING_SUSTAIN_FIXES } from "../flight/landing";
+import { IMPRECISE_SUSTAIN_MS } from "../flight/takeoff";
 import { createWaypointTracker, WAYPOINT_RADIUS_M } from "../flight/waypoints";
 import {
   GeolocationRecordingEngine,
@@ -231,6 +232,70 @@ describe("GeolocationRecordingEngine", () => {
     expect(engine.snapshotSync().error?.code).toBe("unavailable");
     geolocation.emit(position());
     expect(engine.snapshotSync().error).toBeNull();
+  });
+
+  it("a watch error after takeoff never blocks the flight", async () => {
+    const engine = createEngine();
+    await armAndTakeOff(engine);
+    expect(engine.snapshotSync().status).toBe("recording");
+    geolocation.emitError(1);
+    const snapshot = engine.snapshotSync();
+    expect(snapshot.status).toBe("recording");
+    expect(snapshot.error).toBeNull();
+    // Whatever fixes still arrive keep being consumed.
+    const length = snapshot.track.length;
+    geolocation.emit(position({ speed: 6 }));
+    expect(engine.snapshotSync().track.length).toBe(length + 1);
+  });
+
+  it("retry() exits blocked straight back into acquiring, never idle", async () => {
+    const engine = createEngine();
+    await engine.start();
+    geolocation.emitError(1);
+    expect(engine.snapshotSync().status).toBe("blocked");
+    engine.retry();
+    expect(engine.snapshotSync().status).toBe("acquiring");
+    // The bounced watch is live again.
+    geolocation.emit(position());
+    expect(engine.snapshotSync().latest).not.toBeNull();
+  });
+
+  it("latches imprecise from a LONE reduced fix after the sustain window", async () => {
+    const engine = createEngine();
+    await engine.start();
+    vi.useFakeTimers();
+    try {
+      // One kilometer-coarse, altitude-less fix, then silence — the
+      // grid-pinned source shape that a count-based check never catches.
+      geolocation.emit(
+        position({ accuracy: 13_000, altitude: null, altitudeAccuracy: null }),
+      );
+      expect(engine.snapshotSync().status).toBe("acquiring");
+      await vi.advanceTimersByTimeAsync(IMPRECISE_SUSTAIN_MS + 1);
+      const snapshot = engine.snapshotSync();
+      expect(snapshot.status).toBe("blocked");
+      expect(snapshot.error?.code).toBe("imprecise");
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
+  it("a non-reduced fix disarms the imprecise latch", async () => {
+    const engine = createEngine();
+    await engine.start();
+    vi.useFakeTimers();
+    try {
+      geolocation.emit(
+        position({ accuracy: 13_000, altitude: null, altitudeAccuracy: null }),
+      );
+      await vi.advanceTimersByTimeAsync(IMPRECISE_SUSTAIN_MS / 2);
+      geolocation.emit(position());
+      await vi.advanceTimersByTimeAsync(IMPRECISE_SUSTAIN_MS * 2);
+      expect(engine.snapshotSync().status).toBe("acquiring");
+      expect(engine.snapshotSync().error).toBeNull();
+    } finally {
+      vi.useRealTimers();
+    }
   });
 
   it("walks recording → landed → ended on fix time, trimming the tail", async () => {
