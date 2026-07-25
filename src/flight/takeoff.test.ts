@@ -5,6 +5,8 @@ import type { Fix } from "../engine/types";
 import {
   detectTakeoff,
   gpsReadyIndex,
+  IMPRECISE_SUSTAIN_FIXES,
+  looksImprecise,
   MOVEMENT_SPEED_MPS,
   TAKEOFF_SPEED_MPS,
 } from "./takeoff";
@@ -48,6 +50,35 @@ describe("gpsReadyIndex", () => {
       { speed: 0, horizontalAccuracy: 30, verticalAccuracy: 45 },
     ]);
     expect(gpsReadyIndex(track)).toBe(null);
+  });
+});
+
+describe("looksImprecise", () => {
+  const coarse = { speed: 0, horizontalAccuracy: 3000 };
+  const sharp = { speed: 0, horizontalAccuracy: 5 };
+
+  it("flags a sustained run of kilometer-coarse fixes", () => {
+    const track = fixesFrom(Array(IMPRECISE_SUSTAIN_FIXES).fill(coarse));
+    expect(looksImprecise(track)).toBe(true);
+  });
+
+  it("stays quiet until the run is sustained", () => {
+    const track = fixesFrom(Array(IMPRECISE_SUSTAIN_FIXES - 1).fill(coarse));
+    expect(looksImprecise(track)).toBe(false);
+  });
+
+  it("resets on any precise fix inside the window", () => {
+    const specs = Array(IMPRECISE_SUSTAIN_FIXES).fill(coarse);
+    specs[IMPRECISE_SUSTAIN_FIXES - 2] = sharp;
+    expect(looksImprecise(fixesFrom(specs))).toBe(false);
+  });
+
+  it("only judges the tail of a long track", () => {
+    const track = fixesFrom([
+      ...Array(20).fill(sharp),
+      ...Array(IMPRECISE_SUSTAIN_FIXES).fill(coarse),
+    ]);
+    expect(looksImprecise(track)).toBe(true);
   });
 });
 

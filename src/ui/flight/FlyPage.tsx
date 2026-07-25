@@ -46,7 +46,7 @@ import type { MapView } from "../map/types";
 import ViewToggle from "../map/ViewToggle";
 import { useSettings } from "../settings/SettingsContext";
 import { ConfirmSurface, useBigConfirm } from "./BigConfirm";
-import ErrorScreen, { actionableError } from "./ErrorScreen";
+import ErrorScreen from "./ErrorScreen";
 import LiveTrackMap from "./LiveTrackMap";
 import Tile from "./Tile";
 import { showToast } from "./toast";
@@ -119,14 +119,6 @@ export default function FlyPage() {
   const instrumentsRef = useRef<HTMLDivElement>(null);
 
   const { track, latest, landingAt, nextWaypoint } = snapshot;
-  // Errors the pilot must ACT on take the whole surface as a dedicated
-  // screen (ErrorScreen) — never inline prose. Everything else stays off
-  // the flight surface entirely: storage failures are non-actionable
-  // mid-air (native fixes are durably held in Rust; the engine retains
-  // and retries every batch), and transient GPS shadows ("unavailable")
-  // self-heal — the acquiring screen's own guidance covers a slow first
-  // fix.
-  const takeover = actionableError(snapshot.error);
   // Only a still-active selection surfaces the control; a reached/removed pin
   // drops out of activeWaypoints and the button hides on its own.
   const selectedWaypoint =
@@ -229,6 +221,29 @@ export default function FlyPage() {
     void Promise.resolve().then(() => collectEndedFlight());
   }, [status]);
 
+  // Coming back from Settings must PROCEED, not sit on the error screen:
+  // a failed watch is dead (nothing restarts it on its own — native iOS
+  // usually masks this by killing the app on a permission change, but the
+  // Precise Location toggle and the browser grant flow do not force a
+  // relaunch). Re-arm silently when the app foregrounds while a
+  // permission-class screen is up; if it is still broken, the error
+  // re-surfaces and the screen simply stays.
+  const retryTakeover = () => {
+    const code = snapshot.error?.code;
+    if (code !== "permission-denied" && code !== "imprecise") return;
+    void engine.discard().then(() => startFlight());
+  };
+  // Returning from Settings foregrounds the app; retry silently so the
+  // screen simply disappears when the fix took.
+  const retryOnForeground = useEffectEvent(retryTakeover);
+  useEffect(() => {
+    const onVisible = () => {
+      if (document.visibilityState === "visible") retryOnForeground();
+    };
+    document.addEventListener("visibilitychange", onVisible);
+    return () => document.removeEventListener("visibilitychange", onVisible);
+  }, []);
+
   useLayoutEffect(() => {
     if (status !== "recording" && status !== "landed") return;
     const measure = () =>
@@ -266,8 +281,12 @@ export default function FlyPage() {
   // The landing prompt's own button stays direct — it IS the confirmation
   // there.
   function confirmEndFlight() {
+    // No takeoff on record = nothing to finalize (incl. "blocked" before
+    // launch): discard instead of end.
     const stop =
-      status === "acquiring" || status === "armed" ? cancelArmed : endFlight;
+      status === "acquiring" || status === "armed" || track.length === 0
+        ? cancelArmed
+        : endFlight;
     bigConfirm({ title: "End flight?", action: "Stop", onAction: stop });
   }
 
@@ -320,17 +339,25 @@ export default function FlyPage() {
       ? relativeBearing(latest.course, bearingBetween(latest, navTarget))
       : 0;
 
-  if (takeover) {
+  // "blocked" is engine state like any other status: an error the pilot
+  // must act on owns the surface (ErrorScreen) — never inline prose.
+  // Narrowing on snapshot.status types the error as BlockingError; the
+  // engine's discriminant guarantees it. Non-blocking errors (storage,
+  // transient GPS shadows) surface nothing here: storage retries on its
+  // own with the native track durably held in Rust, and the acquiring
+  // screen's guidance covers a slow first fix.
+  if (ready && snapshot.status === "blocked") {
     return (
       <div className={styles.content} data-testid="fly-content">
         <ErrorScreen
-          error={takeover}
+          error={snapshot.error}
+          onRetry={
+            snapshot.error.code === "busy" ? undefined : () => retryTakeover()
+          }
           onCancel={
-            status === "acquiring" || status === "armed"
+            snapshot.track.length > 0
               ? confirmEndFlight
-              : takeover.code === "busy"
-                ? () => void engine.discard()
-                : undefined
+              : () => void engine.discard()
           }
         />
         {confirmElement}

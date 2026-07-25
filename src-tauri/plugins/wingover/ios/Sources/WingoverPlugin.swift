@@ -197,6 +197,13 @@ class WingoverPlugin: Plugin, CLLocationManagerDelegate,
         invoke.reject("location permission not granted")
         return
       }
+      // Reduced accuracy (~kilometers) can never pass the accuracy gate —
+      // the pilot would sit on "Acquiring GPS" forever. Refuse with the
+      // reason so the app's error screen can walk them to Settings.
+      guard self.locationManager.accuracyAuthorization == .fullAccuracy else {
+        invoke.reject("precise location disabled")
+        return
+      }
 
       self.locationManager.desiredAccuracy = kCLLocationAccuracyBest
       self.locationManager.distanceFilter = kCLDistanceFilterNone

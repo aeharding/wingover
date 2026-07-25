@@ -248,7 +248,7 @@ test("backgrounded landing: a burst-replayed flight finalizes retroactively", as
   await expect(page.getByText(/1 flights/)).toBeVisible();
 });
 
-test("permission denied surfaces on the arming screen and clears on fix", async ({
+test("permission denied blocks with the error screen and recovers via retry", async ({
   page,
 }) => {
   await page.addInitScript(GEO_STUB);
@@ -268,9 +268,17 @@ test("permission denied surfaces on the arming screen and clears on fix", async 
     "Location Access Needed",
   );
 
-  // A fix arriving clears the banner
+  // Blocked is absorbing: stray fixes are ignored. Recovery goes through
+  // Try Again (or the foreground auto-retry), which restarts the engine
+  // and its watch.
+  await emit([{}]);
+  await expect(page.getByTestId("gps-error")).toBeVisible();
+
+  await page.getByRole("button", { name: "Try Again" }).click();
+  await waitForWatch(page);
   await emit([{}]);
   await expect(page.getByTestId("gps-error")).toBeHidden();
+  await expect(page.getByTestId("armed")).toBeVisible();
 });
 
 test("a pin becomes a spoken waypoint announcement mid-flight", async ({

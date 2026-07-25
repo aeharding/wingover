@@ -695,10 +695,11 @@ describe("recorder lock", () => {
     await first.start();
     expect(first.snapshotSync().status).toBe("acquiring");
 
-    // Second tab: start refuses BEFORE touching the WAL.
+    // Second tab: start refuses BEFORE touching the WAL, and the refusal
+    // is a first-class blocked state (the error screen owns the surface).
     const second = createEngine();
     await second.start();
-    expect(second.snapshotSync().status).toBe("idle");
+    expect(second.snapshotSync().status).toBe("blocked");
     expect(second.snapshotSync().error?.code).toBe("busy");
 
     // Only the holder consumes fixes.

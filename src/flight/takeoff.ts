@@ -31,6 +31,20 @@ function hasCredibleSpeed(fix: Fix): boolean {
   return fix.horizontalAccuracy <= MAX_SPEED_ACCURACY_M;
 }
 
+// Reduced-accuracy sources (iOS Precise Location off) sit kilometers
+// coarse indefinitely; real GPS converges far below this within seconds
+// of sky view. A full window of grossly coarse fixes is a source-level
+// problem, not a slow first fix.
+export const IMPRECISE_M = 500;
+export const IMPRECISE_SUSTAIN_FIXES = 8;
+
+export function looksImprecise(track: Fix[]): boolean {
+  if (track.length < IMPRECISE_SUSTAIN_FIXES) return false;
+  return track
+    .slice(-IMPRECISE_SUSTAIN_FIXES)
+    .every((fix) => fix.horizontalAccuracy > IMPRECISE_M);
+}
+
 export function gpsReadyIndex(track: Fix[]): number | null {
   let run = 0;
   for (let i = 0; i < track.length; i++) {

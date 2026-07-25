@@ -41,6 +41,18 @@
   border-radius: 999px;
 }
 
+/* Secondary action (Try Again when Open Settings is primary): same pill
+   language, quieter surface. */
+.secondary {
+  width: min(100%, 420px);
+  padding: 1.1rem;
+  font-size: 1.2rem;
+  color: #fff;
+  background: #2a2d31;
+  border: none;
+  border-radius: 999px;
+}
+
 .cancel {
   width: min(60%, 280px);
   padding: 1rem;
