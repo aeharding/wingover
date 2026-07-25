@@ -8,6 +8,7 @@ import {
   GeolocationRecordingEngine,
   navigatorPositionSource,
   type PositionSource,
+  type SourceError,
   type SourcePosition,
 } from "./real";
 import { readWal } from "./wal";
@@ -259,6 +260,58 @@ describe("GeolocationRecordingEngine", () => {
     // The bounced watch is live again.
     geolocation.emit(position());
     expect(engine.snapshotSync().latest).not.toBeNull();
+  });
+
+  // The Settings round trip, end to end: the pilot revokes location, then
+  // sets it back to "Ask Next Time". The native source calls an unasked
+  // permission READY (nativeSource.ts), and this poll is what turns that
+  // into a retry — the bounced watch is what raises the system prompt. No
+  // poll, no prompt: the takeover just sat there until a second trip out
+  // of the app happened to bounce the watch some other way.
+  it("recovery polling retries the moment the source reports ready, and not one poll sooner", async () => {
+    let ready = false;
+    let watches = 0;
+    let fail: (error: SourceError) => void = () => {};
+    const source: PositionSource = {
+      // The native shape: capture outlives the page, so recovery is this
+      // poll rather than a foreground bounce.
+      reportsAccuracyAuthorization: true,
+      readiness: () => Promise.resolve(ready),
+      watch(_onPositions, onError) {
+        watches++;
+        fail = onError;
+        return () => {};
+      },
+    };
+    const engine = new GeolocationRecordingEngine({
+      source,
+      setWaypoints: () => {},
+    });
+    engines.push(engine);
+    await engine.start();
+    expect(watches).toBe(1);
+
+    vi.useFakeTimers();
+    try {
+      fail({ permissionDenied: true, message: "location permission denied" });
+      await vi.advanceTimersByTimeAsync(0);
+      expect(engine.snapshotSync().status).toBe("blocked");
+
+      // Still refused in Settings: polling must not thrash the watch.
+      await vi.advanceTimersByTimeAsync(10_000);
+      expect(engine.snapshotSync().status).toBe("blocked");
+      expect(watches).toBe(1);
+
+      // Flipped to "Ask Next Time": one poll later the session is
+      // acquiring again on a fresh watch — the one that does the asking.
+      ready = true;
+      await vi.advanceTimersByTimeAsync(10_000);
+      expect(engine.snapshotSync().status).toBe("acquiring");
+      expect(engine.snapshotSync().error).toBeNull();
+      expect(watches).toBe(2);
+    } finally {
+      vi.useRealTimers();
+    }
   });
 
   it("a passive (busy) tab can never destroy the owner's WAL, and mid-flight adoption stays a viewer", async () => {

@@ -431,9 +431,20 @@ class WingoverPlugin: Plugin, CLLocationManagerDelegate,
       request.resolve(permissionStatus())
     }
     // Stable codes, not prose: these strings are the wire contract the
-    // JS source matches on (nativeSource.ts).
+    // JS source matches on (nativeSource.ts). EXHAUSTIVE, and it clears:
+    // a code must not outlive the state that caused it. Revoked
+    // authorization stops delivery, so didUpdateLocations' reassert can
+    // never run again — every later transition has to be judged here or
+    // the old code keeps mirroring through drain forever (Settings ->
+    // Never -> Ask Next Time left a stale "permission-denied" holding the
+    // red takeover against a state that no longer existed).
     if status == .denied || status == .restricted {
       lastError = "permission-denied"
+    } else if status == .notDetermined {
+      // Reset to "Ask Next Time": nothing is wrong, the question is
+      // simply unasked. JS reads that as ready and bounces the watch,
+      // whose start sequence does the asking.
+      lastError = nil
     } else if manager.accuracyAuthorization != .fullAccuracy {
       // Precise Location flipped off while we're running (this delegate
       // fires without an app relaunch for accuracy-only changes). Under
@@ -441,6 +452,9 @@ class WingoverPlugin: Plugin, CLLocationManagerDelegate,
       // don't wait for the next fix to reassert — surface it now; the
       // next drain ships it.
       lastError = "reduced-accuracy"
+    } else {
+      // Authorized at full accuracy: whatever we last reported is over.
+      lastError = nil
     }
   }
 

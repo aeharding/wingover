@@ -59,14 +59,26 @@ export function classifyDrainError(message: string): SourceError {
 // and actuates; it does not decide). One rule serving both the watch's
 // pre-capture gate and the blocked screen's readiness poll, so the two
 // can never drift apart.
+//
+// "prompt" is NOT a refusal: the question has not been asked, and asking
+// is the app's job, not a trip to Settings. Both callers resolve it the
+// same way — the watch requests permissions before judging (below), and
+// readiness answers true so the engine retries, which bounces the watch
+// into that same request with the app frontmost and the system alert
+// finally appears. Treating it as a refusal is what left Settings ->
+// Never -> Ask Next Time stuck on the red takeover until a SECOND trip
+// out of the app.
 export function permissionRefusal(
   status: PermissionStatus,
 ): SourceError | null {
-  if (status.location !== "granted")
+  if (status.location === "denied")
     return {
       permissionDenied: true,
-      message: `location permission ${status.location}`,
+      message: "location permission denied",
     };
+  // Accuracy is only meaningful once authorization exists; before the ask
+  // the pilot picks precision in the prompt itself.
+  if (status.location === "prompt") return null;
   // Reduced accuracy can never pass the accuracy gate, so refuse before
   // capture starts and let the error screen walk the pilot to Settings.
   if (status.precise === false)
@@ -78,8 +90,11 @@ export function permissionRefusal(
   return null;
 }
 
-// Poll-friendly readiness check for the blocked screen: the pilot can
-// record only with granted authorization AND full accuracy.
+// Poll-friendly readiness check for the blocked screen. Ready means the
+// watch would get somewhere: recordable (granted, full accuracy) or
+// merely unasked ("prompt"), since the engine's answer to ready is
+// retry() and the bounced watch does the ask. Only what the pilot must
+// change in Settings — denied, Precise Location off — holds the screen.
 export async function nativeLocationReady(): Promise<boolean> {
   const status = await invoke<PermissionStatus>(
     "plugin:wingover|check_permissions",
@@ -153,6 +168,10 @@ export const nativePositionSource: PositionSource = {
         let status = await invoke<PermissionStatus>(
           "plugin:wingover|check_permissions",
         );
+        // The ask, and the only place it happens: permissionRefusal
+        // returns no refusal for "prompt" precisely so this sequence —
+        // not a trip to Settings — is what resolves an unasked
+        // permission, including on the retry that recovery polling fires.
         if (status.location === "prompt") {
           status = await invoke<PermissionStatus>(
             "plugin:wingover|request_permissions",
