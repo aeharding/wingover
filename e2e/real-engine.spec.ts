@@ -341,6 +341,60 @@ test("precise off during a Settings trip surfaces the screen despite a dead watc
   );
 });
 
+// Records every Ionic shell element the DOM ever ACQUIRES, from
+// document-start — proof about frames no screenshot can catch.
+const SHELL_WATCHER = `(() => {
+  window.__shellSeen = [];
+  // addedNodes holds only the ROOT of each inserted subtree, so the
+  // shell must be searched for inside every insertion, not matched on it.
+  const scan = (node) => {
+    const tag = node.tagName?.toLowerCase?.() ?? "";
+    if (tag === "ion-tabs" || tag === "ion-tab-bar") {
+      window.__shellSeen.push(tag);
+    }
+    if (node.querySelectorAll) {
+      for (const el of node.querySelectorAll("ion-tabs, ion-tab-bar")) {
+        window.__shellSeen.push(el.tagName.toLowerCase());
+      }
+    }
+  };
+  new MutationObserver((records) => {
+    for (const record of records) {
+      for (const node of record.addedNodes) scan(node);
+    }
+  }).observe(document, { childList: true, subtree: true });
+})();`;
+
+function shellSeen(page: Page) {
+  return page.evaluate(
+    () => (window as unknown as { __shellSeen: string[] }).__shellSeen,
+  );
+}
+
+test("mid-flight relaunch never flashes the nav shell", async ({ page }) => {
+  await page.addInitScript(SHELL_WATCHER);
+  await page.addInitScript(GEO_STUB);
+  const emit = makeEmitter(page);
+  await page.goto(URL);
+  await armAndFly(page, emit);
+
+  // The relaunch: init scripts re-run at document-start, so the watcher
+  // sees every frame of the reborn page.
+  await page.goto(URL);
+  await expect(page.getByTestId("recording")).toBeVisible();
+  expect(await shellSeen(page)).toEqual([]);
+});
+
+test("idle relaunch still boots the shell (watcher positive control)", async ({
+  page,
+}) => {
+  await page.addInitScript(SHELL_WATCHER);
+  await page.addInitScript(GEO_STUB);
+  await page.goto(URL);
+  await expect(page.getByText("Logbook", { exact: true })).toBeVisible();
+  expect((await shellSeen(page)).length).toBeGreaterThan(0);
+});
+
 test("a pin becomes a spoken waypoint announcement mid-flight", async ({
   page,
 }) => {

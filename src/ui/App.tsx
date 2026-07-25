@@ -34,6 +34,7 @@ import UnitsPage from "./pages/UnitsPage";
 import { SettingsProvider } from "./settings/SettingsContext";
 import { SyncSheetsProvider } from "./sync/SyncSheets";
 import { useCanRecord } from "./useCanRecord";
+import { useHydrationGate } from "./useHydrationGate";
 import { useIsDesktop } from "./useIsDesktop";
 
 setupIonicReact({
@@ -87,11 +88,13 @@ export default function App() {
 // simply does not exist in the DOM. IonApp and the sheets remount with the
 // shell when the flight ends.
 function AppBody() {
+  const hydrated = useHydrationGate();
   const inFlight = useSyncExternalStore(
     engine.subscribe,
     () => engine.snapshotSync().status !== "idle",
   );
   const isDesktop = useIsDesktop();
+  if (!hydrated) return null;
   if (inFlight) return <FlightSurface />;
   // Desktop gets its own shell: plain react-router, no Ionic outlet (see
   // DesktopShell). Phones keep the Ionic tab shell untouched.

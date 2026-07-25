@@ -90,6 +90,12 @@ export async function readWal(): Promise<{
       db.close();
       reject(tx.error);
     };
+    // Aborted is not errored: without this, an aborted read leaves the
+    // promise pending forever - and boot now waits on it.
+    tx.onabort = () => {
+      db.close();
+      reject(tx.error ?? new Error("wal read aborted"));
+    };
   });
 }
 
