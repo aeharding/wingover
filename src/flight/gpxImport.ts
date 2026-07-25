@@ -21,6 +21,20 @@ function firstTagText(parent: Element | Document, tag: string): string | null {
   return element?.textContent?.trim() || null;
 }
 
+/**
+ * Heading at a point: toward the NEXT point where there is one, else the
+ * way we arrived from the previous. A single-point track has neither.
+ */
+function courseAt(
+  previous: RawPoint | undefined,
+  point: RawPoint,
+  next: RawPoint | undefined,
+): number {
+  if (next) return bearingBetween(point, next);
+  if (previous) return bearingBetween(previous, point);
+  return 0;
+}
+
 export function parseGpx(xml: string): ParsedGpx {
   const doc = new DOMParser().parseFromString(xml, "text/xml");
   if (doc.getElementsByTagName("parsererror").length > 0) {
@@ -84,11 +98,7 @@ export function parseGpx(xml: string): ParsedGpx {
       previous && dtSeconds > 0
         ? (point.altitude - previous.altitude) / dtSeconds
         : 0;
-    const course = next
-      ? bearingBetween(point, next)
-      : previous
-        ? bearingBetween(previous, point)
-        : 0;
+    const course = courseAt(previous, point, next);
     return {
       timestamp: point.timestamp,
       latitude: point.latitude,

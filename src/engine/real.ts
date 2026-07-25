@@ -151,6 +151,29 @@ function toEngineError(error: SourceError): EngineError {
   };
 }
 
+// ONE refusal rule, so the same refusal cannot render as two different
+// screens depending on which path carried it. Early returns, not a ternary
+// chain: the branches line up with the conditions.
+function toEngineError(error: SourceError): EngineError {
+  if (error.imprecise) {
+    return {
+      code: "imprecise",
+      message: "Precise Location is off for Wingover.",
+    };
+  }
+  if (error.permissionDenied) {
+    return {
+      code: "permission-denied",
+      message:
+        "Location permission denied. Allow location access for Wingover, then try again.",
+    };
+  }
+  return {
+    code: "unavailable",
+    message: "GPS unavailable. Check that location services are on.",
+  };
+}
+
 // The plugin surface as the engine sees it, identical on every platform:
 // the watch carries the core lifecycle (start_watch/stop_watch native,
 // webCore's wrapper on the web); setWaypoints mirrors the

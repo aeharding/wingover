@@ -74,6 +74,15 @@ export function resolveSyncView(
     statusDetail = base.detail;
   }
 
+  // Self-host is a login, not a subscription (SYNC-UX.md), so the web says
+  // "Log out"; a dormant native account signs out of Apple; everything else
+  // is turning the feature off.
+  function turnOffLabel() {
+    if (!native) return "Log out";
+    if (dormant) return "Sign out";
+    return "Turn off sync";
+  }
+
   return {
     statusLabel,
     statusDetail,
@@ -84,7 +93,7 @@ export function resolveSyncView(
     showDormantSubscribe: dormant,
     showSignIn: off && appleSub !== "active",
     showTurnOff: !off,
-    turnOffLabel: !native ? "Log out" : dormant ? "Sign out" : "Turn off sync",
+    turnOffLabel: turnOffLabel(),
     showManage: !dormant && (hosted || supporter || appleSub !== null),
     showUseOnComputer: hosted && native && !dormant && !linked,
     showLinkedNote: hosted && native && !dormant && linked,

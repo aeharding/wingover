@@ -104,16 +104,26 @@ export default function ClipDock({
   // everything; better to arrive neutral). Otherwise the mode default:
   // trim modes at their own end (nothing cut yet), split at the middle.
   // The pilot can always scrub it elsewhere.
+  // The mode default, when the scrub position is not a sane preset: trim
+  // modes at their own end (nothing cut yet), split at the middle.
+  function modeDefault() {
+    switch (mode) {
+      case "trim-start":
+        return t0;
+      case "trim-end":
+        return t1;
+      case "split":
+        return t0 + (t1 - t0) / 2;
+    }
+  }
+
   const [cut, setCut] = useState(() => {
     const at = recallTimeline(timelineKey).at;
     if (at !== null && at > t0 && at < t1 && at >= cutMin && at <= cutMax)
       return at;
-    return mode === "trim-start"
-      ? t0
-      : mode === "trim-end"
-        ? t1
-        : t0 + (t1 - t0) / 2;
+    return modeDefault();
   });
+
   // True from confirm until the rewrite lands; a rejection re-enables the
   // row (the clip visibly did not apply).
   const [busy, setBusy] = useState(false);
@@ -251,6 +261,43 @@ export default function ClipDock({
 
   const trim = mode !== "split";
 
+  // The barogram's mark and kept-span, and the confirm's title: three
+  // dispatches on the same three modes. Exhaustive switches, so adding a
+  // fourth ClipMode is a type error rather than a silent fall-through to
+  // whatever the last ternary's else happened to be.
+  function markKind() {
+    switch (mode) {
+      case "trim-start":
+        return "start";
+      case "trim-end":
+        return "end";
+      case "split":
+        return "point";
+    }
+  }
+
+  function keptSpan() {
+    switch (mode) {
+      case "trim-start":
+        return { startMs: cut, endMs: t1 };
+      case "trim-end":
+        return { startMs: t0, endMs: cut };
+      case "split":
+        return undefined;
+    }
+  }
+
+  function alertHeader() {
+    switch (mode) {
+      case "trim-start":
+        return "Trim the start?";
+      case "trim-end":
+        return "Trim the end?";
+      case "split":
+        return "Split this flight?";
+    }
+  }
+
   return (
     <div
       className={cx(chassis.dock, seat && chassis.seat)}
@@ -296,22 +343,8 @@ export default function ClipDock({
         onScrubEnd={() => {}}
         initialView={recallTimeline(timelineKey).view}
         onViewChange={(view) => rememberView(timelineKey, view)}
-        mark={{
-          value: cut,
-          kind:
-            mode === "trim-start"
-              ? "start"
-              : mode === "trim-end"
-                ? "end"
-                : "point",
-        }}
-        kept={
-          mode === "trim-start"
-            ? { startMs: cut, endMs: t1 }
-            : mode === "trim-end"
-              ? { startMs: t0, endMs: cut }
-              : undefined
-        }
+        mark={{ value: cut, kind: markKind() }}
+        kept={keptSpan()}
       />
       <div className={styles.transport}>
         <button
@@ -331,11 +364,7 @@ export default function ClipDock({
           disabled={!canApply || busy}
           onClick={() =>
             presentAlert({
-              header: trim
-                ? mode === "trim-start"
-                  ? "Trim the start?"
-                  : "Trim the end?"
-                : "Split this flight?",
+              header: alertHeader(),
               // Every clip rewrites the recording for good: red confirm
               // button, and the copy quantifies exactly what is removed
               // (per Alex).

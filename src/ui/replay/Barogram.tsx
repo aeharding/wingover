@@ -31,6 +31,22 @@ const PINCH_RATE = 0.01;
 // Scrubbing into this edge band pans a zoomed window.
 const EDGE_PX = 28;
 const EDGE_PAN_FRACTION = 0.015;
+
+// Which way the window walks when a scrub reaches an edge, and whether it
+// walks at all. switch (true) because the arms are ranges, not a
+// discriminant. Pure geometry, so it lives out here rather than closing
+// over the component.
+function edgeShift(x: number, width: number, wspan: number) {
+  const step = wspan * EDGE_PAN_FRACTION;
+  switch (true) {
+    case x < EDGE_PX:
+      return -step;
+    case x > width - EDGE_PX:
+      return step;
+    default:
+      return 0;
+  }
+}
 // A zoomed press within this travel is a tap (seek); beyond it, a pan.
 const TAP_SLOP_PX = 8;
 
@@ -251,12 +267,7 @@ export default function Barogram({
   // (only reachable mid-scrub after a pinch zoomed in under the gesture).
   function edgePan(x: number) {
     if (!timeWindow) return;
-    const shift =
-      x < EDGE_PX
-        ? -(wspan * EDGE_PAN_FRACTION)
-        : x > width - EDGE_PX
-          ? wspan * EDGE_PAN_FRACTION
-          : 0;
+    const shift = edgeShift(x, width, wspan);
     if (shift === 0) return;
     const start = Math.min(Math.max(w0 + shift, t0), t1 - wspan);
     if (start !== timeWindow.start)

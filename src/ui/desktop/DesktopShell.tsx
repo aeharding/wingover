@@ -209,6 +209,15 @@ function RailSync() {
   const active =
     status.state === "connecting" ||
     (status.state === "syncing" && status.active);
+
+  // Off beats everything; otherwise settled-and-on gets the tick and any
+  // other working state gets the arrows.
+  function railIcon() {
+    if (off) return closeCircle;
+    if (label === "On") return checkmarkOutline;
+    return syncOutline;
+  }
+
   return (
     <>
       <button
@@ -223,16 +232,7 @@ function RailSync() {
         {active ? (
           <IonSpinner name="crescent" aria-hidden="true" />
         ) : (
-          <IonIcon
-            icon={
-              off
-                ? closeCircle
-                : label === "On"
-                  ? checkmarkOutline
-                  : syncOutline
-            }
-            aria-hidden="true"
-          />
+          <IonIcon icon={railIcon()} aria-hidden="true" />
         )}
         <span>Sync</span>
       </button>

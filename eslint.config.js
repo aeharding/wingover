@@ -536,10 +536,20 @@ export default defineConfig(
     // because in TSX every `?.`, `??` and `&&` guard also scores, so a
     // component's number measures null-safety as much as tangled logic.
     // Same ratchet as above: today's runner-up is useReplayDrawer.tsx (53).
+    //
+    // no-nested-ternary rides along, repo-wide, for the same reason and
+    // with the same exemption. A ternary inside a ternary is the shape the
+    // house style exists to prevent: the branches stop lining up with the
+    // conditions and the reader has to rebuild the decision from operator
+    // precedence. The answer is never a tidier expression — it is a
+    // function with early returns, or a switch (switch (true) when the
+    // arms are ranges rather than a discriminant). Turned on here it cost
+    // 11 sites; all 11 were converted, none suppressed.
     files: ["src/**"],
     ignores: ["src/**/*.test.ts", "src/**/*.test.tsx"],
     rules: {
       complexity: ["error", { max: 55, variant: "modified" }],
+      "no-nested-ternary": "error",
     },
   },
   {
@@ -569,17 +579,20 @@ export default defineConfig(
       complexity: ["error", { max: 25, variant: "modified" }],
       // `{cond && <X />}` for one named guard; anything composite gets a
       // name or an early-return render function (eslint-rules/
-      // simple-jsx-guard.js). Nested ternaries are banned outright — the
-      // house answer is a function with early returns, or a switch.
+      // simple-jsx-guard.js).
       //
-      // Scoped like the ceilings above, and for the same ratchet reason,
-      // which is worth stating plainly: turned on repo-wide TODAY these
-      // two would flag 21 and 11 more sites across the ground app
-      // (MapCluster, ClipDock, DesktopShell, FlightDetailPage, Barogram,
-      // PlanPage, SettingsPage, ReplayDock…). Widening them is the next
-      // turn of the ratchet, not an argument against the rule.
+      // STILL SCOPED TO THIS SURFACE, deliberately, now that its former
+      // travelling companion no-nested-ternary has gone repo-wide (see the
+      // complexity block above). The two are not the same kind of rule. A
+      // nested ternary is wrong everywhere and the fix is mechanical, so
+      // it graduated. This one draws a taste line — how much logic may sit
+      // in a render position — and it costs 21 sites across the ground
+      // app (MapCluster ×4, ClipDock ×4, DesktopShell ×4, FlightDetailPage
+      // ×3, Barogram ×3, plus SettingsPage, PlanPage, LogbookPage,
+      // SyncConnection, MapProviderPage, ConnectFunnel, FlightSeat,
+      // LogbookSection). Widening it is a decision to make on its own,
+      // against the ground app's own surfaces, not a rider on this PR.
       "wingover/simple-jsx-guard": "error",
-      "no-nested-ternary": "error",
     },
   },
   {
