@@ -7,6 +7,24 @@
       content="viewport-fit=cover, width=device-width, initial-scale=1.0, minimum-scale=1.0, maximum-scale=1.0, user-scalable=no"
     />
     <meta name="color-scheme" content="light dark" />
+    <script>
+      // Boot dark BEFORE first paint. The stylesheet is render-blocking but
+      // the entry module is not (type="module" is deferred), so the browser
+      // paints a frame with CSS applied and no app JS run yet. In that frame
+      // neither `ion-palette-dark` nor Ionic's `.ios` is on <html>, so
+      // Ionic's `body { background: var(--ion-background-color) }` resolves
+      // against theme.css's :root light default and the canvas is an
+      // explicit #ffffff — a white flash on a dark phone, for as long as it
+      // takes to fetch and evaluate the entry chunk. No native webview
+      // background can reach this; it is the page painting white.
+      //
+      // Unconditional dark, matching appTheme's default: the stored
+      // preference lives in IndexedDB and cannot be read synchronously, and
+      // appTheme already accepts the same one-frame settle for a stored
+      // "auto" on a light OS. appTheme.apply() re-toggles this class on the
+      // real value a beat later, so this only sets the starting color.
+      document.documentElement.classList.add("ion-palette-dark");
+    </script>
     <link rel="icon" href="/icon-192.png" />
     <link rel="apple-touch-icon" href="/icon-192.png" />
     <link rel="manifest" href="/manifest.webmanifest" />

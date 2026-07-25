@@ -96,6 +96,16 @@
 :root.ion-palette-dark {
   color-scheme: dark;
 
+  /* Ionic only declares the dark background at `.ion-palette-dark.ios`, and
+     the `.ios` half is stamped by setupIonicReact — i.e. from the entry
+     module, same as this class. Declaring it here too means the palette
+     class ALONE is enough to paint dark, which is what lets index.html's
+     boot script beat first paint (it can stamp our class; it has no business
+     stamping Ionic's mode class). Same value Ionic uses; theme.css is
+     imported last, so it wins the source-order tie at equal specificity. */
+  --ion-background-color: #000000;
+  --ion-background-color-rgb: 0, 0, 0;
+
   --ion-color-primary: #428cff;
   --ion-color-primary-rgb: 66, 140, 255;
   --ion-color-primary-contrast: #ffffff;
