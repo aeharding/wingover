@@ -108,17 +108,23 @@ reduced-accuracy fix signature, because the browser Geolocation API has
 nothing to ask). Wall-clock detection is legitimate — the signature is
 partly an _absence_ of fixes, which no function of fix timestamps can
 observe — but it belongs to the source that needs it. The engine holds no
-platform story and no timers.
+timers.
+
+One refusal is retracted by evidence rather than by report, and that is
+the engine's remaining share of the fix signature: an imprecise takeover
+keeps its watch alive on purpose, so `handlePositions` clears it on the
+first non-reduced fix. A bounce would tear down the very watch producing
+the disproof, which is why this one does not travel the report channel.
 
 One channel carries it. A source's `onRefusal` reports what stands RIGHT
 NOW: a refusal, or `null` for "nothing refuses any more". Both are reports
 about the same thing, so the engine has one place to apply one set of
-rules (`handleWatchError`) — a started flight is never blocked, `busy` is
+rules (`handleRefusal`) — a started flight is never blocked, `busy` is
 nobody's to replace, a non-blocking report never tears down a takeover, an
 unchanged reason is not republished, and `null` buys a fresh watch. A
 pilot who trades one refusal for another (Precise Location off, then
-Location Services off) sees the screen follow, without a bounce for a
-refusal already known.
+Location Services off) sees the screen follow, and on a source that can
+ask its platform, without a bounce for a refusal already known.
 
 The one capability a source declares is `revive()`: "find out whether you
 still refuse, and report it." Every foreground and the error screen's Try

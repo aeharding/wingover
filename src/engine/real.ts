@@ -94,7 +94,7 @@ export interface PositionSource {
   // onRefusal carries what stands RIGHT NOW: a refusal, or null for
   // "nothing refuses any more". Both are reports about the same thing, so
   // both travel one channel; the engine acts on the latest (see
-  // handleWatchError). Every source is responsible for knowing its own
+  // handleRefusal). Every source is responsible for knowing its own
   // refusals by its platform's means — the native one asks CoreLocation,
   // the browser one experiments — and the engine never guesses.
   watch(
@@ -103,18 +103,17 @@ export interface PositionSource {
     options?: WatchOptions,
   ): () => void;
   // "Find out whether you still refuse, and report it." Called on every
-  // foreground and by the error screen's Try Again. Reporting null here
-  // makes the engine bounce the watch, so a source whose capture outlives
-  // the page must report null only while it is actually refusing —
-  // otherwise a foreground tears down live capture. Absent = the source
-  // reports refusal changes on its own and has nothing to add here.
+  // foreground and by the error screen's Try Again. null here means
+  // "bounce me", so a source whose capture outlives the page must send it
+  // only when it has a refusal to clear: a bounce stops that capture.
+  // Absent = a foreground tells this source nothing it does not know.
   revive?(): void;
 }
 
 // The one mapping from what the source refused with to what the pilot is
 // told: the same refusal cannot render as two different screens depending
-// on which path carried it (the watch's own report, a revive, or a
-// platform push).
+// on which path carried it (the watch's own report, or a revive
+// answering).
 function toEngineError(error: SourceError): EngineError {
   if (error.imprecise) {
     return {
@@ -304,7 +303,7 @@ export class GeolocationRecordingEngine implements RecordingEngine {
   // blocked always carries a BlockingError is enforced at one site.
   // No takeoff check here: a blocking error cannot exist once a flight
   // has started, and that invariant lives at the SETTERS —
-  // handleWatchError refuses to install one mid-flight, and busy arises
+  // handleRefusal refuses to install one mid-flight, and busy arises
   // only from start() and from pre-takeoff hydration adoption (mid-flight
   // adoption stays a viewer). Pre-takeoff blocked absorbs (imprecise
   // excepted — a good fix clears it), so a flight can never begin with one
@@ -598,9 +597,9 @@ export class GeolocationRecordingEngine implements RecordingEngine {
   // The sanctioned exit from "blocked" besides discard()/start(): clear
   // the blocking error and restart the watch with the session intact, so
   // the UI recovers straight back into acquiring — never through idle
-  // (the homepage must not flash behind the error screen). Both recovery
-  // mechanisms land here, so the guards live at this single mutation
-  // site: busy is excluded (another holder owns the recorder lock, and a
+  // (the homepage must not flash behind the error screen). Every bounce
+  // lands here, so the guards live at this single mutation site: busy is
+  // excluded (another holder owns the recorder lock, and a
   // new watch here would not contest it), and post-takeoff is a no-op (a
   // started flight's source is never touched).
   private bounceWatch(): void {
@@ -616,11 +615,10 @@ export class GeolocationRecordingEngine implements RecordingEngine {
 
   // The foreground handler (engine/session.ts) and the error screen's Try
   // Again both arrive here, and both mean the same thing: ask the source
-  // to find out where it stands. What that costs is the source's business
-  // — a browser reruns its watch, the native shim asks CoreLocation once
-  // — and whatever it finds comes back through onRefusal like any other
-  // report. Capability, not platform: the engine never switches on where
-  // it is running.
+  // to find out where it stands. What that costs is the source's own
+  // business (ARCHITECTURE.md); whatever it finds comes back through
+  // onRefusal like any other report. Capability, not platform: the engine
+  // never switches on where it is running.
   retry(): void {
     this.core.source.revive?.();
   }
@@ -736,7 +734,7 @@ export class GeolocationRecordingEngine implements RecordingEngine {
     const latest = this.buffer[this.buffer.length - 1];
     this.stopWatch = this.core.source.watch(
       (positions) => this.handlePositions(positions),
-      (refusal) => this.handleWatchError(refusal),
+      (refusal) => this.handleRefusal(refusal),
       { since: latest?.timestamp },
     );
     // Config follows the watch: initial start and post-reload rehydration
@@ -746,13 +744,14 @@ export class GeolocationRecordingEngine implements RecordingEngine {
   }
 
   // Every report the source makes about whether it can record arrives
-  // here: its watch refusing, a foreground revive, a platform push. One
-  // channel and one set of rules, so the same refusal cannot render as two
-  // different screens depending on which path carried it.
-  private handleWatchError(refusal: SourceError | null) {
-    // Nothing refuses any more. That is the source's evidence rather than
-    // a guess, so it buys a fresh watch; bounceWatch holds the rules for
-    // when a bounce is legal.
+  // here: its watch refusing, and a revive answering. One channel and one
+  // set of rules, so the same refusal cannot render as two different
+  // screens depending on which path carried it.
+  private handleRefusal(refusal: SourceError | null) {
+    // The source knows of no refusal. On one that can ask its platform
+    // that is an answer; on one that cannot, it means "try a fresh watch
+    // and find out". Either way the response is the same, and bounceWatch
+    // holds the rules for when a bounce is legal.
     if (refusal === null) {
       this.bounceWatch();
       return;

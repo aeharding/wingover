@@ -8,8 +8,10 @@ import type { Waypoint } from "./types";
 // anything that must happen regardless of which page is mounted is wired
 // engine-side): coming back from Settings must PROCEED, not sit on a
 // frozen screen. This is the one place the app learns it was away, and
-// after a Settings trip it is the only evidence there is — no watch runs
-// while a takeover is up, so nothing else could have noticed.
+// after a Settings trip it is usually the only evidence there is: a
+// refused watch is a dead one, so nothing else is left to notice. (The
+// imprecise takeover is the exception — it keeps its watch running so a
+// good fix can disprove it.)
 //
 // What a foreground costs is the source's business, not this file's:
 // engine.retry() forwards to the source, which reruns a browser watch or

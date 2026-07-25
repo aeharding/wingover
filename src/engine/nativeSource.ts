@@ -61,15 +61,14 @@ export function classifyDrainError(message: string): SourceError {
 
 // The refusal DECISION lives here, not in Swift (the sensor layer senses
 // and actuates; it does not decide). One rule serving both the watch's
-// pre-capture gate and the blocked screen's recovery loop, so the two
-// can never drift apart.
+// pre-capture gate and revive's probe, so the two can never drift apart.
 //
 // "prompt" is NOT a refusal: the question has not been asked, and asking
 // is the app's job, not a trip to Settings. Both callers resolve it the
 // same way — the watch requests permissions before judging (below), and
-// currentRefusal answers null so the engine retries, which bounces the watch
-// into that same request with the app frontmost and the system alert
-// finally appears. Treating it as a refusal is what left Settings ->
+// revive's probe answers null, which bounces the watch into that same
+// request with the app frontmost and the system alert finally appears.
+// Treating it as a refusal is what left Settings ->
 // Never -> Ask Next Time stuck on the red takeover until a SECOND trip
 // out of the app.
 export function permissionRefusal(
@@ -254,10 +253,11 @@ export const nativePositionSource: PositionSource = {
   // Every foreground and every Try Again lands here. Capture is
   // process-level and outlives the webview, so a foreground is no evidence
   // that anything changed — but a trip to Settings is a foreground too,
-  // and while a takeover is up there is no watch running to notice what
-  // the pilot did. So: ask the real authorization API, once, and report
-  // what it says. A refusal that has not changed is silent at the engine;
-  // null bounces the watch, and the fresh one does the asking.
+  // and a watch refused at start never began polling, so nothing is left
+  // running to notice what the pilot did there. So: ask the real
+  // authorization API, once, and report what it says. A refusal that has
+  // not changed is silent at the engine; null bounces the watch, and the
+  // fresh one does the asking.
   revive() {
     const watching = live;
     if (watching === null || !watching.refused) return;

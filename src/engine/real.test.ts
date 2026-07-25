@@ -676,6 +676,39 @@ describe("GeolocationRecordingEngine", () => {
     expect(engine.snapshotSync().latest).not.toBe(before);
   });
 
+  // DECLARED DELTA (#160). The latch used to be gated on engine status
+  // being "acquiring"; the source cannot read engine status, so its gate
+  // is now "no good fix on THIS watch". That is strictly weaker, and this
+  // is the one case it admits: a pre-takeoff session rehydrated already
+  // ARMED, whose fresh watch then sees only reduced fixes. It now names
+  // the reason instead of sitting on armed forever. Still strictly
+  // pre-takeoff, so the flight-in-progress invariant is untouched.
+  it("an armed session whose fresh watch only sees reduced fixes still names the reason", async () => {
+    const first = createEngine();
+    await first.start();
+    for (let i = 0; i < 3; i++) geolocation.emit(position({ speed: 0 }));
+    expect((await first.getSnapshot()).status).toBe("armed");
+    // Leave only the reborn engine's watch listening, so the reduced fix
+    // below reaches exactly one source.
+    (first as unknown as { clearWatch: () => void }).clearWatch();
+
+    const reborn = createEngine();
+    expect((await reborn.getSnapshot()).status).toBe("armed");
+
+    vi.useFakeTimers();
+    try {
+      geolocation.emit(
+        position({ accuracy: 13_000, altitude: null, altitudeAccuracy: null }),
+      );
+      await vi.advanceTimersByTimeAsync(IMPRECISE_SUSTAIN_MS + 1);
+      const snapshot = reborn.snapshotSync();
+      expect(snapshot.status).toBe("blocked");
+      expect(snapshot.error?.code).toBe("imprecise");
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
   // A Settings trip backgrounds Safari and severs IndexedDB, so a WAL
   // flush can fail in the very window the source is deciding that Precise
   // Location is off. storage is not a blocking code, so it must not stand

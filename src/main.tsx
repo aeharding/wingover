@@ -7,9 +7,8 @@ import "./theme.css";
 
 import { createRoot } from "react-dom/client";
 
-// Side effect: engine-side recovery wiring (foreground heal + blocked
-// recovery loop) must run from boot, not from whichever page happens
-// to import it first.
+// Side effect: the engine-side foreground recovery wiring must run from
+// boot, not from whichever page happens to import it first.
 import "./engine/session";
 import { stripMintedFlightNames } from "./storage/db";
 import { resume } from "./sync";

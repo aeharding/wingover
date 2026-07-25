@@ -3,8 +3,8 @@ import { describe, expect, it } from "vitest";
 import type { Fix } from "../engine/types";
 import { FlightSimulator } from "./simulator";
 import {
+  coordsLookReduced,
   detectTakeoff,
-  fixLooksReduced,
   gpsReadyIndex,
   IMPRECISE_M,
   MOVEMENT_SPEED_MPS,
@@ -53,37 +53,26 @@ describe("gpsReadyIndex", () => {
   });
 });
 
-describe("fixLooksReduced", () => {
-  const reduced = (fix: FixSpec) => fixLooksReduced(fixesFrom([fix])[0]);
+describe("coordsLookReduced", () => {
+  // Raw source coordinates: a null altitudeAccuracy is no altitude
+  // solution, which is how both platforms report one.
+  const reduced = (accuracy: number, altitudeAccuracy: number | null) =>
+    coordsLookReduced({ accuracy, altitudeAccuracy });
 
   it("flags the reduced-accuracy signature: km-coarse, no altitude", () => {
-    expect(
-      reduced({
-        speed: 0,
-        horizontalAccuracy: 13_000,
-        verticalAccuracy: Number.POSITIVE_INFINITY,
-      }),
-    ).toBe(true);
+    expect(reduced(13_000, null)).toBe(true);
   });
 
   it("passes a coarse fix that still has an altitude solution", () => {
-    expect(
-      reduced({ speed: 0, horizontalAccuracy: 3000, verticalAccuracy: 30 }),
-    ).toBe(false);
+    expect(reduced(3000, 30)).toBe(false);
   });
 
   it("passes a cell-grade fix under the coarseness bar", () => {
-    expect(
-      reduced({
-        speed: 0,
-        horizontalAccuracy: IMPRECISE_M - 1,
-        verticalAccuracy: Number.POSITIVE_INFINITY,
-      }),
-    ).toBe(false);
+    expect(reduced(IMPRECISE_M - 1, null)).toBe(false);
   });
 
   it("passes a sharp fix", () => {
-    expect(reduced({ speed: 0, horizontalAccuracy: 5 })).toBe(false);
+    expect(reduced(5, 8)).toBe(false);
   });
 });
 

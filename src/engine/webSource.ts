@@ -44,12 +44,12 @@ export function createNavigatorSource(): PositionSource {
         return () => {};
       }
 
+      // The diagnosis, as three states: undiagnosed with no window
+      // running, undiagnosed with one (latch !== null), and diagnosed —
+      // reached either by a fix that disproves it or by the window
+      // expiring. Diagnosed is final for this watch.
+      let diagnosed = false;
       let latch: ReturnType<typeof setTimeout> | null = null;
-      // False once the diagnosis is settled for this watch, either way: a
-      // fix that does not look reduced disproves it, and firing publishes
-      // it. Re-arming after either only burns timers — the engine drops a
-      // repeat of the reason already on screen.
-      let armable = true;
 
       const disarm = () => {
         if (latch === null) return;
@@ -57,23 +57,28 @@ export function createNavigatorSource(): PositionSource {
         latch = null;
       };
 
+      const arm = () => {
+        if (diagnosed || latch !== null) return;
+        latch = setTimeout(() => {
+          latch = null;
+          diagnosed = true;
+          onRefusal(IMPRECISE);
+        }, IMPRECISE_SUSTAIN_MS);
+      };
+
+      const disprove = () => {
+        diagnosed = true;
+        disarm();
+      };
+
       const id = navigator.geolocation.watchPosition(
         (position) => {
-          // Armed BEFORE delivery: onPositions can tear this watch down
-          // (the engine bouncing on a report), and teardown is what
-          // disarms. Arming after would leave a timer nothing can clear.
-          if (coordsLookReduced(position.coords)) {
-            if (armable && latch === null) {
-              latch = setTimeout(() => {
-                latch = null;
-                armable = false;
-                onRefusal(IMPRECISE);
-              }, IMPRECISE_SUSTAIN_MS);
-            }
-          } else {
-            armable = false;
-            disarm();
-          }
+          // Judged BEFORE delivery: handlePositions clears the watch when
+          // the flight finalizes, so delivery can synchronously run this
+          // watch's teardown — and teardown is what disarms. Arming after
+          // it would leave a timer nothing can clear.
+          if (coordsLookReduced(position.coords)) arm();
+          else disprove();
           onPositions([position]);
         },
         (error) =>
