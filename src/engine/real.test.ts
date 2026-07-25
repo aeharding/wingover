@@ -262,45 +262,68 @@ describe("GeolocationRecordingEngine", () => {
     expect(engine.snapshotSync().latest).not.toBeNull();
   });
 
-  // The Settings round trip, end to end: the pilot revokes location, then
-  // sets it back to "Ask Next Time". The native source calls an unasked
-  // permission READY (nativeSource.ts), and this poll is what turns that
-  // into a retry — the bounced watch is what raises the system prompt. No
-  // poll, no prompt: the takeover just sat there until a second trip out
-  // of the app happened to bounce the watch some other way.
-  it("recovery polling retries the moment the source reports ready, and not one poll sooner", async () => {
-    let ready = false;
-    let watches = 0;
-    let fail: (error: SourceError) => void = () => {};
+  // A source in the native shape: capture outlives the page, so it
+  // declares no watchCanDieSilently and recovery is the readiness poll
+  // alone. `fail` stays bound to the FIRST watch's error callback; a
+  // bounce installs a fresh one the test never has to touch.
+  function pollingSource(ready: () => boolean) {
+    const state = {
+      watches: 0,
+      fail: (() => {}) as (error: SourceError) => void,
+    };
     const source: PositionSource = {
-      // The native shape: capture outlives the page, so recovery is this
-      // poll rather than a foreground bounce.
       reportsAccuracyAuthorization: true,
-      readiness: () => Promise.resolve(ready),
+      readiness: () => Promise.resolve(ready()),
       watch(_onPositions, onError) {
-        watches++;
-        fail = onError;
+        state.watches++;
+        if (state.watches === 1) state.fail = onError;
         return () => {};
       },
     };
+    return { source, state };
+  }
+
+  // The Settings round trip, end to end: the pilot revokes location, then
+  // sets it back to "Ask Next Time". The native source calls an unasked
+  // permission READY (nativeSource.ts), and this poll is what turns that
+  // into a watch bounce — the fresh watch is what raises the system
+  // prompt. No poll, no prompt: the takeover just sat there until a
+  // second trip out of the app happened to bounce the watch some other
+  // way. retry() cannot stand in: it is the WEB heal and self-gates off
+  // this source's missing watchCanDieSilently.
+  it("recovery polling recovers a source retry() will not touch, and not one poll sooner", async () => {
+    let ready = false;
+    const { source, state } = pollingSource(() => ready);
     const engine = new GeolocationRecordingEngine({
       source,
       setWaypoints: () => {},
     });
     engines.push(engine);
     await engine.start();
-    expect(watches).toBe(1);
+    expect(state.watches).toBe(1);
 
     vi.useFakeTimers();
     try {
-      fail({ permissionDenied: true, message: "location permission denied" });
+      state.fail({
+        permissionDenied: true,
+        message: "location permission denied",
+      });
       await vi.advanceTimersByTimeAsync(0);
       expect(engine.snapshotSync().status).toBe("blocked");
 
       // Still refused in Settings: polling must not thrash the watch.
       await vi.advanceTimersByTimeAsync(10_000);
       expect(engine.snapshotSync().status).toBe("blocked");
-      expect(watches).toBe(1);
+      expect(state.watches).toBe(1);
+
+      // The inverse pin: the foreground heal is inert here even while
+      // blocked. Whatever the pilot's return from Settings dispatches,
+      // this source's capture is never bounced behind its back — the
+      // takeover lifts on the poll's evidence or not at all.
+      engine.retry();
+      await vi.advanceTimersByTimeAsync(0);
+      expect(engine.snapshotSync().status).toBe("blocked");
+      expect(state.watches).toBe(1);
 
       // Flipped to "Ask Next Time": one poll later the session is
       // acquiring again on a fresh watch — the one that does the asking.
@@ -308,10 +331,35 @@ describe("GeolocationRecordingEngine", () => {
       await vi.advanceTimersByTimeAsync(10_000);
       expect(engine.snapshotSync().status).toBe("acquiring");
       expect(engine.snapshotSync().error).toBeNull();
-      expect(watches).toBe(2);
+      expect(state.watches).toBe(2);
     } finally {
       vi.useRealTimers();
     }
+  });
+
+  // Latency, not just eventual recovery: the poll's first check runs when
+  // it arms, so a refusal that is already fixed by the time it lands (the
+  // webview rebuilt while the pilot was in Settings) clears in one
+  // readiness round trip. Real timers, and the test never waits
+  // RECOVERY_POLL_MS — an interval-phased first check would leave it
+  // blocked here.
+  it("the recovery poll checks the moment it arms, not one interval later", async () => {
+    const { source, state } = pollingSource(() => true);
+    const engine = new GeolocationRecordingEngine({
+      source,
+      setWaypoints: () => {},
+    });
+    engines.push(engine);
+    await engine.start();
+
+    state.fail({
+      permissionDenied: true,
+      message: "location permission denied",
+    });
+    await settle();
+    expect(engine.snapshotSync().status).toBe("acquiring");
+    expect(engine.snapshotSync().error).toBeNull();
+    expect(state.watches).toBe(2);
   });
 
   it("a passive (busy) tab can never destroy the owner's WAL, and mid-flight adoption stays a viewer", async () => {
