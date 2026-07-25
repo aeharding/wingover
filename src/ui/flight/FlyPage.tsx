@@ -117,7 +117,14 @@ export default function FlyPage() {
   }>({ selectedId: null, pending: null });
   const instrumentsRef = useRef<HTMLDivElement>(null);
 
-  const { track, latest, landingAt, nextWaypoint, error: gpsError } = snapshot;
+  const { track, latest, landingAt, nextWaypoint } = snapshot;
+  // Storage failures never reach the pilot: they are non-actionable
+  // mid-air, the native track is durably held in Rust regardless of what
+  // webview storage does, and the engine already retains and retries
+  // every failed batch (the console carries the detail). What still
+  // surfaces is what a pilot can act on: GPS/permission problems and the
+  // recorder-busy conflict.
+  const gpsError = snapshot.error?.code === "storage" ? null : snapshot.error;
   // Only a still-active selection surfaces the control; a reached/removed pin
   // drops out of activeWaypoints and the button hides on its own.
   const selectedWaypoint =
