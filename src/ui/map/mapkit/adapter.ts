@@ -1,4 +1,9 @@
-import type { Annotation, Coordinate, PolylineOverlay } from "apple-mapkit";
+import type {
+  Annotation,
+  Coordinate,
+  Padding,
+  PolylineOverlay,
+} from "apple-mapkit";
 import type { Feature } from "geojson";
 
 import type { MapAppearance, MapViewKind } from "../config";
@@ -40,6 +45,15 @@ function normalizeDeg(d: number) {
 // Signed smallest rotation in (-180, 180].
 function shortestAngle(d: number) {
   return ((((d + 180) % 360) + 360) % 360) - 180;
+}
+
+function samePadding(a: Padding, b: Padding) {
+  return (
+    a.top === b.top &&
+    a.right === b.right &&
+    a.bottom === b.bottom &&
+    a.left === b.left
+  );
 }
 
 // The aircraft glyph — a blue chevron. Positioned by a 0×0 wrapper at the
@@ -101,6 +115,12 @@ interface PrivateMapImpl {
     point: PrivateMapPoint,
     direction: number,
   ): PrivateMapPoint | undefined;
+  // The public `map.padding =` setter forwards here with no options; only
+  // the impl takes the second argument (see writePaddingWithoutRect).
+  setPadding?(
+    padding: Padding,
+    options: { updateVisibleMapRect: boolean },
+  ): void;
 }
 
 export async function createMapKitMapView(
@@ -124,9 +144,33 @@ export async function createMapKitMapView(
   map.colorScheme =
     appearance === "light" ? mapkit.ColorScheme.Light : mapkit.ColorScheme.Dark;
 
-  // The bearing the app last asked for. The glyph is oriented against this
-  // (heading − lastBearing → 0 in track-up), so it holds pointing up.
-  let lastBearing = 0;
+  // The target of an ANIMATED turn still in flight, or null when the camera
+  // is settled. Only that window needs a remembered number: mid-tween the
+  // live rotation is not the answer yet, so the glyph rides the target and
+  // holds pointing up (track-up) instead of counter-rotating and snapping
+  // back. Every other moment reads the camera itself.
+  //
+  // A cache of what the app last ASKED for is exactly what misoriented the
+  // glyph on device: MapKit moves rotation behind the adapter's back — a
+  // two-finger twist, a turn the zoom lock refuses, and above all
+  // Map.setPadding, which runs `this.rotation = 0` before it re-derives the
+  // visible rect (read in the v6 bundle, reproduced in a browser) — so an
+  // inset change left the cache describing a camera that no longer existed.
+  // Unsnapped there are no further bearing writes to correct it, so the
+  // chevron kept pointing at the old north for the rest of the flight.
+  //
+  // So this one is written narrowly (moveTo latches only a turn the camera
+  // really left behind) and cleared broadly: every camera settle drops it,
+  // not only the rotation-end that a stranded turn never sends.
+  let turningTo: number | null = null;
+  const screenBearing = () => turningTo ?? rotationToBearing(map.rotation);
+
+  // The live aircraft glyphs (one per aircraft() handle), redrawn whenever
+  // the camera's rotation settles somewhere new: the glyph is screen-fixed,
+  // so a camera turn changes its on-screen angle just as much as a new
+  // course does, and nothing else would repaint it until the next fix — or
+  // ever, once unsnapped.
+  const glyphs = new Set<() => void>();
 
   // mapkit.Map hides its real implementation behind a Symbol-keyed accessor:
   // map._(key) type-checks the key, then returns the impl from a WeakMap
@@ -219,9 +263,51 @@ export async function createMapKitMapView(
     const enabled = zoom >= ROTATION_UNLOCK_ZOOM;
     if (map.isRotationEnabled !== enabled) map.isRotationEnabled = enabled;
   }
+
+  // The camera stopped somewhere. Wherever that is, it is the truth now:
+  // drop any in-flight-turn latch and re-derive every live glyph's angle
+  // from the rotation the camera actually holds.
+  function cameraSettled() {
+    turningTo = null;
+    for (const draw of glyphs) draw();
+  }
+
+  // MapKit's one reliable "the camera stopped TURNING" signal, and it covers
+  // most of the paths that move rotation: a two-finger twist (gesture end +
+  // deceleration end), each non-animated set, the end of an animated turn,
+  // and the zeroing inside setPadding. (rotation-change is dead in the v6
+  // bundle — its dispatch flag is never set — which is why the compass has
+  // to poll instead.) Redrawing the glyphs here is what makes them
+  // self-healing: however the rotation moved, the next settle re-derives
+  // their angle from the camera that actually exists.
+  emap.addEventListener("rotation-end", cameraSettled);
+
+  // The rest of the paths move rotation with NO rotation-end at all. Two of
+  // them, both read out of the v6 bundle:
+  //
+  //  • every region / visible-rect set hard-writes `rotation = 0` onto the
+  //    camera it derives, and non-animated that camera is applied
+  //    instantly: no rotation tween is created, `_rotating` is never
+  //    latched, so cameraDidStopRotating early-returns. Reachable today —
+  //    pause a replay in the logbook seat, twist the map, expand it, and
+  //    fitBounds turns the camera north while the chevron keeps the
+  //    twisted angle until some later fix redraws it.
+  //  • an ANIMATED turn the below-zoom-7 camera constraint declines
+  //    (constrainCameraRotation zeroes the target camera, then the
+  //    equal-camera check skips the tween) reports started and never ends,
+  //    stranding `turningTo` on a bearing the camera never took.
+  //
+  // Both heal on the next region/zoom settle, which is also where the
+  // rotate gesture is re-gated. The redraw is idempotent — draw() skips an
+  // unchanged transform — and that matters here: region-change-end fires on
+  // every follow re-center, i.e. every fix on the live map.
+  function regionSettled() {
+    syncRotationGesture();
+    cameraSettled();
+  }
   syncRotationGesture();
-  emap.addEventListener("zoom-end", syncRotationGesture);
-  emap.addEventListener("region-change-end", syncRotationGesture);
+  emap.addEventListener("zoom-end", regionSettled);
+  emap.addEventListener("region-change-end", regionSettled);
 
   // Animated center+zoom as ONE camera tween, via the captured impl. The
   // public API can't express it: MapKit runs a single camera animation, and
@@ -307,6 +393,34 @@ export async function createMapKitMapView(
     }
   }
 
+  // Write the padding WITHOUT MapKit's visible-rect re-derivation, through
+  // the captured impl. Apple's own opt-out — `setPadding(padding, {
+  // updateVisibleMapRect: false })` — stores the padding and re-places the
+  // controls (controlsLayer.mapPaddingDidChange, which runs either way) and
+  // skips the whole default branch: `this.rotation = 0`, re-derive the
+  // padded rect, setVisibleMapRect. That zeroing is #147, and skipping it
+  // beats zeroing and re-asserting, which turns the camera to north and
+  // back around a pivot that moved in between. It is exactly right here
+  // because this app's padding places the Apple logo and Legal link and
+  // nothing else — the camera framing is never meant to follow it.
+  //
+  // Private surface, so it gets the same treatment as the impl capture
+  // above: probed, never assumed. False = it did not carry the write (no
+  // member, a throw, or a MapKit that ignored the option and zeroed the
+  // rotation anyway), and the caller falls back to the public write plus a
+  // re-assert. A partial private write costs nothing there: setPadding
+  // early-returns on a Padding equal to the one already stored.
+  function writePaddingWithoutRect(padding: Padding): boolean {
+    if (!impl?.setPadding) return false;
+    const was = map.rotation;
+    try {
+      impl.setPadding(padding, { updateVisibleMapRect: false });
+    } catch {
+      return false;
+    }
+    return map.rotation === was && samePadding(map.padding, padding);
+  }
+
   const view: MapView = {
     el: container,
     ready: new Promise<void>((resolve) => {
@@ -336,12 +450,34 @@ export async function createMapKitMapView(
     // cascading var(--ion-safe-area-*) (MapCanvas resolves them off the same
     // probe), so the logo and the buttons move as one.
     setInsets(insets) {
-      map.padding = new mapkit.Padding(
+      const padding = new mapkit.Padding(
         insets.top,
         insets.right,
         insets.bottom,
         insets.left,
       );
+      // Captured BEFORE anything writes padding, because the probe below
+      // can be the thing that zeroes it: a MapKit that dropped the option
+      // runs the default path, and then the re-assert has to restore the
+      // rotation from before the probe, not the 0 it left behind.
+      const rotation = map.rotation;
+      // First choice: the write that never touches the camera at all (see
+      // writePaddingWithoutRect).
+      if (writePaddingWithoutRect(padding)) return;
+      // Fallback. The public setter takes MapKit's default path, which
+      // zeroes the camera on its way through — literally `this.rotation =
+      // 0`, then it re-derives the visible rect north-up (v6 bundle) — so
+      // every inset change (a device rotation, the notch moving to the
+      // side, the replay pane's glide) snapped a track-up pilot to north.
+      // Capture the rotation and re-assert it after, non-animated, exactly
+      // the way MapKit's own resize path does (_resizeDetectorDidInstall).
+      // No unchanged-inset guard needed: setPadding early-returns on an
+      // equal Padding, so an inset that did not move never reaches the
+      // reset. The round trip through north is why this is the fallback and
+      // not the plan: the re-assert pivots around a center the zeroed
+      // camera already re-derived.
+      map.padding = padding;
+      if (map.rotation !== rotation) map.rotation = rotation;
     },
 
     destroy() {
@@ -390,12 +526,38 @@ export async function createMapKitMapView(
       // cameraDistance preserves center + rotation. No per-frame region set
       // (that reset track-up to north and thrashed tiles).
       if (to.bearing !== undefined) {
-        lastBearing = to.bearing;
         const rotation = bearingToRotation(to.bearing);
         // Skip when already at (or turning to) the target — otherwise a
         // steady heading would re-trigger a native turn every fix.
         if (Math.abs(shortestAngle(rotation - map.rotation)) > 0.05) {
-          map.setRotationAnimated(rotation, animated);
+          const was = map.rotation;
+          const turn = map.setRotationAnimated(rotation, animated);
+          // Latch the target ONLY for an animated turn that left the camera
+          // behind to tween it there. Latching one the camera will not take
+          // is the exact staleness this path exists to avoid, and three of
+          // the four outcomes must read the live camera instead:
+          //
+          //  • null — MapKit refused outright (rotation unavailable on this
+          //    renderer): the camera never moves.
+          //  • a non-animated set — the camera is already there, and it
+          //    ends in rotation-end regardless.
+          //  • the rotation moved DURING the call — then it was not tweened
+          //    at all. An animated set issued while another camera tween is
+          //    in flight takes MapKit's instant-apply branch, is written
+          //    straight onto the camera, and is then overwritten by that
+          //    tween's next frame; `_rotating` is never latched, so no
+          //    rotation-end follows either. The camera is the only truth.
+          //
+          // The one outcome this cannot tell apart HERE is the turn the
+          // below-zoom-7 constraint declines: rotation-start fires, the
+          // target camera is zeroed, the equal-camera check skips the
+          // tween, and nothing ever ends — indistinguishable at the call
+          // site from a real tween that has not ticked yet. cameraSettled()
+          // is the backstop; the next settle of any kind drops the latch.
+          turningTo =
+            animated && turn !== null && map.rotation === was
+              ? to.bearing
+              : null;
         }
       }
       if (to.center) {
@@ -673,12 +835,33 @@ export async function createMapKitMapView(
       wrapper.innerHTML = AIRCRAFT_SVG;
       const svg = wrapper.firstElementChild as SVGElement;
       let ann: Annotation | null = null;
+      // The glyph's geographic course; null while no glyph is on the map.
+      let heading: number | null = null;
+      // The transform last written. draw() runs on every camera settle, and
+      // region-change-end fires once per follow re-center — every fix on the
+      // battery-sensitive live map — so a redraw that changes nothing has to
+      // cost nothing.
+      let drawn = "";
+      // Screen-fixed glyph, snapped (no animation): it points to the
+      // on-screen heading — geographic course minus the camera's bearing (0
+      // in track-up, so it holds pointing up as the camera turns under it).
+      // Both terms move, so this runs on a camera settle as well as a fix.
+      const draw = () => {
+        if (heading === null) return;
+        const screenAngle = heading - screenBearing();
+        const transform = `translate(-50%, -50%) rotate(${screenAngle}deg)`;
+        if (transform === drawn) return;
+        drawn = transform;
+        svg.style.transform = transform;
+      };
+      glyphs.add(draw);
       container.setAttribute("data-aircraft-layer", "true");
       return {
         set(state: AircraftState | null) {
           if (!state) {
             if (ann) map.removeAnnotation(ann);
             ann = null;
+            heading = null;
             return;
           }
           const coord = toCoord(state.at);
@@ -690,16 +873,14 @@ export async function createMapKitMapView(
           } else {
             ann.coordinate = coord;
           }
-          // Screen-fixed glyph, snapped (no animation): it points to the
-          // on-screen heading — geographic course minus the map's target
-          // bearing (0 in track-up, so it holds pointing up as the camera
-          // turns under it).
-          const screenAngle = state.heading - lastBearing;
-          svg.style.transform = `translate(-50%, -50%) rotate(${screenAngle}deg)`;
+          heading = state.heading;
+          draw();
         },
         remove() {
+          glyphs.delete(draw);
           if (ann) map.removeAnnotation(ann);
           ann = null;
+          heading = null;
         },
       };
     },

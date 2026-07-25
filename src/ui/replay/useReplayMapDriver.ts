@@ -56,11 +56,10 @@ export function useReplayMapDriver(
         { animate: false },
       );
     }
-    // AFTER the camera move, never before: MapKit orients the glyph
-    // against the bearing the app LAST asked for, so a set() ahead of the
-    // track-up moveTo leaves the chevron pointing at the old north — the
-    // map rotates and the aircraft visibly doesn't (LiveTrackMap orders
-    // the same way).
+    // AFTER the camera move, never before: the glyph is drawn against the
+    // camera's CURRENT bearing, so a set() ahead of the track-up moveTo
+    // composes it against the old north — the map rotates and the aircraft
+    // visibly doesn't (LiveTrackMap orders the same way).
     aircraftRef.current?.set({ at, heading: latest.course });
   });
 
