@@ -29,6 +29,11 @@ final class PermissionUITests: XCTestCase {
       .firstMatch
   }
 
+  // Walks any leftover state (recording, acquiring, blocked takeover)
+  // back to idle. The cancel branch needs a real wait — a cold launch
+  // renders the webview seconds after launch() returns — and pre-takeoff
+  // Cancel is guarded by the same BigConfirm as Stop (gloves-first); the
+  // takeover's Cancel discards directly, so a missing confirm is fine.
   private func recoverToIdle(_ app: XCUIApplication) {
     let stop = app.buttons["Stop flight"].firstMatch
     let cancel = app.buttons["Cancel"].firstMatch
@@ -36,10 +41,12 @@ final class PermissionUITests: XCTestCase {
       stop.tap()
       let confirm = app.buttons["Stop"].firstMatch
       if confirm.waitForExistence(timeout: 5) { confirm.tap() }
-      _ = app.buttons["Fly"].firstMatch.waitForExistence(timeout: 20)
-    } else if cancel.exists {
+    } else if cancel.waitForExistence(timeout: 10) {
       cancel.tap()
+      let confirm = app.buttons["Stop"].firstMatch
+      if confirm.waitForExistence(timeout: 5) { confirm.tap() }
     }
+    _ = app.buttons["Start Flight"].firstMatch.waitForExistence(timeout: 20)
   }
 
   // SwiftUI Settings virtualizes its lists: off-screen rows are absent
