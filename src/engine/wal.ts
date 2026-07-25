@@ -90,6 +90,14 @@ export async function readWal(): Promise<{
       db.close();
       reject(tx.error);
     };
+    // An abort fires onabort and NOT onerror, so without this the promise
+    // stays pending forever — and this read is the one the whole app waits
+    // on to learn whether a flight is in progress. withStores has always
+    // handled it; the read path had the hole.
+    tx.onabort = () => {
+      db.close();
+      reject(tx.error);
+    };
   });
 }
 

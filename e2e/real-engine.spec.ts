@@ -60,28 +60,34 @@ const GEO_STUB = `(() => {
   }
 })();`;
 
-// Was the ground app's navigation shell ever on screen? Recorded from
+// What did this boot put on screen, and in what order? Recorded from
 // mutation RECORDS rather than a live DOM scan, so a shell that mounts and
 // is torn down inside a single frame still counts — the flicker under test
 // is exactly that, and a poll or a visibility check would miss it.
 // Installed at document-start (addInitScript), so nothing before the first
-// React render escapes it, and it resets itself on every navigation.
-const SHELL_WATCH = `(() => {
-  const SHELL = ["ion-app", "ion-tabs", "ion-tab-bar", "ion-router-outlet"];
-  const seen = new Set();
-  window.__shell = { list: () => [...seen] };
+// React render escapes it, and it starts empty on every navigation.
+//
+// Each added subtree is walked in DOM order and every element classified,
+// so the returned list is first-sighting order: "ion-app" before the
+// "fly-content" nested inside it, and the bare flight surface before a
+// shell that arrives in a later commit.
+const BOOT_WATCH = `(() => {
+  const classify = (el) => {
+    if (el.dataset && el.dataset.testid === "fly-content") return "fly-content";
+    const tag = el.tagName.toLowerCase();
+    if (["ion-app", "ion-tabs", "ion-tab-bar", "ion-router-outlet"].includes(tag)) return tag;
+    // The idle homescreen's one action, shell or no shell: the detector for
+    // "the flight surface mounted but is showing the ground screen".
+    if (tag === "button" && el.textContent.trim() === "Start Flight") return "start-flight";
+    return null;
+  };
+  const seen = [];
+  window.__boot = { list: () => [...seen] };
   const scan = (node) => {
     if (!node || node.nodeType !== 1) return;
-    for (const selector of SHELL) {
-      if (node.matches(selector) || node.querySelector(selector)) {
-        seen.add(selector);
-      }
-    }
-    // The idle homescreen itself, shell or no shell.
-    for (const el of [node, ...node.querySelectorAll("button")]) {
-      if (el.tagName === "BUTTON" && el.textContent.trim() === "Start Flight") {
-        seen.add("start-flight");
-      }
+    for (const el of [node, ...node.querySelectorAll("*")]) {
+      const kind = classify(el);
+      if (kind !== null && !seen.includes(kind)) seen.push(kind);
     }
   };
   new MutationObserver((records) => {
@@ -91,9 +97,9 @@ const SHELL_WATCH = `(() => {
   }).observe(document, { childList: true, subtree: true });
 })();`;
 
-function shellSightings(page: Page): Promise<string[]> {
+function bootSightings(page: Page): Promise<string[]> {
   return page.evaluate(() =>
-    (window as unknown as { __shell: { list: () => string[] } }).__shell.list(),
+    (window as unknown as { __boot: { list: () => string[] } }).__boot.list(),
   );
 }
 
@@ -219,16 +225,13 @@ test("real engine: gate, backdated takeoff, reload kill drill, stop", async ({
 });
 
 // Owner-reported, on device: "Dont flicker to the homescreen before
-// relaunching the fly page, if in flight, its disorienting." Pre-hydration
-// the engine reports "idle" (the WAL read has not resolved) and App picked
-// the nav shell off exactly that, so a mid-flight relaunch painted the
-// homescreen for a few frames first. STEERING Reliability 3: after any
-// interruption, foregrounding shows the recording in progress, exactly
-// where it left off, with zero pilot action.
+// relaunching the fly page, if in flight, its disorienting." Why it
+// happened, and why the fix is shaped the way it is: src/engine/
+// sessionMirror.ts.
 test("mid-flight relaunch never flashes the homescreen", async ({ page }) => {
   const pageErrors: string[] = [];
   page.on("pageerror", (error) => pageErrors.push(String(error)));
-  await page.addInitScript(SHELL_WATCH);
+  await page.addInitScript(BOOT_WATCH);
   await page.addInitScript(GEO_STUB);
   const emit = makeEmitter(page);
 
@@ -241,8 +244,18 @@ test("mid-flight relaunch never flashes the homescreen", async ({ page }) => {
   await page.goto(URL);
   await expect(page.getByTestId("recording")).toBeVisible();
 
-  // Not one frame of shell, tab bar, or Start button on the way there.
-  expect(await shellSightings(page)).toEqual([]);
+  // The flight surface, and nothing else, for the whole boot: no shell, no
+  // tab bar, no Start button, not for one frame.
+  expect(await bootSightings(page)).toEqual(["fly-content"]);
+
+  // And with the shell shed the surface owns its canvas, so the frames
+  // before the WAL lands are black rather than the ground app's page (pure
+  // white on a light palette).
+  expect(
+    await page
+      .getByTestId("fly-content")
+      .evaluate((el) => getComputedStyle(el).backgroundColor),
+  ).toBe("rgb(0, 0, 0)");
 
   // And the relaunched page is a working recorder, not a frozen picture.
   await waitForWatch(page);
@@ -251,13 +264,14 @@ test("mid-flight relaunch never flashes the homescreen", async ({ page }) => {
   expect(pageErrors).toEqual([]);
 });
 
-// The other direction of the same commit: an idle launch must still get the
-// nav shell, not a black flight surface waiting on a flight that isn't
-// there.
+// The other direction: an idle launch must still get the nav shell, not a
+// black flight surface waiting on a flight that isn't there. Doubles as the
+// positive control for the watcher above — every kind it can report shows
+// up here, so the empty list in that test means "absent", not "undetected".
 test("relaunch while idle still boots straight to the nav shell", async ({
   page,
 }) => {
-  await page.addInitScript(SHELL_WATCH);
+  await page.addInitScript(BOOT_WATCH);
   await page.addInitScript(GEO_STUB);
   await page.goto(URL);
   await expect(
@@ -268,21 +282,30 @@ test("relaunch while idle still boots straight to the nav shell", async ({
   await expect(
     page.getByRole("button", { name: "Start Flight" }),
   ).toBeVisible();
-  const seen = await shellSightings(page);
-  expect(seen).toContain("ion-app");
+  const seen = await bootSightings(page);
+  expect(seen[0]).toBe("ion-app");
   expect(seen).toContain("ion-tab-bar");
+  expect(seen).toContain("start-flight");
+
+  // Inside the shell the surface stays a guest: transparent, so the trace
+  // backdrop shows through and the idle page themes with the app.
+  expect(
+    await page
+      .getByTestId("fly-content")
+      .evaluate((el) => getComputedStyle(el).backgroundColor),
+  ).toBe("rgba(0, 0, 0, 0)");
 });
 
 // The mirror can be wrong in exactly one affordable direction: a flag left
 // over from a flight the WAL no longer holds. Boot commits to the flight
-// surface (black, its own loading state), hydration reconciles, the shell
-// takes over. No crash, no stuck screen.
+// surface, hydration reconciles, the shell takes over. No crash, no stuck
+// screen, and no repeat next launch.
 test("a stale in-play flag with an empty WAL settles into the shell", async ({
   page,
 }) => {
   const pageErrors: string[] = [];
   page.on("pageerror", (error) => pageErrors.push(String(error)));
-  await page.addInitScript(SHELL_WATCH);
+  await page.addInitScript(BOOT_WATCH);
   await page.addInitScript(GEO_STUB);
   await page.addInitScript(`localStorage.setItem("wingover.session", "1");`);
 
@@ -290,7 +313,11 @@ test("a stale in-play flag with an empty WAL settles into the shell", async ({
   await expect(
     page.getByRole("button", { name: "Start Flight" }),
   ).toBeVisible();
-  expect(await shellSightings(page)).toContain("ion-tab-bar");
+  // The order is the point: the flight surface came up first (the affordable
+  // cost, a loading frame), and the shell followed once the WAL had spoken.
+  const seen = await bootSightings(page);
+  expect(seen[0]).toBe("fly-content");
+  expect(seen).toContain("ion-tab-bar");
   // Reconciled against the WAL, so the next launch does not pay for it again.
   expect(
     await page.evaluate(() => localStorage.getItem("wingover.session")),

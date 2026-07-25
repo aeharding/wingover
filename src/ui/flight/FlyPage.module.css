@@ -35,6 +35,17 @@
   color: #fff;
 }
 
+/* Only when App has shed the shell for a live session (see FlyPage's
+   shellShed note): this surface is the whole screen, so it owns the canvas
+   instead of borrowing the ground app's. Matters for exactly one frame —
+   "loading", before the WAL read lands — but that frame is what a pilot
+   relaunching mid-flight sees first, and on a light palette the ground
+   canvas is pure white. Black in every scheme, like the flight design that
+   follows it and like the boot paint in index.html. */
+.shed {
+  background: #000;
+}
+
 .idle {
   position: relative;
   overflow: hidden;

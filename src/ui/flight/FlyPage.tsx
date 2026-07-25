@@ -73,7 +73,22 @@ const ARMED_HINT = isTauri()
   ? "Recording starts automatically when you launch. It's safe to lock your phone."
   : "Recording starts automatically when you launch.";
 
-export default function FlyPage() {
+/**
+ * shellShed: App renders this surface bare, with the whole Ionic shell gone,
+ * because a session is in play. Then this surface IS the screen and owns its
+ * background in every scheme — the states that paint (armed, recording) do it
+ * themselves, and this covers the one that does not: the pre-hydration
+ * "loading" frame, which would otherwise show the ground app's canvas
+ * underneath. Black in a light palette too, because what follows it is always
+ * the black flight design (index.html boots dark for the same reason).
+ * FlyFrame and the desktop pane leave it off: there the surface is a guest on
+ * a themed page, and the trace backdrop reads through it while idle.
+ */
+export default function FlyPage({
+  shellShed = false,
+}: {
+  shellShed?: boolean;
+}) {
   const { units } = useSettings();
   // The engine is the single owner of flight state; this page is a view.
   // Snapshots are cached (stable identity between changes) and the change
@@ -83,9 +98,8 @@ export default function FlyPage() {
   // Hydration gate: before the WAL read the engine reports "idle", which
   // must not flash the Start button during a live-flight reload. This is
   // only the in-surface half. Whether this surface is mounted AT ALL on a
-  // mid-flight launch is decided a layer up, off the engine's synchronous
-  // session mirror (src/engine/sessionMirror.ts) — "loading" is what the
-  // pilot sees for the frames between that decision and the WAL landing.
+  // mid-flight launch is decided a layer up, off snapshot.sessionInPlay —
+  // "loading" is what the pilot sees for the frames in between.
   const [ready, setReady] = useState(hydratedOnce);
   const { confirm: bigConfirm, element: confirmElement } = useBigConfirm();
   const {
@@ -359,7 +373,10 @@ export default function FlyPage() {
   // screen's guidance covers a slow first fix.
   if (ready && snapshot.status === "blocked") {
     return (
-      <div className={styles.content} data-testid="fly-content">
+      <div
+        className={cx(styles.content, shellShed && styles.shed)}
+        data-testid="fly-content"
+      >
         <ErrorScreen
           error={snapshot.error}
           onRetry={
@@ -373,7 +390,10 @@ export default function FlyPage() {
   }
 
   return (
-    <div className={styles.content} data-testid="fly-content">
+    <div
+      className={cx(styles.content, shellShed && styles.shed)}
+      data-testid="fly-content"
+    >
       {status === "idle" && (
         <div className={styles.idle}>
           <div className={styles.facts} data-testid="idle-facts">

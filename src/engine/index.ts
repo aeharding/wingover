@@ -61,9 +61,3 @@ function parseHome(
 }
 
 export const engine: RecordingEngine = chooseEngine();
-
-// The engine's one synchronous answer, for the one question that cannot
-// wait for the WAL: at first render, is a flight in play? Written by the
-// engine, read by App boot — the UI never touches the storage behind it
-// (sessionMirror.ts).
-export { sessionInPlay } from "./sessionMirror";
