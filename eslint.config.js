@@ -554,7 +554,13 @@ export default defineConfig(
     // and the house ones above are the backstop.
     // Runner-ups on this surface: LiveTrackMap.tsx (274 code lines, a
     // 226-line component) and traceRenderer.ts (complexity 22).
+    //
+    // Tests exempt, like the two blocks above: a table-driven spec's
+    // branches are its cases, and src/engine/real.test.ts is 2000 lines by
+    // design. There is no flight test file yet; without this the first one
+    // written would be the only spec in the repo held to a 25 complexity.
     files: ["src/ui/flight/**"],
+    ignores: ["src/ui/flight/**/*.test.ts", "src/ui/flight/**/*.test.tsx"],
     rules: {
       "max-lines-per-function": [
         "error",
@@ -578,6 +584,7 @@ export default defineConfig(
   },
   {
     files: ["src/ui/flight/**/*.tsx"],
+    ignores: ["src/ui/flight/**/*.test.tsx"],
     rules: {
       "max-lines": [
         "error",

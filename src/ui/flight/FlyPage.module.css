@@ -286,7 +286,13 @@
   );
 }
 
-.skipIconBadge {
+/* Scoped under .skipIcon for the same reason .liveMap is scoped under
+   .recording: this class rides the same element as NativeIcon's own
+   .nativeIcon, and the split flipped their emission order too. The two
+   rules happen to share no property today, so nothing moved — but
+   "inert until someone adds a width" is exactly the tie the conventions
+   ban (docs/CSS-MODULES.md). */
+.skipIcon .skipIconBadge {
   position: absolute;
   left: 80%;
   top: 20%;

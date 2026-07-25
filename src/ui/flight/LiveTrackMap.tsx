@@ -51,7 +51,7 @@ function waypointPinEl(color: string, label: string): HTMLElement {
 }
 
 interface LiveTrackMapProps {
-  // Host placement (FlyPage absolutely fills its recording screen).
+  // Host placement (RecordingSurface absolutely fills its screen).
   className?: string;
   track: Fix[];
   latest: Fix | null;
@@ -72,7 +72,7 @@ interface LiveTrackMapProps {
   onSelectWaypoint?: (id: string | null) => void;
   onFollowChange: (follow: boolean) => void;
   // The abstract map, once created (null when it is destroyed for a
-  // provider re-create) — FlyPage gates the satellite toggle on its
+  // provider re-create) — MapControls gates the satellite toggle on its
   // supportsSatellite.
   onMapReady?: (map: MapView | null) => void;
 }
