@@ -90,7 +90,10 @@ export default function FlyPage() {
     update: updateLiveView,
   } = useLiveViewPrefs();
   const [liveMap, setLiveMap] = useState<MapView | null>(null);
-  const [mapTopInset, setMapTopInset] = useState(0);
+  // The instruments' footprint as map insets: {top} under the portrait
+  // strip, {left} beside the landscape rail. Shape is inferred from the
+  // measured box (full-width = strip), so CSS stays the one layout owner.
+  const [mapInsets, setMapInsets] = useState({ top: 0, left: 0 });
   // The planned route, for the idle-screen distance. Reloaded on every entry
   // to the Fly tab so edits made on the Plan tab are reflected.
   const [plannedPins, setPlannedPins] = useState<Pin[]>([]);
@@ -222,13 +225,30 @@ export default function FlyPage() {
 
   useLayoutEffect(() => {
     if (status !== "recording" && status !== "landed") return;
-    const measure = () =>
-      setMapTopInset(
-        instrumentsRef.current?.getBoundingClientRect().height ?? 0,
+    const el = instrumentsRef.current;
+    const host = el?.parentElement;
+    if (!el || !host) return;
+    const measure = () => {
+      const rect = el.getBoundingClientRect();
+      // The rail is LEFT-ANCHORED and FULL-HEIGHT — width alone also
+      // matches the >=768px floating card (right-anchored, 400px), which
+      // must keep insetting the TOP like the portrait strip does, or
+      // iPad/desktop center the aircraft toward the card. Shape, not
+      // breakpoint, so CSS stays the one layout owner.
+      const rail = rect.left <= 1 && rect.height >= host.clientHeight - 1;
+      setMapInsets(
+        rail ? { top: 0, left: rect.width } : { top: rect.height, left: 0 },
       );
+    };
     measure();
-    window.addEventListener("resize", measure);
-    return () => window.removeEventListener("resize", measure);
+    // ResizeObserver, not window.resize: WKWebView can fire resize before
+    // rotated env() insets settle (the exact stale-read class INSETS.md's
+    // probe bridge exists for); the observer fires again when the boxes
+    // themselves land.
+    const observer = new ResizeObserver(measure);
+    observer.observe(el);
+    observer.observe(host);
+    return () => observer.disconnect();
   }, [status]);
 
   async function armFlight() {
@@ -458,7 +478,8 @@ export default function FlyPage() {
             view={mapView}
             follow={follow}
             trackUp={trackUp}
-            topInset={mapTopInset}
+            topInset={mapInsets.top}
+            leftInset={mapInsets.left}
             plannedWaypoints={snapshot.waypoints}
             navWaypoints={snapshot.activeWaypoints}
             onMapReady={setLiveMap}
@@ -478,7 +499,13 @@ export default function FlyPage() {
           {gpsError && (
             <div
               className={cx(styles.gpsError, styles.recordingError)}
-              style={{ top: mapTopInset + 12 }}
+              // Centered over the MAP: pushed below the strip, or right of
+              // the rail (half the rail shifts the 50% anchor to the open
+              // half's midpoint).
+              style={{
+                top: mapInsets.top + 12,
+                left: `calc(50% + ${mapInsets.left / 2}px)`,
+              }}
               data-testid="gps-error"
             >
               {gpsError.message}

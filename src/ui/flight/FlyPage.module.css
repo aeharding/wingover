@@ -49,7 +49,12 @@
   justify-content: flex-end;
   gap: 1.25rem;
   height: 100%;
-  padding: 0 20px calc(var(--offset-bottom, 0px) + 20px);
+  /* Side padding rides the safe-area insets: zero in portrait, the notch
+     margin in landscape, so the button and facts clear the rounded
+     corners. (env() directly — this surface is Ionic-free, INSETS.md.) */
+  padding: 0 calc(20px + env(safe-area-inset-right))
+    calc(var(--offset-bottom, 0px) + 20px)
+    calc(20px + env(safe-area-inset-left));
 
   /* Idle themes with the app (keyed on the palette CLASS, appTheme.ts);
      armed and recording below stay the frozen sunlight design. */
@@ -118,7 +123,8 @@
   /* In flight the surface owns its black (the frozen sunlight design);
      only idle is transparent over the host splash. */
   background: #000;
-  padding: 0 2rem;
+  padding: 0 calc(2rem + env(safe-area-inset-right)) 0
+    calc(2rem + env(safe-area-inset-left));
   text-align: center;
 }
 
@@ -178,6 +184,13 @@
   position: relative;
   height: 100%;
   background: #000;
+
+  /* Landscape phone: the instruments become a single-stack rail on the
+     left (see .instruments), this wide. One var, read by the rail's own
+     width AND the map's safe-area publish below, so they can never drift. */
+  @media (orientation: landscape) and (max-height: 500px) {
+    --fly-rail-w: 176px;
+  }
 }
 
 /* The live map fills the recording screen (LiveTrackMap takes this as its
@@ -185,13 +198,26 @@
 .liveMap {
   position: absolute;
   inset: 0;
+
+  /* The landscape rail is real chrome on the map's left edge: publish its
+     footprint into the derived safe-area var (INSETS.md), which MapCanvas
+     bridges into map padding — the Apple/Legal attribution steps out from
+     under the rail, and MapKit's padded centering keeps the followed
+     aircraft in the open map, not the geometric screen center. */
+  @media (orientation: landscape) and (max-height: 500px) {
+    --ion-safe-area-left: calc(
+      env(safe-area-inset-left) + var(--fly-rail-w, 168px)
+    );
+  }
 }
 
 /* 2x2 square: half the height of the old column, making room for the
    zoom slider above — everything stays in one thumb's reach. */
 .controls {
   position: absolute;
-  right: 0.9rem;
+  /* The right inset is zero in portrait and the notch margin in landscape,
+     so the cluster steps inboard of the rounded corner + island there. */
+  right: calc(0.9rem + env(safe-area-inset-right));
   bottom: calc(0.9rem + env(safe-area-inset-bottom));
   display: flex;
   flex-direction: column;
@@ -353,6 +379,9 @@
   gap: 1px;
   background: rgba(255, 255, 255, 0.22);
   padding-top: env(safe-area-inset-top);
+  /* Landscape puts the notch on the strip's flanks; the tiles step in. */
+  padding-left: env(safe-area-inset-left);
+  padding-right: env(safe-area-inset-right);
 
   @media (min-width: 768px) {
     top: 0.75rem;
@@ -361,5 +390,46 @@
     width: 400px;
     border-radius: 12px;
     overflow: hidden;
+  }
+
+  /* Landscape PHONE (a height no tablet has): an 844pt-wide phone would
+     trip the >=768px tablet card above and stack half the screen tall
+     over the map's right side, under the zoom rail. Instead: a
+     single-stack rail down the LEFT — portrait reads top-to-bottom
+     pairs, the rail reads one column, and the map keeps its full height,
+     which in track-up follow IS the look-ahead distance. Equal-split
+     rows fill the short edge; the --tile-* knobs compact the type to
+     fit 8 of them (Tile.module.css). Source order intentionally AFTER
+     the card block: both match at 844x390 and the later one must win. */
+  @media (orientation: landscape) and (max-height: 500px) {
+    top: 0;
+    bottom: 0;
+    left: 0;
+    right: auto;
+    width: calc(var(--fly-rail-w, 168px) + env(safe-area-inset-left));
+    border-radius: 0;
+    overflow: visible;
+    grid-template-columns: 1fr;
+    grid-auto-rows: 1fr;
+    padding-bottom: env(safe-area-inset-bottom);
+    /* Value type is row-height-driven via container units — each tile is
+       its own query container in this media (Tile.module.css). */
+    --tile-label-size: 0.62rem;
+    --tile-icon-well: 3.2rem;
+    --tile-icon-right: 0.3rem;
+
+    /* The two icon glyphs scale with the ROW like the values do (cq
+       units resolve against the tile container), at roughly portrait's
+       proportions — a fixed size here reads toy-sized next to
+       height-maximized type. Sized to stay inside --tile-icon-well. */
+    .compass {
+      width: 96cqh;
+      height: 96cqh;
+    }
+
+    .launchArrow {
+      width: 78cqh;
+      height: 78cqh;
+    }
   }
 }
