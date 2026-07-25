@@ -998,12 +998,12 @@ export class GeolocationRecordingEngine implements RecordingEngine {
     // gated, not error-gated: mid-flight these codes never block, and
     // ingest must keep running.
     const blocking = this.blockingError();
-    let disproved = false;
+    let receivedGoodFix = false;
     if (blocking !== null) {
       if (blocking.code !== "imprecise") return;
       if (!positions.some((p) => !coordsLookReduced(p.coords))) return;
       this.error = null;
-      disproved = true;
+      receivedGoodFix = true;
     }
     let ingested = false;
     let reachedChanged = false;
@@ -1059,14 +1059,14 @@ export class GeolocationRecordingEngine implements RecordingEngine {
       ingested = true;
     }
     if (!ingested) {
-      // The good fix that disproved the takeover can still be dropped by
+      // The good fix that cleared the takeover can still be dropped by
       // the duplicate filter below (a burst double, 44 ms apart). The
       // takeover is already cleared, so that has to be PUBLISHED: an
       // error cleared without an invalidation leaves the takeover on a
       // cached snapshot that is never rebuilt, and the recovery loop —
       // which now sees no blocking error — ends for good. On native that
       // is a screen with no way out but Cancel.
-      if (disproved) this.invalidate();
+      if (receivedGoodFix) this.invalidate();
       return;
     }
     // Fixes flowing again means GPS has recovered; a storage error is a
