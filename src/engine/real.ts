@@ -238,6 +238,46 @@ export class GeolocationRecordingEngine implements RecordingEngine {
   // as the same episode (the attempt failed) rather than a new one.
   private recoveryAttempted = false;
 
+  // One readiness answer, judged then acted on. Stale answers are
+  // silent: a previous arming (epoch) or a block that healed while the
+  // question was in flight both describe a state that no longer exists.
+  private onReadinessAnswer(epoch: number, refusal: SourceError | null) {
+    if (epoch !== this.pollEpoch) return;
+    const standing = this.blockingError();
+    if (standing === null) return;
+
+    if (refusal === null) {
+      this.recoveryAttempted = true;
+      this.bounceWatch();
+      return;
+    }
+    this.reclassifyTakeover(standing, refusal);
+  }
+
+  // Not ready - but the answer names WHICH refusal stands NOW, and the
+  // pilot can swap one for another while the takeover is up (Precise
+  // Location off, then Location Services off entirely). No watch runs in
+  // that window, so this is the only place that can notice. Reclassify
+  // only, never bounce: the watch is certain to refuse, and a bounce
+  // would flicker the takeover through acquiring.
+  private reclassifyTakeover(standing: BlockingError, refusal: SourceError) {
+    // A passive tab's busy takeover is never replaced: an answer asked
+    // before another tab took the recorder lock can land after it.
+    if (standing.code === "busy") return;
+    const fresh = toEngineError(refusal);
+    // A non-blocking refusal must never be installed here: it would drop
+    // the takeover to acquiring behind a watch that is still refused.
+    if (!isBlockingError(fresh)) return;
+    if (fresh.code === standing.code) return;
+
+    this.error = fresh;
+    // A different reason is a NEW episode: the attempt already spent was
+    // made against the old refusal, so the fresh one gets the immediate
+    // check back on its next arming.
+    this.recoveryAttempted = false;
+    this.invalidate();
+  }
+
   private syncRecoveryPoll() {
     const readiness = this.core.source.readiness;
     const blocking = this.blockingError();
@@ -249,59 +289,7 @@ export class GeolocationRecordingEngine implements RecordingEngine {
         if (this.pollInFlight) return;
         this.pollInFlight = true;
         void readiness()
-          .then((refusal) => {
-            // A stale answer is silent. Two ways to be stale: it belongs
-            // to a previous arming (epoch), or the block it was asked
-            // about healed while it was in flight (blockingError). Acting
-            // on either judges a state that no longer exists — tearing
-            // down a LIVE watch on a ready, or re-blocking a healed
-            // engine on a refusal.
-            if (epoch !== this.pollEpoch) return;
-            const standing = this.blockingError();
-            if (standing === null) return;
-            if (refusal !== null) {
-              // busy never arms this poll, but an answer asked before
-              // another tab took the recorder lock can land after it: the
-              // passive tab's takeover must not be replaced by a source
-              // refusal, or the next ready would start a second recorder
-              // on one WAL. (The ready path is guarded inside
-              // bounceWatch, at the single mutation site.)
-              if (standing.code === "busy") return;
-              // Not ready — but the answer names WHICH refusal stands
-              // now, and the pilot can swap one for another while the
-              // takeover is up (Precise Location off, then Location
-              // Services off entirely). The watch never runs again in
-              // that window, so this poll is the only thing that can
-              // notice; without it the screen keeps naming the reason
-              // that no longer applies until a bounce or a relaunch.
-              const fresh = toEngineError(refusal);
-              // Same reason, nothing to say. And a refusal that does not
-              // classify as blocking must never be installed: it would
-              // drop the takeover to acquiring behind a watch that is
-              // still refused, which is worse than a stale reason.
-              if (!isBlockingError(fresh) || fresh.code === standing.code)
-                return;
-              // Reclassify only: rendering the current reason is the
-              // whole job here, and bouncing on it would flicker the
-              // takeover through acquiring for a watch certain to refuse.
-              this.error = fresh;
-              // A different reason is a NEW episode. Whatever attempt
-              // this episode already spent was made against the old
-              // refusal, so the new one's eventual ready deserves the
-              // immediate check back. Belt and braces today: every route
-              // from here to a re-arm (start, discard, a fix, the poll's
-              // own bounce) sets the flag itself, and the one route that
-              // would not — retry() on a source declaring BOTH
-              // watchCanDieSilently and readiness — has no implementation
-              // yet. It is the episode's meaning, so it is stated here
-              // rather than left to be re-derived.
-              this.recoveryAttempted = false;
-              this.invalidate();
-              return;
-            }
-            this.recoveryAttempted = true;
-            this.bounceWatch();
-          })
+          .then((refusal) => this.onReadinessAnswer(epoch, refusal))
           // A readiness that rejects is simply not ready; the interval
           // asks again. It must not spam unhandled rejections at 0.5 Hz.
           .catch(() => {})
