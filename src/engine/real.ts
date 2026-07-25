@@ -109,12 +109,40 @@ export interface PositionSource {
   // by a mere foreground.
   watchCanDieSilently?: boolean;
   // Authoritative, side-effect-free "would a watch succeed right now?"
-  // (native: permissions + Precise Location). While blocked on a
-  // permission-class error, the engine polls this and retries the
-  // moment it turns true — the hands-free recovery path on platforms
-  // whose watch refusal is queryable. Absent = recovery relies on the
-  // foreground heal / Try Again.
-  readiness?: () => Promise<boolean>;
+  // (native: permissions + Precise Location). null = ready; otherwise the
+  // refusal that stands RIGHT NOW, in the same shape the watch's error
+  // channel reports. While blocked on a permission-class error the engine
+  // polls this: ready bounces the watch, and a refusal holds the takeover
+  // on THAT reason. Carrying the refusal is what lets the pilot swap one
+  // for another (Precise Location off, then Location Services off)
+  // without the watch ever running again — a bare "still not ready"
+  // leaves the screen naming a reason that no longer applies. The
+  // hands-free recovery path on platforms whose watch refusal is
+  // queryable; absent = recovery relies on the foreground heal / Try
+  // Again.
+  readiness?: () => Promise<SourceError | null>;
+}
+
+// The one mapping from what the source refused with to what the pilot is
+// told, shared by the watch's error channel (handleWatchError) and the
+// recovery poll's reclassification: the same refusal cannot render as two
+// different screens depending on which path carried it.
+function toEngineError(error: SourceError): EngineError {
+  return error.imprecise
+    ? {
+        code: "imprecise",
+        message: "Precise Location is off for Wingover.",
+      }
+    : error.permissionDenied
+      ? {
+          code: "permission-denied",
+          message:
+            "Location permission denied. Allow location access for Wingover, then try again.",
+        }
+      : {
+          code: "unavailable",
+          message: "GPS unavailable. Check that location services are on.",
+        };
 }
 
 // The plugin surface as the engine sees it, identical on every platform:
@@ -209,14 +237,43 @@ export class GeolocationRecordingEngine implements RecordingEngine {
       const epoch = ++this.pollEpoch;
       const check = () => {
         void readiness()
-          .then((ready) => {
+          .then((refusal) => {
             // A stale answer is silent. Two ways to be stale: it belongs
             // to a previous arming (epoch), or the block it was asked
             // about healed while it was in flight (blockingError). Acting
-            // on either tears down a LIVE watch on evidence about a state
-            // that no longer exists.
-            if (!ready || epoch !== this.pollEpoch) return;
-            if (this.blockingError() === null) return;
+            // on either judges a state that no longer exists — tearing
+            // down a LIVE watch on a ready, or re-blocking a healed
+            // engine on a refusal.
+            if (epoch !== this.pollEpoch) return;
+            const standing = this.blockingError();
+            if (standing === null) return;
+            if (refusal !== null) {
+              // Not ready — but the answer names WHICH refusal stands
+              // now, and the pilot can swap one for another while the
+              // takeover is up (Precise Location off, then Location
+              // Services off entirely). The watch never runs again in
+              // that window, so this poll is the only thing that can
+              // notice; without it the screen keeps naming the reason
+              // that no longer applies until a bounce or a relaunch.
+              const fresh = toEngineError(refusal);
+              // Same reason, nothing to say. And a refusal that does not
+              // classify as blocking must never be installed: it would
+              // drop the takeover to acquiring behind a watch that is
+              // still refused, which is worse than a stale reason.
+              if (!isBlockingError(fresh) || fresh.code === standing.code)
+                return;
+              // Reclassify only: rendering the current reason is the
+              // whole job here, and bouncing on it would flicker the
+              // takeover through acquiring for a watch certain to refuse.
+              this.error = fresh;
+              // A different reason is a NEW episode. Whatever attempt
+              // this episode already spent was made against the old
+              // refusal, so the new one's eventual ready deserves the
+              // immediate check back.
+              this.recoveryAttempted = false;
+              this.invalidate();
+              return;
+            }
             this.recoveryAttempted = true;
             this.bounceWatch();
           })
@@ -383,9 +440,10 @@ export class GeolocationRecordingEngine implements RecordingEngine {
   // No takeoff check here: a blocking error cannot exist once a flight
   // has started, and that invariant lives at the SETTERS —
   // handleWatchError refuses to install one mid-flight, the imprecise
-  // latch requires "acquiring", and busy arises only from start() and
-  // from pre-takeoff hydration adoption (mid-flight adoption stays a
-  // viewer). Pre-takeoff blocked absorbs (imprecise excepted — it
+  // latch requires "acquiring", busy arises only from start() and from
+  // pre-takeoff hydration adoption (mid-flight adoption stays a viewer),
+  // and the recovery poll only ever REPLACES a blocking error that
+  // already stands. Pre-takeoff blocked absorbs (imprecise excepted — it
   // self-heals), so a flight can never begin with one still set.
   private blockingError(): BlockingError | null {
     return this.error !== null && isBlockingError(this.error)
@@ -843,21 +901,7 @@ export class GeolocationRecordingEngine implements RecordingEngine {
     // source ends the flight through the stale-gap path, never through
     // an error screen.
     if (this.session && this.session.takeoffIndex !== null) return;
-    this.error = error.imprecise
-      ? {
-          code: "imprecise",
-          message: "Precise Location is off for Wingover.",
-        }
-      : error.permissionDenied
-        ? {
-            code: "permission-denied",
-            message:
-              "Location permission denied. Allow location access for Wingover, then try again.",
-          }
-        : {
-            code: "unavailable",
-            message: "GPS unavailable. Check that location services are on.",
-          };
+    this.error = toEngineError(error);
     this.invalidate();
   }
 

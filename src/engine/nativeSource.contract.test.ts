@@ -31,7 +31,7 @@ import { getCurrentPosition } from "../platform/currentPosition";
 import {
   classifyDrainError,
   nativeCore,
-  nativeLocationReady,
+  nativeLocationRefusal,
   nativePositionSource,
   permissionRefusal,
   type PermissionStatus,
@@ -139,13 +139,20 @@ describe("the engine reads every fixture it owns through the real path", () => {
         case "check_permissions":
         case "request_permissions": {
           const status = payload as PermissionStatus;
-          expect(permissionRefusal(status)).toStrictEqual(
-            expectJs(fixture, "refusal"),
-          );
+          const refusal = expectJs(fixture, "refusal");
+          expect(permissionRefusal(status)).toStrictEqual(refusal);
           // Readiness always asks check_permissions; a request_permissions
           // fixture is here to prove the two shapes are interchangeable.
+          // The capability the engine polls carries the refusal ITSELF, not
+          // a bare boolean: while a takeover is up, this answer is the only
+          // channel that can say the reason changed (Precise Location off
+          // traded for Location Services off), and the blocked screen
+          // re-renders on it. `ready` stays the fixture's own word for the
+          // null case, so the two readings can never drift apart.
           stub({ "plugin:wingover|check_permissions": status });
-          expect(await nativeLocationReady()).toBe(expectJs(fixture, "ready"));
+          const answer = await nativeLocationRefusal();
+          expect(answer).toStrictEqual(refusal);
+          expect(answer === null).toBe(expectJs(fixture, "ready"));
           break;
         }
         case "current_position": {

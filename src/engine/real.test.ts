@@ -291,25 +291,24 @@ describe("GeolocationRecordingEngine", () => {
     expect(engine.snapshotSync().latest).not.toBeNull();
   });
 
-  // A source in the native shape: capture outlives the page, so it
-  // declares no watchCanDieSilently and recovery is the readiness poll
-  // alone. `fail` stays bound to the FIRST watch's error callback; a
-  // bounce installs a fresh one the test never has to touch.
+  // The two Settings-level refusals in the shape a source reports them —
+  // exactly what nativeSource's permissionRefusal answers with, for both
+  // the watch's pre-capture gate and the readiness poll.
+  const DENIED: SourceError = {
+    permissionDenied: true,
+    message: "location permission denied",
+  };
+  const IMPRECISE: SourceError = {
+    permissionDenied: false,
+    imprecise: true,
+    message: "precise location disabled",
+  };
+
+  // The same source seen as a yes/no: not ready always reports the SAME
+  // refusal its watch raises, so nothing here ever reclassifies and these
+  // tests pin the bounce path alone.
   function pollingSource(ready: () => boolean) {
-    const state = {
-      watches: 0,
-      fail: (() => {}) as (error: SourceError) => void,
-    };
-    const source: PositionSource = {
-      reportsAccuracyAuthorization: true,
-      readiness: () => Promise.resolve(ready()),
-      watch(_onPositions, onError) {
-        state.watches++;
-        if (state.watches === 1) state.fail = onError;
-        return () => {};
-      },
-    };
-    return { source, state };
+    return refusingSource(() => (ready() ? null : DENIED));
   }
 
   // The Settings round trip, end to end: the pilot revokes location, then
@@ -399,7 +398,7 @@ describe("GeolocationRecordingEngine", () => {
   // a blocking error must still stand, AND the answer must belong to the
   // current arming.
   it("a readiness answer that outlived its block cannot bounce a live watch", async () => {
-    const pending: ((ready: boolean) => void)[] = [];
+    const pending: ((refusal: SourceError | null) => void)[] = [];
     const state = {
       watches: 0,
       fail: (() => {}) as (error: SourceError) => void,
@@ -407,7 +406,8 @@ describe("GeolocationRecordingEngine", () => {
     };
     const source: PositionSource = {
       reportsAccuracyAuthorization: true,
-      readiness: () => new Promise<boolean>((resolve) => pending.push(resolve)),
+      readiness: () =>
+        new Promise<SourceError | null>((resolve) => pending.push(resolve)),
       watch(onPositions, onError) {
         state.watches++;
         state.feed = onPositions;
@@ -440,8 +440,8 @@ describe("GeolocationRecordingEngine", () => {
     await settle();
     expect(engine.snapshotSync().status).toBe("acquiring");
 
-    // The stale yes lands. Nothing is blocked, so nothing is bounced.
-    pending[0](true);
+    // The stale ready lands. Nothing is blocked, so nothing is bounced.
+    pending[0](null);
     await settle();
     expect(state.watches).toBe(1);
     expect(engine.snapshotSync().status).toBe("acquiring");
@@ -457,13 +457,13 @@ describe("GeolocationRecordingEngine", () => {
     expect(engine.snapshotSync().status).toBe("blocked");
     expect(pending).toHaveLength(2);
 
-    pending[0](true);
+    pending[0](null);
     await settle();
     expect(state.watches).toBe(1);
     expect(engine.snapshotSync().status).toBe("blocked");
 
     // The current arming's own answer is what recovers it.
-    pending[1](true);
+    pending[1](null);
     await settle();
     expect(state.watches).toBe(2);
     expect(engine.snapshotSync().status).toBe("acquiring");
@@ -501,6 +501,160 @@ describe("GeolocationRecordingEngine", () => {
     expect(state.watches).toBe(1);
   });
 
+  // A source in the native shape: capture outlives the page, so it
+  // declares no watchCanDieSilently and recovery is the readiness poll
+  // alone — the poll being the only channel still reporting once the watch
+  // is dead and a takeover is up. `fail` stays bound to the FIRST watch's
+  // error callback; a bounce installs a fresh one the test never touches.
+  function refusingSource(refusal: () => SourceError | null) {
+    const state = {
+      watches: 0,
+      fail: (() => {}) as (error: SourceError) => void,
+    };
+    const source: PositionSource = {
+      reportsAccuracyAuthorization: true,
+      readiness: () => Promise.resolve(refusal()),
+      watch(_onPositions, onError) {
+        state.watches++;
+        if (state.watches === 1) state.fail = onError;
+        return () => {};
+      },
+    };
+    return { source, state };
+  }
+
+  // The device repro: on the "Precise Location Is Off" takeover the pilot
+  // turns Location Services off entirely and comes back. No watch is
+  // running to report the swap, so the poll's answer is the only evidence
+  // there is — and "still not ready" carries none of it, which left the
+  // screen naming precise location while the platform's actual refusal was
+  // a denial (until something happened to bounce the watch, or iOS killed
+  // the app for the permission change). Reclassifying must not cost a
+  // bounce: the watch is certain to refuse again, and the takeover would
+  // flicker through acquiring for nothing.
+  it("a blocked takeover re-renders the CURRENT refusal without bouncing the watch", async () => {
+    let refusal: SourceError | null = IMPRECISE;
+    const { source, state } = refusingSource(() => refusal);
+    const engine = new GeolocationRecordingEngine({
+      source,
+      setWaypoints: () => {},
+    });
+    engines.push(engine);
+    await engine.start();
+    expect(state.watches).toBe(1);
+
+    vi.useFakeTimers();
+    try {
+      state.fail(IMPRECISE);
+      await vi.advanceTimersByTimeAsync(0);
+      expect(engine.snapshotSync().status).toBe("blocked");
+      // The arm-time check agrees with the standing reason: nothing moves.
+      expect(engine.snapshotSync().error?.code).toBe("imprecise");
+      expect(state.watches).toBe(1);
+
+      // Location Services off, device-wide, with no watch to notice.
+      refusal = DENIED;
+      await vi.advanceTimersByTimeAsync(POLL_MS);
+      expect(engine.snapshotSync().status).toBe("blocked");
+      expect(engine.snapshotSync().error?.code).toBe("permission-denied");
+      expect(state.watches).toBe(1);
+
+      // And back the other way, which is the same bug mirrored: the
+      // takeover follows the platform in both directions.
+      refusal = IMPRECISE;
+      await vi.advanceTimersByTimeAsync(POLL_MS);
+      expect(engine.snapshotSync().status).toBe("blocked");
+      expect(engine.snapshotSync().error?.code).toBe("imprecise");
+      expect(state.watches).toBe(1);
+
+      // A refusal that has not changed says nothing new: no re-render
+      // churn, no attempt, still the same single watch.
+      await vi.advanceTimersByTimeAsync(POLL_MS * 3);
+      expect(engine.snapshotSync().error?.code).toBe("imprecise");
+      expect(state.watches).toBe(1);
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
+  // A new reason is a new episode, not a continuation of the old one: the
+  // attempt the previous refusal already spent must not damp this one's
+  // recovery. Whatever the pilot fixes last is what the poll acts on, one
+  // interval later at worst.
+  it("a reclassified takeover still recovers on the next ready, within one interval", async () => {
+    let refusal: SourceError | null = IMPRECISE;
+    const { source, state } = refusingSource(() => refusal);
+    const engine = new GeolocationRecordingEngine({
+      source,
+      setWaypoints: () => {},
+    });
+    engines.push(engine);
+    await engine.start();
+
+    vi.useFakeTimers();
+    try {
+      state.fail(IMPRECISE);
+      await vi.advanceTimersByTimeAsync(0);
+      expect(engine.snapshotSync().status).toBe("blocked");
+
+      refusal = DENIED;
+      await vi.advanceTimersByTimeAsync(POLL_MS);
+      expect(engine.snapshotSync().error?.code).toBe("permission-denied");
+      expect(state.watches).toBe(1);
+
+      // Location Services back on: the reclassified block recovers exactly
+      // like a first-hand one, on a fresh watch.
+      refusal = null;
+      await vi.advanceTimersByTimeAsync(POLL_MS);
+      expect(engine.snapshotSync().status).toBe("acquiring");
+      expect(engine.snapshotSync().error).toBeNull();
+      expect(state.watches).toBe(2);
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
+  // The manual escape hatch, and what made a stale takeover survivable
+  // before the poll learned to reclassify: Cancel + Start Flight runs a
+  // fresh watch, and its start sequence judges the platform from scratch.
+  // Deliberately a source with NO readiness — this pins the fallback path
+  // on its own, independent of the poll.
+  it("cancel and restart always classifies against the platform's CURRENT refusal", async () => {
+    let refusal: SourceError = IMPRECISE;
+    const source: PositionSource = {
+      reportsAccuracyAuthorization: true,
+      watch(_onPositions, onError) {
+        onError(refusal);
+        return () => {};
+      },
+    };
+    const engine = new GeolocationRecordingEngine({
+      source,
+      setWaypoints: () => {},
+    });
+    engines.push(engine);
+    await engine.start();
+    expect(engine.snapshotSync().status).toBe("blocked");
+    expect(engine.snapshotSync().error?.code).toBe("imprecise");
+
+    // The refusal changes with no watch running: the screen still names
+    // the reason it was raised with.
+    refusal = DENIED;
+    expect(engine.snapshotSync().error?.code).toBe("imprecise");
+
+    await engine.discard();
+    await engine.start();
+    expect(engine.snapshotSync().status).toBe("blocked");
+    expect(engine.snapshotSync().error?.code).toBe("permission-denied");
+
+    // The inverse direction through the same hatch.
+    refusal = IMPRECISE;
+    await engine.discard();
+    await engine.start();
+    expect(engine.snapshotSync().status).toBe("blocked");
+    expect(engine.snapshotSync().error?.code).toBe("imprecise");
+  });
+
   // Readiness and the watch's pre-capture refusal are meant to be ONE rule
   // (nativeSource's permissionRefusal, reading one PermissionStatus that
   // now carries the device-wide switch too), so "ready, then refused" is a
@@ -520,7 +674,7 @@ describe("GeolocationRecordingEngine", () => {
       const source: PositionSource = {
         reportsAccuracyAuthorization: true,
         // The lie: always ready, whatever the watch then does.
-        readiness: () => Promise.resolve(true),
+        readiness: () => Promise.resolve(null),
         watch(_onPositions, onError) {
           state.watches++;
           if (state.watches === 1) state.fail = onError;

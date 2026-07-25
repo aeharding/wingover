@@ -1,6 +1,6 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
-import { nativeLocationReady, nativePositionSource } from "./nativeSource";
+import { nativeLocationRefusal, nativePositionSource } from "./nativeSource";
 import type { SourceError, SourcePosition } from "./real";
 
 const core = vi.hoisted(() => ({
@@ -160,24 +160,38 @@ describe("nativePositionSource", () => {
   });
 
   // The Never -> "Ask Next Time" recovery, from the source's side: an
-  // unasked permission is not a refusal, so readiness says ready, the
-  // engine retries, and the bounced watch's start sequence is what
-  // finally puts the system alert on screen. Answering false here left
-  // the pilot on the red takeover until a second trip out of the app.
-  it("an unasked prompt reads as READY; only a Settings-level refusal does not", async () => {
+  // unasked permission is not a refusal, so readiness answers ready (null),
+  // the engine retries, and the bounced watch's start sequence is what
+  // finally puts the system alert on screen. Answering "not ready" here
+  // left the pilot on the red takeover until a second trip out of the app.
+  // A refusal answers with WHICH one, so a takeover whose reason changed
+  // while it was up re-renders on the current one.
+  it("an unasked prompt reads as READY; a Settings-level refusal answers which one", async () => {
     let location = "prompt";
+    let precise = true;
     core.invoke.mockImplementation((cmd: string) => {
       switch (cmd) {
         case "plugin:wingover|check_permissions":
-          return Promise.resolve({ location, precise: true });
+          return Promise.resolve({ location, precise, servicesEnabled: true });
         default:
           return Promise.resolve(null);
       }
     });
 
-    expect(await nativeLocationReady()).toBe(true);
+    expect(await nativeLocationRefusal()).toBeNull();
     location = "denied";
-    expect(await nativeLocationReady()).toBe(false);
+    expect(await nativeLocationRefusal()).toStrictEqual({
+      permissionDenied: true,
+      message: "location permission denied",
+    });
+    // The same poll, a different refusal: precise off instead of denied.
+    location = "granted";
+    precise = false;
+    expect(await nativeLocationRefusal()).toStrictEqual({
+      permissionDenied: false,
+      imprecise: true,
+      message: "precise location disabled",
+    });
   });
 
   it("refuses reduced accuracy in JS, before capture ever starts", async () => {
