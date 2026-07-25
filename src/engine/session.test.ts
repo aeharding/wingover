@@ -8,7 +8,10 @@ import type { Pin } from "../storage/db";
 // projection and the copy-at-start behavior it documents.
 const dbMock = vi.hoisted(() => ({ listPins: vi.fn() }));
 const localMock = vi.hoisted(() => ({ getBooleanSetting: vi.fn() }));
-const engineMock = vi.hoisted(() => ({ engine: { start: vi.fn() } }));
+// getSnapshot: importing session.ts kicks the one-time WAL hydration.
+const engineMock = vi.hoisted(() => ({
+  engine: { start: vi.fn(), getSnapshot: vi.fn() },
+}));
 
 vi.mock("../storage/db", () => dbMock);
 vi.mock("../storage/local", () => localMock);

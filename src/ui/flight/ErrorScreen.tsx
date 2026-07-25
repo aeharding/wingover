@@ -52,6 +52,29 @@ const WEB_BODY: Partial<Record<BlockingErrorCode, string>> = {
 // where openExternal takes the opener path.
 const openAppSettings = () => openExternal("app-settings:");
 
+// Boot failure: the WAL could not be read, so the engine cannot know
+// whether a flight is live — no normal surface is safe to show (the idle
+// screen's Start Flight clears the unread WAL). Reload is the only honest
+// action, sanctioned here like the web denied screen's: pilot-initiated,
+// and a working WAL rehydrates the session.
+export function BootFailedScreen() {
+  return (
+    <div className={cx(styles.screen, styles.urgent)} data-testid="boot-failed">
+      <h2>Something Went Wrong</h2>
+      <p>
+        Wingover could not read its saved flight data. Nothing has been erased.
+        Reload to try again.
+      </p>
+      <button
+        className={styles.action}
+        onClick={() => window.location.reload()}
+      >
+        Reload
+      </button>
+    </div>
+  );
+}
+
 export default function ErrorScreen({
   error,
   onRetry,

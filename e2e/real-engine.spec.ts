@@ -341,6 +341,130 @@ test("precise off during a Settings trip surfaces the screen despite a dead watc
   );
 });
 
+// Records every Ionic shell element the DOM ever ACQUIRES, from
+// document-start — proof about frames no screenshot can catch.
+const SHELL_WATCHER = `(() => {
+  window.__shellSeen = [];
+  window.__nodesSeen = 0;
+  // ion-tabs/ion-tab-bar are the nav shell; idle-facts is IdleSurface's
+  // always-rendered marker. IdleSurface is watched because its ungated
+  // render is the dangerous one: Start Flight clears a live flight's WAL.
+  const WRONG = 'ion-tabs, ion-tab-bar, [data-testid="idle-facts"]';
+  const mark = (el) =>
+    window.__shellSeen.push(
+      el.getAttribute("data-testid") ?? el.tagName.toLowerCase(),
+    );
+  // addedNodes holds only the ROOT of each inserted subtree, so the
+  // shell must be searched for inside every insertion, not matched on it.
+  const scan = (node) => {
+    window.__nodesSeen += 1;
+    if (node.matches?.(WRONG)) mark(node);
+    if (node.querySelectorAll) {
+      for (const el of node.querySelectorAll(WRONG)) mark(el);
+    }
+  };
+  new MutationObserver((records) => {
+    for (const record of records) {
+      for (const node of record.addedNodes) scan(node);
+    }
+  }).observe(document, { childList: true, subtree: true });
+})();`;
+
+function shellSeen(page: Page) {
+  return page.evaluate(
+    () => (window as unknown as { __shellSeen: string[] }).__shellSeen,
+  );
+}
+
+function nodesSeen(page: Page) {
+  return page.evaluate(
+    () => (window as unknown as { __nodesSeen: number }).__nodesSeen,
+  );
+}
+
+// Poll the WAL itself until the session row records takeoff. The engine
+// enqueues that write, it does not await it, so a reload fired straight
+// after arming can beat the commit and boot "armed" — a false failure of
+// the relaunch drills, not a real one of the app.
+function walRecordsTakeoff(page: Page) {
+  return page.waitForFunction(
+    () =>
+      new Promise<boolean>((resolve) => {
+        const open = indexedDB.open("wingover-wal");
+        open.onerror = () => resolve(false);
+        open.onsuccess = () => {
+          const db = open.result;
+          try {
+            const get = db
+              .transaction("meta")
+              .objectStore("meta")
+              .get("session");
+            get.onerror = () => {
+              db.close();
+              resolve(false);
+            };
+            get.onsuccess = () => {
+              db.close();
+              const session = get.result as { takeoffIndex?: number | null };
+              resolve(session?.takeoffIndex != null);
+            };
+          } catch {
+            db.close();
+            resolve(false);
+          }
+        };
+      }),
+  );
+}
+
+test("mid-flight relaunch never flashes the nav shell", async ({ page }) => {
+  await page.addInitScript(SHELL_WATCHER);
+  await page.addInitScript(GEO_STUB);
+  const emit = makeEmitter(page);
+  await page.goto(URL);
+  await armAndFly(page, emit);
+  await walRecordsTakeoff(page);
+
+  // The relaunch: init scripts re-run at document-start, so the watcher
+  // sees every frame of the reborn page.
+  await page.goto(URL);
+  await expect(page.getByTestId("recording")).toBeVisible();
+  // The watcher must have been alive DURING this load, or the empty
+  // shell list below proves nothing.
+  expect(await nodesSeen(page)).toBeGreaterThan(0);
+  expect(await shellSeen(page)).toEqual([]);
+});
+
+test("idle relaunch still boots the shell (watcher positive control)", async ({
+  page,
+}) => {
+  await page.addInitScript(SHELL_WATCHER);
+  await page.addInitScript(GEO_STUB);
+  await page.goto(URL);
+  await expect(page.getByText("Logbook", { exact: true })).toBeVisible();
+  expect((await shellSeen(page)).length).toBeGreaterThan(0);
+});
+
+// The gate must fail VISIBLE. A WAL that cannot be read boots a reload
+// screen: never a blank app, and never the idle shell, whose Start Flight
+// would clear the flight the unreadable WAL may still hold.
+test("an unreadable WAL boots a reload screen, not a blank app", async ({
+  page,
+}) => {
+  await page.addInitScript(SHELL_WATCHER);
+  await page.addInitScript(`{
+    const realOpen = indexedDB.open.bind(indexedDB);
+    indexedDB.open = function (name, ...rest) {
+      if (name === "wingover-wal") throw new Error("drill: wal unreadable");
+      return realOpen(name, ...rest);
+    };
+  }`);
+  await page.goto(URL);
+  await expect(page.getByTestId("boot-failed")).toBeVisible();
+  await expect(page.getByRole("button", { name: "Reload" })).toBeVisible();
+  expect(await shellSeen(page)).toEqual([]);
+});
+
 test("a pin becomes a spoken waypoint announcement mid-flight", async ({
   page,
 }) => {

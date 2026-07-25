@@ -22,6 +22,11 @@ if (typeof document !== "undefined") {
   });
 }
 
+// The one-time WAL hydration is kicked HERE for the same reason: boot must
+// proceed no matter which page mounts first. The app root's gate only
+// OBSERVES the outcome (engine.hydrationSync); no component owns the kick.
+void engine.getSnapshot();
+
 // Pins are planning documents; waypoints are anonymous geofence config.
 // This projection is the only place one becomes the other — deliberately
 // field-by-field so pin data (name, notes, whatever comes later) never

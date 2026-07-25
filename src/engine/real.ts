@@ -18,6 +18,7 @@ import type {
   EngineSnapshot,
   EngineStatus,
   Fix,
+  HydrationState,
   LngLat,
   RecordingEngine,
   StartOptions,
@@ -196,6 +197,7 @@ export class GeolocationRecordingEngine implements RecordingEngine {
   private reachedIds = new Set<string>();
   private hydrated = false;
   private hydration: Promise<void> | null = null;
+  private hydrationState: HydrationState = "pending";
   private error: EngineError | null = null;
   private listeners = new Set<() => void>();
   private snapshotCache: EngineSnapshot | null = null;
@@ -378,6 +380,12 @@ export class GeolocationRecordingEngine implements RecordingEngine {
     });
   }
 
+  // The boot gate reads this like any other engine fact. "failed" means
+  // the WAL could not be read at all: the UI must show a way out (reload),
+  // never an idle screen — Start Flight would clear the WAL that the
+  // failed read proves we cannot see.
+  readonly hydrationSync = (): HydrationState => this.hydrationState;
+
   // The WAL is a crash log, not a live source of truth: it hydrates memory
   // exactly once (page load / webview rebirth). After that, a WAL read can
   // only be equal or STALE — queued writes, or a read racing a replay
@@ -385,44 +393,54 @@ export class GeolocationRecordingEngine implements RecordingEngine {
   // revert the session (the "straight line after waking mid-flight" bug).
   private ensureHydrated(): Promise<void> {
     if (this.hydrated) return Promise.resolve();
-    this.hydration ??= (async () => {
-      const { session, fixes } = await readWal();
-      // start()/stop() may have won while the read was in flight; their
-      // in-memory state is newer than anything the WAL held.
-      if (!this.hydrated) {
-        this.hydrated = true;
-        this.session = session;
-        this.buffer = fixes;
-        // Derive reached state from the durable buffer BEFORE deriveStatus /
-        // ensureWatch, so the fed remaining set excludes already-passed
-        // waypoints (no re-arm, no re-announce on re-entry).
-        this.rebuildReachState();
-        // Rehydrating a live session restarts capture; a finalized flight
-        // ("ended") stays parked until collected via stop(). If another
-        // tab owns the recorder, this one stays a passive viewer.
-        //
-        // A flight the app was gone from is NOT ended here: the native
-        // source keeps recording in the background, so what looks like a
-        // stale last fix is usually just a backlog waiting to replay. The
-        // end is detected on the fix stream instead (a >= STALE_FLIGHT_MS
-        // gap between consecutive fixes; see handlePositions), so the
-        // backlog replays first and only a genuine gap finalizes.
-        if (session && this.deriveStatus() !== "ended") {
-          if (await this.acquireRecorderLock()) {
-            this.ensureWatch();
-          } else if (session.takeoffIndex === null) {
-            // Pre-takeoff: the busy takeover owns the surface. A flight
-            // already in progress instead keeps this tab as a passive
-            // read-only viewer — a blocking screen must never hide a
-            // flight, and this is a SETTER of the pre-takeoff-only
-            // blocking invariant.
-            this.error = BUSY_ERROR;
-          }
-        }
-        this.invalidate();
-      }
-    })();
+    this.hydration ??= this.hydrate();
     return this.hydration;
+  }
+
+  private async hydrate(): Promise<void> {
+    try {
+      await this.adoptWal();
+      this.hydrationState = "ready";
+    } catch (error) {
+      console.error("wal read failed:", error);
+      this.hydrationState = "failed";
+    }
+    this.invalidate();
+  }
+
+  private async adoptWal(): Promise<void> {
+    const { session, fixes } = await readWal();
+    // start()/stop() may have won while the read was in flight; their
+    // in-memory state is newer than anything the WAL held.
+    if (this.hydrated) return;
+    this.hydrated = true;
+    this.session = session;
+    this.buffer = fixes;
+    // Derive reached state from the durable buffer BEFORE deriveStatus /
+    // ensureWatch, so the fed remaining set excludes already-passed
+    // waypoints (no re-arm, no re-announce on re-entry).
+    this.rebuildReachState();
+    // Rehydrating a live session restarts capture; a finalized flight
+    // ("ended") stays parked until collected via stop(). If another
+    // tab owns the recorder, this one stays a passive viewer.
+    //
+    // A flight the app was gone from is NOT ended here: the native
+    // source keeps recording in the background, so what looks like a
+    // stale last fix is usually just a backlog waiting to replay. The
+    // end is detected on the fix stream instead (a >= STALE_FLIGHT_MS
+    // gap between consecutive fixes; see handlePositions), so the
+    // backlog replays first and only a genuine gap finalizes.
+    if (!session || this.deriveStatus() === "ended") return;
+    if (await this.acquireRecorderLock()) {
+      this.ensureWatch();
+    } else if (session.takeoffIndex === null) {
+      // Pre-takeoff: the busy takeover owns the surface. A flight
+      // already in progress instead keeps this tab as a passive
+      // read-only viewer — a blocking screen must never hide a
+      // flight, and this is a SETTER of the pre-takeoff-only
+      // blocking invariant.
+      this.error = BUSY_ERROR;
+    }
   }
 
   async getSnapshot(): Promise<EngineSnapshot> {

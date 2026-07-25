@@ -2,7 +2,6 @@ import { useSyncExternalStore } from "react";
 
 import { engine } from "../../engine";
 import { startFlight } from "../../engine/session";
-import type { EngineStatus } from "../../engine/types";
 import { useSettings } from "../settings/SettingsContext";
 import ArmedSurface from "./ArmedSurface";
 import { useBigConfirm } from "./BigConfirm";
@@ -10,7 +9,6 @@ import ErrorScreen from "./ErrorScreen";
 import IdleSurface from "./IdleSurface";
 import RecordingSurface from "./RecordingSurface";
 import { useFlightCollection } from "./useFlightCollection";
-import { useHydrationGate } from "./useHydrationGate";
 import { useLatestFlight } from "./useLatestFlight";
 import { useLiveViewPrefs } from "./useLiveViewPrefs";
 import { usePlannedPins } from "./usePlannedPins";
@@ -24,7 +22,6 @@ export default function FlyPage() {
   // signal is coalesced per task, so a replay burst lands as one render of
   // a complete track — there is no per-fix mirror to fall behind.
   const snapshot = useSyncExternalStore(engine.subscribe, engine.snapshotSync);
-  const ready = useHydrationGate();
   const { confirm: bigConfirm, element: confirmElement } = useBigConfirm();
   const liveView = useLiveViewPrefs();
   const plannedPins = usePlannedPins();
@@ -32,7 +29,11 @@ export default function FlyPage() {
   // location; its launch point is the best guess for the next one).
   const lastFlight = useLatestFlight();
 
-  const status: EngineStatus | "loading" = ready ? snapshot.status : "loading";
+  // This page renders only behind the app root's boot gate: pre-hydration
+  // the engine reports "idle", and IdleSurface's Start Flight clears the
+  // WAL — on an ungated render that destroys the live flight still sitting
+  // in it, unread. If the gate ever narrows, this dependency moves with it.
+  const status = snapshot.status;
 
   useFlightCollection(status);
 
@@ -78,9 +79,8 @@ export default function FlyPage() {
     engine.dismissLanding();
   }
 
-  // One surface per engine state. "loading" (the frames before the WAL read
-  // lands) and "ended" (collection is already running) deliberately paint
-  // nothing but the surface's own background.
+  // One surface per engine state. "ended" (collection is already running)
+  // deliberately paints nothing but the surface's own background.
   function surface() {
     switch (status) {
       case "idle":
@@ -127,7 +127,7 @@ export default function FlyPage() {
   // transient GPS shadows) surface nothing here: storage retries on its
   // own with the native track durably held in Rust, and the acquiring
   // screen's guidance covers a slow first fix.
-  if (ready && snapshot.status === "blocked") {
+  if (snapshot.status === "blocked") {
     return (
       <div className={styles.content} data-testid="fly-content">
         <ErrorScreen

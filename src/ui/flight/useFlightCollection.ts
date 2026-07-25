@@ -64,7 +64,7 @@ async function persistFlight(flown: Fix[], plannedWaypoints: Waypoint[]) {
  * There is no other page to be in. If that predicate is ever narrowed,
  * this has to move engine-side with it.
  */
-export function useFlightCollection(status: EngineStatus | "loading") {
+export function useFlightCollection(status: EngineStatus) {
   // "ended" is a durable state: the finalized flight waits in the WAL.
   // Persist first, discard after — a crash in between just repeats this
   // on next launch, and the deterministic flight id makes it idempotent.
