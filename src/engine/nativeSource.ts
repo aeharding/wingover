@@ -40,6 +40,10 @@ export interface PermissionStatus {
   // false when iOS Precise Location is off for Wingover. Optional so an
   // older native shell (missing the key) never reads as imprecise.
   precise?: boolean;
+  // false when the DEVICE-wide location switch is off, whatever this app
+  // was granted. Optional for the same reason: an older shell omits it and
+  // must not read as services-off.
+  servicesEnabled?: boolean;
 }
 
 // Codes are the wire contract (see WingoverPlugin.swift); the prose
@@ -71,6 +75,17 @@ export function classifyDrainError(message: string): SourceError {
 export function permissionRefusal(
   status: PermissionStatus,
 ): SourceError | null {
+  // The device-wide switch outranks the app's own grant: authorization can
+  // read "granted" while Location Services is off, and capture would then
+  // never start. Judged FIRST, and reported as a permission denial because
+  // the fix is the same shape — a trip to Settings, not an in-app ask.
+  // Today's iOS folds this into an app-level denial on its own (owner
+  // device test); this covers the platforms and versions that do not.
+  if (status.servicesEnabled === false)
+    return {
+      permissionDenied: true,
+      message: "location services off",
+    };
   if (status.location === "denied")
     return {
       permissionDenied: true,

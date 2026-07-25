@@ -1,0 +1,22 @@
+{
+  "surface": "check_permissions",
+  "hop": "swift->rust->js",
+  "description": "The device-wide Location Services switch is off while this app's own authorization still reads granted. A Settings-level fix, so it is NOT ready: capture would never start, and the engine must show the takeover instead of polling a watch that cannot begin. Reported as a permission denial because the remedy is the same shape (a trip to Settings, not an in-app ask). Today's iOS folds this into an app-level denial by itself (device-tested); the key exists so the refusal rule does not depend on that folding, and so readiness and the watch's pre-capture gate read the same inputs.",
+  "produces": "src-tauri/plugins/wingover/ios/Sources/WingoverPlugin.swift (permissionStatus)",
+  "consumes": "src/engine/nativeSource.ts (permissionRefusal)",
+  "codes": ["location", "precise", "servicesEnabled", "granted"],
+  "response": {
+    "location": "granted",
+    "precise": true,
+    "servicesEnabled": false
+  },
+  "expect": {
+    "js": {
+      "refusal": {
+        "permissionDenied": true,
+        "message": "location services off"
+      },
+      "ready": false
+    }
+  }
+}

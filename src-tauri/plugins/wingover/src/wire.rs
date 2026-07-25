@@ -10,7 +10,11 @@
 // Dead on a desktop build by construction: the only consumer of these
 // types is mobile.rs, which is iOS-only. Compiling them everywhere is the
 // entire point — a shape no platform can check is how the last one broke.
-#![allow(dead_code)]
+//
+// Scoped to the builds where that is true, not blanket: on iOS these types
+// DO have a consumer, so an unused one there is a real signal (a response
+// shape nothing emits any more) and must stay a warning.
+#![cfg_attr(not(target_os = "ios"), allow(dead_code))]
 
 use serde::{Deserialize, Serialize};
 
@@ -138,11 +142,38 @@ mod contract {
             .unwrap_or_else(|| panic!("{name}: fixture has no response"))
     }
 
+    // A fixture's expect.rust is a claim about what THIS ring reads, and an
+    // unread claim is decoration: the round trip above proves the keys
+    // survive serde, not that the values arrive with the meaning the
+    // fixture says they have. The two fix-carrying surfaces are where that
+    // distinction cost a flight (an error field that parsed into None), so
+    // both are asserted, and a fixture on either surface that declares no
+    // expectation fails rather than passing quietly.
+    fn assert_rust_reading(name: &str, fixture: &Value, fixes: usize, error: Option<&str>) {
+        let expected = fixture
+            .get("expect")
+            .and_then(|expect| expect.get("rust"))
+            .unwrap_or_else(|| panic!("{name}: fix-carrying fixture declares no expect.rust"));
+        assert_eq!(
+            expected["fixes"].as_u64().map(|count| count as usize),
+            Some(fixes),
+            "{name}: expect.rust.fixes disagrees with what the real types parsed"
+        );
+        assert_eq!(
+            expected["error"].as_str(),
+            error,
+            "{name}: expect.rust.error disagrees with what the real types parsed"
+        );
+    }
+
     #[test]
     fn every_fixture_survives_the_real_types() {
         let loaded = fixtures();
+        // A floor at the current count, not a token one: fixtures only ever
+        // get added, so this catches a directory that quietly stopped being
+        // read (a bad glob, a moved folder) instead of passing on two files.
         assert!(
-            loaded.len() >= 25,
+            loaded.len() >= 32,
             "contract-fixtures looks empty: {} files",
             loaded.len()
         );
@@ -151,9 +182,17 @@ mod contract {
                 .as_str()
                 .unwrap_or_else(|| panic!("{name}: fixture has no surface"));
             match surface {
-                "drain" => assert_preserved::<DrainResponse>(&name, response(&name, &fixture)),
+                "drain" => {
+                    let payload = response(&name, &fixture);
+                    assert_preserved::<DrainResponse>(&name, payload);
+                    let parsed: DrainResponse = serde_json::from_value(payload.clone()).unwrap();
+                    assert_rust_reading(&name, &fixture, parsed.fixes.len(), parsed.error.as_deref())
+                }
                 "fixes_since" => {
-                    assert_preserved::<FixesResponse>(&name, response(&name, &fixture))
+                    let payload = response(&name, &fixture);
+                    assert_preserved::<FixesResponse>(&name, payload);
+                    let parsed: FixesResponse = serde_json::from_value(payload.clone()).unwrap();
+                    assert_rust_reading(&name, &fixture, parsed.fixes.len(), parsed.error.as_deref())
                 }
                 "current_position" => assert_preserved::<Fix>(&name, response(&name, &fixture)),
                 "keychain_get" => {
@@ -181,7 +220,9 @@ mod contract {
                 | "request_permissions"
                 | "storekit_products"
                 | "speak"
-                | "share_file" => {}
+                | "share_file"
+                | "keychain_set"
+                | "keychain_delete" => {}
                 other => {
                     panic!("{name}: no Rust reader claims surface {other:?} — add a match arm")
                 }

@@ -1,0 +1,11 @@
+{
+  "surface": "keychain_delete",
+  "hop": "js->rust->swift",
+  "description": "Sign-out, and the same key string as set and get: three commands agreeing on \"sync.credentials\" is what makes a logout actually forget. A drifted key here deletes nothing and the next launch signs the pilot back in with a credential they revoked.",
+  "produces": "src/sync/store/keychain.ts (keychainStore.clear)",
+  "consumes": "src-tauri/plugins/wingover/ios/Sources/WingoverPlugin.swift (keychainDelete; KeychainGetArgs)",
+  "codes": [],
+  "request": {
+    "key": "sync.credentials"
+  }
+}

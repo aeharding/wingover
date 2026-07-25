@@ -1,4 +1,4 @@
-import { isTauri } from "../../engine/platform";
+import { isTauri } from "../../platform";
 import type { CredentialStore } from "../types";
 import { indexedDbStore } from "./indexeddb";
 import { keychainAvailable, keychainStore } from "./keychain";

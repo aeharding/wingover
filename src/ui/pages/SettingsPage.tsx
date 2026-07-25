@@ -18,7 +18,7 @@ import { checkmarkOutline, closeCircle } from "ionicons/icons";
 import { useEffect, useState, useSyncExternalStore } from "react";
 import { useHistory } from "react-router-dom";
 
-import { isTauri } from "../../engine/platform";
+import { isTauri } from "../../platform";
 import {
   getBooleanSetting,
   getSetting,

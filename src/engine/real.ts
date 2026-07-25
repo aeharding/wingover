@@ -189,6 +189,16 @@ export class GeolocationRecordingEngine implements RecordingEngine {
   // WHOLE recovery path for sources whose capture outlives the page:
   // retry() (the web foreground/manual heal) is inert on them by design.
   private recoveryPoll: ReturnType<typeof setInterval> | null = null;
+  // Bumped on every arm and disarm. A readiness() answer is in flight
+  // across an unbounded round trip to the platform, so by the time it
+  // lands the block it was asked about may be long over; the epoch it
+  // captured at arm is how it proves it still speaks for the CURRENT one.
+  private pollEpoch = 0;
+  // A readiness-driven bounce whose fresh watch has not yet proven itself
+  // by delivering a fix. Set at the attempt; NOT cleared by the bounce's
+  // own optimistic error clear, so a blocking error landing again is read
+  // as the same episode (the attempt failed) rather than a new one.
+  private recoveryAttempted = false;
 
   private syncRecoveryPoll() {
     const readiness = this.core.source.readiness;
@@ -196,23 +206,45 @@ export class GeolocationRecordingEngine implements RecordingEngine {
     const wants =
       readiness !== undefined && blocking !== null && blocking.code !== "busy";
     if (wants && this.recoveryPoll === null) {
+      const epoch = ++this.pollEpoch;
       const check = () => {
-        void readiness().then((ready) => {
-          if (ready) this.bounceWatch();
-        });
+        void readiness()
+          .then((ready) => {
+            // A stale answer is silent. Two ways to be stale: it belongs
+            // to a previous arming (epoch), or the block it was asked
+            // about healed while it was in flight (blockingError). Acting
+            // on either tears down a LIVE watch on evidence about a state
+            // that no longer exists.
+            if (!ready || epoch !== this.pollEpoch) return;
+            if (this.blockingError() === null) return;
+            this.recoveryAttempted = true;
+            this.bounceWatch();
+          })
+          // A readiness that rejects is simply not ready; the interval
+          // asks again. It must not spam unhandled rejections at 0.5 Hz.
+          .catch(() => {});
       };
       this.recoveryPoll = setInterval(check, RECOVERY_POLL_MS);
-      // Check once immediately, not one interval from now: where this
-      // poll is the only recovery path, an interval of phase is an
-      // interval of stale takeover on screen (a block armed on a
-      // rebuilt webview after a Settings trip is exactly that). It
-      // cannot thrash — readiness and the watch's pre-capture refusal
-      // are one rule (nativeSource's permissionRefusal), so ready is
-      // never true while the refusal that armed this poll still stands.
-      check();
+      // First check at arm, not one interval from now: where this poll is
+      // the only recovery path, an interval of phase is an interval of
+      // stale takeover on screen (a block armed on a rebuilt webview
+      // after a Settings trip is exactly that).
+      //
+      // Only on the FIRST arming of an episode, though. Readiness and the
+      // watch's pre-capture refusal are meant to be one rule (native:
+      // nativeSource's permissionRefusal, which also folds Location
+      // Services off into a denial), so a platform that answers ready
+      // while its watch keeps refusing is a contradiction — but the
+      // engine must stay bounded even against one. A re-arm inside the
+      // same episode means the last attempt failed, so it waits for the
+      // interval. Invariant, against ANY source behaviour: at most one
+      // recovery attempt per RECOVERY_POLL_MS, and a takeover that holds
+      // steady between attempts instead of flickering through acquiring.
+      if (!this.recoveryAttempted) check();
     } else if (!wants && this.recoveryPoll !== null) {
       clearInterval(this.recoveryPoll);
       this.recoveryPoll = null;
+      this.pollEpoch++;
     }
   }
 
@@ -486,6 +518,7 @@ export class GeolocationRecordingEngine implements RecordingEngine {
     this.reachInside.clear();
     this.reachedIds.clear();
     this.error = null;
+    this.recoveryAttempted = false;
     // A latch armed by a previous session must not fire into this one.
     this.clearImpreciseTimer();
     await writeWalSession(this.session);
@@ -689,6 +722,7 @@ export class GeolocationRecordingEngine implements RecordingEngine {
     this.reachInside.clear();
     this.reachedIds.clear();
     this.error = null;
+    this.recoveryAttempted = false;
     this.invalidate();
     await this.walQueue;
     // Only the WAL's owner may destroy it: a passive tab (busy) clearing
@@ -949,6 +983,10 @@ export class GeolocationRecordingEngine implements RecordingEngine {
     // Fixes flowing again means GPS has recovered; a storage error is a
     // different channel — only a successful write clears it.
     if (this.error?.code !== "storage") this.error = null;
+    // A delivered fix is the only proof a recovery attempt actually
+    // worked, so it is the only thing that ends the episode: the next
+    // block gets its immediate check back.
+    this.recoveryAttempted = false;
     // Heuristic net for sources that CANNOT self-report reduced
     // accuracy (the web Geolocation API offers no way to ask): without
     // it, Precise Location off hangs acquiring forever with no

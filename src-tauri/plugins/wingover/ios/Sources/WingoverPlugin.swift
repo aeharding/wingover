@@ -468,10 +468,20 @@ class WingoverPlugin: Plugin, CLLocationManagerDelegate,
   // starts capture with Precise Location off — coarse fixes then flow, the
   // drain code is suppressed as stale, and the pilot sits on Acquiring GPS
   // with no explanation. Pinned by contract-fixtures/request_permissions.*.
+  //
+  // servicesEnabled reports the DEVICE-wide switch, not this app's grant.
+  // It senses; it does not decide (JS's permissionRefusal folds it into a
+  // denial). It is here so the readiness poll and the watch's pre-capture
+  // gate can never disagree: every input to the refusal rule rides in one
+  // dictionary, so there is no state one of them can see and the other
+  // cannot. Today's iOS folds Location Services off into an app-level
+  // denial anyway (device-tested); this is the defense for the platforms
+  // and versions where it does not.
   private func permissionStatus() -> JsonObject {
     [
       "location": authorizationString(),
       "precise": locationManager.accuracyAuthorization == .fullAccuracy,
+      "servicesEnabled": CLLocationManager.locationServicesEnabled(),
     ]
   }
 

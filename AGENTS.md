@@ -17,6 +17,7 @@ Paramotor flight recorder (Tauri v2 iOS + PWA). The one non-negotiable:
 pnpm exec tsc --noEmit
 pnpm exec eslint . --max-warnings 0   # stricter than CI on purpose: CI runs `pnpm lint`, which lets warnings through
 pnpm format:check                     # prettier, its own CI step after lint — and the one that fails most often
+pnpm check:css                        # CSS Modules conventions (docs/CSS-MODULES.md)
 pnpm test                             # vitest
 pnpm exec playwright test             # needs port 5173 free (kills nothing itself)
 ```

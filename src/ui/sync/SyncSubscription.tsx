@@ -1,6 +1,6 @@
 import { IonButton, IonSpinner } from "@ionic/react";
 
-import { isTauri } from "../../engine/platform";
+import { isTauri } from "../../platform";
 import * as sync from "../../sync";
 import { openExternal } from "../externalLinks";
 

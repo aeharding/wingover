@@ -60,9 +60,19 @@ const NO_UI = {
 
 /** @type {RestrictedPattern} */
 const ENGINE_PUBLIC_ONLY = {
-  regex: "(^|/)engine/(?!index$|types$|platform$|session$|currentPosition$)",
+  regex: "(^|/)engine/(?!index$|types$|session$)",
   message:
-    "src/engine's public surface is index, types, platform, session, currentPosition. real/wal/core/*Source are internals: the engine is reached through one injected CoreClient (ARCHITECTURE.md).",
+    "src/engine's public surface is index, types, session. real/wal/core/*Source are internals: the engine is reached through one injected CoreClient (ARCHITECTURE.md). isTauri and getCurrentPosition live in src/platform.",
+};
+
+// src/platform is the engine's second reader of the native permission rule:
+// Center-on-me and the watch judge one PermissionStatus the same way or they
+// drift, which is how the one-shot lost its Precise Location handling.
+/** @type {RestrictedPattern} */
+const ENGINE_PUBLIC_ONLY_PLUS_REFUSAL = {
+  regex: "(^|/)engine/(?!index$|types$|session$|nativeSource$)",
+  message:
+    "src/platform may additionally read nativeSource's permissionRefusal (ONE refusal rule for the watch and for Center-on-me). Everything else under src/engine stays internal (ARCHITECTURE.md).",
 };
 
 /** @type {RestrictedPattern} */
@@ -94,16 +104,18 @@ const NO_POUCHDB = {
 
 /** @type {RestrictedPattern} */
 const NO_PLATFORM = {
-  group: ["./platform", "**/engine/platform"],
+  // Regex, not a glob: minimatch does not treat a leading `..` as a path
+  // segment, so "../platform" slips past "**/platform".
+  regex: "(^|/)platform$",
   message:
-    "It never switches on the platform: sources declare capabilities and the engine adapts (ARCHITECTURE.md). Platform choice lives in the selection modules only.",
+    "It never switches on the platform: sources declare capabilities and the engine adapts (ARCHITECTURE.md). Platform choice lives in src/platform and the selection modules only.",
 };
 
 /** @type {RestrictedPattern} */
 const NO_TAURI = {
   group: ["@tauri-apps/*"],
   message:
-    "Native IPC belongs to the shim modules (nativeSource, currentPosition, sync/store/keychain, sync/providers/apple, ui/download, ui/externalLinks), never to engine logic (ARCHITECTURE.md).",
+    "Native IPC belongs to the shim modules (nativeSource, platform/currentPosition, sync/store/keychain, sync/providers/apple, ui/download, ui/externalLinks), never to engine logic (ARCHITECTURE.md).",
 };
 
 /** @type {RestrictedPattern} */
@@ -114,15 +126,13 @@ const ENGINE_SOURCES_PRIVATE = {
 };
 
 // src/engine's platform-aware edge: the source-SELECTION modules, and only
-// those. currentPosition.ts is a second, one-shot PositionSource selector
-// (WKWebView cannot serve web geolocation, so Center-on-me goes through the
-// plugin under Tauri and navigator.geolocation everywhere else) — selection,
-// not engine logic. Everything else under src/engine is platform-blind.
+// those. index.ts picks the CoreClient; nativeSource.ts is the native one.
+// Everything else under src/engine is platform-blind. The seam itself
+// (isTauri) and the one-shot Center-on-me selector moved out to
+// src/platform, so this list is as short as the doctrine says it should be.
 const ENGINE_PLATFORM_AWARE = [
   "src/engine/index.ts",
-  "src/engine/platform.ts",
   "src/engine/nativeSource.ts",
-  "src/engine/currentPosition.ts",
 ];
 
 /**
@@ -143,8 +153,52 @@ const NO_RELOAD = {
   selector:
     "MemberExpression[property.name='reload'][object.property.name='location'], MemberExpression[property.name='reload'][object.name='location']",
   message:
-    "No location.reload() in app code: instance-swap and notify instead (CLAUDE.md).",
+    "No location.reload() in app code: instance-swap and notify instead (AGENTS.md).",
 };
+
+// no-restricted-imports only sees `import` statements, so every seam above
+// has a second door: `await import("react")` is the same dependency with
+// none of the enforcement. These close it for the headless scopes, mirroring
+// exactly the static ban each scope already carries.
+//
+// Known residue, deliberately un-lintable: an aliased indirection defeats a
+// syntactic rule (`const d = Date; d.now()`, `globalThis["Date"]`,
+// `import(someVariable)`), and so does a string built at runtime. The rules
+// exist to make the seam the obvious path and a crossing loud in review, not
+// to be a sandbox — a determined bypass is a code-review finding, and the
+// three genuinely unmechanizable questions are asked instead of linted
+// (docs/ENGINE-AUDIT.md, "Not lintable").
+//
+// The unicode escapes below are path separators. esquery reads a selector's
+// regex literal as everything up to the next slash, escaped or not, so a
+// literal "/" cannot appear in one: it arrives as an escape the RegExp
+// constructor resolves instead.
+const NO_DYNAMIC_REACT = {
+  selector:
+    "ImportExpression[source.value=/^(react|react-dom(\\u002F.*)?|@ionic\\u002F.*)$/]",
+  message:
+    "Headless world: React/Ionic live in src/ui/ only (STEERING.md). A dynamic import is the same dependency.",
+};
+
+const NO_DYNAMIC_TAURI = {
+  selector: "ImportExpression[source.value=/^@tauri-apps\\u002F/]",
+  message:
+    "Native IPC belongs to the shim modules, never to headless logic (ARCHITECTURE.md). A dynamic import is the same dependency.",
+};
+
+const NO_DYNAMIC_PLATFORM = {
+  selector: "ImportExpression[source.value=/(^|\\u002F)platform$/]",
+  message:
+    "It never switches on the platform: sources declare capabilities and the engine adapts (ARCHITECTURE.md). A dynamic import is the same dependency.",
+};
+
+// What a headless scope bans dynamically: React/Ionic and native IPC
+// everywhere, the platform seam wherever the static NO_PLATFORM applies.
+const NO_DYNAMIC_HEADLESS = [
+  NO_DYNAMIC_REACT,
+  NO_DYNAMIC_TAURI,
+  NO_DYNAMIC_PLATFORM,
+];
 
 // "Every flight-semantic decision — arming, takeoff, landing, flight
 // finalization — is a pure function of fix timestamps, never of wall-clock
@@ -367,12 +421,58 @@ export default defineConfig(
     },
   },
   {
+    // The platform seam: the ONE layer that may ask where it is running and
+    // reach native IPC to act on the answer. Everything else about it is a
+    // headless module — no React, no UI, no database — and its window into
+    // the engine is the shared permission refusal, nothing more.
+    files: ["src/platform/**"],
+    rules: {
+      "no-restricted-imports": restrict(
+        NO_MANUAL_MEMO,
+        ENGINE_PUBLIC_ONLY_PLUS_REFUSAL,
+        SYNC_PUBLIC_ONLY,
+        NO_MAP_BACKEND,
+        NO_POUCHDB,
+        NO_REACT,
+        NO_UI,
+      ),
+    },
+  },
+  {
     // No location.reload() in app code. The one sanctioned exception is the
     // web denied-error screen's Reload button: pilot-initiated, pre-flight,
-    // WAL-rehydrated (CLAUDE.md).
+    // WAL-rehydrated (AGENTS.md).
     ignores: ["src/ui/flight/ErrorScreen.tsx"],
     rules: {
       "no-restricted-syntax": ["error", NO_RELOAD],
+    },
+  },
+  {
+    // The dynamic-import half of the headless seams, scope by scope, each
+    // mirroring the static bans that scope already carries. src/sync is
+    // legitimately native, so only its two IPC shims are exempt.
+    files: ["src/flight/**", "src/storage/**"],
+    rules: {
+      "no-restricted-syntax": ["error", NO_RELOAD, ...NO_DYNAMIC_HEADLESS],
+    },
+  },
+  {
+    files: ["src/engine/**"],
+    ignores: [...ENGINE_PLATFORM_AWARE, "src/engine/**/*.test.ts"],
+    rules: {
+      "no-restricted-syntax": ["error", NO_RELOAD, ...NO_DYNAMIC_HEADLESS],
+    },
+  },
+  {
+    files: ["src/sync/**"],
+    ignores: ["src/sync/providers/apple.ts", "src/sync/store/keychain.ts"],
+    rules: {
+      "no-restricted-syntax": [
+        "error",
+        NO_RELOAD,
+        NO_DYNAMIC_REACT,
+        NO_DYNAMIC_TAURI,
+      ],
     },
   },
   {
@@ -381,7 +481,12 @@ export default defineConfig(
     files: ["src/flight/**"],
     ignores: ["src/flight/format.ts"],
     rules: {
-      "no-restricted-syntax": ["error", NO_RELOAD, ...NO_WALL_CLOCK],
+      "no-restricted-syntax": [
+        "error",
+        NO_RELOAD,
+        ...NO_DYNAMIC_HEADLESS,
+        ...NO_WALL_CLOCK,
+      ],
     },
   },
   {

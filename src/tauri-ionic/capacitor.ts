@@ -34,7 +34,7 @@ import {
   vibrate,
 } from "@tauri-apps/plugin-haptics";
 
-import { isTauri } from "../engine/platform";
+import { isTauri } from "../platform";
 
 // Capacitor's enum values, as Ionic sends them.
 type CapacitorImpactStyle = "HEAVY" | "LIGHT" | "MEDIUM";

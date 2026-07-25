@@ -1,6 +1,6 @@
 import { invoke } from "@tauri-apps/api/core";
 
-import { isTauri } from "../../engine/platform";
+import { isTauri } from "../../platform";
 import type { CredentialProvider, Credentials } from "../types";
 
 /**

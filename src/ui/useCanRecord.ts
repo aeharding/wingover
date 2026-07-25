@@ -1,6 +1,6 @@
 import { useEffect, useState } from "react";
 
-import { isTauri } from "../engine/platform";
+import { isTauri } from "../platform";
 import { getBooleanSetting, onSettingChanged } from "../storage/local";
 import { launchParam } from "./map/config";
 

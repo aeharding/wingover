@@ -1,7 +1,7 @@
+import { isTauri } from "../platform";
 import { webCore, withWebCore } from "./core";
 import { createGpxSource } from "./gpxSource";
 import { nativeCore } from "./nativeSource";
-import { isTauri } from "./platform";
 import { GeolocationRecordingEngine } from "./real";
 import { createSimulatorSource } from "./simulatorSource";
 import type { RecordingEngine } from "./types";

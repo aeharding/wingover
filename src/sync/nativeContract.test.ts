@@ -23,11 +23,13 @@ const core = vi.hoisted(() => ({ invoke: vi.fn() }));
 vi.mock("@tauri-apps/api/core", () => core);
 // StoreKit and the Keychain exist only under Tauri; the fixtures describe
 // the native ring.
-vi.mock("../engine/platform", () => ({ isTauri: () => true }));
+vi.mock("../platform", () => ({ isTauri: () => true }));
 
 const MINE = new Set([
   "keychain_available",
+  "keychain_delete",
   "keychain_get",
+  "keychain_set",
   "sign_in_with_apple",
   "storekit_current_entitlement",
   "storekit_environment",
@@ -61,6 +63,29 @@ describe("sync reads every native fixture it owns through the real path", () => 
         case "keychain_get":
           expect(await keychainStore.load()).toStrictEqual(
             expectJs(fixture, "credentials"),
+          );
+          break;
+        // The write side. A read fixture pins what JS understands, never
+        // what JS wrote: `save` could send the credential under a drifted
+        // key forever and every load test would still pass on a stub.
+        case "keychain_set": {
+          const request = fixture.request as { key: string; value: string };
+          await keychainStore.save(
+            JSON.parse(request.value) as Parameters<
+              typeof keychainStore.save
+            >[0],
+          );
+          expect(core.invoke).toHaveBeenCalledWith(
+            "plugin:wingover|keychain_set",
+            request,
+          );
+          break;
+        }
+        case "keychain_delete":
+          await keychainStore.clear();
+          expect(core.invoke).toHaveBeenCalledWith(
+            "plugin:wingover|keychain_delete",
+            fixture.request,
           );
           break;
         case "sign_in_with_apple":

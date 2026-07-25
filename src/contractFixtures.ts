@@ -26,7 +26,16 @@ export interface Fixture {
   response?: Record<string, unknown>;
   /** Present when Rust unwraps the payload before JS sees it. */
   jsResponse?: unknown;
-  expect?: { js?: Record<string, unknown> };
+  expect?: {
+    js?: Record<string, unknown>;
+    /**
+     * What the cargo ring must parse out of the payload, asserted in
+     * wire.rs. Required on the two fix-carrying surfaces (drain,
+     * fixes_since); typed here so a JS-side edit to a fixture cannot
+     * quietly reshape a claim only Rust reads.
+     */
+    rust?: { fixes: number; error: string | null };
+  };
 }
 
 export const fixtures: Fixture[] = readdirSync(FIXTURE_DIR)

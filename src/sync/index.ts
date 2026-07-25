@@ -1,5 +1,5 @@
 import { engine } from "../engine/index";
-import { isTauri } from "../engine/platform";
+import { isTauri } from "../platform";
 import { resetSyncedData } from "../storage/db";
 import {
   getBooleanSetting,

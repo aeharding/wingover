@@ -19,7 +19,7 @@ import { useEffect, useSyncExternalStore } from "react";
 import { Redirect, Route } from "react-router-dom";
 
 import { engine } from "../engine";
-import { isTauri } from "../engine/platform";
+import { isTauri } from "../platform";
 import DesktopShell from "./desktop/DesktopShell";
 import FlightSurface from "./flight/FlyPage";
 import AllFlightsMapPage from "./pages/AllFlightsMapPage";

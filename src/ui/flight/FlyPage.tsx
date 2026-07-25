@@ -15,7 +15,6 @@ import {
 } from "react";
 
 import { engine } from "../../engine";
-import { isTauri } from "../../engine/platform";
 import { startFlight } from "../../engine/session";
 import type { EngineStatus, Fix, LngLat, Waypoint } from "../../engine/types";
 import {
@@ -31,6 +30,7 @@ import { LANDING_GRACE_MS } from "../../flight/landing";
 import { bearingBetween, relativeBearing } from "../../flight/nav";
 import { computeStats, haversineMeters } from "../../flight/stats";
 import { sunFactLabel } from "../../flight/sun";
+import { isTauri } from "../../platform";
 import {
   inheritedLaunchName,
   listPins,

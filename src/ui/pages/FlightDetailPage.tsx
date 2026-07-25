@@ -35,7 +35,7 @@ import {
 } from "react-reverse-portal";
 import { useParams } from "react-router";
 
-import { isTauri } from "../../engine/platform";
+import { isTauri } from "../../platform";
 import { useAppearance } from "../appTheme";
 import { cx } from "../cx";
 import { endpointMarker } from "../logbook/endpointMarker";

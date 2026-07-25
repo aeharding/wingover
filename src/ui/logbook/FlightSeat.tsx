@@ -8,7 +8,7 @@ import {
 } from "ionicons/icons";
 import { useEffect, useEffectEvent, useRef, useState } from "react";
 
-import { isTauri } from "../../engine/platform";
+import { isTauri } from "../../platform";
 import { useAppearance } from "../appTheme";
 import { cx } from "../cx";
 import { afterNextFrame } from "../map/afterFrame";

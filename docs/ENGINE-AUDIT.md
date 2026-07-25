@@ -74,7 +74,7 @@ questions instead:
 
 ## What the audit is not
 
-Not a substitute for the gates (see CLAUDE.md for the CI-parity list),
+Not a substitute for the gates (see AGENTS.md for the CI-parity list),
 not a rubber stamp (an audit that finds nothing on a large engine diff is
 a reason for suspicion, not celebration), and not a place to relitigate
 decisions STEERING already made.

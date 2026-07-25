@@ -1,7 +1,7 @@
 # Wire contract fixtures (Swift <-> Rust <-> JS)
 
 One canonical payload per surface and per interesting case, read by all three
-languages. The rule this enforces is CLAUDE.md's: **serde drops unknown fields
+languages. The rule this enforces is AGENTS.md's: **serde drops unknown fields
 silently, so an untested field is an unsent field.**
 
 The bug these exist for: Swift's `drain()` emitted an `error` field, Rust's
@@ -11,13 +11,18 @@ layers, individually plausible, jointly broken, invisible to every test.
 
 ## Who reads a fixture
 
-| Ring          | File                                       | What it asserts                                                                                                                       |
-| ------------- | ------------------------------------------ | ------------------------------------------------------------------------------------------------------------------------------------- |
-| cargo (Linux) | `src/wire.rs` (`mod contract`)             | every fixture key survives a round trip through the REAL serde types; deserializing alone proves nothing                              |
-| vitest        | `src/engine/nativeSource.contract.test.ts` | every fixture flows through the real JS reader (helpers plus the real `watch`), and every declared literal exists in the Swift source |
+| Ring                 | File                                       | What it asserts                                                                                                                                              |
+| -------------------- | ------------------------------------------ | ------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| cargo (macOS, `ios`) | `src/wire.rs` (`mod contract`)             | every fixture key survives a round trip through the REAL serde types (deserializing alone proves nothing), and `expect.rust` matches what those types parsed |
+| vitest (Linux)       | `src/engine/nativeSource.contract.test.ts` | every fixture flows through the real JS reader (helpers plus the real `watch`), and every declared literal exists in the Swift source                        |
 
 Both switch on `surface` and **fail on a surface they don't know**. Adding a
 fixture therefore fails until all sides claim it; that is the whole mechanism.
+
+`cargo test` runs in CI's **iOS build job on macOS**, not the Linux job — the
+plugin's build script drives the Swift compile, so the whole ring is one
+`macos-26` runner. It runs fine on Linux locally and that is the fast loop:
+`cargo test --manifest-path src-tauri/plugins/wingover/Cargo.toml`.
 
 The Swift ring is a literal-presence check only (necessary, not sufficient): it
 proves the key and code strings exist in `WingoverPlugin.swift`, not that the
@@ -36,7 +41,7 @@ target that only a Mac can run; deferred.
 | `request`               | the call's arguments, when it takes any                                                                                |
 | `response`              | what the FIRST hop's producer emits                                                                                    |
 | `jsResponse`            | what `invoke()` resolves with, when Rust unwraps the payload (`{ value }` -> string, `{ jws }` -> string, ...)         |
-| `expect.rust`           | fix count and error, for the two fix-carrying surfaces                                                                 |
+| `expect.rust`           | fix count and error the real serde types must parse. REQUIRED on `drain` and `fixes_since`; asserted by `wire.rs`      |
 | `expect.js`             | what the real JS reader produces. Required whenever `hop` ends in `js`                                                 |
 
 ## Adding one

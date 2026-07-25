@@ -27,7 +27,7 @@ import {
   jsPayload,
   PLUGIN_DIR,
 } from "../contractFixtures";
-import { getCurrentPosition } from "./currentPosition";
+import { getCurrentPosition } from "../platform/currentPosition";
 import {
   classifyDrainError,
   nativeCore,
@@ -41,7 +41,7 @@ import type { SourceError, SourcePosition } from "./real";
 const core = vi.hoisted(() => ({ invoke: vi.fn() }));
 vi.mock("@tauri-apps/api/core", () => core);
 // Every native reader gates on this; the fixtures describe the native ring.
-vi.mock("./platform", () => ({ isTauri: () => true }));
+vi.mock("../platform", () => ({ isTauri: () => true }));
 
 const ROOT = join(__dirname, "../..");
 const SWIFT = readFileSync(
@@ -53,7 +53,9 @@ const SWIFT = readFileSync(
 // boundaries), so their surfaces are read where the import is legal.
 const CLAIMED_ELSEWHERE: Record<string, string> = {
   keychain_available: "src/sync/nativeContract.test.ts",
+  keychain_delete: "src/sync/nativeContract.test.ts",
   keychain_get: "src/sync/nativeContract.test.ts",
+  keychain_set: "src/sync/nativeContract.test.ts",
   share_file: "src/ui/download.test.ts",
   sign_in_with_apple: "src/sync/nativeContract.test.ts",
   storekit_current_entitlement: "src/sync/nativeContract.test.ts",
@@ -76,7 +78,10 @@ beforeEach(() => {
 
 describe("the fixtures themselves", () => {
   it("carry the fields every ring reads", () => {
-    expect(fixtures.length).toBeGreaterThanOrEqual(25);
+    // A floor at the current count, not a token one: fixtures only ever
+    // get added, so this catches a directory that quietly stopped being
+    // read (a bad glob, a moved folder) instead of passing on two files.
+    expect(fixtures.length).toBeGreaterThanOrEqual(32);
     for (const fixture of fixtures) {
       expect(fixture.surface, `${fixture.file}: surface`).toBeTruthy();
       expect(fixture.description, `${fixture.file}: description`).toBeTruthy();
@@ -293,6 +298,12 @@ describe("the Swift source declares every key and code the fixtures name", () =>
     const literals = SWIFT.match(/\[[^[\]]*"location":[^[\]]*\]/g) ?? [];
     expect(literals).toHaveLength(1);
     expect(literals[0]).toContain('"precise"');
+    // Every input the refusal rule reads travels in that one dictionary,
+    // so readiness and the watch's pre-capture gate can never be looking
+    // at different state: a device-wide Location Services switch visible
+    // to one and not the other is exactly a poll that says ready against
+    // a watch that keeps refusing.
+    expect(literals[0]).toContain('"servicesEnabled"');
   });
 });
 
