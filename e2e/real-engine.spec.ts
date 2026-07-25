@@ -257,7 +257,7 @@ test("backgrounded landing: a burst-replayed flight finalizes retroactively", as
   await expect(page.getByText(/1 flights/)).toBeVisible();
 });
 
-test("permission denied blocks with the error screen and recovers via retry", async ({
+test("permission denied blocks with the error screen and recovers via reload", async ({
   page,
 }) => {
   await page.addInitScript(GEO_STUB);
@@ -277,13 +277,14 @@ test("permission denied blocks with the error screen and recovers via retry", as
     "Location Access Needed",
   );
 
-  // Blocked is absorbing: stray fixes are ignored. Recovery goes through
-  // Try Again (or the foreground auto-retry), which restarts the engine
-  // and its watch.
+  // Blocked is absorbing: stray fixes are ignored. Web denied recovers
+  // via Reload (browsers only re-prompt on a fresh page load); the WAL
+  // rehydrates the session and the watch comes back on boot.
   await emit([{}]);
   await expect(page.getByTestId("gps-error")).toBeVisible();
+  await expect(page.getByRole("button", { name: "Try Again" })).toBeHidden();
 
-  await page.getByRole("button", { name: "Try Again" }).click();
+  await page.getByRole("button", { name: "Reload" }).click();
   await waitForWatch(page);
   await emit([{}]);
   await expect(page.getByTestId("gps-error")).toBeHidden();
