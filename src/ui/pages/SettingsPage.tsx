@@ -53,15 +53,21 @@ const SETTINGS_TONE_CLASS: Record<SyncTone, string> = {
 // Colored like Voyager's About line (amber beta, red for anything that is not
 // a shippable build at all), but through this module's scheme-aware tones
 // rather than Ionic's palette colors, which wash out on the light list.
-function buildStamp(dev: boolean): { text: string; tone: string } {
+// Development paints the WHOLE line red, not just the stamp: nothing about
+// a non-shippable build is release-shaped, version included.
+function buildStamp(dev: boolean): {
+  text: string;
+  tone: string;
+  wholeLine: boolean;
+} {
   // Decided at runtime, not baked: one build config serves `vite dev` and
   // `vite preview`, and only the former is a dev server.
-  if (dev) return { text: "dev", tone: styles.dev };
+  if (dev) return { text: "dev", tone: styles.dev, wholeLine: true };
 
   // Build number first (what a TestFlight tester quotes in a report), then the
   // commit. Either can be missing; the ring still reads correctly without them.
   const id = [
-    __APP_BUILD__ && `build ${__APP_BUILD__}`,
+    __APP_BUILD__ && `#${__APP_BUILD__}`,
     __APP_GIT_SHA__ && `(${__APP_GIT_SHA__})`,
   ]
     .filter(Boolean)
@@ -69,12 +75,12 @@ function buildStamp(dev: boolean): { text: string; tone: string } {
 
   switch (__APP_CHANNEL__) {
     case "production":
-      return { text: "", tone: "" };
+      return { text: "", tone: "", wholeLine: false };
     case "beta":
-      return { text: `beta ${id}`.trim(), tone: styles.beta };
+      return { text: `beta ${id}`.trim(), tone: styles.beta, wholeLine: false };
     default:
       // A PR image carries a sha; a hand-rolled build carries nothing at all.
-      return { text: id || "local", tone: styles.dev };
+      return { text: id || "local", tone: styles.dev, wholeLine: true };
   }
 }
 
@@ -288,7 +294,7 @@ export default function SettingsPage() {
         />
 
         <div className={styles.build}>
-          <IonNote>
+          <IonNote className={stamp.wholeLine ? stamp.tone : undefined}>
             {`Wingover ${__APP_VERSION__} `}
             {stamp.text ? (
               <span className={stamp.tone}>{`${stamp.text} `}</span>
