@@ -594,4 +594,53 @@ describe("nativePositionSource.revive", () => {
     await vi.advanceTimersByTimeAsync(0);
     expect(reports).toHaveLength(1);
   });
+  // A probe answer is only as good as the moment it lands: fixes flowing
+  // again while it was in flight is the platform answering the same
+  // question first, and more directly.
+  it("a probe answer landing after fixes resumed is dropped", async () => {
+    let resolveProbe: ((status: unknown) => void) | undefined;
+    let probes = 0;
+    let error: string | undefined = "reduced-accuracy";
+    core.invoke.mockImplementation((cmd: string, args?: { ts: number }) => {
+      switch (cmd) {
+        case "plugin:wingover|check_permissions":
+          probes++;
+          if (probes === 1) {
+            return Promise.resolve({
+              location: "granted",
+              precise: true,
+              servicesEnabled: true,
+            });
+          }
+          return new Promise((resolve) => {
+            resolveProbe = resolve;
+          });
+        case "plugin:wingover|fixes_since":
+          return Promise.resolve({
+            fixes: error === undefined ? [fix(args!.ts + 1000)] : [],
+            ...(error !== undefined && { error }),
+          });
+        default:
+          return Promise.resolve(null);
+      }
+    });
+
+    const reports: (SourceError | null)[] = [];
+    nativePositionSource.watch(
+      () => {},
+      (refusal) => reports.push(refusal),
+    );
+    await vi.advanceTimersByTimeAsync(0);
+    expect(reports).toHaveLength(1);
+
+    // The pilot flips Precise back on: the probe goes out, and CoreLocation
+    // starts delivering before it answers.
+    nativePositionSource.revive?.();
+    error = undefined;
+    await vi.advanceTimersByTimeAsync(1000);
+    resolveProbe!({ location: "denied", precise: true, servicesEnabled: true });
+    await vi.advanceTimersByTimeAsync(0);
+
+    expect(reports).toHaveLength(1);
+  });
 });

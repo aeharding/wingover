@@ -265,7 +265,9 @@ export const nativePositionSource: PositionSource = {
       .then((refusal) => {
         // A watch torn down while the round trip was out must not report.
         if (live !== watching) return;
-        if (refusal !== null) watching.refused = true;
+        // Nor may a probe outrank the platform itself: fixes that arrived
+        // while it was out already answered the question.
+        if (!watching.refused) return;
         watching.report(refusal);
       })
       // The plugin not answering says nothing about what refuses, so
