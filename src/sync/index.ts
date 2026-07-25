@@ -51,14 +51,17 @@ export const currentAccount = replicate.currentAccount;
  *
  * Anything that must happen regardless of which page is mounted belongs
  * engine-side (STEERING) — a pilot who backgrounds the app mid-flight, or never
- * opens the Fly tab, must still get the same behavior. `idle` is the only
- * status with no session in play: `ended` still holds a flight that hasn't been
- * persisted and discarded yet, so sync stays out of the way until the engine
- * settles back to idle and the finished flight is safely in PouchDB.
+ * opens the Fly tab, must still get the same behavior. Paused while this
+ * engine is capturing or holds an uncollected flight: `ended` still holds a
+ * flight that hasn't been persisted and discarded yet, so sync stays out of
+ * the way until it is safely in PouchDB. `blocked` records nothing (the watch
+ * is refused, dead, or owned by another tab), so sync runs freely there.
  */
 function watchEngine() {
-  const apply = () =>
-    replicate.setPaused(engine.snapshotSync().status !== "idle");
+  const apply = () => {
+    const status = engine.snapshotSync().status;
+    replicate.setPaused(status !== "idle" && status !== "blocked");
+  };
   apply();
   engine.subscribe(apply);
 }

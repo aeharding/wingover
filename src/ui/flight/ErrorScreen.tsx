@@ -1,6 +1,7 @@
 import { isTauri } from "../../engine/platform";
 import type { BlockingError, BlockingErrorCode } from "../../engine/types";
 import { cx } from "../cx";
+import { openExternal } from "../externalLinks";
 
 import styles from "./ErrorScreen.module.css";
 
@@ -32,13 +33,10 @@ const CONTENT: Record<
   },
 };
 
-function openAppSettings() {
-  // The capability scopes opener to this exact URL; iOS routes it to the
-  // app's own page in Settings.
-  void import("@tauri-apps/plugin-opener").then(({ openUrl }) =>
-    openUrl("app-settings:"),
-  );
-}
+// The capability scopes opener to this exact URL; iOS routes it to the
+// app's own page in Settings. The button only renders under isTauri(),
+// where openExternal takes the opener path.
+const openAppSettings = () => openExternal("app-settings:");
 
 export default function ErrorScreen({
   error,

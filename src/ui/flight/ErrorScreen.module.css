@@ -42,13 +42,7 @@
 }
 
 .cancel {
-  width: min(60%, 280px);
-  padding: 1rem;
-  font-size: 1.2rem;
-  color: #fff;
-  background: #333;
-  border: none;
-  border-radius: 14px;
+  composes: cancel from "./FlyPage.module.css";
 }
 
 /* Location-class errors: full alarm red. The pilot is about to pocket

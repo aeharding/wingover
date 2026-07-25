@@ -293,6 +293,10 @@ test("permission denied blocks with the error screen and recovers via retry", as
 test("precise off during a Settings trip surfaces the screen despite a dead watch", async ({
   page,
 }) => {
+  // Burns the real 12 s sustain window by design (the latch is the thing
+  // under test); the default 30 s budget leaves too little margin for CI
+  // under the zero-retry policy.
+  test.setTimeout(60_000);
   await page.addInitScript(GEO_STUB);
   const emit = makeEmitter(page);
   await page.goto(URL);

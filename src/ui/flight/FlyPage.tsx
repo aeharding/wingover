@@ -15,7 +15,6 @@ import {
 } from "react";
 
 import { engine } from "../../engine";
-import { nativeLocationReady } from "../../engine/nativeSource";
 import { isTauri } from "../../engine/platform";
 import { startFlight } from "../../engine/session";
 import type { EngineStatus, Fix, LngLat, Waypoint } from "../../engine/types";
@@ -199,7 +198,16 @@ export default function FlyPage() {
   const collectEndedFlight = useEffectEvent(async () => {
     const snapshot = await engine.getSnapshot();
     if (snapshot.status !== "ended") return;
-    await persistFlight(snapshot.track, snapshot.waypoints);
+    try {
+      await persistFlight(snapshot.track, snapshot.waypoints);
+    } catch (error) {
+      // The one storage failure that is genuinely possession-losing —
+      // surface loudly (STEERING). The WAL keeps the flight; collection
+      // retries on the next mount/foreground.
+      console.error("flight persist failed:", error);
+      showToast("Could not save the flight yet. It is safe; will retry.");
+      return;
+    }
     // Persisted — the engine's durable copy can go; idle follows.
     await engine.discard();
   });
@@ -222,35 +230,9 @@ export default function FlyPage() {
     void Promise.resolve().then(() => collectEndedFlight());
   }, [status]);
 
-  // Coming back from Settings must PROCEED, not sit on a frozen screen:
-  // Safari can silently kill the watch while backgrounded, and nothing
-  // restarts it on its own. engine.retry() is the heal — it bounces the
-  // watch pre-takeoff (clearing a blocking error if one is up) and
-  // recovers straight into acquiring, never through idle.
-  useEffect(() => {
-    const onVisible = () => {
-      if (document.visibilityState === "visible") engine.retry();
-    };
-    document.addEventListener("visibilitychange", onVisible);
-    return () => document.removeEventListener("visibilitychange", onVisible);
-  }, []);
-  // Native has the real authorization API, so no Try Again button there:
-  // while a permission-class screen is up, poll it and proceed the
-  // moment the pilot flips the switch — covers iPad Split View, where
-  // the app never backgrounds on a Settings trip.
-  const blockedCode =
-    ready && snapshot.status === "blocked" ? snapshot.error.code : null;
-  useEffect(() => {
-    if (!isTauri()) return;
-    if (blockedCode !== "permission-denied" && blockedCode !== "imprecise")
-      return;
-    const poll = setInterval(() => {
-      void nativeLocationReady().then((ok) => {
-        if (ok) engine.retry();
-      });
-    }, 2000);
-    return () => clearInterval(poll);
-  }, [blockedCode]);
+  // Blocked recovery (foreground heal + native readiness poll) is wired
+  // engine-side in src/engine/session.ts, not here: it must run
+  // regardless of which page is mounted.
 
   useLayoutEffect(() => {
     if (status !== "recording" && status !== "landed") return;
@@ -291,7 +273,7 @@ export default function FlyPage() {
   function confirmEndFlight() {
     // No takeoff on record = nothing to finalize: discard instead of end.
     const stop =
-      status === "acquiring" || status === "armed" || track.length === 0
+      status === "acquiring" || status === "armed"
         ? cancelArmed
         : endFlight;
     bigConfirm({ title: "End flight?", action: "Stop", onAction: stop });
@@ -398,7 +380,17 @@ export default function FlyPage() {
             <h2>
               {status === "acquiring" ? "Acquiring GPS" : "Waiting for takeoff"}
             </h2>
-            <p>{status === "acquiring" ? ACQUIRING_HINT : ARMED_HINT}</p>
+            <p>
+              {status === "acquiring"
+                ? // A dead GPS (Location Services off system-wide) is as
+                  // actionable as a permission problem; the diagnostic
+                  // replaces the generic hint rather than sitting mute
+                  // in the snapshot.
+                  snapshot.error?.code === "unavailable"
+                  ? "GPS unavailable. Check that Location Services are on."
+                  : ACQUIRING_HINT
+                : ARMED_HINT}
+            </p>
           </div>
           {status === "acquiring" ? (
             <div className={styles.armedAccuracy} data-testid="armed-accuracy">

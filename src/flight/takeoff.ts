@@ -53,6 +53,18 @@ export function fixLooksReduced(fix: Fix): boolean {
   );
 }
 
+// Twin of fixLooksReduced for raw source coordinates, judged before Fix
+// normalization (null altitudeAccuracy = no altitude solution).
+export function coordsLookReduced(coords: {
+  accuracy: number;
+  altitudeAccuracy: number | null;
+}): boolean {
+  return (
+    coords.accuracy > IMPRECISE_M &&
+    !Number.isFinite(coords.altitudeAccuracy ?? Number.POSITIVE_INFINITY)
+  );
+}
+
 export function gpsReadyIndex(track: Fix[]): number | null {
   let run = 0;
   for (let i = 0; i < track.length; i++) {
