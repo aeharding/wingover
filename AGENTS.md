@@ -53,3 +53,4 @@ plugin from `src-tauri/plugins/wingover/` when touching Rust.
 - Stale Safari bundles survive server swaps; retest in a private tab.
 - A crash-looping docker container flaps the bridge network and aborts
   Chromium page loads mid-e2e (`ERR_NETWORK_CHANGED`).
+- Deploy to the iPhone: `scripts/deploy-iphone.sh [ref]` (Mac over SSH; see script header). Simulator ring: docs/ios-sim-runbook.md.
