@@ -1,0 +1,20 @@
+{
+  "surface": "storekit_current_entitlement",
+  "hop": "swift->rust->js",
+  "description": "The signed transaction, verbatim: the server verifies it against Apple's roots, so anything that re-encodes it destroys it. Rust unwraps jws to a bare string.",
+  "produces": "src-tauri/plugins/wingover/ios/Sources/WingoverPlugin.swift (storekitCurrentEntitlement)",
+  "consumes": "src/sync/providers/apple.ts (currentEntitlementJWS)",
+  "codes": ["productIds", "jws"],
+  "request": {
+    "productIds": ["app.wingover.sync.monthly", "app.wingover.sync.yearly"]
+  },
+  "response": {
+    "jws": "eyJhbGciOiJFUzI1NiJ9.eyJwcm9kdWN0SWQiOiJhcHAud2luZ292ZXIuc3luYy55ZWFybHkifQ.c2lnbmF0dXJl"
+  },
+  "jsResponse": "eyJhbGciOiJFUzI1NiJ9.eyJwcm9kdWN0SWQiOiJhcHAud2luZ292ZXIuc3luYy55ZWFybHkifQ.c2lnbmF0dXJl",
+  "expect": {
+    "js": {
+      "jws": "eyJhbGciOiJFUzI1NiJ9.eyJwcm9kdWN0SWQiOiJhcHAud2luZ292ZXIuc3luYy55ZWFybHkifQ.c2lnbmF0dXJl"
+    }
+  }
+}

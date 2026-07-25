@@ -1,7 +1,7 @@
 import { useState } from "react";
 
-import { isTauri } from "../../engine/platform";
 import type { BlockingError, BlockingErrorCode } from "../../engine/types";
+import { isTauri } from "../../platform";
 import { cx } from "../cx";
 import { openExternal } from "../externalLinks";
 

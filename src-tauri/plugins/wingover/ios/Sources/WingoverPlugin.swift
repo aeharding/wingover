@@ -338,10 +338,7 @@ class WingoverPlugin: Plugin, CLLocationManagerDelegate,
 
   @objc override public func checkPermissions(_ invoke: Invoke) {
     DispatchQueue.main.async {
-      invoke.resolve([
-        "location": self.authorizationString(),
-        "precise": self.locationManager.accuracyAuthorization == .fullAccuracy,
-      ])
+      invoke.resolve(self.permissionStatus())
     }
   }
 
@@ -355,7 +352,7 @@ class WingoverPlugin: Plugin, CLLocationManagerDelegate,
         self.permissionRequests.append(invoke)
         self.locationManager.requestWhenInUseAuthorization()
       } else {
-        invoke.resolve(["location": self.authorizationString()])
+        invoke.resolve(self.permissionStatus())
       }
     }
   }
@@ -431,12 +428,23 @@ class WingoverPlugin: Plugin, CLLocationManagerDelegate,
     let requests = permissionRequests
     permissionRequests = []
     for request in requests {
-      request.resolve(["location": authorizationString()])
+      request.resolve(permissionStatus())
     }
     // Stable codes, not prose: these strings are the wire contract the
-    // JS source matches on (nativeSource.ts).
+    // JS source matches on (nativeSource.ts). EXHAUSTIVE, and it clears:
+    // a code must not outlive the state that caused it. Revoked
+    // authorization stops delivery, so didUpdateLocations' reassert can
+    // never run again — every later transition has to be judged here or
+    // the old code keeps mirroring through drain forever (Settings ->
+    // Never -> Ask Next Time left a stale "permission-denied" holding the
+    // red takeover against a state that no longer existed).
     if status == .denied || status == .restricted {
       lastError = "permission-denied"
+    } else if status == .notDetermined {
+      // Reset to "Ask Next Time": nothing is wrong, the question is
+      // simply unasked. JS reads that as ready and bounces the watch,
+      // whose start sequence does the asking.
+      lastError = nil
     } else if manager.accuracyAuthorization != .fullAccuracy {
       // Precise Location flipped off while we're running (this delegate
       // fires without an app relaunch for accuracy-only changes). Under
@@ -444,12 +452,38 @@ class WingoverPlugin: Plugin, CLLocationManagerDelegate,
       // don't wait for the next fix to reassert — surface it now; the
       // next drain ships it.
       lastError = "reduced-accuracy"
+    } else {
+      // Authorized at full accuracy: whatever we last reported is over.
+      lastError = nil
     }
   }
 
   //
   // Helpers
   //
+
+  // ONE shape for every permission answer: check, request, and the
+  // delegate that resolves the prompt. JS reassigns the same status from
+  // all three, so a resolve missing "precise" reads as full accuracy and
+  // starts capture with Precise Location off — coarse fixes then flow, the
+  // drain code is suppressed as stale, and the pilot sits on Acquiring GPS
+  // with no explanation. Pinned by contract-fixtures/request_permissions.*.
+  //
+  // servicesEnabled reports the DEVICE-wide switch, not this app's grant.
+  // It senses; it does not decide (JS's permissionRefusal folds it into a
+  // denial). It is here so the readiness poll and the watch's pre-capture
+  // gate can never disagree: every input to the refusal rule rides in one
+  // dictionary, so there is no state one of them can see and the other
+  // cannot. Today's iOS folds Location Services off into an app-level
+  // denial anyway (device-tested); this is the defense for the platforms
+  // and versions where it does not.
+  private func permissionStatus() -> JsonObject {
+    [
+      "location": authorizationString(),
+      "precise": locationManager.accuracyAuthorization == .fullAccuracy,
+      "servicesEnabled": CLLocationManager.locationServicesEnabled(),
+    ]
+  }
 
   private func authorizationString() -> String {
     switch CLLocationManager.authorizationStatus() {

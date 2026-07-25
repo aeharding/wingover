@@ -1,4 +1,4 @@
-import { isTauri } from "../engine/platform";
+import { isTauri } from "../platform";
 
 // Under Tauri (WKWebView) an external link — the Apple Maps attribution's
 // "Legal" credit, say — is swallowed: WKWebView opens neither a

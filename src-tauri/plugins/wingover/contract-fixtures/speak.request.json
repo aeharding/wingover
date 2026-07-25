@@ -1,0 +1,11 @@
+{
+  "surface": "speak",
+  "hop": "rust->swift",
+  "description": "The announcer's only actuator. Rust owns the decision and the text; Swift just utters it. Never reaches JS: audio has a single authority per platform.",
+  "produces": "src-tauri/plugins/wingover/src/mobile.rs (speak)",
+  "consumes": "src-tauri/plugins/wingover/ios/Sources/WingoverPlugin.swift (SpeakArgs)",
+  "codes": [],
+  "request": {
+    "text": "Waypoint reached"
+  }
+}

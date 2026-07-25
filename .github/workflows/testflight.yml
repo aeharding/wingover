@@ -81,6 +81,11 @@ jobs:
           VITE_MAPKIT_TOKEN_TAURI: ${{ vars.VITE_MAPKIT_TOKEN_TAURI }}
           MATCH_PASSWORD: ${{ secrets.MATCH_PASSWORD }}
           MATCH_GIT_BASIC_AUTHORIZATION: ${{ secrets.MATCH_GIT_BASIC_AUTHORIZATION }}
+          # Stamped into the IPA by fastlane (--build-number) AND read by vite
+          # for the settings footer, so the number a tester quotes is one
+          # number. The rest of the footer's identity (ref -> release ring,
+          # sha) needs no wiring: the frontend build runs inside this job and
+          # inherits the runner's GITHUB_* env.
           BUILD_NUMBER: ${{ github.run_number }}
           COMMIT_MSG: ${{ github.event.head_commit.message }}
 

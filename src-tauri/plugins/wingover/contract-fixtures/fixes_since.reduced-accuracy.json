@@ -1,0 +1,29 @@
+{
+  "surface": "fixes_since",
+  "hop": "rust->js",
+  "description": "The severed channel, at the far end: the sensor code reaches JS and must classify as imprecise, never as a generic outage. Exact match on the code; the regex is only a fallback for prose.",
+  "produces": "src-tauri/plugins/wingover/src/lib.rs (fixes_since)",
+  "consumes": "src/engine/nativeSource.ts (classifyDrainError)",
+  "codes": [],
+  "request": {
+    "ts": 1721815199000
+  },
+  "response": {
+    "fixes": [],
+    "error": "reduced-accuracy"
+  },
+  "expect": {
+    "rust": {
+      "fixes": 0,
+      "error": "reduced-accuracy"
+    },
+    "js": {
+      "sourceError": {
+        "permissionDenied": false,
+        "imprecise": true,
+        "message": "reduced-accuracy"
+      },
+      "positions": []
+    }
+  }
+}

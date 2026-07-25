@@ -1,5 +1,5 @@
+import { FlightSimulator } from "../flight/simulator";
 import type { PositionSource, SourcePosition } from "./real";
-import { FlightSimulator } from "./simulator";
 import type { Fix } from "./types";
 
 const SESSION_KEY = "wingover.sim-session";

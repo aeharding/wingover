@@ -16,8 +16,8 @@ import {
 import { ellipsisHorizontal } from "ionicons/icons";
 import { useEffect, useRef, useState } from "react";
 
-import { isTauri } from "../../engine/platform";
 import { formatAirtime, formatDistance } from "../../flight/format";
+import { isTauri } from "../../platform";
 import { importGpxFiles } from "../../storage/importGpx";
 import ConnectFunnel from "../logbook/ConnectFunnel";
 import FlightList from "../logbook/FlightList";

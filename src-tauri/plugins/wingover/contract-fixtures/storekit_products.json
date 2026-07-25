@@ -1,0 +1,51 @@
+{
+  "surface": "storekit_products",
+  "hop": "swift->rust->js",
+  "description": "Passthrough: Rust never types this, and JS destructures products straight out. A rename of that key yields undefined, which is returned as StoreProduct[] past the catch and reaches React state. displayPrice is Apple's localized string and is never formatted here.",
+  "produces": "src-tauri/plugins/wingover/ios/Sources/WingoverPlugin.swift (storekitProducts)",
+  "consumes": "src/sync/providers/apple.ts (subscriptionProducts)",
+  "codes": [
+    "productIds",
+    "products",
+    "displayName",
+    "displayPrice",
+    "description"
+  ],
+  "request": {
+    "productIds": ["app.wingover.sync.monthly", "app.wingover.sync.yearly"]
+  },
+  "response": {
+    "products": [
+      {
+        "id": "app.wingover.sync.monthly",
+        "displayName": "Wingover Sync",
+        "displayPrice": "$3.99",
+        "description": "Sync your logbook across devices."
+      },
+      {
+        "id": "app.wingover.sync.yearly",
+        "displayName": "Wingover Sync",
+        "displayPrice": "$39.99",
+        "description": "Sync your logbook across devices."
+      }
+    ]
+  },
+  "expect": {
+    "js": {
+      "products": [
+        {
+          "id": "app.wingover.sync.monthly",
+          "displayName": "Wingover Sync",
+          "displayPrice": "$3.99",
+          "description": "Sync your logbook across devices."
+        },
+        {
+          "id": "app.wingover.sync.yearly",
+          "displayName": "Wingover Sync",
+          "displayPrice": "$39.99",
+          "description": "Sync your logbook across devices."
+        }
+      ]
+    }
+  }
+}

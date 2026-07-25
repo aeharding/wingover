@@ -12,7 +12,7 @@ import {
 import { chevronBackOutline, logoApple } from "ionicons/icons";
 import { type RefObject, useState, useSyncExternalStore } from "react";
 
-import { isTauri } from "../../engine/platform";
+import { isTauri } from "../../platform";
 import * as sync from "../../sync";
 import { cx } from "../cx";
 import { describe, type SyncTone } from "./describe";

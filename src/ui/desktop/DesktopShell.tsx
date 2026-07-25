@@ -24,7 +24,7 @@ import {
   useLocation,
 } from "react-router-dom";
 
-import { isTauri } from "../../engine/platform";
+import { isTauri } from "../../platform";
 import { resetSyncedData } from "../../storage/db";
 import * as sync from "../../sync";
 import { cx } from "../cx";

@@ -1,6 +1,6 @@
 import { invoke } from "@tauri-apps/api/core";
 
-import { isTauri } from "../engine/platform";
+import { isTauri } from "../platform";
 
 // Flight names contain "/" and ":" (locale timestamps) — invalid or
 // path-splitting in filenames on every target.

@@ -8,9 +8,9 @@ import {
 import { locateOutline } from "ionicons/icons";
 import { useEffect, useEffectEvent, useRef, useState } from "react";
 
-import { getCurrentPosition } from "../../engine/currentPosition";
 import { formatDistance } from "../../flight/format";
 import { haversineMeters } from "../../flight/stats";
+import { getCurrentPosition } from "../../platform/currentPosition";
 import {
   deleteAllPins,
   deletePin,

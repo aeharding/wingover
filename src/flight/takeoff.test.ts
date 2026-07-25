@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest";
 
-import { FlightSimulator } from "../engine/simulator";
 import type { Fix } from "../engine/types";
+import { FlightSimulator } from "./simulator";
 import {
   detectTakeoff,
   fixLooksReduced,

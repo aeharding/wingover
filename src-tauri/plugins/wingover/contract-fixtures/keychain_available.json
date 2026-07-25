@@ -1,0 +1,17 @@
+{
+  "surface": "keychain_available",
+  "hop": "swift->rust->js",
+  "description": "A probe, not a capability check: the desktop stub answers false through the same command so the JS store can fall back to IndexedDB. Rust unwraps to a bare boolean.",
+  "produces": "src-tauri/plugins/wingover/ios/Sources/WingoverPlugin.swift (keychainAvailable)",
+  "consumes": "src/sync/store/keychain.ts (keychainAvailable)",
+  "codes": ["available"],
+  "response": {
+    "available": true
+  },
+  "jsResponse": true,
+  "expect": {
+    "js": {
+      "available": true
+    }
+  }
+}

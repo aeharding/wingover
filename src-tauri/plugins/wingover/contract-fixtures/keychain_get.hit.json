@@ -1,0 +1,28 @@
+{
+  "surface": "keychain_get",
+  "hop": "swift->rust->js",
+  "description": "Rust unwraps the value key, so JS sees the bare string (jsResponse). The stored blob is the Credentials JSON the sync store wrote.",
+  "produces": "src-tauri/plugins/wingover/ios/Sources/WingoverPlugin.swift (keychainGet)",
+  "consumes": "src/sync/store/keychain.ts (load)",
+  "codes": ["key", "value"],
+  "request": {
+    "key": "sync.credentials"
+  },
+  "response": {
+    "value": "{\"kind\":\"apple\",\"url\":\"https://db.wingover.app\",\"dbName\":\"u_9f3\",\"username\":\"u_9f3\",\"password\":\"s3cr3t\",\"entitled\":true,\"environment\":\"Sandbox\"}"
+  },
+  "jsResponse": "{\"kind\":\"apple\",\"url\":\"https://db.wingover.app\",\"dbName\":\"u_9f3\",\"username\":\"u_9f3\",\"password\":\"s3cr3t\",\"entitled\":true,\"environment\":\"Sandbox\"}",
+  "expect": {
+    "js": {
+      "credentials": {
+        "kind": "apple",
+        "url": "https://db.wingover.app",
+        "dbName": "u_9f3",
+        "username": "u_9f3",
+        "password": "s3cr3t",
+        "entitled": true,
+        "environment": "Sandbox"
+      }
+    }
+  }
+}

@@ -1,6 +1,11 @@
 import { invoke } from "@tauri-apps/api/core";
 
-import type { CoreClient, PositionSource, SourcePosition } from "./real";
+import type {
+  CoreClient,
+  PositionSource,
+  SourceError,
+  SourcePosition,
+} from "./real";
 import type { Waypoint } from "./types";
 
 // Pull-based source over the wingover plugin. The native side
@@ -25,25 +30,91 @@ interface NativeFix {
   course?: number;
 }
 
-interface FixesResponse {
+export interface FixesResponse {
   fixes: NativeFix[];
-  error?: string;
+  error?: string | null;
 }
 
-interface PermissionStatus {
+export interface PermissionStatus {
   location: "granted" | "denied" | "prompt";
   // false when iOS Precise Location is off for Wingover. Optional so an
   // older native shell (missing the key) never reads as imprecise.
   precise?: boolean;
+  // false when the DEVICE-wide location switch is off, whatever this app
+  // was granted. Optional for the same reason: an older shell omits it and
+  // must not read as services-off.
+  servicesEnabled?: boolean;
 }
 
-// Poll-friendly readiness check for the blocked screen: the pilot can
-// record only with granted authorization AND full accuracy.
+// Codes are the wire contract (see WingoverPlugin.swift); the prose
+// fallbacks cover didFailWithError's localized messages, which are
+// locale-dependent and classify only in English. Pinned by the
+// fixes_since contract fixtures.
+export function classifyDrainError(message: string): SourceError {
+  return {
+    permissionDenied:
+      message === "permission-denied" || /denied|permission/i.test(message),
+    imprecise: message === "reduced-accuracy" || /precise/i.test(message),
+    message,
+  };
+}
+
+// The refusal DECISION lives here, not in Swift (the sensor layer senses
+// and actuates; it does not decide). One rule serving both the watch's
+// pre-capture gate and the blocked screen's readiness poll, so the two
+// can never drift apart.
+//
+// "prompt" is NOT a refusal: the question has not been asked, and asking
+// is the app's job, not a trip to Settings. Both callers resolve it the
+// same way — the watch requests permissions before judging (below), and
+// readiness answers true so the engine retries, which bounces the watch
+// into that same request with the app frontmost and the system alert
+// finally appears. Treating it as a refusal is what left Settings ->
+// Never -> Ask Next Time stuck on the red takeover until a SECOND trip
+// out of the app.
+export function permissionRefusal(
+  status: PermissionStatus,
+): SourceError | null {
+  // The device-wide switch outranks the app's own grant: authorization can
+  // read "granted" while Location Services is off, and capture would then
+  // never start. Judged FIRST, and reported as a permission denial because
+  // the fix is the same shape — a trip to Settings, not an in-app ask.
+  // Today's iOS folds this into an app-level denial on its own (owner
+  // device test); this covers the platforms and versions that do not.
+  if (status.servicesEnabled === false)
+    return {
+      permissionDenied: true,
+      message: "location services off",
+    };
+  if (status.location === "denied")
+    return {
+      permissionDenied: true,
+      message: "location permission denied",
+    };
+  // Accuracy is only meaningful once authorization exists; before the ask
+  // the pilot picks precision in the prompt itself.
+  if (status.location === "prompt") return null;
+  // Reduced accuracy can never pass the accuracy gate, so refuse before
+  // capture starts and let the error screen walk the pilot to Settings.
+  if (status.precise === false)
+    return {
+      permissionDenied: false,
+      imprecise: true,
+      message: "precise location disabled",
+    };
+  return null;
+}
+
+// Poll-friendly readiness check for the blocked screen. Ready means the
+// watch would get somewhere: recordable (granted, full accuracy) or
+// merely unasked ("prompt"), since the engine's answer to ready is
+// retry() and the bounced watch does the ask. Only what the pilot must
+// change in Settings — denied, Precise Location off — holds the screen.
 export async function nativeLocationReady(): Promise<boolean> {
   const status = await invoke<PermissionStatus>(
     "plugin:wingover|check_permissions",
   );
-  return status.location === "granted" && status.precise !== false;
+  return permissionRefusal(status) === null;
 }
 
 function toSourcePosition(fix: NativeFix): SourcePosition {
@@ -92,18 +163,8 @@ export const nativePositionSource: PositionSource = {
           onPositions(response.fixes.map(toSourcePosition));
         }
         // A stale error with fixes still flowing is already resolved.
-        // Codes are the wire contract (see WingoverPlugin.swift); the
-        // prose fallbacks cover didFailWithError's localized messages.
         if (response.error != null && response.fixes.length === 0) {
-          onError({
-            permissionDenied:
-              response.error === "permission-denied" ||
-              /denied|permission/i.test(response.error),
-            imprecise:
-              response.error === "reduced-accuracy" ||
-              /precise/i.test(response.error),
-            message: response.error,
-          });
+          onError(classifyDrainError(response.error));
         }
       } catch (error) {
         if (!stopped)
@@ -122,6 +183,10 @@ export const nativePositionSource: PositionSource = {
         let status = await invoke<PermissionStatus>(
           "plugin:wingover|check_permissions",
         );
+        // The ask, and the only place it happens: permissionRefusal
+        // returns no refusal for "prompt" precisely so this sequence —
+        // not a trip to Settings — is what resolves an unasked
+        // permission, including on the retry that recovery polling fires.
         if (status.location === "prompt") {
           status = await invoke<PermissionStatus>(
             "plugin:wingover|request_permissions",
@@ -130,24 +195,9 @@ export const nativePositionSource: PositionSource = {
         // A bounced watch's stale permission round-trip must not push an
         // error at the engine after a newer watch took over.
         if (stopped) return;
-        if (status.location !== "granted") {
-          onError({
-            permissionDenied: true,
-            message: `location permission ${status.location}`,
-          });
-          return;
-        }
-        // The refusal DECISION lives here, not in Swift (the sensor
-        // layer senses and actuates; it does not decide): reduced
-        // accuracy can never pass the accuracy gate, so refuse before
-        // capture starts and let the error screen walk the pilot to
-        // Settings.
-        if (status.precise === false) {
-          onError({
-            permissionDenied: false,
-            imprecise: true,
-            message: "precise location disabled",
-          });
+        const refusal = permissionRefusal(status);
+        if (refusal !== null) {
+          onError(refusal);
           return;
         }
         await invoke("plugin:wingover|start_watch");

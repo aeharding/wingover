@@ -21,7 +21,7 @@ import {
   useSyncExternalStore,
 } from "react";
 
-import { isTauri } from "../../engine/platform";
+import { isTauri } from "../../platform";
 import * as sync from "../../sync";
 import {
   AppleSignInButton,

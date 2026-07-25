@@ -1,6 +1,6 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
-import { nativePositionSource } from "./nativeSource";
+import { nativeLocationReady, nativePositionSource } from "./nativeSource";
 import type { SourceError, SourcePosition } from "./real";
 
 const core = vi.hoisted(() => ({
@@ -157,6 +157,27 @@ describe("nativePositionSource", () => {
 
     expect(commands()).toContain("plugin:wingover|request_permissions");
     expect(commands()).toContain("plugin:wingover|start_watch");
+  });
+
+  // The Never -> "Ask Next Time" recovery, from the source's side: an
+  // unasked permission is not a refusal, so readiness says ready, the
+  // engine retries, and the bounced watch's start sequence is what
+  // finally puts the system alert on screen. Answering false here left
+  // the pilot on the red takeover until a second trip out of the app.
+  it("an unasked prompt reads as READY; only a Settings-level refusal does not", async () => {
+    let location = "prompt";
+    core.invoke.mockImplementation((cmd: string) => {
+      switch (cmd) {
+        case "plugin:wingover|check_permissions":
+          return Promise.resolve({ location, precise: true });
+        default:
+          return Promise.resolve(null);
+      }
+    });
+
+    expect(await nativeLocationReady()).toBe(true);
+    location = "denied";
+    expect(await nativeLocationReady()).toBe(false);
   });
 
   it("refuses reduced accuracy in JS, before capture ever starts", async () => {

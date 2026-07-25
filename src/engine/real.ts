@@ -182,10 +182,23 @@ export class GeolocationRecordingEngine implements RecordingEngine {
   }
 
   // While blocked on a permission-class error and the source can answer
-  // "would a watch succeed now?", poll it and retry the moment it says
-  // yes — the pilot flips the switch in Settings and the app simply
-  // proceeds (covers iPad Split View, where no foreground ever fires).
+  // "would a watch succeed now?", poll it and bounce the watch the moment
+  // it says yes — the pilot flips the switch in Settings and the app
+  // simply proceeds (covers iPad Split View, where no foreground ever
+  // fires). This asks the platform instead of guessing, so it is the
+  // WHOLE recovery path for sources whose capture outlives the page:
+  // retry() (the web foreground/manual heal) is inert on them by design.
   private recoveryPoll: ReturnType<typeof setInterval> | null = null;
+  // Bumped on every arm and disarm. A readiness() answer is in flight
+  // across an unbounded round trip to the platform, so by the time it
+  // lands the block it was asked about may be long over; the epoch it
+  // captured at arm is how it proves it still speaks for the CURRENT one.
+  private pollEpoch = 0;
+  // A readiness-driven bounce whose fresh watch has not yet proven itself
+  // by delivering a fix. Set at the attempt; NOT cleared by the bounce's
+  // own optimistic error clear, so a blocking error landing again is read
+  // as the same episode (the attempt failed) rather than a new one.
+  private recoveryAttempted = false;
 
   private syncRecoveryPoll() {
     const readiness = this.core.source.readiness;
@@ -193,14 +206,45 @@ export class GeolocationRecordingEngine implements RecordingEngine {
     const wants =
       readiness !== undefined && blocking !== null && blocking.code !== "busy";
     if (wants && this.recoveryPoll === null) {
-      this.recoveryPoll = setInterval(() => {
-        void readiness().then((ready) => {
-          if (ready) this.retry();
-        });
-      }, RECOVERY_POLL_MS);
+      const epoch = ++this.pollEpoch;
+      const check = () => {
+        void readiness()
+          .then((ready) => {
+            // A stale answer is silent. Two ways to be stale: it belongs
+            // to a previous arming (epoch), or the block it was asked
+            // about healed while it was in flight (blockingError). Acting
+            // on either tears down a LIVE watch on evidence about a state
+            // that no longer exists.
+            if (!ready || epoch !== this.pollEpoch) return;
+            if (this.blockingError() === null) return;
+            this.recoveryAttempted = true;
+            this.bounceWatch();
+          })
+          // A readiness that rejects is simply not ready; the interval
+          // asks again. It must not spam unhandled rejections at 0.5 Hz.
+          .catch(() => {});
+      };
+      this.recoveryPoll = setInterval(check, RECOVERY_POLL_MS);
+      // First check at arm, not one interval from now: where this poll is
+      // the only recovery path, an interval of phase is an interval of
+      // stale takeover on screen (a block armed on a rebuilt webview
+      // after a Settings trip is exactly that).
+      //
+      // Only on the FIRST arming of an episode, though. Readiness and the
+      // watch's pre-capture refusal are meant to be one rule (native:
+      // nativeSource's permissionRefusal, which also folds Location
+      // Services off into a denial), so a platform that answers ready
+      // while its watch keeps refusing is a contradiction — but the
+      // engine must stay bounded even against one. A re-arm inside the
+      // same episode means the last attempt failed, so it waits for the
+      // interval. Invariant, against ANY source behaviour: at most one
+      // recovery attempt per RECOVERY_POLL_MS, and a takeover that holds
+      // steady between attempts instead of flickering through acquiring.
+      if (!this.recoveryAttempted) check();
     } else if (!wants && this.recoveryPoll !== null) {
       clearInterval(this.recoveryPoll);
       this.recoveryPoll = null;
+      this.pollEpoch++;
     }
   }
 
@@ -474,6 +518,7 @@ export class GeolocationRecordingEngine implements RecordingEngine {
     this.reachInside.clear();
     this.reachedIds.clear();
     this.error = null;
+    this.recoveryAttempted = false;
     // A latch armed by a previous session must not fire into this one.
     this.clearImpreciseTimer();
     await writeWalSession(this.session);
@@ -632,34 +677,41 @@ export class GeolocationRecordingEngine implements RecordingEngine {
   }
 
   // The sanctioned exit from "blocked" besides discard()/start(): clear
-  // the blocking error and bounce the watch with the session intact, so
+  // the blocking error and restart the watch with the session intact, so
   // the UI recovers straight back into acquiring — never through idle
-  // (the homepage must not flash behind the error screen).
-  //
-  // Also the pre-takeoff foreground heal: Safari can silently kill a
-  // watch while the app is backgrounded (a Settings trip is exactly
-  // that), leaving acquiring frozen on the last pre-trip fix with no
-  // error to show for it. Bouncing even when not blocked costs nothing
-  // — a fresh watch gets an immediate delivery — and revives the dead
-  // ones. busy is excluded: another holder owns the recorder lock, and
-  // a new watch here would not contest it. Post-takeoff this is a
-  // no-op: a started flight's source is never touched.
-  retry(): void {
+  // (the homepage must not flash behind the error screen). Both recovery
+  // mechanisms land here, so the guards live at this single mutation
+  // site: busy is excluded (another holder owns the recorder lock, and a
+  // new watch here would not contest it), and post-takeoff is a no-op (a
+  // started flight's source is never touched).
+  private bounceWatch(): void {
     if (!this.session || this.session.takeoffIndex !== null) return;
     if (this.error?.code === "busy") return;
-    // A HEALTHY watch is bounced only where a watch can silently die
-    // (browser); native capture must never be touched by a mere
-    // foreground — its recorder outlives the page by design. While
-    // blocked (permission/imprecise) the bounce is always safe: capture
-    // was refused or is dead.
-    if (this.blockingError() === null && !this.core.source.watchCanDieSilently)
-      return;
     // A storage error rides through the bounce: it is not the watch's
     // problem, and only a successful write may clear it.
     if (this.error !== null && this.error.code !== "storage") this.error = null;
     this.clearWatch();
     this.ensureWatch();
     this.invalidate();
+  }
+
+  // The WEB heal, and only the web's: the foreground handler
+  // (engine/session.ts) and the error screen's Try Again both arrive
+  // here. A browser watch can be killed silently while the page is
+  // backgrounded (a Settings trip is exactly that), leaving acquiring
+  // frozen on the last pre-trip fix with no error to show for it, and a
+  // browser cannot be asked whether a watch would succeed — so bouncing
+  // is the only way to find out. Bouncing a healthy one costs nothing
+  // there: a fresh watch gets an immediate delivery.
+  //
+  // Sources whose capture outlives the page opt out of BOTH cases,
+  // healthy and blocked: their recorder must never be touched by a mere
+  // foreground, and they recover through the readiness poll above, which
+  // asks the platform instead of guessing. Capability, not platform —
+  // the engine never switches on where it is running.
+  retry(): void {
+    if (!this.core.source.watchCanDieSilently) return;
+    this.bounceWatch();
   }
 
   async discard(): Promise<void> {
@@ -670,6 +722,7 @@ export class GeolocationRecordingEngine implements RecordingEngine {
     this.reachInside.clear();
     this.reachedIds.clear();
     this.error = null;
+    this.recoveryAttempted = false;
     this.invalidate();
     await this.walQueue;
     // Only the WAL's owner may destroy it: a passive tab (busy) clearing
@@ -930,6 +983,10 @@ export class GeolocationRecordingEngine implements RecordingEngine {
     // Fixes flowing again means GPS has recovered; a storage error is a
     // different channel — only a successful write clears it.
     if (this.error?.code !== "storage") this.error = null;
+    // A delivered fix is the only proof a recovery attempt actually
+    // worked, so it is the only thing that ends the episode: the next
+    // block gets its immediate check back.
+    this.recoveryAttempted = false;
     // Heuristic net for sources that CANNOT self-report reduced
     // accuracy (the web Geolocation API offers no way to ask): without
     // it, Precise Location off hangs acquiring forever with no

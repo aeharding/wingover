@@ -127,8 +127,11 @@ arriving in a burst instead of one per second.
   wired engine-side (`src/engine/session.ts`; the web core
   `src/engine/core.ts` is a TS twin of the plugin's core.rs, driven by
   the same watch lifecycle). The boundary is a directory boundary — React
-  exists only under `src/ui/` — and it is mechanical: eslint bans
-  React/Ionic imports from `src/engine`, `src/flight`, and `src/storage`.
+  exists only under `src/ui/` — and it is mechanical: the seams are
+  enforced by `eslint.config.js`, which is the enumeration (React and
+  Ionic out of the headless world, the platform out of the engine, each
+  layer reached through its public surface). A seam that is not in that
+  file is not a seam yet.
 - **A flight owns its waypoints.** The Plan tab is a reusable template for
   the NEXT flight; starting a flight copies the plan's pins into the
   session. Mid-flight additions join that flight only. An active flight
@@ -150,6 +153,7 @@ Real test flights exist but are precious — the maintainer can fly, but not ite
 - **Native engine tests.** The location source is abstracted so the Swift (later Kotlin) engine is unit-tested with injected fixes: WAL write/flush ordering, recovery from truncated and corrupt WALs, finalization, baro handling.
 - **Golden-track tests.** Known input flight → asserted stats (duration, distance, max altitude/speed, launch/land detection) and stable export output. Export is deliberately lossy and that is the trade: GPX 1.1 carries lat/lon/ele/time and dropped `<speed>`/`<course>` from 1.0, and has no home at all for climb rate or accuracy-in-meters (`hdop`/`vdop` are dilution-of-precision, a different quantity). So a round-trip returns a track that is interoperable, not identical — import reconstructs speed, course and climb rate from geometry, and the accuracies are gone. Interop is worth that at the export boundary; it is why the stored track stays JSON, where the record is complete.
 - **Soak test.** A long simulated flight with randomized interruption events injected throughout, asserting zero data loss — run scheduled in CI, not on every commit.
+- **Adversarial audit.** Engine- and native-touching changes get an independent bug hunt and a doctrine-grounded architecture review before merge ([docs/ENGINE-AUDIT.md](docs/ENGINE-AUDIT.md)) — the failure mode of this codebase is plausible code that passes green tests, and audits have caught what rings could not.
 - **Honest gaps, ground-truthed before flying.** Simulators can't reproduce real jetsam decisions, GPS chip behavior, or battery/thermal reality. That gap closes on the ground first: unattended real-device drills — phone recording in a pocket during a long drive or walk, screen off, hours at a stretch — exercise the identical pipeline; a flight is the same data, just higher. TestFlight beta pilots widen coverage before 1.0.
 
 **Flight-ready** means: the full automated matrix is green, and multiple unattended multi-hour ground recordings on physical hardware have completed with zero loss. Only then does a real flight happen — as sign-off, with the expectation it works the first time.

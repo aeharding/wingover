@@ -7,12 +7,15 @@ import type { Waypoint } from "./types";
 // Foreground heal, wired HERE and not in a component (STEERING:
 // anything that must happen regardless of which page is mounted is
 // wired engine-side): coming back from Settings must PROCEED, not sit
-// on a frozen screen. Safari can silently kill a watch while
-// backgrounded; engine.retry() bounces it pre-takeoff (clearing a
-// blocking error if one is up) and is a no-op wherever it could do
-// harm (mid-flight, busy, healthy native capture). The other recovery
-// mechanism — polling the source's readiness while blocked — is wired
-// inside the engine itself, off the source's capability.
+// on a frozen screen. A browser watch can be killed silently while the
+// page is backgrounded, and engine.retry() bounces it pre-takeoff.
+//
+// This listener is harmless by construction where a foreground means
+// nothing — retry() self-gates on the source's watchCanDieSilently, so
+// on a source whose capture outlives the page it does nothing at all,
+// and that source recovers by the engine's readiness poll instead. The
+// gate is the source's to answer, not this file's: no platform check
+// here (the seam lint forbids one, and that is exactly the point).
 if (typeof document !== "undefined") {
   document.addEventListener("visibilitychange", () => {
     if (document.visibilityState === "visible") engine.retry();

@@ -1,0 +1,18 @@
+{
+  "surface": "drain",
+  "hop": "swift->rust",
+  "description": "The uncoded tail: any CLError that is neither locationUnknown nor denied ships localizedDescription verbatim. Locale-dependent by construction, which is why the two cases that matter have codes. See fixes_since.prose-fallback.json for what the JS classifier does with it.",
+  "produces": "src-tauri/plugins/wingover/ios/Sources/WingoverPlugin.swift (drain; localizedDescription in didFailWithError)",
+  "consumes": "src-tauri/plugins/wingover/src/wire.rs (DrainResponse)",
+  "codes": ["error"],
+  "response": {
+    "fixes": [],
+    "error": "The operation couldn't be completed. (kCLErrorDomain error 2.)"
+  },
+  "expect": {
+    "rust": {
+      "fixes": 0,
+      "error": "The operation couldn't be completed. (kCLErrorDomain error 2.)"
+    }
+  }
+}

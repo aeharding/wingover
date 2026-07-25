@@ -210,7 +210,10 @@ to avoid duplicating arithmetic.)
 
 1. ✅ Rust: `store.rs` (append-only log, hydration, ordering guard),
    `core.rs` (lifecycle, persist-then-announce, waypoint persistence),
-   `announcer.rs` (golden vectors) — 9 cargo tests on Linux CI.
+   `announcer.rs` (golden vectors), `wire.rs` (contract fixtures) — 13
+   cargo tests, run by the macOS `ios` CI job on the host target. Not the
+   Linux job: `tauri`'s wry feature would drag webkit2gtk onto the runner
+   that everything else waits on.
 2. ✅ Swift: dieted to capture/drain/permissions/speak (~compiles on Mac
    only — unverified here).
 3. ✅ JS: `nativeSource` wire contract unchanged (commands now answered by

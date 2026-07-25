@@ -8,6 +8,7 @@ import {
   GeolocationRecordingEngine,
   navigatorPositionSource,
   type PositionSource,
+  type SourceError,
   type SourcePosition,
 } from "./real";
 import { readWal } from "./wal";
@@ -101,6 +102,35 @@ function position(
     },
   } as GeolocationPosition;
 }
+
+// The same fix as `position()`, in the shape a non-browser source
+// delivers: full accuracy and an altitude, so nothing reads as reduced.
+function sourceFix(): SourcePosition {
+  timestamp += 1000;
+  return {
+    timestamp,
+    coords: {
+      latitude: 43.0,
+      longitude: -89.4,
+      accuracy: 5,
+      altitude: 300,
+      altitudeAccuracy: 8,
+      speed: 0,
+      heading: 90,
+    },
+  };
+}
+
+// RECOVERY_POLL_MS in real.ts. Not exported: the interval is an internal
+// cadence, and a test that had to know it exactly would be pinning the
+// implementation rather than the behaviour.
+const POLL_MS = 2_000;
+
+// A stand-in for the native permission round trip a watch makes before it
+// can refuse: long enough that the refusal lands after the bounce's own
+// optimistic clear has already been observed, which is the ordering that
+// re-arms the poll.
+const ROUND_TRIP_MS = 10;
 
 beforeEach(async () => {
   geolocation = new FakeGeolocation();
@@ -260,6 +290,315 @@ describe("GeolocationRecordingEngine", () => {
     geolocation.emit(position());
     expect(engine.snapshotSync().latest).not.toBeNull();
   });
+
+  // A source in the native shape: capture outlives the page, so it
+  // declares no watchCanDieSilently and recovery is the readiness poll
+  // alone. `fail` stays bound to the FIRST watch's error callback; a
+  // bounce installs a fresh one the test never has to touch.
+  function pollingSource(ready: () => boolean) {
+    const state = {
+      watches: 0,
+      fail: (() => {}) as (error: SourceError) => void,
+    };
+    const source: PositionSource = {
+      reportsAccuracyAuthorization: true,
+      readiness: () => Promise.resolve(ready()),
+      watch(_onPositions, onError) {
+        state.watches++;
+        if (state.watches === 1) state.fail = onError;
+        return () => {};
+      },
+    };
+    return { source, state };
+  }
+
+  // The Settings round trip, end to end: the pilot revokes location, then
+  // sets it back to "Ask Next Time". The native source calls an unasked
+  // permission READY (nativeSource.ts), and this poll is what turns that
+  // into a watch bounce — the fresh watch is what raises the system
+  // prompt. No poll, no prompt: the takeover just sat there until a
+  // second trip out of the app happened to bounce the watch some other
+  // way. retry() cannot stand in: it is the WEB heal and self-gates off
+  // this source's missing watchCanDieSilently.
+  it("recovery polling recovers a source retry() will not touch, and not one poll sooner", async () => {
+    let ready = false;
+    const { source, state } = pollingSource(() => ready);
+    const engine = new GeolocationRecordingEngine({
+      source,
+      setWaypoints: () => {},
+    });
+    engines.push(engine);
+    await engine.start();
+    expect(state.watches).toBe(1);
+
+    vi.useFakeTimers();
+    try {
+      state.fail({
+        permissionDenied: true,
+        message: "location permission denied",
+      });
+      await vi.advanceTimersByTimeAsync(0);
+      expect(engine.snapshotSync().status).toBe("blocked");
+
+      // Still refused in Settings: polling must not thrash the watch.
+      await vi.advanceTimersByTimeAsync(10_000);
+      expect(engine.snapshotSync().status).toBe("blocked");
+      expect(state.watches).toBe(1);
+
+      // The inverse pin: the foreground heal is inert here even while
+      // blocked. Whatever the pilot's return from Settings dispatches,
+      // this source's capture is never bounced behind its back — the
+      // takeover lifts on the poll's evidence or not at all.
+      engine.retry();
+      await vi.advanceTimersByTimeAsync(0);
+      expect(engine.snapshotSync().status).toBe("blocked");
+      expect(state.watches).toBe(1);
+
+      // Flipped to "Ask Next Time": one poll later the session is
+      // acquiring again on a fresh watch — the one that does the asking.
+      ready = true;
+      await vi.advanceTimersByTimeAsync(10_000);
+      expect(engine.snapshotSync().status).toBe("acquiring");
+      expect(engine.snapshotSync().error).toBeNull();
+      expect(state.watches).toBe(2);
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
+  // Latency, not just eventual recovery: the poll's first check runs when
+  // it arms, so a refusal that is already fixed by the time it lands (the
+  // webview rebuilt while the pilot was in Settings) clears in one
+  // readiness round trip. Real timers, and the test never waits
+  // RECOVERY_POLL_MS — an interval-phased first check would leave it
+  // blocked here.
+  it("the recovery poll checks the moment it arms, not one interval later", async () => {
+    const { source, state } = pollingSource(() => true);
+    const engine = new GeolocationRecordingEngine({
+      source,
+      setWaypoints: () => {},
+    });
+    engines.push(engine);
+    await engine.start();
+
+    state.fail({
+      permissionDenied: true,
+      message: "location permission denied",
+    });
+    await settle();
+    expect(engine.snapshotSync().status).toBe("acquiring");
+    expect(engine.snapshotSync().error).toBeNull();
+    expect(state.watches).toBe(2);
+  });
+
+  // A readiness() answer is in flight across an unbounded round trip to
+  // the platform, and the block it was asked about can end while it
+  // travels. Acting on a stale yes tears down a watch that is already
+  // delivering — the pilot loses capture to a poll answering a question
+  // nobody is asking any more. Two independent guards, pinned separately:
+  // a blocking error must still stand, AND the answer must belong to the
+  // current arming.
+  it("a readiness answer that outlived its block cannot bounce a live watch", async () => {
+    const pending: ((ready: boolean) => void)[] = [];
+    const state = {
+      watches: 0,
+      fail: (() => {}) as (error: SourceError) => void,
+      feed: (() => {}) as (positions: SourcePosition[]) => void,
+    };
+    const source: PositionSource = {
+      reportsAccuracyAuthorization: true,
+      readiness: () => new Promise<boolean>((resolve) => pending.push(resolve)),
+      watch(onPositions, onError) {
+        state.watches++;
+        state.feed = onPositions;
+        state.fail = onError;
+        return () => {};
+      },
+    };
+    const engine = new GeolocationRecordingEngine({
+      source,
+      setWaypoints: () => {},
+    });
+    engines.push(engine);
+    await engine.start();
+    expect(state.watches).toBe(1);
+
+    // Precise Location off: a blocking error that self-heals on evidence,
+    // so the poll can be left holding an answer to a dead question.
+    state.fail({
+      permissionDenied: false,
+      imprecise: true,
+      message: "precise location disabled",
+    });
+    await settle();
+    expect(engine.snapshotSync().status).toBe("blocked");
+    expect(pending).toHaveLength(1);
+
+    // Precise flipped back on, proven by a good fix: the block ends
+    // through ingest, and the watch that ingested is live.
+    state.feed([sourceFix()]);
+    await settle();
+    expect(engine.snapshotSync().status).toBe("acquiring");
+
+    // The stale yes lands. Nothing is blocked, so nothing is bounced.
+    pending[0](true);
+    await settle();
+    expect(state.watches).toBe(1);
+    expect(engine.snapshotSync().status).toBe("acquiring");
+
+    // Second guard: a NEW block arms a new poll, and the answer from the
+    // OLD one is still not this block's evidence.
+    state.fail({
+      permissionDenied: false,
+      imprecise: true,
+      message: "precise location disabled",
+    });
+    await settle();
+    expect(engine.snapshotSync().status).toBe("blocked");
+    expect(pending).toHaveLength(2);
+
+    pending[0](true);
+    await settle();
+    expect(state.watches).toBe(1);
+    expect(engine.snapshotSync().status).toBe("blocked");
+
+    // The current arming's own answer is what recovers it.
+    pending[1](true);
+    await settle();
+    expect(state.watches).toBe(2);
+    expect(engine.snapshotSync().status).toBe("acquiring");
+  });
+
+  it("a readiness that rejects is simply not ready, never an unhandled rejection", async () => {
+    const state = {
+      watches: 0,
+      fail: (() => {}) as (error: SourceError) => void,
+    };
+    const source: PositionSource = {
+      reportsAccuracyAuthorization: true,
+      readiness: () => Promise.reject(new Error("plugin not responding")),
+      watch(_onPositions, onError) {
+        state.watches++;
+        if (state.watches === 1) state.fail = onError;
+        return () => {};
+      },
+    };
+    const engine = new GeolocationRecordingEngine({
+      source,
+      setWaypoints: () => {},
+    });
+    engines.push(engine);
+    await engine.start();
+
+    state.fail({
+      permissionDenied: true,
+      message: "location permission denied",
+    });
+    await settle();
+    // The takeover holds and the watch is untouched; an unhandled
+    // rejection at 0.5 Hz would fail this suite outright.
+    expect(engine.snapshotSync().status).toBe("blocked");
+    expect(state.watches).toBe(1);
+  });
+
+  // Readiness and the watch's pre-capture refusal are meant to be ONE rule
+  // (nativeSource's permissionRefusal, reading one PermissionStatus that
+  // now carries the device-wide switch too), so "ready, then refused" is a
+  // contradiction. A platform that produces it anyway — a version where
+  // the two disagree, a shell answering stale — must still not make the
+  // engine flap: bounce, error re-lands, re-arm, immediate check, bounce,
+  // as fast as the round trips allow, with the takeover flickering through
+  // acquiring each time. Convergence is structural instead of assumed:
+  // only the FIRST arming of an episode checks immediately.
+  for (const delivery of ["synchronously", "after a round trip"] as const) {
+    it(`a lying platform cannot make the engine thrash: attempts damp to the poll cadence (refused ${delivery})`, async () => {
+      let lying = false;
+      const state = {
+        watches: 0,
+        fail: (() => {}) as (error: SourceError) => void,
+      };
+      const source: PositionSource = {
+        reportsAccuracyAuthorization: true,
+        // The lie: always ready, whatever the watch then does.
+        readiness: () => Promise.resolve(true),
+        watch(_onPositions, onError) {
+          state.watches++;
+          if (state.watches === 1) state.fail = onError;
+          const refuse = () => {
+            if (!lying) return;
+            onError({
+              permissionDenied: true,
+              message: "location permission denied",
+            });
+          };
+          // A native refusal arrives only after a permission round trip
+          // (nativeSource awaits check_permissions before judging), long
+          // after the bounce's own optimistic clear has been observed; a
+          // web one is immediate. The two take different paths through
+          // the poll's arm and disarm and must damp the same way.
+          if (state.watches > 1) {
+            if (delivery === "synchronously") refuse();
+            else setTimeout(refuse, ROUND_TRIP_MS);
+          }
+          return () => {};
+        },
+      };
+      const engine = new GeolocationRecordingEngine({
+        source,
+        setWaypoints: () => {},
+      });
+      engines.push(engine);
+      await engine.start();
+      expect(state.watches).toBe(1);
+
+      vi.useFakeTimers();
+      try {
+        lying = true;
+        state.fail({
+          permissionDenied: true,
+          message: "location permission denied",
+        });
+        await vi.advanceTimersByTimeAsync(0);
+        // The block arms and buys exactly ONE immediate attempt.
+        expect(state.watches).toBe(2);
+        // Once the refusal is back, the takeover is standing again — and
+        // the re-arm it causes does NOT buy a second attempt.
+        await vi.advanceTimersByTimeAsync(ROUND_TRIP_MS);
+        expect(engine.snapshotSync().status).toBe("blocked");
+        expect(state.watches).toBe(2);
+
+        // Nor does any amount of settling short of the interval: no tight
+        // loop, no takeover flickering through acquiring.
+        await vi.advanceTimersByTimeAsync(0);
+        expect(state.watches).toBe(2);
+        expect(engine.snapshotSync().status).toBe("blocked");
+
+        // Each interval buys at most one more attempt. The trailing
+        // round-trip advance lets a refusal still in flight land before
+        // judging: an attempt in PROGRESS legitimately reads acquiring
+        // until the platform answers, and it is the RATE of attempts
+        // being damped.
+        for (let k = 1; k <= 5; k++) {
+          await vi.advanceTimersByTimeAsync(POLL_MS);
+          await vi.advanceTimersByTimeAsync(ROUND_TRIP_MS);
+          expect(engine.snapshotSync().status).toBe("blocked");
+          expect(state.watches).toBeLessThanOrEqual(k + 2);
+        }
+        // Damped, not wedged: it is still trying.
+        expect(state.watches).toBeGreaterThan(2);
+
+        // And stability is not deadlock: the moment the platform stops
+        // lying, the next attempt recovers.
+        lying = false;
+        await vi.advanceTimersByTimeAsync(POLL_MS);
+        await vi.advanceTimersByTimeAsync(ROUND_TRIP_MS);
+        expect(engine.snapshotSync().status).toBe("acquiring");
+        expect(engine.snapshotSync().error).toBeNull();
+      } finally {
+        vi.useRealTimers();
+      }
+    });
+  }
 
   it("a passive (busy) tab can never destroy the owner's WAL, and mid-flight adoption stays a viewer", async () => {
     // Owner records a flight (lock-less env: owner by default).

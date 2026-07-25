@@ -1,0 +1,22 @@
+{
+  "surface": "check_permissions",
+  "hop": "swift->rust->js",
+  "description": "Denied or restricted, both reported as denied. No imprecise key on this refusal: the engine's error mapping checks imprecise first, and a denial is not an accuracy problem.",
+  "produces": "src-tauri/plugins/wingover/ios/Sources/WingoverPlugin.swift (checkPermissions; authorizationString)",
+  "consumes": "src/engine/nativeSource.ts (permissionRefusal)",
+  "codes": ["location", "precise", "servicesEnabled", "denied"],
+  "response": {
+    "location": "denied",
+    "precise": true,
+    "servicesEnabled": true
+  },
+  "expect": {
+    "js": {
+      "refusal": {
+        "permissionDenied": true,
+        "message": "location permission denied"
+      },
+      "ready": false
+    }
+  }
+}

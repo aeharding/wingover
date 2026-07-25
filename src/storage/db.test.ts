@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 
-import { FlightSimulator } from "../engine/simulator";
+import { FlightSimulator } from "../flight/simulator";
 import { computeStats, EMPTY_STATS } from "../flight/stats";
 import {
   deleteAllPins,

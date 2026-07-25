@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 
-import { FlightSimulator } from "../engine/simulator";
+import { FlightSimulator } from "./simulator";
 import { computeStats, haversineMeters } from "./stats";
 
 describe("FlightSimulator", () => {
