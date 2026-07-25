@@ -18,9 +18,12 @@ cd "$(dirname "$0")"
 #    burn minutes before the movement test even starts). The scenario runs
 #    on the HOST, so it keeps feeding
 #    CoreLocation while the app is backgrounded — which is the point. Laps,
-#    not a one-way line, because the waypoint test drops a pin at "wherever
-#    the sim is right now" and relies on the path re-crossing that spot
-#    within one lap (~60 s).
+#    not a one-way line, because the waypoint test drops a pin on the
+#    corridor and relies on the path re-crossing it within one lap (~60 s).
+#    The path is a CONSTANT-LATITUDE out-and-back and WaypointUITests
+#    depends on that: it averages the app's logged fixes to get the one
+#    latitude its pin has to sit on. A path that wandered in latitude would
+#    need that drill's calibration reworked, not just this file.
 xcrun simctl privacy "$UDID" grant location app.wingover.wingover
 xcrun simctl location "$UDID" clear
 xcrun simctl location "$UDID" start --speed=40 --interval=1 - <flight-path.txt
@@ -45,16 +48,11 @@ DATA_DIR=$(xcrun simctl get_app_container "$UDID" app.wingover.wingover data)
 # skip the other's signal — and the job fails if either did.
 suite_failed=0
 
-# QUARANTINE (issue #151): the waypoint announcement drill has been red
-# on main since #145 merged (speak.log empty; pin drop and recording both
-# healthy) and needs interactive Mac debugging. Delete this one skip line
-# to unquarantine.
 TEST_RUNNER_WINGOVER_DATA="$DATA_DIR" xcodebuild test \
   -project WingoverUITests.xcodeproj \
   -scheme WingoverUITests \
   -destination "id=$UDID" \
   -skip-testing:WingoverUITests/PermissionUITests \
-  -skip-testing:WingoverUITests/WaypointUITests/testWaypointAnnouncementSpokenWhileBackgrounded \
   -collect-test-diagnostics never || suite_failed=1
 
 # The blocked-state drills run in their own invocation with the OPPOSITE

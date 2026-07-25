@@ -12,24 +12,55 @@ import XCTest
 // to tmp/speak.log (WingoverPlugin.swift), read off the simulator's
 // filesystem by this runner.
 //
-// Geometry: the location scenario is an out-and-back lap (run.sh +
-// flight-path.txt), so "wherever the sim is right now" is a point the path
-// re-crosses every lap. A pin is dropped there (Center on me → long-press
-// the map center — pins are created ONLY by long-press, at the pressed
-// point). The flight then leaves the pin's fixed 322 m radius and re-enters
-// within one lap (~60 s worst case). That outside→inside crossing is the
-// one transition that announces; arming on the first fix is silent by
-// design (launching from inside your own waypoint must not speak), so the
-// test works whether the flight starts inside or outside.
+// Geometry: the location scenario is a constant-latitude out-and-back lap
+// (run.sh + flight-path.txt), so the pin has to land on ONE line of
+// latitude, within the announcer's fixed 322 m radius, and the flight
+// re-crosses it every lap (~60 s). That outside→inside crossing is the one
+// transition that announces; arming on the first fix is silent by design
+// (launching from inside your own waypoint must not speak), so the test
+// works whether the flight starts inside or outside.
 //
+// WHY THIS DRILL CALIBRATES INSTEAD OF PRESSING AT A MAGIC OFFSET (#151):
 // MapKit's annotation layer is hidden from the accessibility tree (verified
-// against XCUITest's own snapshot), so the pin markers can be neither
-// queried nor tapped: pin creation is probed via the "Route:" pill (plain
-// page DOM — it appears once a second pin makes a route), and pins are
-// never deleted (a tap on the marker is the only delete). CI runs on a
-// fresh install every time; local reruns accumulate a couple of pins per
-// run, which only adds announcement sources and cannot break the assertion.
+// against XCUITest's own snapshot), so a dropped pin can be neither queried
+// nor tapped, and the only way in is a long-press at a normalized offset in
+// the webview. Every earlier version hard-coded that offset against
+// wherever "Center on me" happened to land the camera — dy 0.444 was the
+// plan map's raw container center — and #145 legitimately moved the
+// landing to the map's PADDED center (the visually unobstructed middle,
+// below the status bar): 24 pt on an iPhone 11, which at the app's locate
+// zoom of 12 is 637 m, twice the radius. The five-rung fence that replaced
+// it (#148) was sparser than the radius it had to catch — 1.09 km between
+// rungs against a 644 m capture window — and the corridor landed in a gap
+// (measured 424 m from the nearest rung).
+//
+// So this drill measures instead of assuming. Two pins one half-screen
+// apart give the map's screen→latitude mapping AT WHATEVER SCALE AND
+// CENTER the app legitimately chose; the app's own files supply the ground
+// truth for both ends of that mapping (waypoints.json = the exact
+// coordinates the presses produced, session.jsonl = the exact latitudes
+// CoreLocation is feeding the app). The corridor pin is then placed at a
+// computed offset, and its distance to the corridor is asserted in METRES
+// before the announcement is ever waited on — so a future camera change
+// fails with "the camera landed N m off", not with a mute empty log.
+//
+// Pin creation is probed via the "Route:" pill (plain page DOM — it appears
+// once a second pin makes a route). Pins are never deleted individually (a
+// tap on the marker is the only delete), but the plan IS wiped through the
+// app's own route sheet at the start, so repeated local runs on one install
+// calibrate against their own pins and not a previous run's.
 final class WaypointUITests: XCTestCase {
+
+  // Mirrors WAYPOINT_RADIUS_M in src/flight/waypoints.ts (0.2 mi). Only the
+  // guards and the failure messages use it; the announcement itself is
+  // decided by the Rust announcer against its own copy.
+  private let waypointRadiusM = 0.2 * 1609.344
+  // Good to ~0.1% over the few km this drill spans.
+  private let metersPerDegreeLat = 111_132.0
+  // The calibration rungs: one half-screen apart, clear of the status bar
+  // at the top and of the route pill (dy ~0.85) at the bottom.
+  private let calibrationTopDy = 0.25
+  private let calibrationBottomDy = 0.75
 
   override func setUp() {
     // The steps build on each other; a cascade of follow-on failures after
@@ -71,17 +102,114 @@ final class WaypointUITests: XCTestCase {
   // whole string, e.g. "Route: 5.2 km" — no child StaticTexts. Match that
   // button. Fall back to the older exposure (sibling "Route:" + length
   // StaticTexts, as a plain <div> gave) so the probe survives either tree.
+  private func routePill(_ app: XCUIApplication) -> XCUIElement? {
+    app.buttons.allElementsBoundByIndex.first { $0.label.hasPrefix("Route:") }
+  }
+
   private func routeValue(_ app: XCUIApplication) -> String? {
-    if let pill = app.buttons.allElementsBoundByIndex.first(where: {
-      $0.label.hasPrefix("Route:")
-    }) {
-      return pill.label
-    }
+    if let pill = routePill(app) { return pill.label }
     let texts = app.staticTexts.allElementsBoundByIndex
     guard let index = texts.firstIndex(where: { $0.label == "Route:" }),
       index + 1 < texts.count
     else { return nil }
     return texts[index + 1].label
+  }
+
+  // Reruns on one install would otherwise leave the previous run's pins in
+  // the plan, and the calibration below pairs the two pins it just dropped
+  // by creation order. The route sheet's destructive action is the app's own
+  // "delete all"; no pill means fewer than two pins, i.e. nothing to clear.
+  private func clearPlan(_ app: XCUIApplication) {
+    guard let pill = routePill(app) else { return }
+    pill.tap()
+    let deleteAll = app.buttons
+      .matching(NSPredicate(format: "label BEGINSWITH %@", "Delete all"))
+      .firstMatch
+    if deleteAll.waitForExistence(timeout: 5) {
+      deleteAll.tap()
+    } else {
+      let cancel = app.buttons["Cancel"].firstMatch
+      if cancel.exists { cancel.tap() }
+    }
+    Thread.sleep(forTimeInterval: 1)
+  }
+
+  private func longPress(_ map: XCUIElement, dy: Double) {
+    map.coordinate(withNormalizedOffset: CGVector(dx: 0.5, dy: dy))
+      .press(forDuration: 1.2)
+    Thread.sleep(forTimeInterval: 1)
+  }
+
+  private func startFlight(_ app: XCUIApplication) {
+    app.buttons["Fly"].firstMatch.tap()
+    let start = app.buttons["Start Flight"].firstMatch
+    XCTAssertTrue(start.waitForExistence(timeout: 15), "no Start Flight button")
+    start.tap()
+    XCTAssertTrue(
+      app.buttons["Stop flight"].firstMatch.waitForExistence(timeout: 60),
+      "recording never started")
+  }
+
+  private func stopFlight(_ app: XCUIApplication) {
+    let stop = app.buttons["Stop flight"].firstMatch
+    XCTAssertTrue(stop.waitForExistence(timeout: 15), "recording UI did not return")
+    stop.tap()
+    let confirm = app.buttons["Stop"].firstMatch
+    XCTAssertTrue(confirm.waitForExistence(timeout: 5), "no End flight? confirm")
+    confirm.tap()
+  }
+
+  // The flight's waypoints exactly as the native announcer holds them: the
+  // plan is copied into waypoints.json at start (plugins/wingover/src/core.rs)
+  // and the file is deleted at stop, so this is only readable mid-flight.
+  private func activeWaypoints(count: Int, timeout: TimeInterval)
+    -> [(lat: Double, lon: Double)]
+  {
+    let deadline = Date().addingTimeInterval(timeout)
+    while Date() < deadline {
+      if let url = containerFile(named: "waypoints.json"),
+        let data = try? Data(contentsOf: url),
+        let list = (try? JSONSerialization.jsonObject(with: data))
+          as? [[String: Any]],
+        list.count >= count
+      {
+        return list.compactMap { entry in
+          guard let lat = entry["latitude"] as? Double,
+            let lon = entry["longitude"] as? Double
+          else { return nil }
+          return (lat, lon)
+        }
+      }
+      Thread.sleep(forTimeInterval: 0.5)
+    }
+    return []
+  }
+
+  // The corridor's latitude, read from the app's own durable fix log rather
+  // than assumed from flight-path.txt: run.sh plays that file into
+  // CoreLocation, the engine persists every fix to session.jsonl, and the
+  // scenario is a constant-latitude lap — so the mean of the fixes IS the
+  // line the pin has to sit on. Cleared at stop, like waypoints.json.
+  private func corridorLatitude(timeout: TimeInterval) -> Double? {
+    let deadline = Date().addingTimeInterval(timeout)
+    while Date() < deadline {
+      if let url = containerFile(named: "session.jsonl"),
+        let text = try? String(contentsOf: url, encoding: .utf8)
+      {
+        let lats = text.split(separator: "\n").compactMap { line -> Double? in
+          guard let data = line.data(using: .utf8),
+            let fix = (try? JSONSerialization.jsonObject(with: data))
+              as? [String: Any]
+          else { return nil }
+          return fix["latitude"] as? Double
+        }
+        if lats.count >= 3 {
+          return lats.reduce(0, +) / Double(lats.count)
+        }
+      }
+      Thread.sleep(forTimeInterval: 0.5)
+    }
+    return nil
   }
 
   func testWaypointAnnouncementSpokenWhileBackgrounded() throws {
@@ -90,63 +218,123 @@ final class WaypointUITests: XCTestCase {
     app.launch()
     recoverToIdle(app)
 
-    // Stale speak.log from an earlier run must not satisfy the assertion.
-    if let log = containerFile(named: "speak.log") {
-      try? FileManager.default.removeItem(at: log)
-    }
-
     let planTab = app.buttons["Plan"].firstMatch
     XCTAssertTrue(planTab.waitForExistence(timeout: 30), "no Plan tab")
     planTab.tap()
+    clearPlan(app)
 
-    // Center on the (moving) simulated position, then drop two pins: one at
-    // the screen center — a point on the scenario's corridor by
-    // construction — and one to the north whose only job is to complete a
-    // route, because the route pill is the only AX-visible proof the
-    // presses took.
+    // Center on the (moving) simulated position. One press is enough: the
+    // app's Center-on-me is an absolute move to zoom 12 (PlanPage.locate),
+    // not a pan at the current zoom, so a fresh install's world-scale start
+    // is gone after the first fly-to. Which point of the lap it centers on
+    // does not matter — the corridor is a line of constant latitude and the
+    // pin inherits the camera's longitude, so it is on the lap by
+    // construction.
     let locate = app.buttons["Center on me"].firstMatch
     XCTAssertTrue(locate.waitForExistence(timeout: 10), "no Center on me")
     locate.tap()
-    Thread.sleep(forTimeInterval: 2)
-    // Centering keeps the current zoom, and a fresh install starts at world
-    // scale — where the few-points offset between the press and the true
-    // camera-center row measured ~73 km of latitude. Pinch in hard so the
-    // same offset is tens of meters, then re-center: the simulated position
-    // kept moving while we zoomed, and each pinch anchors at the gesture
-    // centroid, not the camera center, so the camera wanders regardless.
+    Thread.sleep(forTimeInterval: 3)
+
     let map = app.webViews.firstMatch
-    for _ in 0..<4 {
-      map.pinch(withScale: 8, velocity: 8)
-      Thread.sleep(forTimeInterval: 1)
-    }
-    locate.tap()
-    Thread.sleep(forTimeInterval: 2)
+    let viewport = map.frame.height
+    XCTAssertGreaterThan(viewport, 100, "no map viewport to press in")
+
+    // --- calibration: two pins, one half-screen apart ----------------------
     let before = routeValue(app)
-    // A vertical FENCE of candidate pins across the center band, not one
-    // pin at a magic offset: the old 0.444 encoded exactly where fly-to
-    // happened to land the camera, and PR #145's padding-offset fix moved
-    // that landing (padded-viewport center, not screen center) — the pin
-    // fell > 322 m (WAYPOINT_RADIUS_M) off the corridor and the announcer
-    // never fired. One rung near the corridor row is all the assertion
-    // needs, wherever the camera legitimately centers.
-    for dy in [0.34, 0.39, 0.444, 0.49, 0.54] {
-      map.coordinate(withNormalizedOffset: CGVector(dx: 0.5, dy: dy))
-        .press(forDuration: 1.2)
-      Thread.sleep(forTimeInterval: 1)
-    }
+    longPress(map, dy: calibrationTopDy)
+    longPress(map, dy: calibrationBottomDy)
     let after = routeValue(app)
     XCTAssertTrue(
       after != nil && after != before,
       "route pill did not appear/change — long-presses created no pins")
 
+    // Starting the flight is what publishes the pins' real coordinates to a
+    // file this runner can read; a short flight is the price of ground truth.
+    startFlight(app)
+    let pair = Array(activeWaypoints(count: 2, timeout: 30).suffix(2))
+    XCTAssertEqual(
+      pair.count, 2, "waypoints.json never carried the two calibration pins")
+    let corridor = corridorLatitude(timeout: 30)
+    XCTAssertNotNil(
+      corridor, "session.jsonl carried no fixes — the location scenario is dead")
+    stopFlight(app)
+
+    // Both presses were the same screen column, so a longitude split means
+    // the pair is not the pair we just dropped (a stale pin from an earlier
+    // run at a different camera longitude).
+    let lonSpreadM =
+      abs(pair[0].lon - pair[1].lon) * metersPerDegreeLat
+      * cos(pair[0].lat * .pi / 180)
+    XCTAssertLessThan(
+      lonSpreadM, 5,
+      "calibration pins are \(lonSpreadM) m apart in longitude — not one column")
+
+    let north = max(pair[0].lat, pair[1].lat)
+    let south = min(pair[0].lat, pair[1].lat)
+    // Screen y grows downward, latitude grows upward: negative by
+    // construction, and degenerate if the presses produced one point.
+    let degreesPerDy = (south - north) / (calibrationBottomDy - calibrationTopDy)
+    XCTAssertLessThan(degreesPerDy, 0, "calibration pins share a latitude")
+    let metersPerPoint = abs(degreesPerDy) * metersPerDegreeLat / Double(viewport)
+    // A press lands on a whole point, so the map must be zoomed in far enough
+    // that a point is worth much less than the radius or no computed offset
+    // could be trusted. At the app's locate zoom this is ~26 m.
+    XCTAssertLessThan(
+      metersPerPoint, waypointRadiusM / 3,
+      "map scale is \(metersPerPoint) m/pt — too coarse to place a \(waypointRadiusM) m waypoint")
+
+    let targetDy =
+      calibrationTopDy + (corridor! - north) / degreesPerDy
+    // Off the map means Center-on-me left the simulated position more than a
+    // third of a screen from where it centered — an app regression, not a
+    // flake, and this is the line that will say so.
+    XCTAssertTrue(
+      (0.12...0.78).contains(targetDy),
+      """
+      the flight corridor is not on the plan map: Center on me put lat \
+      \(corridor!) at dy \(targetDy) (calibration \(north)@\(calibrationTopDy) \
+      .. \(south)@\(calibrationBottomDy), \(metersPerPoint) m/pt)
+      """)
+
+    // --- the drill ---------------------------------------------------------
+    // Center on me again, and press the offset the calibration solved for.
+    // The calibration measured the map's LANDING RULE — which screen row a
+    // Center-on-me puts the simulated position on, and how many meters a
+    // point is worth — not one particular camera, and that rule is the same
+    // on the next press: the corridor's latitude is constant and the app's
+    // locate is an absolute move to a fixed zoom. Re-centering is not
+    // optional. A flight replaces the whole tab shell with the flight
+    // surface (App.tsx: `if (inFlight) return <FlightSurface />`), so the
+    // Plan page and its map are destroyed at start and rebuilt from scratch
+    // at stop — the rebuilt map can come up on MapKit's construction camera
+    // (a long-press then drops a pin in Kansas, which is how this was
+    // caught).
+    planTab.tap()
+    Thread.sleep(forTimeInterval: 1.5)
+    XCTAssertTrue(locate.waitForExistence(timeout: 15), "no Center on me after the flight")
+    locate.tap()
+    Thread.sleep(forTimeInterval: 3)
+    longPress(map, dy: targetDy)
+
+    // A stale speak.log — or anything the calibration flight might have said
+    // — must not satisfy the assertion.
+    if let log = containerFile(named: "speak.log") {
+      try? FileManager.default.removeItem(at: log)
+    }
+
     // Fly: the pin list is copied to the Rust announcer at start, and the
     // flight never re-reads the plan.
-    app.buttons["Fly"].firstMatch.tap()
-    let start = app.buttons["Start Flight"].firstMatch
-    XCTAssertTrue(start.waitForExistence(timeout: 10), "no Start Flight button")
-    start.tap()
-    let stop = app.buttons["Stop flight"].firstMatch
-    XCTAssertTrue(stop.waitForExistence(timeout: 60), "recording never started")
+    startFlight(app)
+
+    // Prove the geometry BEFORE waiting on audio, so a future camera change
+    // fails as "the pin is N m off" instead of as a mute empty log.
+    let placed = activeWaypoints(count: 3, timeout: 30)
+    XCTAssertFalse(placed.isEmpty, "waypoints.json never carried the flight's pins")
+    let miss =
+      placed.map { abs($0.lat - corridor!) * metersPerDegreeLat }.min() ?? .infinity
+    XCTAssertLessThan(
+      miss, waypointRadiusM,
+      "nearest waypoint is \(miss) m off the corridor (radius \(waypointRadiusM) m)")
 
     // Background the app for the crossing: the announcement must be decided
     // and spoken with the webview suspended. The speak log is read
@@ -167,29 +355,28 @@ final class WaypointUITests: XCTestCase {
       spoken.contains("Waypoint reached"),
       "no announcement within one lap; speak.log: \(spoken.isEmpty ? "<empty>" : spoken)")
 
-    // Wind down: stop the flight and delete it from the logbook.
+    // Wind down: stop the flight, then delete BOTH logbook entries (the
+    // calibration flight left one too) so a rerun starts from an empty
+    // logbook.
     app.activate()
-    XCTAssertTrue(stop.waitForExistence(timeout: 15), "recording UI did not return")
-    stop.tap()
-    let confirm = app.buttons["Stop"].firstMatch
-    XCTAssertTrue(confirm.waitForExistence(timeout: 5), "no End flight? confirm")
-    confirm.tap()
+    stopFlight(app)
 
     let logbookTab = app.buttons["Logbook"].firstMatch
     XCTAssertTrue(logbookTab.waitForExistence(timeout: 20), "tab shell did not return")
     logbookTab.tap()
-    let row = app.links.firstMatch
-    if row.waitForExistence(timeout: 10) {
+    for _ in 0..<3 {
+      let row = app.links.firstMatch
+      guard row.waitForExistence(timeout: 10) else { break }
       row.tap()
       app.buttons["Options"].firstMatch.tap()
       let deleteAction = app.buttons
         .matching(NSPredicate(format: "label BEGINSWITH %@", "Delete flight"))
         .firstMatch
-      if deleteAction.waitForExistence(timeout: 5) {
-        deleteAction.tap()
-        let confirmDelete = app.buttons["Delete"].firstMatch
-        if confirmDelete.waitForExistence(timeout: 5) { confirmDelete.tap() }
-      }
+      guard deleteAction.waitForExistence(timeout: 5) else { break }
+      deleteAction.tap()
+      let confirmDelete = app.buttons["Delete"].firstMatch
+      if confirmDelete.waitForExistence(timeout: 5) { confirmDelete.tap() }
+      Thread.sleep(forTimeInterval: 1)
     }
   }
 }
