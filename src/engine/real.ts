@@ -13,6 +13,7 @@ import {
   IMPRECISE_SUSTAIN_MS,
 } from "../flight/takeoff";
 import { WAYPOINT_RADIUS_M } from "../flight/waypoints";
+import { setSessionInPlay } from "./sessionMirror";
 import type {
   EngineError,
   EngineSnapshot,
@@ -296,13 +297,30 @@ export class GeolocationRecordingEngine implements RecordingEngine {
   private ensureHydrated(): Promise<void> {
     if (this.hydrated) return Promise.resolve();
     this.hydration ??= (async () => {
-      const { session, fixes } = await readWal();
+      const { session, fixes } = await readWal().catch((error: unknown) => {
+        // A WAL that cannot be read proves no session, and the boot mirror
+        // is a cache of the WAL: leaving a flag set here would strand the
+        // next launch on a flight surface whose hydration never lands.
+        // Nothing is lost by clearing it — without this read there is no
+        // flight in memory either, and the WAL itself is untouched.
+        setSessionInPlay(false);
+        throw error;
+      });
       // start()/stop() may have won while the read was in flight; their
       // in-memory state is newer than anything the WAL held.
       if (!this.hydrated) {
         this.hydrated = true;
         this.session = session;
         this.buffer = fixes;
+        // The WAL has spoken: reconcile the boot mirror against it, here at
+        // the top of hydration, before anything below can await and let a
+        // render read a stale answer. This is the direction that makes the
+        // mirror safe to trust at first render — a session recovered after a
+        // crash sets it (this sitting never ran start()), and a flag left
+        // over from a flight this WAL no longer holds clears it, so an idle
+        // app settles into the shell instead of sitting on a flight surface
+        // forever.
+        setSessionInPlay(session !== null);
         // Derive reached state from the durable buffer BEFORE deriveStatus /
         // ensureWatch, so the fed remaining set excludes already-passed
         // waypoints (no re-arm, no re-announce on re-entry).
@@ -514,6 +532,10 @@ export class GeolocationRecordingEngine implements RecordingEngine {
       waypoints: options?.waypoints ?? [],
       autoEnd: options?.autoEnd ?? true,
     };
+    // A session exists from this instant, so the boot mirror says so from
+    // this instant: a webview death one beat after Start must relaunch onto
+    // the flight surface, not the homescreen (sessionMirror.ts).
+    setSessionInPlay(true);
     this.buffer = [];
     this.reachInside.clear();
     this.reachedIds.clear();
@@ -718,6 +740,10 @@ export class GeolocationRecordingEngine implements RecordingEngine {
     this.clearWatch();
     this.hydrated = true;
     this.session = null;
+    // Synchronously, with the session itself and before the invalidate
+    // below: the mirror is only ever allowed to lag the WAL toward "in
+    // play", never toward idle (sessionMirror.ts).
+    setSessionInPlay(false);
     this.buffer = [];
     this.reachInside.clear();
     this.reachedIds.clear();

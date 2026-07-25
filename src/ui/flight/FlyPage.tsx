@@ -81,7 +81,11 @@ export default function FlyPage() {
   // a complete track — there is no per-fix mirror to fall behind.
   const snapshot = useSyncExternalStore(engine.subscribe, engine.snapshotSync);
   // Hydration gate: before the WAL read the engine reports "idle", which
-  // must not flash the Start button during a live-flight reload.
+  // must not flash the Start button during a live-flight reload. This is
+  // only the in-surface half. Whether this surface is mounted AT ALL on a
+  // mid-flight launch is decided a layer up, off the engine's synchronous
+  // session mirror (src/engine/sessionMirror.ts) — "loading" is what the
+  // pilot sees for the frames between that decision and the WAL landing.
   const [ready, setReady] = useState(hydratedOnce);
   const { confirm: bigConfirm, element: confirmElement } = useBigConfirm();
   const {

@@ -18,7 +18,7 @@ import {
 import { useEffect, useSyncExternalStore } from "react";
 import { Redirect, Route } from "react-router-dom";
 
-import { engine } from "../engine";
+import { engine, sessionInPlay } from "../engine";
 import { isTauri } from "../platform";
 import DesktopShell from "./desktop/DesktopShell";
 import FlightSurface from "./flight/FlyPage";
@@ -79,17 +79,32 @@ export default function App() {
 // Rendering only the flight surface in flight makes the footprint the single
 // live map and nothing else. The tab bar is unreachable during a flight
 // anyway, so this is invisible to the pilot, and the full shell returns the
-// instant the flight ends. "idle" is the only non-flight state;
-// pre-hydration the engine reports it, so the shell shows during load.
+// instant the flight ends. "idle" is the only non-flight state.
 //
 // Shed means SHED: ion-app itself goes too. The flight surface is a plain
 // div tree (src/ui/flight, Ionic-free by lint), so while recording, Ionic
 // simply does not exist in the DOM. IonApp and the sheets remount with the
 // shell when the flight ends.
 function AppBody() {
+  // Two sources, because one of them cannot answer yet. Before the WAL read
+  // lands the engine honestly reports "idle", and committing to the shell on
+  // that is what flashed the homescreen at a pilot who relaunched mid-flight:
+  // tab bar, idle surface, then a swap to the flight a few frames later. The
+  // engine's synchronous mirror of "a session is in play" answers at first
+  // render, so boot commits to the flight surface immediately and the pilot
+  // sees the surface's own loading state — black, the same canvas index.html
+  // boots to — instead of a shell that is about to be torn down (STEERING,
+  // Reliability 3: after any interruption, foregrounding shows the recording
+  // in progress).
+  //
+  // After hydration the two agree by construction: the mirror IS session
+  // presence, "idle" is exactly its absence, and hydration reconciles the
+  // mirror against the WAL before it notifies. So the engine stays the
+  // authority and a stale flag self-corrects into the shell the moment the
+  // WAL speaks — the ONE direction where a wrong answer is affordable.
   const inFlight = useSyncExternalStore(
     engine.subscribe,
-    () => engine.snapshotSync().status !== "idle",
+    () => engine.snapshotSync().status !== "idle" || sessionInPlay(),
   );
   const isDesktop = useIsDesktop();
   if (inFlight) return <FlightSurface />;

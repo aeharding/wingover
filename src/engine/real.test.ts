@@ -11,6 +11,7 @@ import {
   type SourceError,
   type SourcePosition,
 } from "./real";
+import { sessionInPlay } from "./sessionMirror";
 import { readWal } from "./wal";
 
 class FakeGeolocation {
@@ -1259,6 +1260,99 @@ describe("recorder lock", () => {
     await second.start();
     expect(second.snapshotSync().status).toBe("acquiring");
     expect(second.snapshotSync().error).toBeNull();
+  });
+});
+
+// The boot mirror (src/engine/sessionMirror.ts): the one piece of engine
+// state a launch can read synchronously, so App can commit to the flight
+// surface at first render instead of flashing the homescreen at a pilot who
+// relaunched mid-flight. Tested through the public lifecycle, not the
+// module: what matters is that the flag tracks session presence at every
+// door in and out of one.
+describe("boot session mirror", () => {
+  beforeEach(() => {
+    localStorage.removeItem("wingover.session");
+  });
+
+  it("is set by start and cleared by discard", async () => {
+    const engine = createEngine();
+    expect(sessionInPlay()).toBe(false);
+
+    await engine.start();
+    expect(sessionInPlay()).toBe(true);
+
+    await engine.discard();
+    expect(sessionInPlay()).toBe(false);
+  });
+
+  it("stays set across a finalized flight, until collection discards it", async () => {
+    const engine = createEngine();
+    await armAndTakeOff(engine);
+    for (let i = 0; i < LANDING_SUSTAIN_FIXES + 20; i++) {
+      geolocation.emit(position({ speed: 0 }));
+    }
+    // "ended" is a flight still awaiting collection: the surface owns the
+    // screen through the save, so a relaunch in that window must land there.
+    expect(engine.snapshotSync().status).toBe("ended");
+    expect(sessionInPlay()).toBe(true);
+  });
+
+  it("hydration sets it for a WAL-recovered session this sitting never started", async () => {
+    const first = createEngine();
+    await armAndTakeOff(first);
+    // getSnapshot drains the WAL queue, so the flight is durable before the
+    // webview "dies" below.
+    expect((await first.getSnapshot()).status).toBe("recording");
+    // Nothing ran discard, and the next launch's engine never ran start
+    // either. Only the WAL knows there is a flight.
+    localStorage.removeItem("wingover.session");
+
+    const relaunched = createEngine();
+    await relaunched.getSnapshot();
+    expect(relaunched.snapshotSync().status).toBe("recording");
+    expect(sessionInPlay()).toBe(true);
+  });
+
+  it("hydration clears a stale flag when the WAL holds no session", async () => {
+    // The affordable direction, deliberately exercised: a flag survives a
+    // flight the WAL no longer has (a crash between clearWal and the mirror
+    // write, an older build). Boot shows the flight surface's black loading
+    // state, then hydration reconciles and the shell takes over.
+    localStorage.setItem("wingover.session", "1");
+
+    const engine = createEngine();
+    expect(sessionInPlay()).toBe(true);
+    await engine.getSnapshot();
+    expect(engine.snapshotSync().status).toBe("idle");
+    expect(sessionInPlay()).toBe(false);
+  });
+
+  it("a tab refused the recorder lock does not claim a session", async () => {
+    let held = false;
+    (navigator as unknown as { locks: unknown }).locks = {
+      request: async (
+        _name: string,
+        _options: unknown,
+        callback: (lock: unknown) => unknown,
+      ) => {
+        if (held) return callback(null);
+        held = true;
+        try {
+          return await callback({});
+        } finally {
+          held = false;
+        }
+      },
+    };
+    const first = createEngine();
+    await first.start();
+    const second = createEngine();
+    await second.start();
+    expect(second.snapshotSync().error?.code).toBe("busy");
+
+    // The holder's flight is still in play; the refused tab neither set nor
+    // cleared anything (discarding it must not unset the owner's flag).
+    expect(sessionInPlay()).toBe(true);
   });
 });
 
