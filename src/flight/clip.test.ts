@@ -1,6 +1,5 @@
 import { describe, expect, it } from "vitest";
 
-import { FlightSimulator } from "../engine/simulator";
 import {
   cumulativeDistances,
   MIN_CLIP_SPAN_MS,
@@ -10,6 +9,7 @@ import {
   trimAvailable,
   windowIndices,
 } from "./clip";
+import { FlightSimulator } from "./simulator";
 import { computeStats } from "./stats";
 
 const track = new FlightSimulator(42, 0).fixesUpTo(180);

@@ -127,8 +127,11 @@ arriving in a burst instead of one per second.
   wired engine-side (`src/engine/session.ts`; the web core
   `src/engine/core.ts` is a TS twin of the plugin's core.rs, driven by
   the same watch lifecycle). The boundary is a directory boundary — React
-  exists only under `src/ui/` — and it is mechanical: eslint bans
-  React/Ionic imports from `src/engine`, `src/flight`, and `src/storage`.
+  exists only under `src/ui/` — and it is mechanical: the seams are
+  enforced by `eslint.config.js`, which is the enumeration (React and
+  Ionic out of the headless world, the platform out of the engine, each
+  layer reached through its public surface). A seam that is not in that
+  file is not a seam yet.
 - **A flight owns its waypoints.** The Plan tab is a reusable template for
   the NEXT flight; starting a flight copies the plan's pins into the
   session. Mid-flight additions join that flight only. An active flight

@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest";
 
-import { FlightSimulator } from "../engine/simulator";
 import { flightToGpx } from "./gpx";
+import { FlightSimulator } from "./simulator";
 
 describe("flightToGpx", () => {
   it("serializes a flight with one trkpt per fix", () => {

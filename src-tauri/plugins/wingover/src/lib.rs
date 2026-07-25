@@ -23,6 +23,7 @@ mod core;
 mod error;
 mod fix;
 mod store;
+mod wire;
 
 #[cfg(not(target_os = "ios"))]
 mod desktop;
@@ -74,6 +75,7 @@ mod commands {
     use tauri::{command, AppHandle, Manager, Runtime};
 
     use crate::core::Core;
+    use crate::wire::FixesResponse;
     use crate::{Result, Waypoint, WingoverExt};
 
     #[command]
@@ -91,13 +93,15 @@ mod commands {
     pub(crate) async fn fixes_since<R: Runtime>(
         app: AppHandle<R>,
         ts: i64,
-    ) -> Result<serde_json::Value> {
+    ) -> Result<FixesResponse> {
         let core = app.state::<Core>();
-        let fixes = core.fixes_since(ts)?;
-        // Sensor health rides along with every poll: fixes with no error
-        // is a healthy stream; an error with no fixes is a dead or
-        // reduced source the engine must surface.
-        Ok(serde_json::json!({ "fixes": fixes, "error": core.sensor_error() }))
+        // A typed shape, not a json! literal: this response is the one
+        // the sensor's health code has to survive, so it gets a struct a
+        // test can round-trip (wire.rs, contract-fixtures/).
+        Ok(FixesResponse {
+            fixes: core.fixes_since(ts)?,
+            error: core.sensor_error(),
+        })
     }
 
     #[command]

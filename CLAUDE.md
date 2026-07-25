@@ -15,8 +15,8 @@ Paramotor flight recorder (Tauri v2 iOS + PWA). The one non-negotiable:
 
 ```sh
 pnpm exec tsc --noEmit
-pnpm exec eslint . --max-warnings 0   # CI fails on warnings; bare `pnpm lint` does not
-pnpm format:check                     # prettier; CI runs it after lint
+pnpm exec eslint . --max-warnings 0   # stricter than CI on purpose: CI runs `pnpm lint`, which lets warnings through
+pnpm format:check                     # prettier, its own CI step after lint — and the one that fails most often
 pnpm test                             # vitest
 pnpm exec playwright test             # needs port 5173 free (kills nothing itself)
 ```
@@ -38,9 +38,10 @@ plugin from `src-tauri/plugins/wingover/` when touching Rust.
   capabilities and the engine adapts. Swift/Kotlin sense and actuate;
   they do not decide (ARCHITECTURE.md).
 - Wire contracts across Swift↔Rust↔JS are stable code strings, not
-  prose, and every shape is covered by the contract fixtures (see
-  contract tests) — serde drops unknown fields silently, so an untested
-  field is an unsent field.
+  prose, and every shape is covered by the contract fixtures
+  (`src-tauri/plugins/wingover/contract-fixtures/`, read by `wire.rs` and
+  `src/engine/nativeSource.contract.test.ts`) — serde drops unknown fields
+  silently, so an untested field is an unsent field.
 
 ## Environment traps (all have drawn blood)
 

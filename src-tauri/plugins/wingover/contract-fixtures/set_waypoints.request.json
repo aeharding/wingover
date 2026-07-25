@@ -1,0 +1,24 @@
+{
+  "surface": "set_waypoints",
+  "hop": "js->rust",
+  "description": "Config only, fire and forget: a failure is a console warning, so a shape break costs every callout of the flight in silence. radiusM is the camelCase of radius_m - the one renamed field in the waypoint contract.",
+  "produces": "src/engine/nativeSource.ts (nativeCore.setWaypoints)",
+  "consumes": "src-tauri/plugins/wingover/src/announcer.rs (Waypoint)",
+  "codes": [],
+  "request": {
+    "waypoints": [
+      {
+        "id": "wp-1",
+        "latitude": 43.0731,
+        "longitude": -89.4012,
+        "radiusM": 200
+      },
+      {
+        "id": "wp-2",
+        "latitude": 43.0902,
+        "longitude": -89.3711,
+        "radiusM": 200
+      }
+    ]
+  }
+}

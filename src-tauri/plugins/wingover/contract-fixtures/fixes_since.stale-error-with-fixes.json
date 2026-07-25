@@ -1,0 +1,32 @@
+{
+  "surface": "fixes_since",
+  "hop": "rust->js",
+  "description": "An error with fixes still flowing is already resolved: the sensor reasserts health on every delivery, so JS suppresses it. This is also what hides a reduced-accuracy code while coarse fixes keep arriving, which is why the precise gate has to run BEFORE capture starts.",
+  "produces": "src-tauri/plugins/wingover/src/lib.rs (fixes_since)",
+  "consumes": "src/engine/nativeSource.ts (poll)",
+  "codes": [],
+  "request": {
+    "ts": 1721815199000
+  },
+  "response": {
+    "fixes": [
+      {
+        "timestamp": 1721815201000,
+        "latitude": 43.0733,
+        "longitude": -89.4009,
+        "horizontalAccuracy": 3200
+      }
+    ],
+    "error": "reduced-accuracy"
+  },
+  "expect": {
+    "rust": {
+      "fixes": 1,
+      "error": "reduced-accuracy"
+    },
+    "js": {
+      "sourceError": null,
+      "positions": [1721815201000]
+    }
+  }
+}

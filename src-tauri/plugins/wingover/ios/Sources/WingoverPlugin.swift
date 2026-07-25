@@ -338,10 +338,7 @@ class WingoverPlugin: Plugin, CLLocationManagerDelegate,
 
   @objc override public func checkPermissions(_ invoke: Invoke) {
     DispatchQueue.main.async {
-      invoke.resolve([
-        "location": self.authorizationString(),
-        "precise": self.locationManager.accuracyAuthorization == .fullAccuracy,
-      ])
+      invoke.resolve(self.permissionStatus())
     }
   }
 
@@ -355,7 +352,7 @@ class WingoverPlugin: Plugin, CLLocationManagerDelegate,
         self.permissionRequests.append(invoke)
         self.locationManager.requestWhenInUseAuthorization()
       } else {
-        invoke.resolve(["location": self.authorizationString()])
+        invoke.resolve(self.permissionStatus())
       }
     }
   }
@@ -431,7 +428,7 @@ class WingoverPlugin: Plugin, CLLocationManagerDelegate,
     let requests = permissionRequests
     permissionRequests = []
     for request in requests {
-      request.resolve(["location": authorizationString()])
+      request.resolve(permissionStatus())
     }
     // Stable codes, not prose: these strings are the wire contract the
     // JS source matches on (nativeSource.ts).
@@ -450,6 +447,19 @@ class WingoverPlugin: Plugin, CLLocationManagerDelegate,
   //
   // Helpers
   //
+
+  // ONE shape for every permission answer: check, request, and the
+  // delegate that resolves the prompt. JS reassigns the same status from
+  // all three, so a resolve missing "precise" reads as full accuracy and
+  // starts capture with Precise Location off — coarse fixes then flow, the
+  // drain code is suppressed as stale, and the pilot sits on Acquiring GPS
+  // with no explanation. Pinned by contract-fixtures/request_permissions.*.
+  private func permissionStatus() -> JsonObject {
+    [
+      "location": authorizationString(),
+      "precise": locationManager.accuracyAuthorization == .fullAccuracy,
+    ]
+  }
 
   private func authorizationString() -> String {
     switch CLLocationManager.authorizationStatus() {

@@ -1,0 +1,17 @@
+{
+  "surface": "storekit_environment",
+  "hop": "swift->rust->js",
+  "description": "The third value nobody types: a build run straight from Xcode reports Xcode, and the JS mapping folds anything that is not Sandbox into Production. Recorded so the fold is a decision, not a surprise - a dev build holding a Sandbox credential trips the cross-environment guard and silently refuses to replicate.",
+  "produces": "src-tauri/plugins/wingover/ios/Sources/WingoverPlugin.swift (storekitEnvironment)",
+  "consumes": "src/sync/providers/apple.ts (appEnvironment)",
+  "codes": ["environment"],
+  "response": {
+    "environment": "Xcode"
+  },
+  "jsResponse": "Xcode",
+  "expect": {
+    "js": {
+      "appEnvironment": "Production"
+    }
+  }
+}

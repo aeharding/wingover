@@ -1,0 +1,25 @@
+{
+  "surface": "drain",
+  "hop": "swift->rust",
+  "description": "Precise Location off. Coarse fixes keep arriving, so the buffer is NOT empty and the health code rides alongside them. This is the payload whose error key Rust once dropped: DrainResponse deserialized fine, reported None, and every test stayed green.",
+  "produces": "src-tauri/plugins/wingover/ios/Sources/WingoverPlugin.swift (drain; code set in didUpdateLocations and didChangeAuthorization)",
+  "consumes": "src-tauri/plugins/wingover/src/wire.rs (DrainResponse)",
+  "codes": ["fixes", "error", "reduced-accuracy"],
+  "response": {
+    "fixes": [
+      {
+        "timestamp": 1721815201000,
+        "latitude": 43.0733,
+        "longitude": -89.4009,
+        "horizontalAccuracy": 3200
+      }
+    ],
+    "error": "reduced-accuracy"
+  },
+  "expect": {
+    "rust": {
+      "fixes": 1,
+      "error": "reduced-accuracy"
+    }
+  }
+}

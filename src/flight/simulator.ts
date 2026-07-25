@@ -1,4 +1,4 @@
-import type { Fix } from "./types";
+import type { Fix } from "../engine/types";
 
 const EARTH_RADIUS = 6371000;
 

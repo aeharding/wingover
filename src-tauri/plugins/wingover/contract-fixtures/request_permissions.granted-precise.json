@@ -1,0 +1,18 @@
+{
+  "surface": "request_permissions",
+  "hop": "swift->rust->js",
+  "description": "SHAPE PARITY WITH check_permissions IS THE CONTRACT. JS reassigns the same PermissionStatus from this response, so a missing precise key reads as ready and starts capture with Precise Location off: coarse fixes then flow, the drain code is suppressed as stale, and the pilot sits on Acquiring GPS forever. Both resolve sites (requestPermissions and didChangeAuthorization) must carry it.",
+  "produces": "src-tauri/plugins/wingover/ios/Sources/WingoverPlugin.swift (requestPermissions; didChangeAuthorization)",
+  "consumes": "src/engine/nativeSource.ts (permissionRefusal)",
+  "codes": ["location", "precise", "granted"],
+  "response": {
+    "location": "granted",
+    "precise": true
+  },
+  "expect": {
+    "js": {
+      "refusal": null,
+      "ready": true
+    }
+  }
+}

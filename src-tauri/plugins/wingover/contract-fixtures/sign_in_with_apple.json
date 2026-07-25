@@ -1,0 +1,17 @@
+{
+  "surface": "sign_in_with_apple",
+  "hop": "swift->rust->js",
+  "description": "The raw identity JWT, verbatim (the server reads only the stable subject). The one response Rust types as a required String: a rename fails loudly here instead of degrading to None.",
+  "produces": "src-tauri/plugins/wingover/ios/Sources/WingoverPlugin.swift (SiwaDelegate)",
+  "consumes": "src/sync/providers/apple.ts (appleIdentityToken)",
+  "codes": ["identityToken", "cancelled"],
+  "response": {
+    "identityToken": "eyJhbGciOiJSUzI1NiJ9.eyJzdWIiOiIwMDEyMzQuYWJjIn0.c2lnbmF0dXJl"
+  },
+  "jsResponse": "eyJhbGciOiJSUzI1NiJ9.eyJzdWIiOiIwMDEyMzQuYWJjIn0.c2lnbmF0dXJl",
+  "expect": {
+    "js": {
+      "identityToken": "eyJhbGciOiJSUzI1NiJ9.eyJzdWIiOiIwMDEyMzQuYWJjIn0.c2lnbmF0dXJl"
+    }
+  }
+}

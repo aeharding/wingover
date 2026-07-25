@@ -1,0 +1,21 @@
+{
+  "surface": "check_permissions",
+  "hop": "swift->rust->js",
+  "description": "Never asked. The watch requests before judging; readiness (the blocked screen's poll) answers false meanwhile.",
+  "produces": "src-tauri/plugins/wingover/ios/Sources/WingoverPlugin.swift (checkPermissions; authorizationString)",
+  "consumes": "src/engine/nativeSource.ts (permissionRefusal)",
+  "codes": ["location", "precise", "prompt"],
+  "response": {
+    "location": "prompt",
+    "precise": true
+  },
+  "expect": {
+    "js": {
+      "refusal": {
+        "permissionDenied": true,
+        "message": "location permission prompt"
+      },
+      "ready": false
+    }
+  }
+}

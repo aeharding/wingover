@@ -40,6 +40,27 @@ Two independent reviewers with different lenses, run as background agents
 The two briefs deliberately do not overlap; tell each agent the other
 exists so it doesn't duplicate.
 
+## Not lintable — ask these in review
+
+`eslint.config.js` mechanizes the seams it can (imports, wall-clock reads
+in `src/flight`, `location.reload`). These three resist it, so they are
+questions instead:
+
+- **Does any Swift/Kotlin diff contain a decision?** A threshold, a
+  comparison against a constant, a timer, or a state machine belongs in
+  Rust; the shims sense and actuate (ARCHITECTURE.md §1). No CI ring can
+  observe this — the iOS job compiles Swift, it does not judge it.
+- **Does a new component effect drive engine or sync lifecycle?** Retry,
+  start/stop, credential refresh, waypoint push. If it must happen
+  regardless of which page is mounted, it belongs in
+  `src/engine/session.ts` or `src/sync/index.ts` (STEERING). Not lintable:
+  the same listener is legitimate when it is view-local (the replay clock
+  pausing, the trace canvas re-arming after a resume).
+- **Every `Date.now()` / `new Date()` in an engine diff: decision or
+  bookkeeping?** Decisions are pure functions of fix timestamps
+  (STEERING). `src/flight` is lint-enforced; `src/engine` cannot be,
+  because a mock source legitimately reads the clock to pace itself.
+
 ## Consuming the findings
 
 - Verify CONFIRMED findings yourself before fixing — audits have been

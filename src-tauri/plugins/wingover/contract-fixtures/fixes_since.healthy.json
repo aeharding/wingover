@@ -1,0 +1,42 @@
+{
+  "surface": "fixes_since",
+  "hop": "rust->js",
+  "description": "The 1 Hz poll in good health. error is null, not absent: Rust always emits the key, so JS must treat null and absent alike.",
+  "produces": "src-tauri/plugins/wingover/src/lib.rs (fixes_since)",
+  "consumes": "src/engine/nativeSource.ts (poll)",
+  "codes": [],
+  "request": {
+    "ts": 1721815199000
+  },
+  "response": {
+    "fixes": [
+      {
+        "timestamp": 1721815200000,
+        "latitude": 43.0731,
+        "longitude": -89.4012,
+        "horizontalAccuracy": 4.5,
+        "altitude": 412.3,
+        "verticalAccuracy": 6,
+        "speed": 11.4,
+        "course": 271.5
+      },
+      {
+        "timestamp": 1721815202000,
+        "latitude": 43.0735,
+        "longitude": -89.4005,
+        "horizontalAccuracy": 4.8
+      }
+    ],
+    "error": null
+  },
+  "expect": {
+    "rust": {
+      "fixes": 2,
+      "error": null
+    },
+    "js": {
+      "sourceError": null,
+      "positions": [1721815200000, 1721815202000]
+    }
+  }
+}

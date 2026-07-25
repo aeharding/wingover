@@ -1,0 +1,34 @@
+{
+  "surface": "drain",
+  "hop": "swift->rust",
+  "description": "Healthy stream: the error key is ABSENT, not null. Rust's Option must read that as None without an error, and the second fix carries none of the optional values (CoreLocation reported them invalid), which must stay absent through the round trip.",
+  "produces": "src-tauri/plugins/wingover/ios/Sources/WingoverPlugin.swift (drain)",
+  "consumes": "src-tauri/plugins/wingover/src/wire.rs (DrainResponse)",
+  "codes": ["fixes"],
+  "response": {
+    "fixes": [
+      {
+        "timestamp": 1721815200000,
+        "latitude": 43.0731,
+        "longitude": -89.4012,
+        "horizontalAccuracy": 4.5,
+        "altitude": 412.3,
+        "verticalAccuracy": 6,
+        "speed": 11.4,
+        "course": 271.5
+      },
+      {
+        "timestamp": 1721815202000,
+        "latitude": 43.0735,
+        "longitude": -89.4005,
+        "horizontalAccuracy": 4.8
+      }
+    ]
+  },
+  "expect": {
+    "rust": {
+      "fixes": 2,
+      "error": null
+    }
+  }
+}

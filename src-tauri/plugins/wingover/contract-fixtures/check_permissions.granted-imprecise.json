@@ -1,0 +1,22 @@
+{
+  "surface": "check_permissions",
+  "hop": "swift->rust->js",
+  "description": "Authorization granted, Precise Location off. The refusal DECISION is JS's (the sensor senses, it does not decide): reduced accuracy can never pass the accuracy gate, so the watch refuses before capture starts. request_permissions must answer this same shape or the gate is bypassed on the first-run grant.",
+  "produces": "src-tauri/plugins/wingover/ios/Sources/WingoverPlugin.swift (checkPermissions)",
+  "consumes": "src/engine/nativeSource.ts (permissionRefusal)",
+  "codes": ["location", "precise", "granted"],
+  "response": {
+    "location": "granted",
+    "precise": false
+  },
+  "expect": {
+    "js": {
+      "refusal": {
+        "permissionDenied": false,
+        "imprecise": true,
+        "message": "precise location disabled"
+      },
+      "ready": false
+    }
+  }
+}

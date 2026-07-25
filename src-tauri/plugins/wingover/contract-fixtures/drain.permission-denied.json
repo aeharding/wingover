@@ -1,0 +1,18 @@
+{
+  "surface": "drain",
+  "hop": "swift->rust",
+  "description": "Authorization revoked mid-watch. Stable code, never localizedDescription prose: didFailWithError overwrites the code otherwise, and prose fails the JS classifier.",
+  "produces": "src-tauri/plugins/wingover/ios/Sources/WingoverPlugin.swift (drain; code set in didFailWithError and didChangeAuthorization)",
+  "consumes": "src-tauri/plugins/wingover/src/wire.rs (DrainResponse)",
+  "codes": ["error", "permission-denied"],
+  "response": {
+    "fixes": [],
+    "error": "permission-denied"
+  },
+  "expect": {
+    "rust": {
+      "fixes": 0,
+      "error": "permission-denied"
+    }
+  }
+}
