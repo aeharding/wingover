@@ -50,3 +50,20 @@
   border: none;
   border-radius: 14px;
 }
+
+/* Location-class errors: full alarm red. The pilot is about to pocket
+   the phone; at arm's length in sunlight this must read as STOP, not
+   as a quiet loading state. Deep red keeps white text on the right
+   side of the luminance-contrast line; the white action pill stays the
+   brightest thing on screen. */
+.urgent {
+  background: color(display-p3 0.52 0.04 0.03);
+
+  p {
+    color: rgb(255 255 255 / 0.88);
+  }
+
+  .cancel {
+    background: rgb(0 0 0 / 0.32);
+  }
+}

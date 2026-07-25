@@ -1,5 +1,6 @@
 import { isTauri } from "../../engine/platform";
 import type { BlockingError, BlockingErrorCode } from "../../engine/types";
+import { cx } from "../cx";
 
 import styles from "./ErrorScreen.module.css";
 
@@ -54,8 +55,15 @@ export default function ErrorScreen({
   // API and proceeds by itself the moment the pilot flips the switch.
   // The web has no such API, so the button is the recovery path there.
   const retry = onRetry && !isTauri() ? onRetry : undefined;
+  // Location-class errors mean the pilot is about to pocket a phone
+  // that cannot record: full alarm red, unmissable at arm's length.
+  // busy stays calm; it is a coordination note, not a preflight abort.
+  const urgent = error.code !== "busy";
   return (
-    <div className={styles.screen} data-testid="gps-error">
+    <div
+      className={cx(styles.screen, urgent && styles.urgent)}
+      data-testid="gps-error"
+    >
       <h2>{content.title}</h2>
       <p>{content.body}</p>
       {settings && (
