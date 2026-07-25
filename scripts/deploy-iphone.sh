@@ -19,6 +19,15 @@
 # the alternative (an interactive prompt) cannot run unattended.
 set -euo pipefail
 REF="${1:-$(git rev-parse HEAD)}"
+# Branch, sha, or origin/-prefixed name all accepted; the remote knows no
+# "origin/" refs, and an unfetchable ref once slipped through zsh -i's
+# unreliable set -e and shipped YESTERDAY'S binary while claiming success.
+# Hence: normalize, resolve the expected sha locally, and make the Mac
+# PROVE it checked that exact sha out before it builds anything.
+REF="${REF#origin/}"
+WANT="$(git ls-remote origin "$REF" | head -1 | cut -f1)"
+[ -n "$WANT" ] || WANT="$REF" # a raw sha resolves to nothing on ls-remote
+echo "deploying $WANT ($REF)"
 source ~/.wingover-deploy.env
 DEVICE="${WINGOVER_DEVICE:-0CBB62FC-1D74-54E2-A1F3-7EDF0514882F}" # iPhone 13 mini, WiFi-paired
 WT="${WINGOVER_MAC_WT:-~/wingover-pr153}"                         # detached Mac worktree for agent builds
@@ -28,7 +37,10 @@ ssh mac "zsh -ilc '
   IFS= read -r PW
   cd $WT
   git checkout -- . 2>/dev/null || true
-  git fetch origin \"$REF\" && git checkout FETCH_HEAD
+  git fetch origin \"$REF\" || { echo DEPLOY-ABORT: fetch failed; exit 1; }
+  git checkout --detach \"$WANT\" || { echo DEPLOY-ABORT: checkout failed; exit 1; }
+  [ \"\$(git rev-parse HEAD)\" = \"$WANT\" ] || { echo DEPLOY-ABORT: sha mismatch; exit 1; }
+  echo \"building \$(git rev-parse HEAD)\"
   pnpm install --silent
   # Keychain re-locks between SSH sessions: unlock must share the build shell.
   security unlock-keychain -p \"\$PW\" login.keychain-db
