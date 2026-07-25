@@ -92,6 +92,18 @@ re-implement it.
 (`recording → landed → ended`), replay, storage, UI. Background parity via
 burst replay, per STEERING.md.
 
+One overlay sits above that lifecycle: **`blocked`**, a live-source health
+state (permission denied, reduced accuracy, recorder held by another tab).
+It is derived from an in-memory error, never journaled, and strictly
+pre-takeoff — the error setters refuse to install a blocking error once a
+flight has started, so nothing can block a flight in progress. Detection
+of source health is the one place wall-clock time is legitimate (the
+signature is partly an *absence* of fixes, which no function of fix
+timestamps can observe); it never touches the WAL, the track, or
+finalization, so burst-replay byte-identity is unaffected. Sources declare
+their capabilities (`reportsAccuracyAuthorization`, `watchCanDieSilently`,
+`readiness`) and the engine adapts — it never switches on the platform.
+
 The WAL hydrates the engine exactly once per page load; after that,
 in-memory state is authoritative and WAL reads are never re-applied. A
 replay burst delivers many fixes in one task, so any WAL read racing it is

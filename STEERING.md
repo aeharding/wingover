@@ -94,7 +94,7 @@ The invariants, in priority order:
 | App process killed by OS          | iOS keeps location apps alive aggressively; if it happens anyway, next launch finds an unfinalized WAL → offers/auto-resumes recovery             |
 | Pilot force-quits mid-flight      | iOS stops location for force-quit apps (platform limit shared by every flight app); WAL recovery on next launch, nothing already recorded is lost |
 | Phone reboot / battery death      | WAL recovery on next launch                                                                                                                       |
-| Storage write failure             | Surface loudly; never fail silently                                                                                                               |
+| Storage write failure             | Ring-scoped: native retries silently (the Rust log is the record of truth; a JS WAL blip loses nothing). Web/PWA, where the JS WAL is the only copy: never fail silently — flight *finalization* failure surfaces loudly on every ring |
 
 These invariants double as the primary test suite: the "kill drills" (background 30+ min, force webview termination, force app termination, relaunch mid-recording) are automated in CI against simulators and re-run on physical hardware before each release. See Testing Strategy.
 
