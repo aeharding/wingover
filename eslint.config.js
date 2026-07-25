@@ -121,7 +121,13 @@ const NO_TAURI = {
 
 /** @type {RestrictedPattern} */
 const ENGINE_SOURCES_PRIVATE = {
-  group: ["./core", "./nativeSource", "./gpxSource", "./simulatorSource"],
+  group: [
+    "./core",
+    "./nativeSource",
+    "./gpxSource",
+    "./simulatorSource",
+    "./webSource",
+  ],
   message:
     "Source selection happens in exactly one place, src/engine/index.ts: one interface, a web implementation, a native implementation (ARCHITECTURE.md).",
 };

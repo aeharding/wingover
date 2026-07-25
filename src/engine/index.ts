@@ -1,10 +1,11 @@
 import { isTauri } from "../platform";
-import { webCore, withWebCore } from "./core";
+import { withWebCore } from "./core";
 import { createGpxSource } from "./gpxSource";
 import { nativeCore } from "./nativeSource";
 import { GeolocationRecordingEngine } from "./real";
 import { createSimulatorSource } from "./simulatorSource";
 import type { RecordingEngine } from "./types";
+import { createNavigatorSource } from "./webSource";
 
 const initialSearch = typeof location === "undefined" ? "" : location.search;
 
@@ -44,7 +45,9 @@ function chooseEngine(): RecordingEngine {
       );
     }
   }
-  return new GeolocationRecordingEngine(isTauri() ? nativeCore : webCore);
+  return new GeolocationRecordingEngine(
+    isTauri() ? nativeCore : withWebCore(createNavigatorSource()),
+  );
 }
 
 // Dev-only: override the simulator's start coordinate, e.g.
