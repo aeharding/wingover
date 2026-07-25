@@ -56,9 +56,12 @@ final class PermissionUITests: XCTestCase {
   ) -> XCUIElement? {
     let target = row(app, label)
     for _ in 0...swipes {
-      // Frame math, not isHittable: on iOS 26's SwiftUI Settings the
-      // hittability probe itself can FAIL the test ("activation point
-      // invalid") for oddly-exposed rows, where reading the frame cannot.
+      // Frame math, not isHittable: when the query resolves to nothing,
+      // the hittability probe THROWS instead of answering — "Failed to
+      // determine hittability of "Precise Location" Any: Activation point
+      // invalid and no suggested hit points based on element frame" (CI
+      // run 30164810665, where Settings was probed mid-transition). exists
+      // plus a frame on screen answers the same question and cannot throw.
       if target.exists, !target.frame.isEmpty,
         app.windows.firstMatch.frame.intersects(target.frame)
       {
@@ -69,11 +72,53 @@ final class PermissionUITests: XCTestCase {
     return target.exists && !target.frame.isEmpty ? target : nil
   }
 
+  // Wingover's Precise Location toggle, reached by navigating Settings
+  // from scratch. On iOS 26 the row is a Switch WRAPPER whose only live
+  // tap target is an unlabeled child Switch on the trailing edge — the
+  // accessibility tree of the Location page, verified on iPhone 11 /
+  // iOS 26.5:
+  //
+  //   Cell     id 'app.wingover.wingover'                {{20,433},{374,53}}
+  //     Switch id 'app.wingover.wingover'  label 'Precise Location'  value 1
+  //       Button id 'app.wingover.wingover'  label 'Precise Location'
+  //       Switch (no id, no label)  value 1     {{313,445.5},{63,28}}
+  //
+  // Tapping the wrapper activates the middle of the row, which Settings
+  // ignores: the value stays 1 and the drill proves nothing. Only the
+  // child knob flips it.
+  //
+  // nil = this runtime has no Precise Location row at all.
+  private func preciseToggle() -> XCUIElement? {
+    guard let settings = openWingoverLocationInSettings() else { return nil }
+    let wrapper = settings.switches
+      .matching(NSPredicate(format: "label == %@", "Precise Location"))
+      .firstMatch
+    guard wrapper.waitForExistence(timeout: 5) else { return nil }
+    return wrapper.children(matching: .switch).firstMatch
+  }
+
+  // Taps a switch to `on` and waits for the value to LAND there. Reading
+  // the result back is the point: a tap that misses the control is
+  // silent, and a drill that cannot tell the difference is decoration.
+  private func flip(_ toggle: XCUIElement, to on: Bool) -> Bool {
+    let want = on ? "1" : "0"
+    if String(describing: toggle.value ?? "") == want { return true }
+    toggle.tap()
+    let landed = XCTNSPredicateExpectation(
+      predicate: NSPredicate(format: "value == %@", want), object: toggle)
+    return XCTWaiter().wait(for: [landed], timeout: 5) == .completed
+  }
+
   // Settings navigation to Wingover's Location page. iOS 18+ nests
   // third-party apps under a root "Apps" item (below the fold); older
   // roots list them directly. Returns nil when this runtime's Settings
   // resists automation — callers XCTSkip rather than fail, because that
   // is a statement about the simulator, not the app.
+  //
+  // launch(), never activate(): a Settings sent to the background comes
+  // back on whatever page it feels like, and probing it mid-transition is
+  // what made the hittability call above throw on CI. Relaunching costs a
+  // few seconds and buys a page this test knows the shape of.
   private func openWingoverLocationInSettings() -> XCUIApplication? {
     let settings = XCUIApplication(bundleIdentifier: "com.apple.Preferences")
     settings.launch()
@@ -200,39 +245,41 @@ final class PermissionUITests: XCTestCase {
       app.staticTexts["Acquiring GPS"].firstMatch.waitForExistence(timeout: 20),
       "expected to sit in acquiring (is the location scenario cleared?)")
 
-    guard let settings = openWingoverLocationInSettings(),
-      let precise = scrollTo(settings, "Precise Location", swipes: 3)
-    else {
+    guard let precise = preciseToggle() else {
       throw XCTSkip(
-        "Settings rows not automatable on this runtime; the Precise "
+        "no Precise Location row in this runtime's Settings; the accuracy "
           + "pipeline needs a device to drill")
     }
-    precise.tap()
+    // Nothing outside Settings can put accuracy back: the reduced-accuracy
+    // flag survives BOTH `simctl privacy revoke location` and `reset`
+    // (verified, iOS 26.5). So a drill that dies between the two flips
+    // leaves every later run on this simulator red for an unrelated
+    // reason — with accuracy reduced, readiness is false by design and
+    // test2's grant can never resume. Teardown is the one place that also
+    // runs on the failure path.
+    var restored = false
+    addTeardownBlock {
+      if !restored, let toggle = self.preciseToggle() {
+        _ = self.flip(toggle, to: true)
+      }
+    }
+    XCTAssertTrue(
+      flip(precise, to: false), "Precise Location would not turn off")
 
     app.activate()
-    // Simulators differ from devices here: some runtimes fire
-    // didChangeAuthorization for a live app on the toggle (device
-    // behavior, device-verified), others deliver nothing — and with the
-    // location scenario cleared there are no fixes for the reassert
-    // path to ride either. Assert when the event arrives; skip honestly
-    // when the runtime never emits it.
-    let surfaced = app.staticTexts["Precise Location Is Off"].firstMatch
-      .waitForExistence(timeout: 20)
+    XCTAssertTrue(
+      app.staticTexts["Precise Location Is Off"].firstMatch
+        .waitForExistence(timeout: 20),
+      "Precise Location off mid-acquiring did not surface its takeover")
 
-    // Restore Precise either way so the sim is left clean.
-    settings.activate()
-    if scrollTo(settings, "Precise Location", swipes: 3) != nil {
-      precise.tap()
+    // And back: the pilot flips the switch, the app recovers with no taps.
+    guard let again = preciseToggle() else {
+      XCTFail("the Precise Location row vanished before restoring it")
+      return
     }
+    restored = flip(again, to: true)
+    XCTAssertTrue(restored, "Precise Location would not turn back on")
     app.activate()
-
-    if !surfaced {
-      recoverToIdle(app)
-      throw XCTSkip(
-        "accuracy-change event not observable on this runtime (no "
-          + "delegate fire, no deliveries to reassert); the flip "
-          + "pipeline is device-verified")
-    }
     XCTAssertTrue(
       app.staticTexts["Acquiring GPS"].firstMatch.waitForExistence(timeout: 20),
       "restoring Precise Location did not resume acquiring hands-free")

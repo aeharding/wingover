@@ -64,6 +64,11 @@ TEST_RUNNER_WINGOVER_DATA="$DATA_DIR" xcodebuild test \
 # app; test3 flips Precise Location there and back).
 xcrun simctl location "$UDID" clear
 xcrun simctl terminate "$UDID" app.wingover.wingover 2>/dev/null || true
+# Accuracy is NOT part of what this resets: the app's reduced-accuracy
+# flag survives both `privacy revoke` and `privacy reset` (verified on
+# iOS 26.5), and only the Settings UI can put it back. test3 restores it
+# in a teardown for that reason; if a run ever dies harder than that, the
+# fix is Settings > Apps > Wingover > Location, or a fresh simulator.
 xcrun simctl privacy "$UDID" revoke location app.wingover.wingover
 
 xcodebuild test \
