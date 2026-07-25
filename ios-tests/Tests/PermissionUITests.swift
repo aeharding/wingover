@@ -56,10 +56,17 @@ final class PermissionUITests: XCTestCase {
   ) -> XCUIElement? {
     let target = row(app, label)
     for _ in 0...swipes {
-      if target.exists && target.isHittable { return target }
+      // Frame math, not isHittable: on iOS 26's SwiftUI Settings the
+      // hittability probe itself can FAIL the test ("activation point
+      // invalid") for oddly-exposed rows, where reading the frame cannot.
+      if target.exists, !target.frame.isEmpty,
+        app.windows.firstMatch.frame.intersects(target.frame)
+      {
+        return target
+      }
       app.swipeUp()
     }
-    return target.exists ? target : nil
+    return target.exists && !target.frame.isEmpty ? target : nil
   }
 
   // Settings navigation to Wingover's Location page. iOS 18+ nests
