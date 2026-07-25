@@ -16,6 +16,10 @@ pub struct Core {
     announcer: Mutex<Announcer>,
     running: AtomicBool,
     ingest_spawned: AtomicBool,
+    // Mirror of the sensor's current health, refreshed by the ingest
+    // thread each drain and served to JS by fixes_since. Never persisted:
+    // it is live-source state, not flight data.
+    sensor_error: Mutex<Option<String>>,
 }
 
 impl Core {
@@ -35,6 +39,7 @@ impl Core {
             announcer: Mutex::new(announcer),
             running: AtomicBool::new(false),
             ingest_spawned: AtomicBool::new(false),
+            sensor_error: Mutex::new(None),
         }
     }
 
@@ -67,6 +72,7 @@ impl Core {
 
     pub fn stop(&self) -> std::io::Result<()> {
         self.running.store(false, Ordering::SeqCst);
+        *self.sensor_error.lock().unwrap() = None;
         // The flight's waypoints die with its session: without this, a
         // failed set_waypoints at the next start (fire-and-forget) could
         // let a relaunch hydrate the PREVIOUS flight's set and announce it.
@@ -104,6 +110,14 @@ impl Core {
 
     pub fn fixes_since(&self, ts: i64) -> std::io::Result<Vec<Fix>> {
         self.with_store(|store| Ok(store.fixes_since(ts)))
+    }
+
+    pub fn set_sensor_error(&self, error: Option<String>) {
+        *self.sensor_error.lock().unwrap() = error;
+    }
+
+    pub fn sensor_error(&self) -> Option<String> {
+        self.sensor_error.lock().unwrap().clone()
     }
 
     pub fn set_waypoints(&self, waypoints: Vec<Waypoint>) -> std::io::Result<()> {

@@ -25,7 +25,7 @@ impl<R: Runtime> Wingover<R> {
         Err(crate::Error::UnsupportedPlatform)
     }
 
-    pub fn drain(&self) -> crate::Result<Vec<Fix>> {
+    pub fn drain(&self) -> crate::Result<(Vec<Fix>, Option<String>)> {
         Err(crate::Error::UnsupportedPlatform)
     }
 

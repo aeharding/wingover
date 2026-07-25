@@ -191,20 +191,12 @@ class WingoverPlugin: Plugin, CLLocationManagerDelegate,
 
   @objc public func startCapture(_ invoke: Invoke) throws {
     DispatchQueue.main.async {
-      guard CLLocationManager.authorizationStatus() == .authorizedWhenInUse
-        || CLLocationManager.authorizationStatus() == .authorizedAlways
-      else {
-        invoke.reject("location permission not granted")
-        return
-      }
-      // Reduced accuracy (~kilometers) can never pass the accuracy gate —
-      // the pilot would sit on "Acquiring GPS" forever. Refuse with the
-      // reason so the app's error screen can walk them to Settings.
-      guard self.locationManager.accuracyAuthorization == .fullAccuracy else {
-        invoke.reject("precise location disabled")
-        return
-      }
-
+      // No guards here by design: the sensor layer senses and actuates,
+      // it does not decide (ARCHITECTURE.md). The JS engine refuses a
+      // watch on missing permission or reduced accuracy BEFORE issuing
+      // start_watch, using what checkPermissions reports; if capture is
+      // ever started anyway, the delegate's lastError codes and the
+      // barren delivery stream tell the truth downstream.
       self.locationManager.desiredAccuracy = kCLLocationAccuracyBest
       self.locationManager.distanceFilter = kCLDistanceFilterNone
       self.locationManager.activityType = .airborne
@@ -383,7 +375,7 @@ class WingoverPlugin: Plugin, CLLocationManagerDelegate,
     // app ignores this error by design and keeps consuming.
     lastError =
       manager.accuracyAuthorization == .fullAccuracy
-      ? nil : "precise location disabled"
+      ? nil : "reduced-accuracy"
     for location in locations {
       guard location.horizontalAccuracy >= 0 else { continue }
       let fix = convertLocation(location)
@@ -430,15 +422,17 @@ class WingoverPlugin: Plugin, CLLocationManagerDelegate,
     for request in requests {
       request.resolve(["location": authorizationString()])
     }
+    // Stable codes, not prose: these strings are the wire contract the
+    // JS source matches on (nativeSource.ts).
     if status == .denied || status == .restricted {
-      lastError = "location permission denied"
+      lastError = "permission-denied"
     } else if manager.accuracyAuthorization != .fullAccuracy {
       // Precise Location flipped off while we're running (this delegate
       // fires without an app relaunch for accuracy-only changes). Under
       // reduced accuracy CoreLocation may deliver very sparsely, so
       // don't wait for the next fix to reassert — surface it now; the
       // next drain ships it.
-      lastError = "precise location disabled"
+      lastError = "reduced-accuracy"
     }
   }
 
