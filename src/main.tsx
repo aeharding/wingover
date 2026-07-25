@@ -8,7 +8,7 @@ import "./theme.css";
 import { createRoot } from "react-dom/client";
 
 // Side effect: engine-side recovery wiring (foreground heal + blocked
-// readiness poll) must run from boot, not from whichever page happens
+// recovery loop) must run from boot, not from whichever page happens
 // to import it first.
 import "./engine/session";
 import { stripMintedFlightNames } from "./storage/db";

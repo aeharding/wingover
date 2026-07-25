@@ -1,7 +1,7 @@
 {
   "surface": "check_permissions",
   "hop": "swift->rust->js",
-  "description": "Never asked, or reset to \"Ask Next Time\" in Settings. NOT a refusal: nothing here is the pilot's to fix in Settings, so readiness answers ready (no refusal, the null below) and the engine retries — the bounced watch requests permissions with the app frontmost and the system alert appears. Answering with a refusal is what left a pilot who flipped Never -> Ask Next Time on the red takeover until a SECOND trip out of the app.",
+  "description": "Never asked, or reset to \"Ask Next Time\" in Settings. NOT a refusal: nothing here is the pilot's to fix in Settings, so currentRefusal answers null (see expect.js below) and the engine retries — the bounced watch requests permissions with the app frontmost and the system alert appears. Answering with a refusal is what left a pilot who flipped Never -> Ask Next Time on the red takeover until a SECOND trip out of the app.",
   "produces": "src-tauri/plugins/wingover/ios/Sources/WingoverPlugin.swift (checkPermissions; authorizationString)",
   "consumes": "src/engine/nativeSource.ts (permissionRefusal)",
   "codes": ["location", "precise", "servicesEnabled", "prompt"],
@@ -12,8 +12,7 @@
   },
   "expect": {
     "js": {
-      "refusal": null,
-      "ready": true
+      "refusal": null
     }
   }
 }

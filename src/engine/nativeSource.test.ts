@@ -160,13 +160,13 @@ describe("nativePositionSource", () => {
   });
 
   // The Never -> "Ask Next Time" recovery, from the source's side: an
-  // unasked permission is not a refusal, so readiness answers ready (null),
+  // unasked permission is not a refusal, so currentRefusal answers null,
   // the engine retries, and the bounced watch's start sequence is what
-  // finally puts the system alert on screen. Answering "not ready" here
+  // finally puts the system alert on screen. Answering with a refusal here
   // left the pilot on the red takeover until a second trip out of the app.
-  // A refusal answers with WHICH one, so a takeover whose reason changed
+  // A real refusal names WHICH one, so a takeover whose reason changed
   // while it was up re-renders on the current one.
-  it("an unasked prompt reads as READY; a Settings-level refusal answers which one", async () => {
+  it("an unasked prompt refuses nothing; a Settings-level refusal names itself", async () => {
     let location = "prompt";
     let precise = true;
     core.invoke.mockImplementation((cmd: string) => {

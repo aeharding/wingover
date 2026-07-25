@@ -471,7 +471,7 @@ class WingoverPlugin: Plugin, CLLocationManagerDelegate,
   //
   // servicesEnabled reports the DEVICE-wide switch, not this app's grant.
   // It senses; it does not decide (JS's permissionRefusal folds it into a
-  // denial). It is here so the readiness poll and the watch's pre-capture
+  // denial). It is here so the recovery loop and the watch's pre-capture
   // gate can never disagree: every input to the refusal rule rides in one
   // dictionary, so there is no state one of them can see and the other
   // cannot. Today's iOS folds Location Services off into an app-level

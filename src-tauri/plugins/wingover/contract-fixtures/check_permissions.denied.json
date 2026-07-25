@@ -15,8 +15,7 @@
       "refusal": {
         "permissionDenied": true,
         "message": "location permission denied"
-      },
-      "ready": false
+      }
     }
   }
 }

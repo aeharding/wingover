@@ -4,7 +4,7 @@ import { getBooleanSetting } from "../storage/local";
 import { engine } from "./index";
 import type { Waypoint } from "./types";
 
-// Foreground heal, wired HERE and not in a component (STEERING:
+// Foreground watch revival, wired HERE and not in a component (STEERING:
 // anything that must happen regardless of which page is mounted is
 // wired engine-side): coming back from Settings must PROCEED, not sit
 // on a frozen screen. A browser watch can be killed silently while the
@@ -13,7 +13,7 @@ import type { Waypoint } from "./types";
 // This listener is harmless by construction where a foreground means
 // nothing — retry() self-gates on the source's watchCanDieSilently, so
 // on a source whose capture outlives the page it does nothing at all,
-// and that source recovers by the engine's readiness poll instead. The
+// and that source recovers by the engine's currentRefusal loop instead. The
 // gate is the source's to answer, not this file's: no platform check
 // here (the seam lint forbids one, and that is exactly the point).
 if (typeof document !== "undefined") {

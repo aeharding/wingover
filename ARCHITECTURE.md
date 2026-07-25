@@ -102,17 +102,25 @@ signature is partly an _absence_ of fixes, which no function of fix
 timestamps can observe); it never touches the WAL, the track, or
 finalization, so burst-replay byte-identity is unaffected. Sources declare
 their capabilities (`reportsAccuracyAuthorization`, `watchCanDieSilently`,
-`readiness`) and the engine adapts — it never switches on the platform.
+`currentRefusal`) and the engine adapts — it never switches on the
+platform.
 
-`readiness` answers `SourceError | null`: `null` is ready, anything else
-is the refusal that stands RIGHT NOW, in the same shape the watch's error
-channel reports. A refused watch is a dead one, so while that takeover is
-up the poll is the only channel left reporting (the imprecise heuristic's
-takeover is the exception — it keeps a live watch precisely so one good
-fix can disprove it). A pilot who trades one refusal for another (Precise
-Location off, then Location Services off) must see the screen follow, so
-the engine re-renders on the fresh classification — without bouncing the
-watch for a refusal it already knows about.
+`currentRefusal` answers `SourceError | null`: `null` means nothing
+refuses, anything else is the refusal that stands at this moment, in the
+same shape the watch's error channel reports. A refused watch is a dead
+one, so while that takeover is up this is the only channel left reporting
+(the imprecise takeover is the exception — it keeps a live watch
+precisely so one good fix can disprove it). A pilot who trades one
+refusal for another (Precise Location off, then Location Services off)
+must see the screen follow, so the engine re-renders on the fresh
+classification — without bouncing the watch for a refusal it already
+knows about.
+
+The engine asks it from a sequential loop that runs exactly while such a
+takeover stands: ask, act, sleep, ask again. One question is outstanding
+at a time and the pacing is the sleep, so "at most one recovery attempt
+per interval" and "answers cannot pile up or land out of order" are
+properties of the shape rather than flags defending it.
 
 The WAL hydrates the engine exactly once per page load; after that,
 in-memory state is authoritative and WAL reads are never re-applied. A

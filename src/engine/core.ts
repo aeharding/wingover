@@ -114,7 +114,7 @@ export function withWebCore(inner: PositionSource): CoreClient {
       // the most pessimistic one.
       reportsAccuracyAuthorization: inner.reportsAccuracyAuthorization,
       watchCanDieSilently: inner.watchCanDieSilently,
-      readiness: inner.readiness,
+      currentRefusal: inner.currentRefusal,
       watch(onPositions, onError, options) {
         core.start();
         // The watch carries every capability, wake lock included — the

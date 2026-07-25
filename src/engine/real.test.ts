@@ -295,7 +295,7 @@ describe("GeolocationRecordingEngine", () => {
 
   // The two Settings-level refusals in the shape a source reports them —
   // exactly what nativeSource's permissionRefusal answers with, for both
-  // the watch's pre-capture gate and the readiness poll.
+  // the watch's pre-capture gate and the recovery loop.
   const DENIED: SourceError = {
     permissionDenied: true,
     message: "location permission denied",
@@ -319,8 +319,8 @@ describe("GeolocationRecordingEngine", () => {
   // into a watch bounce — the fresh watch is what raises the system
   // prompt. No poll, no prompt: the takeover just sat there until a
   // second trip out of the app happened to bounce the watch some other
-  // way. retry() cannot stand in: it is the WEB heal and self-gates off
-  // this source's missing watchCanDieSilently.
+  // way. retry() cannot stand in: it revives a possibly-dead browser
+  // watch and self-gates off this source's missing watchCanDieSilently.
   it("recovery polling recovers a source retry() will not touch, and not one poll sooner", async () => {
     let ready = false;
     const { source, state } = pollingSource(() => ready);
@@ -346,7 +346,7 @@ describe("GeolocationRecordingEngine", () => {
       expect(engine.snapshotSync().status).toBe("blocked");
       expect(state.watches).toBe(1);
 
-      // The inverse pin: the foreground heal is inert here even while
+      // The inverse pin: the foreground revival is inert here even while
       // blocked. Whatever the pilot's return from Settings dispatches,
       // this source's capture is never bounced behind its back — the
       // takeover lifts on the poll's evidence or not at all.
@@ -370,9 +370,9 @@ describe("GeolocationRecordingEngine", () => {
   // Latency, not just eventual recovery: the poll's first check runs when
   // it arms, so a refusal that is already fixed by the time it lands (the
   // webview rebuilt while the pilot was in Settings) clears in one
-  // readiness round trip. Real timers, and the test never waits
-  // RECOVERY_POLL_MS — an interval-phased first check would leave it
-  // blocked here.
+  // round trip to the platform. Real timers, and the test never waits
+  // RECOVERY_POLL_MS — a loop that slept before its first question would
+  // leave it blocked here.
   it("the recovery poll checks the moment it arms, not one interval later", async () => {
     const { source, state } = pollingSource(() => true);
     const engine = new GeolocationRecordingEngine({
@@ -392,14 +392,14 @@ describe("GeolocationRecordingEngine", () => {
     expect(state.watches).toBe(2);
   });
 
-  // A readiness() answer is in flight across an unbounded round trip to
-  // the platform, and the block it was asked about can end while it
-  // travels. Acting on a stale yes tears down a watch that is already
-  // delivering — the pilot loses capture to a poll answering a question
-  // nobody is asking any more. Two independent guards, pinned separately:
-  // a blocking error must still stand, AND the answer must belong to the
-  // current arming.
-  it("a readiness answer that outlived its block cannot bounce a live watch", async () => {
+  // A question is out across an unbounded round trip to the platform, and
+  // what it asked about can be over before the answer lands. Acting on one
+  // then tears down a watch that is already delivering — the pilot loses
+  // capture to an answer nobody is waiting for. Two ways to be too late,
+  // pinned separately: the LOOP that asked is dead (the block it existed
+  // for was cleared, so its answer dies with it), or the loop is alive but
+  // the block was cleared while the answer was in flight.
+  it("an answer that outlives its loop is dead, and one that outlives its block is silent", async () => {
     const pending: ((refusal: SourceError | null) => void)[] = [];
     const state = {
       watches: 0,
@@ -408,7 +408,7 @@ describe("GeolocationRecordingEngine", () => {
     };
     const source: PositionSource = {
       reportsAccuracyAuthorization: true,
-      readiness: () =>
+      currentRefusal: () =>
         new Promise<SourceError | null>((resolve) => pending.push(resolve)),
       watch(onPositions, onError) {
         state.watches++;
@@ -425,8 +425,8 @@ describe("GeolocationRecordingEngine", () => {
     await engine.start();
     expect(state.watches).toBe(1);
 
-    // Precise Location off: a blocking error that self-heals on evidence,
-    // so the poll can be left holding an answer to a dead question.
+    // Precise Location off: a blocking error a good fix disproves, so the
+    // loop can be left holding an answer to a question nobody is asking.
     state.fail(IMPRECISE);
     await settle();
     expect(engine.snapshotSync().status).toBe("blocked");
@@ -439,9 +439,9 @@ describe("GeolocationRecordingEngine", () => {
     await settle();
     expect(engine.snapshotSync().status).toBe("acquiring");
 
-    // A NEW block arms a new poll — so a block IS standing when arming
-    // 1's answer finally lands, and only the epoch can tell that the
-    // answer is not about THIS block.
+    // A new block runs a NEW loop with its own question, so a block IS
+    // standing when the first loop's answer lands: only the fact that the
+    // loop asking it is dead can stop that answer from acting.
     state.fail(IMPRECISE);
     await settle();
     expect(engine.snapshotSync().status).toBe("blocked");
@@ -452,22 +452,22 @@ describe("GeolocationRecordingEngine", () => {
     expect(state.watches).toBe(1);
     expect(engine.snapshotSync().status).toBe("blocked");
 
-    // The current arming's own answer is what recovers it.
+    // The living loop's own answer is what recovers it.
     pending[1](null);
     await settle();
     expect(state.watches).toBe(2);
     expect(engine.snapshotSync().status).toBe("acquiring");
 
     // A delivered fix proves the attempt worked, ending the episode, so
-    // the next block gets its immediate check back.
+    // the next loop opens by asking instead of sleeping first.
     state.feed([sourceFix()]);
     await settle();
 
-    // The other guard, on its own: an answer from the CURRENT arming
-    // whose block healed while it travelled. Resolved before the healing
-    // fix, so the disarm (and the epoch bump it carries) has not run yet
-    // — the standing-error check is the only thing that can stop it, and
-    // the watch it would tear down is the one now delivering.
+    // The other case, on its own: a LIVING loop's answer, landing after a
+    // good fix cleared the block. Resolved before that fix, so the
+    // subscriber that kills the loop has not run yet — the standing-error
+    // check is the only thing that can stop it, and the watch it would
+    // tear down is the one now delivering.
     state.fail(IMPRECISE);
     await settle();
     expect(engine.snapshotSync().status).toBe("blocked");
@@ -476,20 +476,20 @@ describe("GeolocationRecordingEngine", () => {
     pending[2](null);
     state.feed([sourceFix()]);
     await settle();
-    // Healed (the fix count has it armed by now), on the SAME watch.
+    // Cleared (the fix count has it armed by now), on the SAME watch.
     expect(engine.snapshotSync().status).not.toBe("blocked");
     expect(engine.snapshotSync().error).toBeNull();
     expect(state.watches).toBe(2);
   });
 
-  it("a readiness that rejects is simply not ready, never an unhandled rejection", async () => {
+  it("a refusal probe that rejects says nothing, and never an unhandled rejection", async () => {
     const state = {
       watches: 0,
       fail: (() => {}) as (error: SourceError) => void,
     };
     const source: PositionSource = {
       reportsAccuracyAuthorization: true,
-      readiness: () => Promise.reject(new Error("plugin not responding")),
+      currentRefusal: () => Promise.reject(new Error("plugin not responding")),
       watch(_onPositions, onError) {
         state.watches++;
         if (state.watches === 1) state.fail = onError;
@@ -515,10 +515,11 @@ describe("GeolocationRecordingEngine", () => {
   });
 
   // A source in the native shape: capture outlives the page, so it
-  // declares no watchCanDieSilently and recovery is the readiness poll
-  // alone — the poll being the only channel still reporting once the watch
-  // is dead and a takeover is up. `fail` stays bound to the FIRST watch's
-  // error callback; a bounce installs a fresh one the test never touches.
+  // declares no watchCanDieSilently and recovery is the currentRefusal
+  // loop alone — that loop being the only channel still reporting once the
+  // watch is dead and a takeover is up. `fail` stays bound to the FIRST
+  // watch's error callback; a bounce installs a fresh one the test never
+  // touches.
   function refusingSource(refusal: () => SourceError | null) {
     const state = {
       watches: 0,
@@ -526,7 +527,7 @@ describe("GeolocationRecordingEngine", () => {
     };
     const source: PositionSource = {
       reportsAccuracyAuthorization: true,
-      readiness: () => Promise.resolve(refusal()),
+      currentRefusal: () => Promise.resolve(refusal()),
       watch(_onPositions, onError) {
         state.watches++;
         if (state.watches === 1) state.fail = onError;
@@ -680,7 +681,7 @@ describe("GeolocationRecordingEngine", () => {
   // takeover's reason (the exact staleness this poll exists to kill) and a
   // batch of readys would bounce the watch once each, breaking the
   // one-attempt-per-interval bound the poll promises against ANY source.
-  it("a readiness slower than the interval is asked once, never stacked", async () => {
+  it("a refusal probe slower than the interval is asked once, never stacked", async () => {
     const pending: ((refusal: SourceError | null) => void)[] = [];
     const state = {
       watches: 0,
@@ -688,7 +689,7 @@ describe("GeolocationRecordingEngine", () => {
     };
     const source: PositionSource = {
       reportsAccuracyAuthorization: true,
-      readiness: () =>
+      currentRefusal: () =>
         new Promise<SourceError | null>((resolve) => pending.push(resolve)),
       watch(_onPositions, onError) {
         state.watches++;
@@ -769,7 +770,7 @@ describe("GeolocationRecordingEngine", () => {
   // The manual escape hatch, and what made a stale takeover survivable
   // before the poll learned to reclassify: Cancel + Start Flight runs a
   // fresh watch, and its start sequence judges the platform from scratch.
-  // Deliberately a source with NO readiness — this pins the fallback path
+  // Deliberately a source with NO currentRefusal — this pins the fallback path
   // on its own, independent of the poll.
   it("cancel and restart always classifies against the platform's CURRENT refusal", async () => {
     let refusal: SourceError = IMPRECISE;
@@ -826,7 +827,7 @@ describe("GeolocationRecordingEngine", () => {
       const source: PositionSource = {
         reportsAccuracyAuthorization: true,
         // The lie: always ready, whatever the watch then does.
-        readiness: () => Promise.resolve(null),
+        currentRefusal: () => Promise.resolve(null),
         watch(_onPositions, onError) {
           state.watches++;
           if (state.watches === 1) state.fail = onError;

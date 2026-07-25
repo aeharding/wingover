@@ -12,8 +12,7 @@
   },
   "expect": {
     "js": {
-      "refusal": null,
-      "ready": true
+      "refusal": null
     }
   }
 }
