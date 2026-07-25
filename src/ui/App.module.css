@@ -1,0 +1,13 @@
+/* The boot frame: what the app shows while the boot gate waits for the
+   engine to read its WAL (engine/bootGate.ts). Deliberately empty, and
+   deliberately black in every scheme — it continues index.html's
+   unconditional dark stamp (and appTheme's dark default), and it is what a
+   flight surface would follow it with, so the wait adds no screen of its
+   own. A light-palette pilot simply gets the dark-to-light settle appTheme
+   already accepts, for the length of a WAL read instead of a frame. Fixed
+   and inset rather than sized: no layout exists yet to size against. */
+.boot {
+  position: fixed;
+  inset: 0;
+  background: #000;
+}

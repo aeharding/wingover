@@ -42,3 +42,41 @@ describe("WalSession round-trip", () => {
     expect(read?.removedIds).toBeUndefined();
   });
 });
+
+// The read the whole boot waits on (src/engine/bootGate.ts). A transaction
+// that aborts fires "abort" and NOT "error", so the read has to handle it
+// itself or its promise never settles — and a launch that could have
+// answered in milliseconds instead sits out the gate's entire deadline
+// showing a dark screen.
+describe("readWal always settles", () => {
+  it("rejects when the transaction aborts after its requests are done", async () => {
+    await writeWalSession({ armedAt: 1, takeoffIndex: 0, waypoints: [] });
+
+    // Aborted from the LAST request's success, so every request of the read
+    // is already done: nothing is left to fire an error event, and "abort"
+    // is the only event the transaction will ever emit. (A store evicted
+    // mid-read, a WKWebView whose IndexedDB is severed by a Settings trip.)
+    const get = IDBObjectStore.prototype.get;
+    IDBObjectStore.prototype.get = function (
+      this: IDBObjectStore,
+      ...args: Parameters<IDBObjectStore["get"]>
+    ) {
+      const request = get.apply(this, args);
+      request.addEventListener("success", () => request.transaction?.abort());
+      return request;
+    };
+
+    try {
+      const outcome = await Promise.race([
+        readWal().then(
+          () => "resolved",
+          () => "rejected",
+        ),
+        new Promise((resolve) => setTimeout(() => resolve("hung"), 500)),
+      ]);
+      expect(outcome).toBe("rejected");
+    } finally {
+      IDBObjectStore.prototype.get = get;
+    }
+  });
+});

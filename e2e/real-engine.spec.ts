@@ -71,6 +71,11 @@ const GEO_STUB = `(() => {
 // so the returned list is first-sighting order: "ion-app" before the
 // "fly-content" nested inside it, and the bare flight surface before a
 // shell that arrives in a later commit.
+//
+// The boot gate's frame is deliberately NOT a kind: it is an empty black
+// rectangle, indistinguishable from the launch screen and from index.html's
+// pre-paint canvas, so it is not a screen a pilot can be shown by mistake.
+// What these lists track is the screens that mean something.
 const BOOT_WATCH = `(() => {
   const classify = (el) => {
     if (el.dataset && el.dataset.testid === "fly-content") return "fly-content";
@@ -156,6 +161,38 @@ async function waitForWatch(page: Page) {
   );
 }
 
+// "recording" on screen is in-memory state: the session write that journals
+// the takeoff index is only ENQUEUED at that point (real.ts, enqueueWal).
+// Killing the page before it commits rehydrates an armed session, which is a
+// race in the DRILL, not in the app — the app is still running and would
+// flush it. A relaunch drill has to wait for the WAL to actually hold the
+// takeoff, or it is testing its own timing.
+async function waitForDurableTakeoff(page: Page) {
+  await page.waitForFunction(
+    () =>
+      new Promise<boolean>((resolve) => {
+        const request = indexedDB.open("wingover-wal", 1);
+        request.onerror = () => resolve(false);
+        request.onsuccess = () => {
+          const db = request.result;
+          const tx = db.transaction("meta", "readonly");
+          const session = tx.objectStore("meta").get("session");
+          tx.oncomplete = () => {
+            db.close();
+            resolve(
+              (session.result as { takeoffIndex?: number | null } | undefined)
+                ?.takeoffIndex != null,
+            );
+          };
+          tx.onerror = () => {
+            db.close();
+            resolve(false);
+          };
+        };
+      }),
+  );
+}
+
 async function armAndFly(page: Page, emit: ReturnType<typeof makeEmitter>) {
   await page.getByRole("button", { name: "Start Flight" }).click();
   await expect(page.getByTestId("armed")).toBeVisible();
@@ -227,7 +264,7 @@ test("real engine: gate, backdated takeoff, reload kill drill, stop", async ({
 // Owner-reported, on device: "Dont flicker to the homescreen before
 // relaunching the fly page, if in flight, its disorienting." Why it
 // happened, and why the fix is shaped the way it is: src/engine/
-// sessionMirror.ts.
+// bootGate.ts.
 test("mid-flight relaunch never flashes the homescreen", async ({ page }) => {
   const pageErrors: string[] = [];
   page.on("pageerror", (error) => pageErrors.push(String(error)));
@@ -238,6 +275,7 @@ test("mid-flight relaunch never flashes the homescreen", async ({ page }) => {
   await page.goto(URL);
   await armAndFly(page, emit);
   await emit([{ speed: 7 }, { speed: 7 }]);
+  await waitForDurableTakeoff(page);
 
   // The relaunch. The watcher is reinstalled on this fresh document, so
   // what it records is this boot only.
@@ -296,32 +334,51 @@ test("relaunch while idle still boots straight to the nav shell", async ({
   ).toBe("rgba(0, 0, 0, 0)");
 });
 
-// The mirror can be wrong in exactly one affordable direction: a flag left
-// over from a flight the WAL no longer holds. Boot commits to the flight
-// surface, hydration reconciles, the shell takes over. No crash, no stuck
-// screen, and no repeat next launch.
-test("a stale in-play flag with an empty WAL settles into the shell", async ({
+// The bounded half of the gate, and the only case where a pilot can still
+// see the old flash. A WAL that never answers must not hold the boot frame
+// forever: past the deadline the app renders from the current snapshot,
+// which pre-hydration is honestly "idle" — exactly what it did before the
+// gate existed. Degraded equals the old status quo; never a brick.
+test("a WAL that never answers falls back to the shell after the deadline", async ({
   page,
 }) => {
   const pageErrors: string[] = [];
   page.on("pageerror", (error) => pageErrors.push(String(error)));
   await page.addInitScript(BOOT_WATCH);
   await page.addInitScript(GEO_STUB);
-  await page.addInitScript(`localStorage.setItem("wingover.session", "1");`);
+  // The WAL's open request is never answered: no success, no error, no
+  // abort. Scoped to that one database, so the rest of the app (settings,
+  // logbook, sync) keeps working — a page that failed to boot at all would
+  // "pass" this drill while proving nothing.
+  await page.addInitScript(`(() => {
+    const open = indexedDB.open.bind(indexedDB);
+    indexedDB.open = (name, version) =>
+      name === "wingover-wal"
+        ? { onupgradeneeded: null, onsuccess: null, onerror: null }
+        : open(name, version);
+  })();`);
 
-  await page.goto(URL);
-  await expect(
-    page.getByRole("button", { name: "Start Flight" }),
-  ).toBeVisible();
-  // The order is the point: the flight surface came up first (the affordable
-  // cost, a loading frame), and the shell followed once the WAL had spoken.
-  const seen = await bootSightings(page);
-  expect(seen[0]).toBe("fly-content");
-  expect(seen).toContain("ion-tab-bar");
-  // Reconciled against the WAL, so the next launch does not pay for it again.
+  await page.goto(URL, { waitUntil: "commit" });
+  const startedAt = Date.now();
+  const bootFrame = page.getByTestId("boot-frame");
+  await expect(bootFrame).toBeVisible({ timeout: 10_000 });
+  // Black while it waits, in every scheme: the wait has to be invisible
+  // against the launch screen, not a grey card announcing itself.
   expect(
-    await page.evaluate(() => localStorage.getItem("wingover.session")),
-  ).toBeNull();
+    await bootFrame.evaluate((el) => getComputedStyle(el).backgroundColor),
+  ).toBe("rgb(0, 0, 0)");
+  // Budgets sum to less than the 30 s per-test timeout, so a gate that never
+  // opens fails on the locator that names it rather than as a bare timeout.
+  await expect(page.locator("ion-tab-bar")).toBeVisible({ timeout: 15_000 });
+  const waited = Date.now() - startedAt;
+
+  // It waited — this is not a boot that rendered off the pre-hydration
+  // snapshot immediately and happened to look right.
+  expect(waited).toBeGreaterThan(1500);
+  // And what it fell back to is the pre-gate boot, in the pre-gate order.
+  const seen = await bootSightings(page);
+  expect(seen[0]).toBe("ion-app");
+  expect(seen).toContain("ion-tab-bar");
   expect(pageErrors).toEqual([]);
 });
 

@@ -77,12 +77,12 @@ const ARMED_HINT = isTauri()
  * shellShed: App renders this surface bare, with the whole Ionic shell gone,
  * because a session is in play. Then this surface IS the screen and owns its
  * background in every scheme — the states that paint (armed, recording) do it
- * themselves, and this covers the one that does not: the pre-hydration
- * "loading" frame, which would otherwise show the ground app's canvas
- * underneath. Black in a light palette too, because what follows it is always
- * the black flight design (index.html boots dark for the same reason).
- * FlyFrame and the desktop pane leave it off: there the surface is a guest on
- * a themed page, and the trace backdrop reads through it while idle.
+ * themselves, and this covers the one that does not: the "loading" frame,
+ * which would otherwise show the ground app's canvas underneath. Black in a
+ * light palette too, because what follows it is always the black flight
+ * design (index.html and the boot frame both start there for the same
+ * reason). FlyFrame and the desktop pane leave it off: there the surface is a
+ * guest on a themed page, and the trace backdrop reads through it while idle.
  */
 export default function FlyPage({
   shellShed = false,
@@ -96,10 +96,12 @@ export default function FlyPage({
   // a complete track — there is no per-fix mirror to fall behind.
   const snapshot = useSyncExternalStore(engine.subscribe, engine.snapshotSync);
   // Hydration gate: before the WAL read the engine reports "idle", which
-  // must not flash the Start button during a live-flight reload. This is
-  // only the in-surface half. Whether this surface is mounted AT ALL on a
-  // mid-flight launch is decided a layer up, off snapshot.sessionInPlay —
-  // "loading" is what the pilot sees for the frames in between.
+  // must not flash the Start button during a live-flight reload. Whether
+  // this surface is mounted AT ALL on a mid-flight launch is decided a layer
+  // up, by the boot gate (engine/bootGate.ts). This one still earns its keep
+  // underneath it: the surface remounts mid-session (a flight starting, a
+  // flight ending), and a boot that fell through the gate's timeout can
+  // mount it with the WAL still unread.
   const [ready, setReady] = useState(hydratedOnce);
   const { confirm: bigConfirm, element: confirmElement } = useBigConfirm();
   const {

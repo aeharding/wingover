@@ -13,7 +13,6 @@ import {
   IMPRECISE_SUSTAIN_MS,
 } from "../flight/takeoff";
 import { WAYPOINT_RADIUS_M } from "../flight/waypoints";
-import { mirrorSaysInPlay, setSessionInPlay } from "./sessionMirror";
 import type {
   EngineError,
   EngineSnapshot,
@@ -163,11 +162,6 @@ export class GeolocationRecordingEngine implements RecordingEngine {
   private reachedIds = new Set<string>();
   private hydrated = false;
   private hydration: Promise<void> | null = null;
-  // The WAL read rejected. Terminal: the hydration promise is memoized, so
-  // it never retries this page. Recorded so the boot mirror stops being
-  // consulted — an unreadable WAL is not evidence of a flight, and a
-  // consumer must not be pinned to a flight surface that can never fill in.
-  private hydrationFailed = false;
   private error: EngineError | null = null;
   private listeners = new Set<() => void>();
   private snapshotCache: EngineSnapshot | null = null;
@@ -302,32 +296,19 @@ export class GeolocationRecordingEngine implements RecordingEngine {
   private ensureHydrated(): Promise<void> {
     if (this.hydrated) return Promise.resolve();
     this.hydration ??= (async () => {
-      const { session, fixes } = await readWal().catch((error: unknown) => {
-        // Not swallowed — an unreadable WAL is a real failure and the caller
-        // still hears it — but the engine must not go silent either: nothing
-        // else will ever notify, and a consumer waiting on the boot mirror
-        // would sit on a surface that can never fill in. The mirror in
-        // STORAGE is left exactly as it was: a read that failed proves
-        // nothing about what the WAL holds, and the next launch reads again.
-        this.hydrationFailed = true;
-        this.invalidate();
-        throw error;
-      });
+      // A rejection propagates to every getSnapshot() caller, the boot gate
+      // included (engine/bootGate.ts) — which is why readWal must always
+      // settle: an aborted transaction fires onabort and NOT onerror, so
+      // without wal.ts's handler for it this promise would hang and the gate
+      // would sit out its whole timeout on a launch that could have answered
+      // instantly.
+      const { session, fixes } = await readWal();
       // start()/stop() may have won while the read was in flight; their
       // in-memory state is newer than anything the WAL held.
       if (!this.hydrated) {
         this.hydrated = true;
         this.session = session;
         this.buffer = fixes;
-        // The WAL has spoken: reconcile the boot mirror against it, here at
-        // the top of hydration, before anything below can await and let a
-        // render read a stale answer. This is the direction that makes the
-        // mirror safe to trust at first render — a session recovered after a
-        // crash sets it (this sitting never ran start()), and a flag left
-        // over from a flight this WAL no longer holds clears it, so an idle
-        // app settles into the shell instead of sitting on a flight surface
-        // forever.
-        setSessionInPlay(session !== null);
         // Derive reached state from the durable buffer BEFORE deriveStatus /
         // ensureWatch, so the fed remaining set excludes already-passed
         // waypoints (no re-arm, no re-announce on re-entry).
@@ -418,19 +399,6 @@ export class GeolocationRecordingEngine implements RecordingEngine {
       : null;
   }
 
-  // The one thing a consumer may trust at FIRST render, before the WAL read
-  // has resolved. In memory the answer is simply whether a session exists;
-  // pre-hydration there is nothing in memory yet, so it comes from the boot
-  // mirror instead (sessionMirror.ts). The mirror is consulted in exactly
-  // that window: once the WAL has spoken — or refused to — memory is the
-  // only answer, so a stale flag self-corrects and an unreadable WAL cannot
-  // pin the UI to a flight it will never produce.
-  private sessionInPlay(): boolean {
-    if (this.session !== null) return true;
-    if (this.hydrated || this.hydrationFailed) return false;
-    return mirrorSaysInPlay();
-  }
-
   private deriveSnapshot(): EngineSnapshot {
     const session = this.session;
     const error = this.error;
@@ -442,7 +410,6 @@ export class GeolocationRecordingEngine implements RecordingEngine {
       return {
         status: "blocked",
         error: blocking,
-        sessionInPlay: this.sessionInPlay(),
         startedAt: null,
         track: [],
         latest: this.buffer[this.buffer.length - 1] ?? null,
@@ -460,7 +427,6 @@ export class GeolocationRecordingEngine implements RecordingEngine {
     if (!session) {
       return {
         status: "idle",
-        sessionInPlay: this.sessionInPlay(),
         startedAt: null,
         track: [],
         latest: null,
@@ -483,7 +449,6 @@ export class GeolocationRecordingEngine implements RecordingEngine {
       const track = this.finalizedTrack();
       return {
         status,
-        sessionInPlay: this.sessionInPlay(),
         startedAt: track[0]?.timestamp ?? null,
         track,
         latest,
@@ -501,7 +466,6 @@ export class GeolocationRecordingEngine implements RecordingEngine {
     if (status !== "recording" && status !== "landed") {
       return {
         status,
-        sessionInPlay: this.sessionInPlay(),
         startedAt: null,
         track: [],
         latest,
@@ -518,7 +482,6 @@ export class GeolocationRecordingEngine implements RecordingEngine {
     const track = this.buffer.slice(session.takeoffIndex!);
     return {
       status,
-      sessionInPlay: this.sessionInPlay(),
       startedAt: track[0]?.timestamp ?? null,
       track,
       latest,
@@ -557,10 +520,6 @@ export class GeolocationRecordingEngine implements RecordingEngine {
       waypoints: options?.waypoints ?? [],
       autoEnd: options?.autoEnd ?? true,
     };
-    // A session exists from this instant, so the boot mirror says so from
-    // this instant: a webview death one beat after Start must relaunch onto
-    // the flight surface, not the homescreen (sessionMirror.ts).
-    setSessionInPlay(true);
     this.buffer = [];
     this.reachInside.clear();
     this.reachedIds.clear();
@@ -765,13 +724,6 @@ export class GeolocationRecordingEngine implements RecordingEngine {
     this.clearWatch();
     this.hydrated = true;
     this.session = null;
-    // Gated exactly like the clearWal below, and for the same reason: the
-    // mirror caches the WAL, localStorage is origin-wide like the WAL, and
-    // only the owner may retire either. A passive tab (busy) clearing this
-    // would send the OWNING tab's next launch to the homescreen. Otherwise
-    // synchronous, with the session itself and ahead of the invalidate: the
-    // mirror may lag the WAL toward "in play", never toward idle.
-    if (this.walOwner) setSessionInPlay(false);
     this.buffer = [];
     this.reachInside.clear();
     this.reachedIds.clear();

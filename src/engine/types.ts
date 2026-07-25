@@ -72,15 +72,6 @@ export type EngineSnapshot =
     });
 
 interface EngineSnapshotBase {
-  // Whether the engine holds a session at all: armed, flying, or finalized
-  // and waiting to be collected. Almost the negation of status "idle" — with
-  // one difference that is the whole point of the field. Before the WAL read
-  // lands, status is honestly "idle" (IndexedDB cannot be read
-  // synchronously), and a consumer that commits its first render to that
-  // shows a pilot who relaunched mid-flight the homescreen for a few frames.
-  // This field answers from the engine's synchronous boot mirror until the
-  // WAL speaks, then from the session itself (engine/sessionMirror.ts).
-  sessionInPlay: boolean;
   startedAt: number | null;
   // CONTRACT: within a session the track is append-only and prefix-stable
   // by timestamp — a new array identity per change, but content only ever

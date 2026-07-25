@@ -15,10 +15,10 @@ import {
   navigateOutline,
   settingsOutline,
 } from "ionicons/icons";
-import { useEffect, useSyncExternalStore } from "react";
+import { useSyncExternalStore } from "react";
 import { Redirect, Route } from "react-router-dom";
 
-import { engine } from "../engine";
+import { bootGate, engine } from "../engine";
 import { isTauri } from "../platform";
 import DesktopShell from "./desktop/DesktopShell";
 import FlightSurface from "./flight/FlyPage";
@@ -35,6 +35,8 @@ import { SettingsProvider } from "./settings/SettingsContext";
 import { SyncSheetsProvider } from "./sync/SyncSheets";
 import { useCanRecord } from "./useCanRecord";
 import { useIsDesktop } from "./useIsDesktop";
+
+import styles from "./App.module.css";
 
 setupIonicReact({
   mode: "ios",
@@ -59,11 +61,6 @@ setupIonicReact({
 });
 
 export default function App() {
-  useEffect(() => {
-    // Kick the one-time WAL hydration (idempotent; FlyPage kicks it too).
-    void engine.getSnapshot();
-  }, []);
-
   return (
     <SettingsProvider>
       <AppBody />
@@ -79,33 +76,36 @@ export default function App() {
 // Rendering only the flight surface in flight makes the footprint the single
 // live map and nothing else. The tab bar is unreachable during a flight
 // anyway, so this is invisible to the pilot, and the full shell returns the
-// instant the flight ends. "idle" is the only non-flight state.
+// instant the flight ends. "idle" is the only non-flight state, and it is
+// also what the engine honestly reports before it has read its WAL — hence
+// the boot gate below.
 //
 // Shed means SHED: ion-app itself goes too. The flight surface is a plain
 // div tree (src/ui/flight, Ionic-free by lint), so while recording, Ionic
 // simply does not exist in the DOM. IonApp and the sheets remount with the
 // shell when the flight ends.
 function AppBody() {
-  // sessionInPlay, where this used to read `status !== "idle"`. The two
-  // agree once the engine has read its WAL, and differ for the frames
-  // before that — where status is honestly "idle" because IndexedDB cannot
-  // be read synchronously. Committing this render to that is what flashed
-  // the homescreen at a pilot who relaunched mid-flight: tab bar, idle
-  // surface, then a swap to the flight a few frames later. Off the field,
-  // boot commits to the flight surface immediately and the pilot sees that
-  // surface's own loading state (STEERING, Reliability 3: after any
-  // interruption, foregrounding shows the recording in progress).
-  //
-  // Plus "blocked", the one status that is not session presence: a start
-  // refused by another tab's recorder lock never creates a session, and
-  // that takeover has always owned this surface. Two terms of ONE snapshot,
-  // not two stores — the engine still owns the whole judgement, including
-  // when to stop trusting its boot mirror.
-  const inFlight = useSyncExternalStore(engine.subscribe, () => {
-    const snapshot = engine.snapshotSync();
-    return snapshot.sessionInPlay || snapshot.status === "blocked";
-  });
+  // The boot gate (engine/bootGate.ts). This choice is not revisable: mount
+  // the shell and a mid-flight relaunch has already flashed the homescreen
+  // at the pilot, whatever the next commit does. So the first commit waits
+  // for the engine to have read its WAL — bounded, and until then this
+  // renders the same dark canvas index.html has already stamped, so the
+  // wait adds no screen.
+  const booted = useSyncExternalStore(bootGate.subscribe, bootGate.settled);
+  // Unchanged from before the gate, and deliberately: with hydration behind
+  // us this is the truth, not a guess. "blocked" is why status and not
+  // session presence — a start refused by another tab's recorder lock
+  // returns before it creates a session, and that takeover has always owned
+  // this surface.
+  const inFlight = useSyncExternalStore(
+    engine.subscribe,
+    () => engine.snapshotSync().status !== "idle",
+  );
   const isDesktop = useIsDesktop();
+  // Nothing else: no spinner, no logo, no layout to un-paint. The gate is
+  // milliseconds in every healthy launch, and the pilot must not be able to
+  // tell that anything waited.
+  if (!booted) return <div className={styles.boot} data-testid="boot-frame" />;
   if (inFlight) return <FlightSurface shellShed />;
   // Desktop gets its own shell: plain react-router, no Ionic outlet (see
   // DesktopShell). Phones keep the Ionic tab shell untouched.

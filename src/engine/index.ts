@@ -1,4 +1,5 @@
 import { isTauri } from "../platform";
+import { createBootGate } from "./bootGate";
 import { webCore, withWebCore } from "./core";
 import { createGpxSource } from "./gpxSource";
 import { nativeCore } from "./nativeSource";
@@ -61,3 +62,12 @@ function parseHome(
 }
 
 export const engine: RecordingEngine = chooseEngine();
+
+// Kicked HERE, at module init: the read is already in flight before React's
+// first render, instead of starting after it from a component effect (which
+// is where it used to live — see ENGINE-AUDIT's "does a new component effect
+// drive engine lifecycle?"). It cannot have LANDED by then, since it is
+// queued in this same synchronous pass; what it buys is that the boot frame
+// covers the read rather than following it. The composition root owns the
+// wiring; bootGate.ts owns the policy (why the app waits, and for how long).
+export const bootGate = createBootGate(() => engine.getSnapshot());
