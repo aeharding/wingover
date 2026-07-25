@@ -124,9 +124,29 @@ export async function createMapKitMapView(
   map.colorScheme =
     appearance === "light" ? mapkit.ColorScheme.Light : mapkit.ColorScheme.Dark;
 
-  // The bearing the app last asked for. The glyph is oriented against this
-  // (heading − lastBearing → 0 in track-up), so it holds pointing up.
-  let lastBearing = 0;
+  // The target of an ANIMATED turn still in flight, or null when the camera
+  // is settled. Only that window needs a remembered number: mid-tween the
+  // live rotation is not the answer yet, so the glyph rides the target and
+  // holds pointing up (track-up) instead of counter-rotating and snapping
+  // back. Every other moment reads the camera itself.
+  //
+  // A cache of what the app last ASKED for is exactly what misoriented the
+  // glyph on device: MapKit moves rotation behind the adapter's back — a
+  // two-finger twist, a turn the zoom lock refuses, and above all
+  // Map.setPadding, which runs `this.rotation = 0` before it re-derives the
+  // visible rect (read in the v6 bundle, reproduced in a browser) — so an
+  // inset change left the cache describing a camera that no longer existed.
+  // Unsnapped there are no further bearing writes to correct it, so the
+  // chevron kept pointing at the old north for the rest of the flight.
+  let turningTo: number | null = null;
+  const screenBearing = () => turningTo ?? rotationToBearing(map.rotation);
+
+  // The live aircraft glyphs (one per aircraft() handle), redrawn whenever
+  // the camera's rotation settles somewhere new: the glyph is screen-fixed,
+  // so a camera turn changes its on-screen angle just as much as a new
+  // course does, and nothing else would repaint it until the next fix — or
+  // ever, once unsnapped.
+  const glyphs = new Set<() => void>();
 
   // mapkit.Map hides its real implementation behind a Symbol-keyed accessor:
   // map._(key) type-checks the key, then returns the impl from a WeakMap
@@ -222,6 +242,19 @@ export async function createMapKitMapView(
   syncRotationGesture();
   emap.addEventListener("zoom-end", syncRotationGesture);
   emap.addEventListener("region-change-end", syncRotationGesture);
+
+  // MapKit's one reliable "the camera stopped turning" signal, and it covers
+  // every path that moves rotation: a two-finger twist (gesture end +
+  // deceleration end), each non-animated set, the end of an animated turn,
+  // and the zeroing inside setPadding. (rotation-change is dead in the v6
+  // bundle — its dispatch flag is never set — which is why the compass has
+  // to poll instead.) Redrawing the glyphs here is what makes them
+  // self-healing: however the rotation moved, the next settle re-derives
+  // their angle from the camera that actually exists.
+  emap.addEventListener("rotation-end", () => {
+    turningTo = null;
+    for (const draw of glyphs) draw();
+  });
 
   // Animated center+zoom as ONE camera tween, via the captured impl. The
   // public API can't express it: MapKit runs a single camera animation, and
@@ -336,12 +369,23 @@ export async function createMapKitMapView(
     // cascading var(--ion-safe-area-*) (MapCanvas resolves them off the same
     // probe), so the logo and the buttons move as one.
     setInsets(insets) {
+      // Map.setPadding zeroes the camera on its way through — literally
+      // `this.rotation = 0`, then it re-derives the visible rect north-up
+      // (v6 bundle) — so every inset change (a device rotation, the notch
+      // moving to the side, the replay pane's glide) snapped a track-up
+      // pilot to north. Capture the rotation and re-assert it after,
+      // non-animated, exactly the way MapKit's own resize path does
+      // (_resizeDetectorDidInstall). No unchanged-inset guard needed:
+      // setPadding early-returns on an equal Padding, so an inset that did
+      // not move never reaches the reset.
+      const rotation = map.rotation;
       map.padding = new mapkit.Padding(
         insets.top,
         insets.right,
         insets.bottom,
         insets.left,
       );
+      if (map.rotation !== rotation) map.rotation = rotation;
     },
 
     destroy() {
@@ -390,12 +434,20 @@ export async function createMapKitMapView(
       // cameraDistance preserves center + rotation. No per-frame region set
       // (that reset track-up to north and thrashed tiles).
       if (to.bearing !== undefined) {
-        lastBearing = to.bearing;
         const rotation = bearingToRotation(to.bearing);
         // Skip when already at (or turning to) the target — otherwise a
         // steady heading would re-trigger a native turn every fix.
         if (Math.abs(shortestAngle(rotation - map.rotation)) > 0.05) {
-          map.setRotationAnimated(rotation, animated);
+          // Only an ANIMATED turn MapKit actually started leaves the camera
+          // behind the intent; a snapped one is already there, and null
+          // means MapKit refused outright (rotation unavailable on this
+          // renderer), so the camera never moves. Latching a target the
+          // camera will not take is precisely the staleness this path
+          // exists to avoid — including the turn the zoom lock quietly
+          // declines, which reports started and still ends in rotation-end
+          // with the camera where it was.
+          const turn = map.setRotationAnimated(rotation, animated);
+          turningTo = animated && turn !== null ? to.bearing : null;
         }
       }
       if (to.center) {
@@ -673,12 +725,25 @@ export async function createMapKitMapView(
       wrapper.innerHTML = AIRCRAFT_SVG;
       const svg = wrapper.firstElementChild as SVGElement;
       let ann: Annotation | null = null;
+      // The glyph's geographic course; null while no glyph is on the map.
+      let heading: number | null = null;
+      // Screen-fixed glyph, snapped (no animation): it points to the
+      // on-screen heading — geographic course minus the camera's bearing (0
+      // in track-up, so it holds pointing up as the camera turns under it).
+      // Both terms move, so this runs on a camera settle as well as a fix.
+      const draw = () => {
+        if (heading === null) return;
+        const screenAngle = heading - screenBearing();
+        svg.style.transform = `translate(-50%, -50%) rotate(${screenAngle}deg)`;
+      };
+      glyphs.add(draw);
       container.setAttribute("data-aircraft-layer", "true");
       return {
         set(state: AircraftState | null) {
           if (!state) {
             if (ann) map.removeAnnotation(ann);
             ann = null;
+            heading = null;
             return;
           }
           const coord = toCoord(state.at);
@@ -690,16 +755,14 @@ export async function createMapKitMapView(
           } else {
             ann.coordinate = coord;
           }
-          // Screen-fixed glyph, snapped (no animation): it points to the
-          // on-screen heading — geographic course minus the map's target
-          // bearing (0 in track-up, so it holds pointing up as the camera
-          // turns under it).
-          const screenAngle = state.heading - lastBearing;
-          svg.style.transform = `translate(-50%, -50%) rotate(${screenAngle}deg)`;
+          heading = state.heading;
+          draw();
         },
         remove() {
+          glyphs.delete(draw);
           if (ann) map.removeAnnotation(ann);
           ann = null;
+          heading = null;
         },
       };
     },

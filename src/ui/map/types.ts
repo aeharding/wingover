@@ -150,7 +150,13 @@ export interface MarkerLayer {
 
 export interface AircraftState {
   at: LngLat;
-  heading: number; // degrees — the fix's course
+  // Degrees — the fix's GEOGRAPHIC course, never a screen angle. Backends
+  // draw it against their own camera bearing (MapLibre's GL matrix does it
+  // implicitly, MapKit subtracts the live rotation), so the glyph reads as
+  // the on-screen heading however the map is turned, and re-orients when
+  // the CAMERA turns and not only when a fix arrives — unsnapped, no fix
+  // ever corrects it.
+  heading: number;
 }
 
 export interface Aircraft {
@@ -183,7 +189,10 @@ export interface MapView {
   // the imperative (MapKit) and declarative (CSS) consumers can never
   // disagree. MapKit sets map.padding; MapLibre/fake no-op (their
   // attribution reads the vars directly). Live — reapplied whenever the
-  // resolved inset moves (rotation, a consume class toggling).
+  // resolved inset moves (rotation, a consume class toggling). An inset
+  // change must not move the CAMERA: MapKit's own setPadding zeroes
+  // rotation, and the adapter re-asserts it (a track-up pilot rotating
+  // the phone must not be snapped to north).
   setInsets(insets: Insets): void;
   destroy(): void;
 
