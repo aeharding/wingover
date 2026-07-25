@@ -15,8 +15,9 @@ import type { Insets, MapView } from "./types";
 // so ours must come last to win (position: absolute; inset: 0). Eager, and
 // ahead of MapView.css — the adapter (and its map JS) still load lazily.
 import "maplibre-gl/dist/maplibre-gl.css";
-import mapCss from "./map.module.css";
 import { cx } from "../cx";
+
+import mapCss from "./map.module.css";
 
 interface MapCanvasProps {
   base: MapViewKind;
