@@ -30,7 +30,12 @@ import type { CustomLayerInterface, Map as MapLibreMap } from "maplibre-gl";
 // texture.
 const TARGET_BOXES = 5;
 const LINE_WIDTH_PX = 1;
-const LINE_COLOR: [number, number, number] = [0.447, 0.49, 0.549]; // #727d8c
+// Per appearance: the same mid-grey that reads on a dark backdrop all but
+// vanishes on a light one, so the light variant goes darker instead.
+const LINE_COLOR: Record<"light" | "dark", [number, number, number]> = {
+  dark: [0.447, 0.49, 0.549], // #727d8c
+  light: [0.42, 0.45, 0.5],
+};
 // Opacity of a fully established line. Deliberately quiet: the grid is a
 // reference for drift and scale, and it shares the screen with the track,
 // which must always be the brightest thing on it.
@@ -126,7 +131,10 @@ export function gridForZoom(zoom: number, viewportPx: number) {
   return { spacing, fade: progress ** 3, worldSize };
 }
 
-export function createGraticuleLayer(id: string): CustomLayerInterface {
+export function createGraticuleLayer(
+  id: string,
+  getAppearance: () => "light" | "dark",
+): CustomLayerInterface {
   let map: MapLibreMap;
   let program: WebGLProgram | null = null;
   let buffer: WebGLBuffer;
@@ -228,7 +236,7 @@ export function createGraticuleLayer(id: string): CustomLayerInterface {
       );
       gl.uniform1f(uFade, fade);
       gl.uniform1f(uWidth, LINE_WIDTH_PX * (window.devicePixelRatio || 1));
-      gl.uniform3fv(uColor, LINE_COLOR);
+      gl.uniform3fv(uColor, LINE_COLOR[getAppearance()]);
       gl.uniform1f(uAlpha, LINE_ALPHA);
 
       gl.bindBuffer(gl.ARRAY_BUFFER, buffer);

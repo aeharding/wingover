@@ -2,7 +2,12 @@ import type { Feature, FeatureCollection } from "geojson";
 import { AttributionControl, Map as MapLibreMap, Marker } from "maplibre-gl";
 import type { GeoJSONSource, MapMouseEvent } from "maplibre-gl";
 
-import { BLANK_STYLE, GRATICULE_LAYER } from "../blankStyle";
+import {
+  BLANK_BACKGROUND,
+  BLANK_BACKGROUND_LAYER,
+  BLANK_STYLE,
+  GRATICULE_LAYER,
+} from "../blankStyle";
 import {
   type MapAppearance,
   type MapViewKind,
@@ -149,6 +154,7 @@ export async function createMapLibreMapView(
   function sync() {
     if (!map.isStyleLoaded()) return;
     syncGraticule();
+    paintBlankBackdrop();
     for (const rec of lines) {
       if (!map.getSource(rec.sourceId)) {
         map.addSource(rec.sourceId, { type: "geojson", data: rec.data });
@@ -192,12 +198,27 @@ export async function createMapLibreMapView(
   //
   // Anchored by finding the first NON-background layer rather than by index:
   // getStyle() serialises runtime layers too, so an index would drift.
+  // The blank style is one shared constant, so its backdrop cannot be baked
+  // per appearance — it is painted here instead. Without this the offline map
+  // stayed dark in light mode, which reads as light mode being broken.
+  function paintBlankBackdrop() {
+    if (!onBlankStyle || !map.getLayer(BLANK_BACKGROUND_LAYER)) return;
+    map.setPaintProperty(
+      BLANK_BACKGROUND_LAYER,
+      "background-color",
+      BLANK_BACKGROUND[appearance],
+    );
+  }
+
   function syncGraticule() {
     if (!map.isStyleLoaded() || map.getLayer(GRATICULE_LAYER)) return;
     const above = map
       .getStyle()
       ?.layers?.find((layer) => layer.type !== "background")?.id;
-    map.addLayer(createGraticuleLayer(GRATICULE_LAYER), above);
+    map.addLayer(
+      createGraticuleLayer(GRATICULE_LAYER, () => appearance),
+      above,
+    );
   }
 
   map.on("style.load", sync);
@@ -324,6 +345,10 @@ export async function createMapLibreMapView(
       // Restyle in place — the content registry re-adds overlays on the
       // style swap exactly as it does for setBaseMap.
       appearance = next;
+      // Directly, not via the restyle: offline applyStyle returns early
+      // because there is no basemap to fetch, and the pilot would be left
+      // looking at a dark map in light mode.
+      paintBlankBackdrop();
       void applyStyle();
     },
 
