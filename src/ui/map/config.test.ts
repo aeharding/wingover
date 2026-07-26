@@ -48,7 +48,7 @@ describe("resolveMapStyle", () => {
 
   // Asked for, not failed. The distinction matters: a requested blank style
   // must never be retried, while an unreachable one must be.
-  it("returns BLANK_STYLE verbatim when ?map-style=blank asked for it", async () => {
+  it("returns NO_BASEMAP_STYLE verbatim when ?map-style=blank asked for it", async () => {
     // The launch URL is pinned on first read, so the flag has to be in place
     // before a fresh copy of the module loads.
     (globalThis as { location: { search: string } }).location = {
@@ -58,8 +58,8 @@ describe("resolveMapStyle", () => {
     const fresh = await import("./config");
     // Identity, not shape: the adapter distinguishes "asked for blank" from
     // "could not reach a basemap" by reference. Take it from the same fresh
-    // module graph, since resetModules mints a new BLANK_STYLE object.
-    const { BLANK_STYLE: freshBlank } = await import("./blankStyle");
-    expect(await fresh.resolveMapStyle("street", "dark")).toBe(freshBlank);
+    // module graph, since resetModules mints a new NO_BASEMAP_STYLE object.
+    const { NO_BASEMAP_STYLE: fresh_ } = await import("./noBasemapStyle");
+    expect(await fresh.resolveMapStyle("street", "dark")).toBe(fresh_);
   });
 });

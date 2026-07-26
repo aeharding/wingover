@@ -4,7 +4,7 @@ import type {
 } from "maplibre-gl";
 
 import { getSetting } from "../../storage/local";
-import { BLANK_STYLE } from "./blankStyle";
+import { NO_BASEMAP_STYLE } from "./noBasemapStyle";
 
 export type MapViewKind = "street" | "satellite";
 
@@ -136,11 +136,11 @@ async function satelliteStyle(
 // Safe to hand back a parsed object: OpenFreeMap's styles use absolute URLs
 // for sprite, glyphs and every source, so nothing resolves relative to the
 // style URL we just dropped.
-// Eight seconds, because a connection that black-holes rather than refusing
-// (captive portals, dying signal — iOS waits ~60s) would otherwise leave the
-// map with no style object at all. The catch below turns the abort into null,
-// which is the whole point of the contract: a hang becomes BLANK_STYLE plus a
-// retry rather than a blank screen.
+
+// A connection that black-holes rather than refusing (dying signal; iOS waits
+// ~60s) would otherwise leave the map with no style object at all. The catch
+// below turns the abort into null, which is the point of the contract: a hang
+// becomes NO_BASEMAP_STYLE plus a retry, not a blank screen.
 const STYLE_FETCH_TIMEOUT_MS = 8000;
 
 async function fetchStyle(url: string): Promise<StyleSpecification | null> {
@@ -155,7 +155,7 @@ async function fetchStyle(url: string): Promise<StyleSpecification | null> {
  * The basemap style, or null when there is no reaching it.
  *
  * null is the whole contract: callers decide what an unreachable basemap
- * means. At construction it means BLANK_STYLE (a map that always loads, so the
+ * means. At construction it means NO_BASEMAP_STYLE (a map that always loads, so the
  * track always has somewhere to live); on a later swap it means keep what is
  * already up, because a failed satellite toggle must not blank a working
  * street map.
@@ -165,7 +165,7 @@ export async function resolveMapStyle(
   appearance: MapAppearance,
 ): Promise<StyleSpecification | null> {
   // Asked for, not failed — so it is a real answer, and never retried.
-  if (blankStyleRequested()) return BLANK_STYLE;
+  if (blankStyleRequested()) return NO_BASEMAP_STYLE;
   const key = await resolveMaptilerKey();
   // No key, no satellite (a stored "satellite" preference degrades to
   // street rather than erroring) — the toggle is hidden in that state via

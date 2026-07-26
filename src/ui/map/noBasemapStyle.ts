@@ -11,18 +11,18 @@ import type { StyleSpecification } from "maplibre-gl";
 // reference the pilot has for distance and drift — and on a map that follows
 // the aircraft for hours they have to be nearly free to draw.
 export const GRATICULE_LAYER = "graticule";
-export const BLANK_BACKGROUND_LAYER = "background";
+export const NO_BASEMAP_BACKGROUND_LAYER = "background";
 
 // Matches the container backdrop in map.module.css, so an unreachable basemap
 // looks like a deliberately empty map rather than a broken one. Two values
 // because the ground screens follow the system scheme; the blank style used to
 // be dark always, which read as "light mode is broken".
-export const BLANK_BACKGROUND: Record<"light" | "dark", string> = {
+export const NO_BASEMAP_BACKGROUND: Record<"light" | "dark", string> = {
   dark: "#191b1e",
   light: "#e2e5e9",
 };
 
-export const BLANK_STYLE: StyleSpecification = {
+export const NO_BASEMAP_STYLE: StyleSpecification = {
   version: 8,
   sources: {},
   layers: [

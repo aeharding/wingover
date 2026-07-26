@@ -3,17 +3,17 @@ import { AttributionControl, Map as MapLibreMap, Marker } from "maplibre-gl";
 import type { GeoJSONSource, MapMouseEvent } from "maplibre-gl";
 
 import {
-  BLANK_BACKGROUND,
-  BLANK_BACKGROUND_LAYER,
-  BLANK_STYLE,
-  GRATICULE_LAYER,
-} from "../blankStyle";
-import {
   type MapAppearance,
   type MapViewKind,
   resolveMapStyle,
   resolveMaptilerKey,
 } from "../config";
+import {
+  GRATICULE_LAYER,
+  NO_BASEMAP_BACKGROUND,
+  NO_BASEMAP_BACKGROUND_LAYER,
+  NO_BASEMAP_STYLE,
+} from "../noBasemapStyle";
 import type {
   Aircraft,
   AircraftState,
@@ -100,7 +100,7 @@ export async function createMapLibreMapView(
   const supportsSatellite = !!(await resolveMaptilerKey());
   const map = new MapLibreMap({
     container,
-    style: BLANK_STYLE,
+    style: NO_BASEMAP_STYLE,
     center: [-98.5, 39.8],
     zoom: 3,
     fadeDuration: 0,
@@ -224,11 +224,11 @@ export async function createMapLibreMapView(
   }
 
   function paintBlankBackdrop() {
-    if (!onBlankStyle || !map.getLayer(BLANK_BACKGROUND_LAYER)) return;
+    if (!onBlankStyle || !map.getLayer(NO_BASEMAP_BACKGROUND_LAYER)) return;
     map.setPaintProperty(
-      BLANK_BACKGROUND_LAYER,
+      NO_BASEMAP_BACKGROUND_LAYER,
       "background-color",
-      BLANK_BACKGROUND[appearance],
+      NO_BASEMAP_BACKGROUND[appearance],
     );
   }
 
@@ -257,7 +257,7 @@ export async function createMapLibreMapView(
     const next = await resolveMapStyle(currentBase, appearance);
     if (!next) return false;
     if (seq !== styleSeq) return true;
-    onBlankStyle = next === BLANK_STYLE;
+    onBlankStyle = next === NO_BASEMAP_STYLE;
     // A successful manual swap also ends the hunt; otherwise one more tick
     // fires and re-fetches for nothing.
     if (!onBlankStyle && retryTimer !== undefined) {
