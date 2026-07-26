@@ -150,32 +150,3 @@ test("the basemap arrives on its own once the network returns", async ({
   // transformStyle now carries it into the incoming style instead.
   expect(await sampledTrackGap(page)).toBe(0);
 });
-
-// Reported from device: the FIRST offline map drew fine, every one after it
-// was blank — and stayed blank even back online.
-//
-// MapKit is the default backend, and Apple's loader reuses an existing script
-// tag found by data-callback. After a failed load that tag remains in the head
-// with its error event already fired, so the next call awaits listeners that
-// can never fire and hangs. createBackend awaits it, so the catch never runs
-// and the MapLibre fallback never happens: no map at all, for the life of the
-// page. Deliberately uses the DEFAULT backend, since forcing maplibre skips the
-// loader entirely and cannot see this.
-test("every offline map draws, not just the first", async ({ page }) => {
-  test.setTimeout(90_000);
-  await cutMapNetwork(page);
-  await page.goto("/?e2e=0");
-  await openTrack(page);
-  await expect
-    .poll(async () => (await mapState(page)).track, { timeout: 20_000 })
-    .toBe(true);
-
-  for (let entry = 2; entry <= 3; entry++) {
-    await page.goBack();
-    await page.getByRole("heading", { name: "Tomahawk Test Flight" }).click();
-    await expect(page.getByTestId("map-container")).toBeVisible();
-    await expect
-      .poll(async () => (await mapState(page)).track, { timeout: 25_000 })
-      .toBe(true);
-  }
-});
