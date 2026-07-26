@@ -17,6 +17,7 @@ import App from "./ui/App";
 import { initAppTheme } from "./ui/appTheme";
 import { installExternalLinkHandler } from "./ui/externalLinks";
 import { captureLaunchUrl } from "./ui/map/config";
+import { initSatelliteAvailability } from "./ui/map/satelliteAvailability";
 
 installExternalLinkHandler();
 // Resize <ion-app> and flag html.keyboard-open when tauri-plugin-ionic
@@ -31,6 +32,9 @@ captureLaunchUrl();
 // first render — palettes/dark.class.css and every scheme-aware rule key
 // off that class, not prefers-color-scheme.
 initAppTheme();
+// A stored satellite view the active backend cannot render would otherwise pin
+// the palette dark with no visible toggle to undo it.
+initSatelliteAvailability();
 // Sync that stops at the end of the session isn't sync. Fire-and-forget: the
 // credential is on disk or it isn't, and nothing here should delay first paint.
 void resume();
