@@ -57,11 +57,9 @@ void main() {
 // uniform, rather than with fwidth(). That keeps this on plain GLSL ES 1.00
 // with no derivatives extension to feature-detect.
 //
-// It assumes a uniform scale across the frame, which holds while the map is
-// unpitched. maplibre's defaults leave touchPitch and dragRotate ENABLED, so a
-// two-finger vertical drag currently breaks that assumption and the lines go
-// uneven. Tracked separately; the flight surface probably wants maxPitch 0
-// regardless.
+// It assumes a uniform scale across the frame, which holds only while the map
+// is unpitched. The adapter builds every map with maxPitch 0, so that is not a
+// hope: a pitched map cannot occur. Rotation is fine — it preserves scale.
 const FRAGMENT_SHADER = `
 precision highp float;
 varying vec2 v_pos;
@@ -116,6 +114,11 @@ function compile(
  * that line is solid and IS the established grid. Apparent density never
  * changes and nothing pops.
  */
+function mercY(lat: number) {
+  const s = Math.sin((lat * Math.PI) / 180);
+  return 0.5 - Math.log((1 + s) / (1 - s)) / (4 * Math.PI);
+}
+
 export function gridForZoom(zoom: number, viewportPx: number) {
   const worldSize = 512 * 2 ** zoom;
   // A hidden tab reports clientWidth 0, and log2(0) is -Infinity: it would
@@ -149,6 +152,11 @@ export function createGraticuleLayer(
   let uWidth: WebGLUniformLocation;
   let uColor: WebGLUniformLocation;
   let uAlpha: WebGLUniformLocation;
+
+  // Reused: the live map follows the aircraft, so render() runs continuously
+  // for the length of a flight.
+  const translated = new Float32Array(16);
+  const quad = new Float32Array(8);
 
   return {
     id,
@@ -205,10 +213,6 @@ export function createGraticuleLayer(
       const ne = bounds.getNorthEast();
       const x0 = (sw.lng + 180) / 360;
       const x1 = (ne.lng + 180) / 360;
-      const mercY = (lat: number) => {
-        const s = Math.sin((lat * Math.PI) / 180);
-        return 0.5 - Math.log((1 + s) / (1 - s)) / (4 * Math.PI);
-      };
       const y0 = mercY(ne.lat);
       const y1 = mercY(sw.lat);
       const padX = (x1 - x0) * 0.5 || spacing;
@@ -225,7 +229,6 @@ export function createGraticuleLayer(
       const top = y0 - padY - anchorY;
       const bottom = y1 + padY - anchorY;
 
-      const translated = new Array<number>(16);
       for (let i = 0; i < 12; i++) translated[i] = matrix[i]!;
       for (let i = 0; i < 4; i++) {
         translated[12 + i] =
@@ -233,7 +236,7 @@ export function createGraticuleLayer(
       }
 
       gl.useProgram(program);
-      gl.uniformMatrix4fv(uMatrix, false, new Float32Array(translated));
+      gl.uniformMatrix4fv(uMatrix, false, translated);
       gl.uniform1f(uSpacing, spacing);
       gl.uniform1f(
         uPxPerUnit,
@@ -244,12 +247,16 @@ export function createGraticuleLayer(
       gl.uniform3fv(uColor, LINE_COLOR[getAppearance()]);
       gl.uniform1f(uAlpha, LINE_ALPHA);
 
+      quad[0] = left;
+      quad[1] = top;
+      quad[2] = right;
+      quad[3] = top;
+      quad[4] = left;
+      quad[5] = bottom;
+      quad[6] = right;
+      quad[7] = bottom;
       gl.bindBuffer(gl.ARRAY_BUFFER, buffer);
-      gl.bufferData(
-        gl.ARRAY_BUFFER,
-        new Float32Array([left, top, right, top, left, bottom, right, bottom]),
-        gl.DYNAMIC_DRAW,
-      );
+      gl.bufferData(gl.ARRAY_BUFFER, quad, gl.DYNAMIC_DRAW);
       gl.enableVertexAttribArray(aPos);
       gl.vertexAttribPointer(aPos, 2, gl.FLOAT, false, 0, 0);
       gl.enable(gl.BLEND);
