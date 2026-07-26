@@ -40,18 +40,15 @@ interface MapCanvasProps {
 
 // Instantiate the resolved backend, each in its own lazy chunk. MapKit is the
 // default; if it can't load or authorize (offline, blocked, wrong origin) fall
-// back to MapLibre so a map always appears. The fake backend is network-free
-// and used by the e2e suite.
+// back to MapLibre so a map always appears. Hermetic tests use the real
+// MapLibre adapter with ?map-style=blank, which fetches nothing — exercising
+// the real rendering path rather than a stub of it.
 async function createBackend(
   container: HTMLElement,
   base: MapViewKind,
   appearance: MapAppearance,
 ): Promise<MapView> {
   const backend = await resolveBackend();
-  if (backend === "fake") {
-    const { createFakeMapView } = await import("./fake/adapter");
-    return createFakeMapView(container);
-  }
   if (backend === "mapkit") {
     try {
       const { createMapKitMapView } = await import("./mapkit/adapter");

@@ -53,6 +53,16 @@ plugin from `src-tauri/plugins/wingover/` when touching Rust.
   wrong. (PR #158: a fifty-line readiness closure became
   `onReadinessAnswer` + `reclassifyTakeover`, the comments shrank 5x, and
   behavior did not change.)
+- **Comments record, they do not argue.** A comment stating a checkable
+  fact — a measured behavior, a platform quirk, an API contract — rots
+  loudly, because the next reader can test it. A comment justifying a
+  choice launders an assumption into authority and rots silently: it
+  makes wrong code read as settled, so nobody re-checks it. Three in
+  this repo did exactly that (a shader claiming "the map is never
+  pitched" while `touchPitch` was on; a generator selecting
+  `.map-container` after the class stopped existing; a claim that e2e
+  used a backend nothing selected). If you cannot say where a claim was
+  verified, do not write it in the voice of fact.
 - **`switch` and small early-return functions over ternary chains** —
   `switch (true)` included, when the arms are ranges rather than a
   discriminant. Nested ternaries are lint-banned repo-wide.

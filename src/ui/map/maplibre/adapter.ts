@@ -8,6 +8,12 @@ import {
   resolveMapStyle,
   resolveMaptilerKey,
 } from "../config";
+import {
+  GRATICULE_LAYER,
+  NO_BASEMAP_BACKGROUND,
+  NO_BASEMAP_BACKGROUND_LAYER,
+  NO_BASEMAP_STYLE,
+} from "../noBasemapStyle";
 import type {
   Aircraft,
   AircraftState,
@@ -26,11 +32,15 @@ import type {
   Unsub,
 } from "../types";
 import { createAircraftLayer } from "./aircraft";
+import { createGraticuleLayer } from "./graticule";
 
 const LONG_PRESS_MS = 500;
 const MOVE_TOLERANCE_PX = 10;
 const ATTRIBUTION_LINGER_MS = 6000;
 const REVEAL_FALLBACK_MS = 4000;
+// How soon the map should reappear once a pilot flies back into signal. The
+// cost of a missed attempt on a long flight has not been measured; see #170.
+const BASEMAP_RETRY_MS = 10_000;
 
 // One-per-launch attribution reveal: the MapTiler credit expands the first
 // time the app shows a map, lingers, then collapses and stays collapsed.
@@ -74,14 +84,21 @@ export async function createMapLibreMapView(
   appearance: MapAppearance,
 ): Promise<MapView> {
   let currentBase = initialBase;
-  const style = await resolveMapStyle(initialBase, appearance);
+  // Built on the local blank style, ALWAYS, and upgraded after. Blocking
+  // construction on the style fetch meant a network that hangs rather than
+  // refusing left no map object at all — measured at 8s of empty loading veil
+  // against a black-holed host, which is what a joined-but-dead wifi does.
+  //
+  // So the map exists from the first frame: style.load fires immediately, the
+  // overlay registry below runs, and the track draws whether or not there is a
+  // network. The track is local data and must never wait on one.
   // Decided once at creation: satellite here costs MapTiler quota, so it
   // exists only on the pilot's own key. A key added in Settings takes
   // effect on the next map, which is fine — Settings has no map.
   const supportsSatellite = !!(await resolveMaptilerKey());
   const map = new MapLibreMap({
     container,
-    style,
+    style: NO_BASEMAP_STYLE,
     center: [-98.5, 39.8],
     zoom: 3,
     fadeDuration: 0,
@@ -166,9 +183,160 @@ export async function createMapLibreMapView(
     }
   }
 
+  // Only vector/raster count as a basemap: our own geojson overlays need no
+  // network, so they must not make an empty map look furnished.
+  function hasBasemap(): boolean {
+    return Object.values(map.getStyle()?.sources ?? {}).some(
+      (source) =>
+        source.type === "vector" ||
+        source.type === "raster" ||
+        source.type === "raster-dem",
+    );
+  }
+
+  function showGrid() {
+    if (map.getLayer(GRATICULE_LAYER)) return;
+    // Custom layers are absent from getStyle(), so anchor on a real one.
+    const aboveBackdrop = map
+      .getStyle()
+      ?.layers?.find((layer) => layer.type !== "background")?.id;
+    map.addLayer(
+      createGraticuleLayer(GRATICULE_LAYER, () => appearance),
+      aboveBackdrop,
+    );
+  }
+
+  function hideGrid() {
+    if (map.getLayer(GRATICULE_LAYER)) map.removeLayer(GRATICULE_LAYER);
+  }
+
+  function paintBackdrop() {
+    if (!map.getLayer(NO_BASEMAP_BACKGROUND_LAYER)) return;
+    map.setPaintProperty(
+      NO_BASEMAP_BACKGROUND_LAYER,
+      "background-color",
+      NO_BASEMAP_BACKGROUND[appearance],
+    );
+  }
+
+  // The grid stands IN for a basemap, so a style with tiles retires it. Asked
+  // of the style each time rather than remembered, so either direction settles
+  // itself. See #170 for why a basemap whose tiles die individually still
+  // counts as having one.
+  function syncNoBasemap() {
+    if (!map.isStyleLoaded()) return;
+    if (hasBasemap()) {
+      hideGrid();
+      return;
+    }
+    paintBackdrop();
+    showGrid();
+  }
+
   map.on("style.load", sync);
   map.on("styledata", sync);
   map.on("idle", sync);
+
+  // NOT on idle, which fires 9-18x/s while the map moves. hasBasemap() reads
+  // getStyle(), and maplibre serializes the whole style to answer that —
+  // measured at ~1000-2000 cloned layer specs per second on the flight
+  // surface. The answer only changes when the style does.
+  map.on("style.load", () => {
+    syncNoBasemap();
+    if (hasBasemap()) stopHunting();
+  });
+
+  // ── basemap ───────────────────────────────────────────────────────────
+
+  let retryTimer: ReturnType<typeof setInterval> | undefined;
+
+  // A style swap drops every runtime-added layer, and re-adding a geojson
+  // source costs a worker parse before it draws — long enough that the track
+  // visibly blinked out. Carried in with the style, it is never absent.
+  const carryOverlays: NonNullable<
+    Parameters<MapLibreMap["setStyle"]>[1]
+  >["transformStyle"] = (previous, incoming) => {
+    // Throwing here is fatal, not recoverable: maplibre catches it, tears the
+    // CURRENT style down and rebuilds, calls this again, throws again — and
+    // the map is left with no style, no track and no way back.
+    if (!previous || !Array.isArray(incoming?.layers)) return incoming;
+    const ours = new Set(lines.map((rec) => rec.layerId));
+    const sources = { ...incoming.sources };
+    for (const rec of lines) {
+      const source = previous.sources[rec.sourceId];
+      if (source) sources[rec.sourceId] = source;
+    }
+    return {
+      ...incoming,
+      sources,
+      // Appended, so the track stays above the basemap.
+      layers: [
+        ...incoming.layers,
+        ...previous.layers.filter((layer) => ours.has(layer.id)),
+      ],
+    };
+  };
+
+  // The retry ticks while the pilot can also toggle satellite, so an older
+  // fetch can settle last; without this it would silently undo the newer one.
+  // A destroyed map counts as stale: an in-flight resolve would otherwise
+  // build a whole Style on a removed map and restart the hunt after cleanup.
+  let styleSeq = 0;
+  let destroyed = false;
+  const isStale = (seq: number) => destroyed || seq !== styleSeq;
+
+  function fallBackToNoBasemap() {
+    if (hasBasemap()) {
+      map.setStyle(NO_BASEMAP_STYLE, { transformStyle: carryOverlays });
+    }
+    huntForBasemap();
+  }
+
+  /**
+   * @param pilotAsked whether this came from the pilot choosing a view.
+   *
+   * Only a pilot's own choice may drop a working basemap. Showing the street
+   * map after they tapped satellite is the map lying about what it shows — but
+   * an appearance flip or a retry tick is not a request to change the view, and
+   * blanking a basemap they are flying on because the OS went dark is worse
+   * than a stale one.
+   */
+  async function applyStyle(pilotAsked = false): Promise<void> {
+    const seq = ++styleSeq;
+    const next = await resolveMapStyle(currentBase, appearance);
+    if (isStale(seq)) return;
+    if (!next) {
+      if (pilotAsked || !hasBasemap()) fallBackToNoBasemap();
+      else huntForBasemap();
+      return;
+    }
+    if (next === NO_BASEMAP_STYLE) return;
+    map.setStyle(next, { transformStyle: carryOverlays });
+  }
+
+  // Tiles re-request themselves per viewport; a style that never arrived does
+  // not, and the Fly map is mounted for a whole flight, so nothing else would
+  // ever re-resolve it. Not driven by `online`: cell coverage returning
+  // mid-flight frequently never changes it, and each attempt fetches, so a
+  // failure changes nothing.
+  function stopHunting() {
+    clearInterval(retryTimer);
+    retryTimer = undefined;
+  }
+
+  function huntForBasemap() {
+    if (retryTimer !== undefined) return;
+    retryTimer = setInterval(() => {
+      // Pointless while hidden, and iOS suspends the timer anyway; leaving it
+      // out keeps the flight surface quiet.
+      if (document.visibilityState !== "visible") return;
+      void applyStyle();
+    }, BASEMAP_RETRY_MS);
+  }
+
+  // The upgrade the map was built to receive. applyStyle starts the hunt
+  // itself if the basemap turns out to be unreachable.
+  void applyStyle();
 
   // ── gesture fan-out ───────────────────────────────────────────────────
   const longPressHandlers = new Set<(e: GestureEvent) => void>();
@@ -205,18 +373,22 @@ export async function createMapLibreMapView(
     setInsets() {},
     setBaseMap(base) {
       currentBase = base;
-      void resolveMapStyle(base, appearance).then((next) => map.setStyle(next));
+      void applyStyle(true);
     },
     setAppearance(next) {
       // Restyle in place — the content registry re-adds overlays on the
       // style swap exactly as it does for setBaseMap.
       appearance = next;
-      void resolveMapStyle(currentBase, appearance).then((style2) =>
-        map.setStyle(style2),
-      );
+      // Directly, not via the restyle: offline applyStyle returns early
+      // because there is no basemap to fetch, and the pilot would be left
+      // looking at a dark map in light mode.
+      syncNoBasemap();
+      void applyStyle();
     },
 
     destroy() {
+      destroyed = true;
+      stopHunting();
       map.remove();
     },
 

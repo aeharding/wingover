@@ -4,6 +4,7 @@ import type {
 } from "maplibre-gl";
 
 import { getSetting } from "../../storage/local";
+import { NO_BASEMAP_STYLE } from "./noBasemapStyle";
 
 export type MapViewKind = "street" | "satellite";
 
@@ -51,19 +52,16 @@ function blankStyleRequested(): boolean {
   return launchParam("map-style") === "blank";
 }
 
-export type MapBackend = "mapkit" | "maplibre" | "fake";
+export type MapBackend = "mapkit" | "maplibre";
 
 // MapKit JS is the default map backend everywhere — its token authorizes on
-// localhost, so plain `vite` and the Tauri dev webview get it too. Overrides
-// (highest first): ?map= in the URL, then a "wingover.map" localStorage flag
-// (how e2e forces the fake, deterministic, network-free backend), then the
-// blank debug style (implies MapLibre for offline manual debugging), then
-// the pilot's Settings choice.
+// localhost, so plain `vite` and the Tauri dev webview get it too. Overrides,
+// highest first: ?map= in the URL, then a "wingover.map" localStorage flag,
+// then ?map-style=blank (which implies MapLibre, since the no-basemap style is
+// a maplibre style), then the pilot's Settings choice.
 export async function resolveBackend(): Promise<MapBackend> {
   const override = backendOverride();
-  if (override === "mapkit" || override === "maplibre" || override === "fake") {
-    return override;
-  }
+  if (override === "mapkit" || override === "maplibre") return override;
   if (blankStyleRequested()) return "maplibre";
   const chosen = await getSetting("mapBackend");
   if (chosen === "mapkit" || chosen === "maplibre") return chosen;
@@ -79,18 +77,6 @@ function backendOverride(): string | null {
     return null;
   }
 }
-
-const BLANK_STYLE: StyleSpecification = {
-  version: 8,
-  sources: {},
-  layers: [
-    {
-      id: "background",
-      type: "background",
-      paint: { "background-color": "#191b1e" },
-    },
-  ],
-};
 
 // The pilot's own MapTiler key, or null. There is deliberately no built-in
 // key and no build-time env fallback: satellite is MapKit's job (free on the
@@ -111,19 +97,15 @@ export async function resolveMaptilerKey(): Promise<string | null> {
 async function satelliteStyle(
   key: string,
   appearance: MapAppearance,
-): Promise<StyleSpecification | string> {
-  const style = await fetch(
+): Promise<StyleSpecification | null> {
+  const style = await fetchStyle(
     `https://api.maptiler.com/maps/hybrid-v4/style.json?key=${key}`,
-  )
-    .then((response) =>
-      response.ok ? (response.json() as Promise<StyleSpecification>) : null,
-    )
-    .catch(() => null);
+  );
   if (!style?.sources) {
     console.warn(
       "Satellite unavailable (MapTiler hybrid style — key not valid for this origin); showing street view",
     );
-    return streetStyleUrl(key, appearance);
+    return fetchStyle(streetStyleUrl(key, appearance));
   }
 
   const base = style.sources.satellite;
@@ -142,15 +124,50 @@ async function satelliteStyle(
   return style;
 }
 
+// Fetched here rather than handed to maplibre as a URL, so that a style we
+// cannot reach is a value the caller can SEE. Given a URL, maplibre fetches it
+// itself and a failure leaves the map with no style at all — which takes the
+// track down with it, because the overlay registry runs on style.load. The
+// satellite path already worked this way; this makes street match it.
+//
+// Safe to hand back a parsed object: OpenFreeMap's styles use absolute URLs
+// for sprite, glyphs and every source, so nothing resolves relative to the
+// style URL we just dropped.
+
+// A connection that black-holes rather than refusing would otherwise leave the
+// map with no style at all. The catch below turns the abort into null, so a
+// hang becomes NO_BASEMAP_STYLE plus a retry rather than a blank screen.
+const STYLE_FETCH_TIMEOUT_MS = 8000;
+
+async function fetchStyle(url: string): Promise<StyleSpecification | null> {
+  return fetch(url, { signal: AbortSignal.timeout(STYLE_FETCH_TIMEOUT_MS) })
+    .then((response) =>
+      response.ok ? (response.json() as Promise<StyleSpecification>) : null,
+    )
+    .catch(() => null);
+}
+
+/**
+ * The basemap style, or null when there is no reaching it.
+ *
+ * null is the whole contract: callers decide what an unreachable basemap
+ * means. At construction it means NO_BASEMAP_STYLE (a map that always loads, so the
+ * track always has somewhere to live); on a later swap it means keep what is
+ * already up, because a failed satellite toggle must not blank a working
+ * street map.
+ */
 export async function resolveMapStyle(
   view: MapViewKind,
   appearance: MapAppearance,
-): Promise<StyleSpecification | string> {
-  if (blankStyleRequested()) return BLANK_STYLE;
+): Promise<StyleSpecification | null> {
+  // Asked for, not failed — so it is a real answer, and never retried.
+  if (blankStyleRequested()) return NO_BASEMAP_STYLE;
   const key = await resolveMaptilerKey();
   // No key, no satellite (a stored "satellite" preference degrades to
   // street rather than erroring) — the toggle is hidden in that state via
   // MapView.supportsSatellite.
-  if (view === "street" || !key) return streetStyleUrl(key, appearance);
+  if (view === "street" || !key) {
+    return fetchStyle(streetStyleUrl(key, appearance));
+  }
   return satelliteStyle(key, appearance);
 }
