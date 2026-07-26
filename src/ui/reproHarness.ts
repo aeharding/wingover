@@ -463,8 +463,9 @@ export async function runReproHarness() {
     lines.some((l) => l.includes("after=POISONED") || l.includes(": POISONED")),
     lines,
   );
-  // Then hand the screen over to a live map whose health can be read from a
-  // screenshot while gestures are driven from the host.
+  // Hand over to the live map only after the verdict has been readable for a
+  // while — the screenshot has to catch the results, not the watcher.
+  await wait(150000);
   try {
     document.querySelectorAll("div").forEach((d) => {
       if (d.style.zIndex === "2147483647") d.remove();
