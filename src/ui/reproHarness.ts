@@ -29,9 +29,9 @@ const wait = (ms: number) => new Promise((r) => setTimeout(r, ms));
 
 function paint(poisoned: boolean, lines: string[]) {
   const el = document.createElement("div");
-  el.style.cssText = `position:fixed;inset:0;z-index:2147483647;background:${
+  el.style.cssText = `position:fixed;left:0;right:0;bottom:0;height:46%;z-index:2147483647;background:${
     poisoned ? "#c00" : "#060"
-  };color:#fff;font:600 19px/1.35 ui-monospace,monospace;padding:70px 18px;white-space:pre-wrap;overflow:auto`;
+  };color:#fff;font:600 17px/1.3 ui-monospace,monospace;padding:12px;white-space:pre-wrap;overflow:auto`;
   el.textContent = (poisoned ? "REPRODUCED\n\n" : "not reproduced\n\n") + lines.join("\n");
   document.body.appendChild(el);
   document.title = poisoned ? "REPRO:YES" : "REPRO:NO";
@@ -171,6 +171,60 @@ async function padAndResize(mk: typeof mapkit, skip: boolean): Promise<string> {
   return `C(skip=${skip}): survived ${CYCLES}`;
 }
 
+/** D: a map whose context is already lost, then driven the way the app drives it. */
+async function driveAfterContextLoss(mk: typeof mapkit): Promise<string> {
+  const host = makeHost(false);
+  host.style.height = "300px";
+  const map = new mk.Map(host, {
+    isRotationEnabled: true,
+    center: new mk.Coordinate(39.8, -98.5),
+  }) as unknown as MapLike;
+  await wait(1800);
+  const rendered = health(map);
+
+  const canvas = host.querySelector("canvas") as HTMLCanvasElement | null;
+  const gl = canvas?.getContext("webgl2") ?? canvas?.getContext("webgl");
+  const ext = (gl as WebGLRenderingContext | null)?.getExtension(
+    "WEBGL_lose_context",
+  ) as { loseContext(): void } | null;
+  ext?.loseContext();
+  await wait(1000);
+  const afterLoss = health(map);
+
+  // Now everything the app does that a probe never did, on a dead context.
+  const steps: string[] = [];
+  const m = map as unknown as Record<string, unknown> & {
+    convertCoordinateToPointOnPage(c: unknown): unknown;
+  };
+  try {
+    (m as unknown as { padding: unknown }).padding = new mk.Padding(50, 0, 0, 0);
+    steps.push(`pad=${health(map)}`);
+  } catch (e) {
+    steps.push(`pad threw ${String(e).slice(0, 40)}`);
+  }
+  host.style.height = "340px";
+  await frame();
+  await frame();
+  steps.push(`resize=${health(map)}`);
+  try {
+    const c = (map as unknown as { center: { latitude: number; longitude: number } }).center;
+    m.convertCoordinateToPointOnPage(new mk.Coordinate(c.latitude, c.longitude));
+    m.convertCoordinateToPointOnPage(new mk.Coordinate(c.latitude, c.longitude + 0.02));
+    steps.push(`project=${health(map)}`);
+  } catch (e) {
+    steps.push(`project threw ${String(e).slice(0, 50)}`);
+  }
+  try {
+    (m as unknown as { isRotationEnabled: boolean }).isRotationEnabled = false;
+    steps.push(`rotGate=${health(map)}`);
+  } catch (e) {
+    steps.push(`rotGate threw ${String(e).slice(0, 40)}`);
+  }
+  const out = `D after-loss: rendered=${rendered} lost=${afterLoss}\n   ${steps.join("\n   ")}\n   ${canvasState(host)}`;
+  // Leave the map on screen so the screenshot shows whether it is grey.
+  return out;
+}
+
 export async function runReproHarness() {
   const lines: string[] = [];
   try {
@@ -181,6 +235,7 @@ export async function runReproHarness() {
       () => floodContexts(mk),
       () => padAndResize(mk, true),
       () => padAndResize(mk, false),
+      () => driveAfterContextLoss(mk),
     ]) {
       try {
         lines.push(await run());
