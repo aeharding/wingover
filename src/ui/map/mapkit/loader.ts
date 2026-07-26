@@ -16,6 +16,10 @@ function mapKitToken(): string {
   );
 }
 
+// Mirrors Apple's private CALLBACK_NAME; a rename there surfaces as a drill
+// failure rather than the hang returning.
+const LOADER_CALLBACK = "initMapKitLoaderV2";
+
 let ready: Promise<typeof mapkit> | null = null;
 
 // Loads MapKit JS 6 via Apple's official npm loader (@apple/mapkit-loader):
@@ -25,6 +29,17 @@ let ready: Promise<typeof mapkit> | null = null;
 // fall back to MapLibre. Libraries: `map` (the interactive map), `annotations`
 // (the pins + midpoint handles), and `overlays` (the flight/route polylines +
 // their Style/LineGradient).
+// Apple's loader reuses an existing tag, so one whose `error` already fired
+// hangs the next call forever. Only remove it when no namespace appeared: a
+// second mapkit.core.js overwrites `window.mapkit`, and overlays from the new
+// namespace throw when passed to a map built from the old one.
+function cleanupLoaderTagIfNeeded() {
+  if ("mapkit" in window) return;
+  document
+    .querySelector(`script[data-callback="${LOADER_CALLBACK}"]`)
+    ?.remove();
+}
+
 export function loadMapKit(): Promise<typeof mapkit> {
   // A rejected load is NOT cached: with the provider switchable at runtime,
   // one offline moment must not pin the session to the MapLibre fallback
@@ -36,6 +51,7 @@ export function loadMapKit(): Promise<typeof mapkit> {
     () => mapkit,
     (error: unknown) => {
       ready = null;
+      cleanupLoaderTagIfNeeded();
       throw error;
     },
   );
