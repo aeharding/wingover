@@ -1,5 +1,6 @@
 import { getSetting, onSettingChanged, setSetting } from "../../storage/local";
-import { resolveBackend, resolveMaptilerKey } from "./config";
+import { resolveBackend } from "./config";
+import { resolveMaptilerKey } from "./maplibre/style";
 
 /**
  * Satellite is free on MapKit but needs the pilot's own MapTiler key on

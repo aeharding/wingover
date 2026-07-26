@@ -2,18 +2,7 @@ import type { Feature, FeatureCollection } from "geojson";
 import { AttributionControl, Map as MapLibreMap, Marker } from "maplibre-gl";
 import type { GeoJSONSource, MapMouseEvent } from "maplibre-gl";
 
-import {
-  type MapAppearance,
-  type MapViewKind,
-  resolveMapStyle,
-  resolveMaptilerKey,
-} from "../config";
-import {
-  GRATICULE_LAYER,
-  NO_BASEMAP_BACKGROUND,
-  NO_BASEMAP_BACKGROUND_LAYER,
-  NO_BASEMAP_STYLE,
-} from "../noBasemapStyle";
+import type { MapAppearance, MapViewKind } from "../config";
 import type {
   Aircraft,
   AircraftState,
@@ -33,6 +22,13 @@ import type {
 } from "../types";
 import { createAircraftLayer } from "./aircraft";
 import { createGraticuleLayer } from "./graticule";
+import {
+  GRATICULE_LAYER,
+  NO_BASEMAP_BACKGROUND,
+  NO_BASEMAP_BACKGROUND_LAYER,
+  NO_BASEMAP_STYLE,
+} from "./noBasemapStyle";
+import { resolveMapStyle, resolveMaptilerKey } from "./style";
 
 const LONG_PRESS_MS = 500;
 const MOVE_TOLERANCE_PX = 10;

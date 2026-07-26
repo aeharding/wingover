@@ -3,9 +3,10 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 // The pilot's stored settings are the only thing resolveMapStyle reads besides
 // the network; stub them so these tests are about the STYLE decision alone.
 const settings = vi.hoisted(() => ({ getSetting: vi.fn() }));
-vi.mock("../../storage/local", () => settings);
+vi.mock("../../../storage/local", () => settings);
 
-import { captureLaunchUrl, resolveMapStyle } from "./config";
+import { captureLaunchUrl } from "../config";
+import { resolveMapStyle } from "./style";
 
 const STYLE = { version: 8, sources: {}, layers: [] };
 
@@ -19,7 +20,7 @@ function respond(ok: boolean) {
 beforeEach(() => {
   vi.clearAllMocks();
   settings.getSetting.mockResolvedValue(null); // no MapTiler key
-  // config.ts reads location.search at module scope via captureLaunchUrl;
+  // config.ts pins location.search at module scope via captureLaunchUrl;
   // vitest runs in node, where there is no location.
   (globalThis as { location?: unknown }).location ??= { search: "" };
   captureLaunchUrl();
@@ -76,7 +77,7 @@ describe("resolveMapStyle", () => {
       search: "?map-style=blank",
     };
     vi.resetModules();
-    const fresh = await import("./config");
+    const fresh = await import("./style");
     // Identity, not shape: the adapter distinguishes "asked for blank" from
     // "could not reach a basemap" by reference. Take it from the same fresh
     // module graph, since resetModules mints a new NO_BASEMAP_STYLE object.
