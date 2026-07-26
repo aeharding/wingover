@@ -202,7 +202,33 @@ export async function createMapLibreMapView(
     const next = await resolveMapStyle(currentBase, appearance);
     if (!next) return;
     onBlankStyle = next === BLANK_STYLE;
-    map.setStyle(next);
+    // Carry our own sources and layers INTO the incoming style, rather than
+    // letting the swap drop them and re-adding them afterwards.
+    //
+    // Without this the track visibly blinks out for about a second when the
+    // basemap arrives: a style change removes every runtime-added layer, and
+    // putting a geojson source back costs a worker parse before it draws
+    // again. Committed as part of the new style it is simply never absent.
+    // (This is what transformStyle is for — maplibre's own first listed use is
+    // carrying state from the previous style across gracefully.)
+    map.setStyle(next, {
+      transformStyle: (previous, incoming) => {
+        if (!previous) return incoming;
+        const ours = new Set(lines.map((rec) => rec.layerId));
+        const carried = previous.layers.filter((layer) => ours.has(layer.id));
+        const sources = { ...incoming.sources };
+        for (const rec of lines) {
+          const source = previous.sources[rec.sourceId];
+          if (source) sources[rec.sourceId] = source;
+        }
+        return {
+          ...incoming,
+          sources,
+          // Appended, so the track stays above the basemap.
+          layers: [...incoming.layers, ...carried],
+        };
+      },
+    });
   }
 
   // Tiles heal themselves — maplibre re-requests them per viewport — but a

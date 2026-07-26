@@ -46,6 +46,33 @@ interface MapLibreLike {
   getLayer(id: string): unknown;
 }
 
+// Watch the track CONTINUOUSLY from inside the page. A before/after check
+// cannot see a gap that opens and closes between two awaits, and that gap is
+// exactly the defect: the track vanished for about a second as the basemap
+// swapped in.
+async function startTrackSampler(page: Page) {
+  await page.evaluate(() => {
+    const w = window as unknown as { __gap?: number; __sampler?: number };
+    w.__gap = 0;
+    w.__sampler = window.setInterval(() => {
+      const el = document.querySelector('[data-testid="map-container"]') as
+        (HTMLElement & { __map?: { getLayer(id: string): unknown } }) | null;
+      const map = el?.__map;
+      if (!map?.getLayer) return;
+      if (!map.getLayer("track")) w.__gap = (w.__gap ?? 0) + 1;
+    }, 50);
+  });
+}
+
+// Number of samples in which the track was missing. Must be zero.
+async function sampledTrackGap(page: Page) {
+  return page.evaluate(() => {
+    const w = window as unknown as { __gap?: number; __sampler?: number };
+    if (w.__sampler) window.clearInterval(w.__sampler);
+    return w.__gap ?? 0;
+  });
+}
+
 // Seed a flight from the local GPX fixture and open its detail map. Import is
 // entirely local, so it works with every external host blocked.
 async function openTrack(page: Page) {
@@ -97,18 +124,17 @@ test("the basemap arrives on its own once the network returns", async ({
   expect((await mapState(page)).basemapSources).toBe(0);
 
   // No reload, no interaction, no connectivity event — just coverage back.
+  await startTrackSampler(page);
   blocked = false;
   await expect
     .poll(async () => (await mapState(page)).basemapSources, {
       timeout: 45_000,
     })
     .toBeGreaterThan(0);
-  // And the pilot's data comes back with it. Polled, not instant: setStyle
-  // drops every runtime-added layer and the content registry re-adds them on
-  // style.load, so there is a brief window mid-swap with no track. That window
-  // is pre-existing — an appearance flip does the same — and what matters is
-  // that it closes.
-  await expect
-    .poll(async () => (await mapState(page)).track, { timeout: 15_000 })
-    .toBe(true);
+  // And the track was never absent while that happened. Polling for it to
+  // come BACK would hide the bug this pins: a style swap drops every
+  // runtime-added layer, and restoring a geojson source costs a worker parse,
+  // so the track blinked out for about a second — reported from the device.
+  // transformStyle now carries it into the incoming style instead.
+  expect(await sampledTrackGap(page)).toBe(0);
 });
