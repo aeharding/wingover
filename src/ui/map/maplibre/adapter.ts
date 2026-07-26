@@ -103,6 +103,9 @@ export async function createMapLibreMapView(
     zoom: 3,
     fadeDuration: 0,
     attributionControl: false,
+    // The graticule shader does not support a pitched map, and the MapKit
+    // backend has no pitch to match.
+    maxPitch: 0,
   });
   map.addControl(new AttributionControl({ compact: true }), "bottom-left");
   (container as HTMLElement & { __map?: MapLibreMap }).__map = map;
