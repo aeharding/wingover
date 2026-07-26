@@ -7,6 +7,7 @@ import {
 } from "react";
 
 import { onSettingChanged } from "../../storage/local";
+import { breadcrumb } from "../diag";
 import { type MapAppearance, type MapViewKind, resolveBackend } from "./config";
 import type { Insets, MapView } from "./types";
 
@@ -166,6 +167,11 @@ export default function MapCanvas({
       if (!(await laidOut(container, () => cancelled))) return;
       const createdWith = baseRef.current;
       const createdAppearance = appearanceRef.current;
+      breadcrumb("MapCanvas.create", {
+        w: container.clientWidth,
+        h: container.clientHeight,
+        epoch,
+      });
       view = await createBackend(container, createdWith, createdAppearance);
       if (cancelled) {
         view.destroy();
@@ -214,6 +220,15 @@ export default function MapCanvas({
       // preserves. Backend-agnostic: MapLibre's stored zoom would have
       // survived a hidden read, but the rule stays about visibility, not
       // backend.
+      // DIAGNOSTIC (#185): this guard checks WIDTH only, so a container
+      // collapsed to zero height still calls camera() -> map.center, which is
+      // where MapKit throws on a degenerate rect. Record both dimensions so
+      // the next crash says whether that is what happened.
+      breadcrumb("MapCanvas.cleanup", {
+        hasView: !!view,
+        w: container?.clientWidth ?? null,
+        h: container?.clientHeight ?? null,
+      });
       if (view && (container?.clientWidth ?? 0) > 0) {
         preservedCameraRef.current = view.camera();
       }

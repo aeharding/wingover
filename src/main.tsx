@@ -15,10 +15,13 @@ import { resume } from "./sync";
 import { installCapacitorShim, installKeyboardLayout } from "./tauri-ionic";
 import App from "./ui/App";
 import { initAppTheme } from "./ui/appTheme";
+import { installDiagnostics } from "./ui/diag";
 import { installExternalLinkHandler } from "./ui/externalLinks";
 import { captureLaunchUrl } from "./ui/map/config";
 import { initSatelliteAvailability } from "./ui/map/satelliteAvailability";
 
+// DIAGNOSTIC (#185): first, so it is watching before anything else runs.
+installDiagnostics();
 installExternalLinkHandler();
 // Resize <ion-app> and flag html.keyboard-open when tauri-plugin-ionic
 // reports the on-screen keyboard (dormant off-device).

@@ -53,6 +53,13 @@ const channel =
       : "development";
 
 export default defineConfig({
+  // DIAGNOSTIC BRANCH ONLY — do not merge. A minified stack cost a whole
+  // investigation round on #185 ("adapter-CZk-FrZQ.js:1:4161" names nothing),
+  // so this build keeps function names and ships sourcemaps.
+  build: {
+    minify: false,
+    sourcemap: true,
+  },
   define: {
     __APP_VERSION__: JSON.stringify(version),
     __APP_GIT_SHA__: JSON.stringify(gitSha),
