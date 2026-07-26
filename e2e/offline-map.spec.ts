@@ -31,6 +31,7 @@ function mapState(page: Page) {
     return {
       ready: true as const,
       track: !!map.getLayer("track"),
+      grid: !!map.getLayer("graticule"),
       // By TYPE, not by name: a basemap is vector or raster, while every
       // overlay we add ourselves is geojson and needs no network. Names would
       // not discriminate — the track's source id is its testId, "track".
@@ -97,6 +98,9 @@ test("with no network the track still draws", async ({ page }) => {
     .poll(async () => (await mapState(page)).track, { timeout: 15_000 })
     .toBe(true);
   expect((await mapState(page)).basemapSources).toBe(0);
+  // The grid is the only thing giving scale to a map with no basemap, and it
+  // is what the pilot reads drift against.
+  expect((await mapState(page)).grid).toBe(true);
 });
 
 // The requirement that forced the retry: the Fly map is mounted for a whole
