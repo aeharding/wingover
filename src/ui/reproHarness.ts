@@ -370,6 +370,69 @@ async function liveWatch(mk: typeof mapkit) {
   }, 500);
 }
 
+/**
+ * H: THE mechanism. iOS steals a touch mid-pan (Reachability, app switcher),
+ * MapKit's recognizer never unwinds on pointercancel — touchesCancelled is an
+ * empty method and enterCancelledState is only reachable from the `enabled`
+ * setter — so it stays armed with an empty touch list. The next stray move
+ * divides by zero touches, and Camera.translate writes the NaN straight into
+ * camera.center via Object.create, bypassing every validator.
+ */
+async function cancelledGesture(mk: typeof mapkit, prevent: boolean): Promise<string> {
+  const [map, host] = await newMap(mk);
+  const before = health(map);
+  const el = (host.querySelector("canvas") ?? host) as HTMLElement;
+  const pe = (type: string, x: number, y: number, id = 1) =>
+    new PointerEvent(type, {
+      pointerId: id,
+      pointerType: "touch",
+      isPrimary: true,
+      clientX: x,
+      clientY: y,
+      bubbles: true,
+      cancelable: true,
+    });
+
+  el.dispatchEvent(pe("pointerdown", 180, 300));
+  await frame();
+  window.dispatchEvent(pe("pointermove", 200, 320));
+  await frame();
+  window.dispatchEvent(pe("pointermove", 230, 350));
+  await frame();
+
+  // iOS steals the touch.
+  window.dispatchEvent(pe("pointercancel", 230, 350));
+  await frame();
+
+  if (prevent) {
+    // MapKit's own interrupt idiom: the only path to enterCancelledState.
+    (map as unknown as { isScrollEnabled: boolean }).isScrollEnabled = false;
+    (map as unknown as { isScrollEnabled: boolean }).isScrollEnabled = true;
+    await frame();
+  }
+
+  // A stray move with nothing tracked.
+  window.dispatchEvent(pe("pointermove", 260, 380));
+  await frame();
+  await frame();
+  await wait(700);
+
+  const after = health(map);
+  let repaired = "n/a";
+  if (after.startsWith("POISONED")) {
+    try {
+      (map as unknown as { center: unknown }).center = new mk.Coordinate(39.8, -98.5);
+      await wait(600);
+      repaired = health(map);
+    } catch (e) {
+      repaired = `repair threw ${String(e).slice(0, 40)}`;
+    }
+  }
+  map.destroy();
+  host.remove();
+  return `H cancel${prevent ? "+guard" : ""}: b=${before} a=${after} repair=${repaired}`;
+}
+
 export async function runReproHarness() {
   const lines: string[] = [];
   try {
@@ -384,6 +447,8 @@ export async function runReproHarness() {
       () => deleteVisibleMapRect(mk),
       () => regionOnDeadContext(mk),
       () => loseDuringResize(mk),
+      () => cancelledGesture(mk, false),
+      () => cancelledGesture(mk, true),
     ]) {
       try {
         lines.push(await run());
