@@ -187,38 +187,48 @@ export async function createMapLibreMapView(
     }
   }
 
-  // The grid sits directly above the basemap's own background and below
-  // everything else, on EVERY style — not just the blank one.
+  // The grid stands in for a basemap; it is not an overlay on one. So it
+  // exists only while the style has no tiles to draw at all.
   //
-  // Imagery covers it the moment tiles arrive, so it costs nothing visually
-  // when the map is working. It reappears exactly where tiles have not: lose
-  // signal mid-flight and pan into uncached ground and the pilot still has a
-  // reference for scale and drift instead of a void. That case is the whole
-  // point, and it is invisible to a blank-style-only grid because the style
-  // itself loaded fine.
+  // Derived from the style rather than remembered: geojson sources are our own
+  // overlays and need no network, so only a vector/raster source counts as a
+  // basemap. Adding AND removing here means a style swap in either direction
+  // settles itself, with nothing to keep in sync.
   //
-  // Anchored by finding the first NON-background layer rather than by index:
-  // getStyle() serialises runtime layers too, so an index would drift.
-  // The blank style is one shared constant, so its backdrop cannot be baked
-  // per appearance — it is painted here instead. Without this the offline map
-  // stayed dark in light mode, which reads as light mode being broken.
-  function paintBlankBackdrop() {
-    if (!onBlankStyle || !map.getLayer(BLANK_BACKGROUND_LAYER)) return;
-    map.setPaintProperty(
-      BLANK_BACKGROUND_LAYER,
-      "background-color",
-      BLANK_BACKGROUND[appearance],
-    );
-  }
-
+  // Deliberately coarse for now. A basemap whose tiles fail individually still
+  // suppresses the grid, so losing signal mid-flight and panning into uncached
+  // ground gives a bare basemap rather than a reference. The precise version
+  // hangs the grid off maplibre's per-tile error hook — which carries the tile
+  // and excludes 404s, so it can tell "the network failed here" from "there is
+  // nothing here" — and is tracked on the offline epic.
   function syncGraticule() {
-    if (!map.isStyleLoaded() || map.getLayer(GRATICULE_LAYER)) return;
+    if (!map.isStyleLoaded()) return;
+    const hasTiles = Object.values(map.getStyle()?.sources ?? {}).some(
+      (source) =>
+        source.type === "vector" ||
+        source.type === "raster" ||
+        source.type === "raster-dem",
+    );
+    if (hasTiles) {
+      if (map.getLayer(GRATICULE_LAYER)) map.removeLayer(GRATICULE_LAYER);
+      return;
+    }
+    if (map.getLayer(GRATICULE_LAYER)) return;
     const above = map
       .getStyle()
       ?.layers?.find((layer) => layer.type !== "background")?.id;
     map.addLayer(
       createGraticuleLayer(GRATICULE_LAYER, () => appearance),
       above,
+    );
+  }
+
+  function paintBlankBackdrop() {
+    if (!onBlankStyle || !map.getLayer(BLANK_BACKGROUND_LAYER)) return;
+    map.setPaintProperty(
+      BLANK_BACKGROUND_LAYER,
+      "background-color",
+      BLANK_BACKGROUND[appearance],
     );
   }
 
