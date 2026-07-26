@@ -38,8 +38,8 @@ export function createSimulatorSource(
   home?: { latitude: number; longitude: number },
 ): PositionSource {
   return {
-    watch(onPositions, onError, options) {
-      void onError;
+    watch(onPositions, onRefusal, options) {
+      void onRefusal;
       const since = options?.since;
       let session: SimSession | null = null;
       if (since != null) {

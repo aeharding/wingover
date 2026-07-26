@@ -1,9 +1,5 @@
 import { createWaypointTracker } from "../flight/waypoints";
-import {
-  type CoreClient,
-  navigatorPositionSource,
-  type PositionSource,
-} from "./real";
+import type { CoreClient, PositionSource } from "./real";
 import type { Fix, Waypoint } from "./types";
 
 // TS twin of the plugin's core.rs: the SAME surface, function for
@@ -111,11 +107,10 @@ export function withWebCore(inner: PositionSource): CoreClient {
       // The wrapper adds ingest/wake-lock plumbing, not platform
       // behavior: the inner source's capabilities pass through
       // unchanged, or the engine would treat every wrapped source as
-      // the most pessimistic one.
-      reportsAccuracyAuthorization: inner.reportsAccuracyAuthorization,
-      watchCanDieSilently: inner.watchCanDieSilently,
-      currentRefusal: inner.currentRefusal,
-      watch(onPositions, onError, options) {
+      // the most pessimistic one. Absent stays absent (?.bind), so a
+      // wrapped mock does not claim a capability it lacks.
+      revive: inner.revive?.bind(inner),
+      watch(onPositions, onRefusal, options) {
         core.start();
         // The watch carries every capability, wake lock included — the
         // exact counterpart of startCapture's isIdleTimerDisabled.
@@ -127,7 +122,7 @@ export function withWebCore(inner: PositionSource): CoreClient {
             for (const text of core.ingest(coords)) speak(text);
             onPositions(positions);
           },
-          onError,
+          onRefusal,
           options,
         );
         return () => {
@@ -140,5 +135,3 @@ export function withWebCore(inner: PositionSource): CoreClient {
     setWaypoints: (waypoints) => core.setWaypoints(waypoints),
   };
 }
-
-export const webCore = withWebCore(navigatorPositionSource);

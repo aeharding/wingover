@@ -4,17 +4,18 @@ import { getBooleanSetting } from "../storage/local";
 import { engine } from "./index";
 import type { Waypoint } from "./types";
 
-// Foreground watch revival, wired HERE and not in a component (STEERING:
-// anything that must happen regardless of which page is mounted is
-// wired engine-side): coming back from Settings must PROCEED, not sit
-// on a frozen screen. A browser watch can be killed silently while the
-// page is backgrounded, and engine.retry() bounces it pre-takeoff.
+// Foreground recovery, wired HERE and not in a component (STEERING:
+// anything that must happen regardless of which page is mounted is wired
+// engine-side): coming back from Settings must PROCEED, not sit on a
+// frozen screen. This is the one place the app learns it was away, and
+// after a Settings trip it is usually the only evidence there is: a
+// refused watch is a dead one, so nothing else is left to notice. (The
+// imprecise takeover is the exception — it keeps its watch running so a
+// good fix can disprove it.)
 //
-// This listener is harmless by construction where a foreground means
-// nothing — retry() self-gates on the source's watchCanDieSilently, so
-// on a source whose capture outlives the page it does nothing at all,
-// and that source recovers by the engine's currentRefusal loop instead. The
-// gate is the source's to answer, not this file's: no platform check
+// What a foreground costs is the source's business, not this file's:
+// engine.retry() forwards to the source, which reruns a browser watch or
+// asks CoreLocation once and reports what it finds. No platform check
 // here (the seam lint forbids one, and that is exactly the point).
 if (typeof document !== "undefined") {
   document.addEventListener("visibilitychange", () => {

@@ -186,7 +186,7 @@ describe("the engine reads every fixture it owns through the real path", () => {
       });
 
       const batches: SourcePosition[][] = [];
-      const errors: SourceError[] = [];
+      const errors: (SourceError | null)[] = [];
       const stop = nativePositionSource.watch(
         (batch) => batches.push(batch),
         (error) => errors.push(error),

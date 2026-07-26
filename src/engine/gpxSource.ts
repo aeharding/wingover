@@ -18,7 +18,7 @@ export function createGpxSource(
   compression: number,
 ): PositionSource {
   return {
-    watch(onPositions, onError, options) {
+    watch(onPositions, onRefusal, options) {
       const since = options?.since;
       let cancelled = false;
       let timer: ReturnType<typeof setInterval> | undefined;
@@ -30,7 +30,7 @@ export function createGpxSource(
           if (!response.ok) throw new Error(`GPX ${response.status}`);
           fixes = parseGpx(await response.text());
         } catch (error) {
-          onError({
+          onRefusal({
             permissionDenied: false,
             message: `GPX load failed: ${(error as Error).message}`,
           });

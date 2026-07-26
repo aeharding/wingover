@@ -96,31 +96,44 @@ One overlay sits above that lifecycle: **`blocked`**, a live-source health
 state (permission denied, reduced accuracy, recorder held by another tab).
 It is derived from an in-memory error, never journaled, and strictly
 pre-takeoff — the error setters refuse to install a blocking error once a
-flight has started, so nothing can block a flight in progress. Detection
-of source health is the one place wall-clock time is legitimate (the
-signature is partly an _absence_ of fixes, which no function of fix
-timestamps can observe); it never touches the WAL, the track, or
-finalization, so burst-replay byte-identity is unaffected. Sources declare
-their capabilities (`reportsAccuracyAuthorization`, `watchCanDieSilently`,
-`currentRefusal`) and the engine adapts — it never switches on the
-platform.
+flight has started, so nothing can block a flight in progress. It never
+touches the WAL, the track, or finalization, so burst-replay byte-identity
+is unaffected.
 
-`currentRefusal` answers `SourceError | null`: `null` means nothing
-refuses, anything else is the refusal that stands at this moment, in the
-same shape the watch's error channel reports. A refused watch is a dead
-one, so while that takeover is up this is the only channel left reporting
-(the imprecise takeover is the exception — it keeps a live watch
-precisely so one good fix can disprove it). A pilot who trades one
-refusal for another (Precise Location off, then Location Services off)
-must see the screen follow, so the engine re-renders on the fresh
-classification — without bouncing the watch for a refusal it already
-knows about.
+Every source is responsible for knowing its own refusals by its platform's
+means, and the engine believes what it is told. The native source ASKS
+(`check_permissions`, the real CoreLocation authorization); the browser
+source EXPERIMENTS (a fresh watch, and a wall-clock latch on the
+reduced-accuracy fix signature, because the browser Geolocation API has
+nothing to ask). Wall-clock detection is legitimate — the signature is
+partly an _absence_ of fixes, which no function of fix timestamps can
+observe — but it belongs to the source that needs it. The engine holds no
+timers.
 
-The engine asks it from a sequential loop that runs exactly while such a
-takeover stands: ask, act, sleep, ask again. One question is outstanding
-at a time and the pacing is the sleep, so "at most one recovery attempt
-per interval" and "answers cannot pile up or land out of order" are
-properties of the shape rather than flags defending it.
+One refusal is retracted by evidence rather than by report, and that is
+the engine's remaining share of the fix signature: an imprecise takeover
+keeps its watch alive on purpose, so `handlePositions` clears it on the
+first non-reduced fix. A bounce would tear down the very watch producing
+the disproof, which is why this one does not travel the report channel.
+
+One channel carries it. A source's `onRefusal` reports what stands RIGHT
+NOW: a refusal, or `null` for "nothing refuses any more". Both are reports
+about the same thing, so the engine has one place to apply one set of
+rules (`handleRefusal`) — a started flight is never blocked, `busy` is
+nobody's to replace, a non-blocking report never tears down a takeover, an
+unchanged reason is not republished, and `null` buys a fresh watch. A
+pilot who trades one refusal for another (Precise Location off, then
+Location Services off) sees the screen follow, and on a source that can
+ask its platform, without a bounce for a refusal already known.
+
+The one capability a source declares is `revive()`: "find out whether you
+still refuse, and report it." Every foreground and the error screen's Try
+Again forward to it, and what it costs is the source's business — a
+browser reruns its watch (Safari kills one silently while the page is
+backgrounded, and a Settings trip is exactly that); the native source asks
+CoreLocation once, and only from a state it actually refused from, because
+reporting `null` bounces the watch and bouncing a healthy capture would
+stop CoreLocation and delete the native session log for nothing.
 
 The WAL hydrates the engine exactly once per page load; after that,
 in-memory state is authoritative and WAL reads are never re-applied. A

@@ -8,9 +8,7 @@ import { haversineMeters } from "../flight/stats";
 import {
   coordsLookReduced,
   detectTakeoff,
-  fixLooksReduced,
   gpsReadyIndex,
-  IMPRECISE_SUSTAIN_MS,
 } from "../flight/takeoff";
 import { WAYPOINT_RADIUS_M } from "../flight/waypoints";
 import type {
@@ -48,13 +46,6 @@ const DERIVE_COURSE_MIN_SPEED_MPS = 0.5;
 // that must replay before we judge the flight over.
 const STALE_FLIGHT_MS = 15 * 60 * 1000;
 
-const RECOVERY_POLL_MS = 2000;
-
-// Loop pacing. Nothing cancels a sleep: one that wakes into a loop that
-// was killed meanwhile simply returns on the next `alive` read.
-const sleep = (ms: number) =>
-  new Promise<void>((resolve) => setTimeout(resolve, ms));
-
 const STORAGE_ERROR: EngineError = {
   code: "storage",
   message:
@@ -81,7 +72,8 @@ export interface SourcePosition {
 
 export interface SourceError {
   permissionDenied: boolean;
-  // iOS Precise Location off (native source only).
+  // Precise Location off: CoreLocation's accuracyAuthorization natively,
+  // the reduced-fix latch in the browser.
   imprecise?: boolean;
   message: string;
 }
@@ -100,38 +92,29 @@ export interface WatchOptions {
 // one call, making the burst boundary structural instead of an accident
 // of delivery timing; live browser cadence is simply a batch of one.
 export interface PositionSource {
+  // onRefusal carries what stands RIGHT NOW: a refusal, or null for
+  // "nothing refuses any more". Both are reports about the same thing, so
+  // both travel one channel; the engine acts on the latest (see
+  // handleRefusal). Every source is responsible for knowing its own
+  // refusals by its platform's means — the native one asks CoreLocation,
+  // the browser one experiments — and the engine never guesses.
   watch(
     onPositions: (positions: SourcePosition[]) => void,
-    onError: (error: SourceError) => void,
+    onRefusal: (refusal: SourceError | null) => void,
     options?: WatchOptions,
   ): () => void;
-  // The source detects reduced accuracy itself via a real platform API
-  // (CoreLocation's accuracyAuthorization); the engine must never guess
-  // from fix signatures when this is set.
-  reportsAccuracyAuthorization?: boolean;
-  // The platform can kill an active watch without any callback (Safari
-  // while backgrounded), so a foreground should bounce it and find out.
-  // Sources whose capture survives the page's visibility must never be
-  // bounced by a mere foreground.
-  watchCanDieSilently?: boolean;
-  // Side-effect-free "what refuses to record right now?" (native:
-  // permissions + Precise Location). null = nothing refuses, a watch
-  // would get somewhere; otherwise the refusal that stands at this
-  // moment, in the same shape the watch's error channel reports. While a
-  // takeover is up the engine asks this on a loop: no refusal bounces the
-  // watch, and a refusal holds the takeover on THAT reason. Naming the
-  // refusal is what lets the pilot swap one for another (Precise Location
-  // off, then Location Services off) with no watch running to notice — a
-  // bare "not yet" would leave the screen on a reason that no longer
-  // applies. Absent = recovery relies on retry() (foreground / Try
-  // Again) instead.
-  currentRefusal?: () => Promise<SourceError | null>;
+  // "Find out whether you still refuse, and report it." Called on every
+  // foreground and by the error screen's Try Again. null here means
+  // "bounce me", so a source whose capture outlives the page must send it
+  // only when it has a refusal to clear: a bounce stops that capture.
+  // Absent = a foreground tells this source nothing it does not know.
+  revive?(): void;
 }
 
 // The one mapping from what the source refused with to what the pilot is
-// told, shared by the watch's error channel (handleWatchError) and the
-// recovery poll's reclassification: the same refusal cannot render as two
-// different screens depending on which path carried it.
+// told: the same refusal cannot render as two different screens depending
+// on which path carried it (the watch's own report, or a revive
+// answering).
 function toEngineError(error: SourceError): EngineError {
   if (error.imprecise) {
     return {
@@ -161,26 +144,6 @@ export interface CoreClient {
   setWaypoints(waypoints: Waypoint[]): void;
 }
 
-export const navigatorPositionSource: PositionSource = {
-  watchCanDieSilently: true,
-  watch(onPositions, onError) {
-    if (!("geolocation" in navigator)) {
-      onError({ permissionDenied: false, message: "no geolocation support" });
-      return () => {};
-    }
-    const id = navigator.geolocation.watchPosition(
-      (position) => onPositions([position]),
-      (error) =>
-        onError({
-          permissionDenied: error.code === error.PERMISSION_DENIED,
-          message: error.message,
-        }),
-      { enableHighAccuracy: true, maximumAge: 0 },
-    );
-    return () => navigator.geolocation.clearWatch(id);
-  },
-};
-
 export class GeolocationRecordingEngine implements RecordingEngine {
   private buffer: Fix[] = [];
   private session: WalSession | null = null;
@@ -206,139 +169,7 @@ export class GeolocationRecordingEngine implements RecordingEngine {
   private releaseRecorderLock: (() => void) | null = null;
   private walOwner = false;
 
-  constructor(
-    private readonly core: CoreClient = {
-      source: navigatorPositionSource,
-      setWaypoints: () => {},
-    },
-  ) {
-    // Self-wired so the recovery loop tracks blocked state through EVERY
-    // invalidation path, without each error setter remembering it.
-    this.subscribe(() => this.syncRecoveryLoop());
-  }
-
-  // The recovery loop: while a takeover the pilot can clear is up, ask
-  // the source what refuses right now, act on the answer, wait, ask
-  // again — until nothing is blocked or the loop is killed. The pilot
-  // flips the switch in Settings and the app simply proceeds (covers
-  // iPad Split View, where no foreground ever fires). Asking the platform
-  // beats guessing, so this is the WHOLE recovery path for sources whose
-  // capture outlives the page: retry() is inert on them by design.
-  //
-  // A sequential loop rather than an interval, because that makes the
-  // rules structural instead of guarded:
-  //
-  //  - exactly one question is ever outstanding, so answers cannot pile
-  //    up or land out of order (an older refusal overwriting the
-  //    takeover's reason is the very staleness this exists to kill);
-  //  - "act, then sleep" IS the bound of one recovery attempt per
-  //    RECOVERY_POLL_MS, against ANY source behaviour — including a
-  //    platform that keeps answering "nothing refuses" while its watch
-  //    keeps refusing;
-  //  - the loop opens by asking, so there is no separate first check to
-  //    special-case. Damping an episode that already spent an attempt is
-  //    one `if` at the top: sleep first, then ask;
-  //  - teardown is one flag read between steps, so an answer that
-  //    outlives its loop is dead on arrival.
-  //
-  // Non-null means a loop is running; calling it kills that loop.
-  private stopRecoveryLoop: (() => void) | null = null;
-  // A bounce this loop made whose fresh watch has not yet proven itself
-  // by delivering a fix. Set at the attempt; NOT cleared by the bounce's
-  // own optimistic error clear, so a blocking error landing again is read
-  // as the same episode (the attempt failed) rather than a new one.
-  private recoveryAttempted = false;
-
-  private startRecoveryLoop(probe: () => Promise<SourceError | null>) {
-    let alive = true;
-    const stop = () => {
-      alive = false;
-    };
-    this.stopRecoveryLoop = stop;
-    const run = async () => {
-      // A loop armed inside an episode that already spent its attempt
-      // waits an interval before spending another. A fresh episode asks
-      // straight away: where this loop is the only recovery path, an
-      // interval of delay is an interval of stale takeover on screen (a
-      // block raised on a rebuilt webview after a Settings trip is
-      // exactly that).
-      if (this.recoveryAttempted) await sleep(RECOVERY_POLL_MS);
-      while (alive) {
-        // undefined = the question itself failed (the plugin is not
-        // answering). That says nothing about what refuses, so nothing is
-        // acted on: the takeover holds and the loop asks again.
-        const answer = await probe().catch(() => undefined);
-        if (!alive) return;
-        if (answer !== undefined) this.onRefusalAnswer(answer);
-        // Purpose served: the block this loop was raised for is gone —
-        // its own bounce cleared it, or a good fix cleared it while the
-        // question was in flight.
-        if (this.blockingError() === null) return;
-        await sleep(RECOVERY_POLL_MS);
-      }
-    };
-    void run().finally(() => {
-      // A handle means a loop is running, so a loop that ended by itself
-      // drops it — unless a newer loop has already taken its place.
-      if (this.stopRecoveryLoop === stop) this.stopRecoveryLoop = null;
-    });
-  }
-
-  // One answer, acted on.
-  private onRefusalAnswer(refusal: SourceError | null) {
-    // The block can be cleared in the gap between the fix that cleared it
-    // and the subscriber that kills this loop, so the answer is checked
-    // against the takeover standing right now.
-    const standing = this.blockingError();
-    if (standing === null) return;
-
-    // Nothing refuses: run a fresh watch and let it prove recovery.
-    if (refusal === null) {
-      this.recoveryAttempted = true;
-      this.bounceWatch();
-      return;
-    }
-    this.reclassifyTakeover(standing, refusal);
-  }
-
-  // Something still refuses - but the answer names WHICH one stands NOW,
-  // and the pilot can swap one for another while the takeover is up
-  // (Precise Location off, then Location Services off entirely). No watch
-  // runs in that window, so this is the only place that can notice.
-  // Re-render only, never bounce: the watch is certain to refuse, and a
-  // bounce would flicker the takeover through acquiring.
-  private reclassifyTakeover(standing: BlockingError, refusal: SourceError) {
-    // A passive tab's busy takeover is never replaced: an answer asked
-    // before another tab took the recorder lock can land after it.
-    if (standing.code === "busy") return;
-    const fresh = toEngineError(refusal);
-    // A non-blocking refusal must never be installed here: it would drop
-    // the takeover to acquiring behind a watch that is still refused.
-    if (!isBlockingError(fresh)) return;
-    if (fresh.code === standing.code) return;
-
-    this.error = fresh;
-    // A different reason is a NEW episode: the attempt already spent was
-    // made against the old refusal, so the fresh one gets to ask straight
-    // away when it next arms.
-    this.recoveryAttempted = false;
-    this.invalidate();
-  }
-
-  // The arm/kill seam, wired to every invalidation (see the constructor):
-  // a loop runs exactly while a takeover the pilot can clear stands on a
-  // source that can be asked. busy is excluded — another tab owns the
-  // recorder, and no answer here could change that.
-  private syncRecoveryLoop() {
-    const probe = this.core.source.currentRefusal;
-    const blocking = this.blockingError();
-    if (probe !== undefined && blocking !== null && blocking.code !== "busy") {
-      if (this.stopRecoveryLoop === null) this.startRecoveryLoop(probe);
-    } else if (this.stopRecoveryLoop !== null) {
-      this.stopRecoveryLoop();
-      this.stopRecoveryLoop = null;
-    }
-  }
+  constructor(private readonly core: CoreClient) {}
 
   // Two engines on one WAL (two PWA tabs) would interleave duplicate fixes
   // into the same store — an unexplainable corrupt flight later. A Web
@@ -490,12 +321,11 @@ export class GeolocationRecordingEngine implements RecordingEngine {
   // blocked always carries a BlockingError is enforced at one site.
   // No takeoff check here: a blocking error cannot exist once a flight
   // has started, and that invariant lives at the SETTERS —
-  // handleWatchError refuses to install one mid-flight, the imprecise
-  // latch requires "acquiring", busy arises only from start() and from
-  // pre-takeoff hydration adoption (mid-flight adoption stays a viewer),
-  // and the recovery loop only ever REPLACES a blocking error that
-  // already stands. Pre-takeoff blocked absorbs (imprecise excepted — a
-  // good fix clears it), so a flight can never begin with one still set.
+  // handleRefusal refuses to install one mid-flight, and busy arises
+  // only from start() and from pre-takeoff hydration adoption (mid-flight
+  // adoption stays a viewer). Pre-takeoff blocked absorbs (imprecise
+  // excepted — a good fix clears it), so a flight can never begin with one
+  // still set.
   private blockingError(): BlockingError | null {
     return this.error !== null && isBlockingError(this.error)
       ? this.error
@@ -627,9 +457,6 @@ export class GeolocationRecordingEngine implements RecordingEngine {
     this.reachInside.clear();
     this.reachedIds.clear();
     this.error = null;
-    this.recoveryAttempted = false;
-    // A latch armed by a previous session must not fire into this one.
-    this.clearImpreciseTimer();
     await writeWalSession(this.session);
     this.ensureWatch();
     this.invalidate();
@@ -788,9 +615,9 @@ export class GeolocationRecordingEngine implements RecordingEngine {
   // The sanctioned exit from "blocked" besides discard()/start(): clear
   // the blocking error and restart the watch with the session intact, so
   // the UI recovers straight back into acquiring — never through idle
-  // (the homepage must not flash behind the error screen). Both recovery
-  // mechanisms land here, so the guards live at this single mutation
-  // site: busy is excluded (another holder owns the recorder lock, and a
+  // (the homepage must not flash behind the error screen). Every bounce
+  // lands here, so the guards live at this single mutation site: busy is
+  // excluded (another holder owns the recorder lock, and a
   // new watch here would not contest it), and post-takeoff is a no-op (a
   // started flight's source is never touched).
   private bounceWatch(): void {
@@ -804,23 +631,14 @@ export class GeolocationRecordingEngine implements RecordingEngine {
     this.invalidate();
   }
 
-  // Revive a possibly-dead browser watch, and only a browser's: the
-  // foreground handler (engine/session.ts) and the error screen's Try
-  // Again both arrive here. Safari kills a watch silently while the page
-  // is backgrounded (a Settings trip is exactly that), leaving acquiring
-  // frozen on the last pre-trip fix with no error to show for it, and a
-  // browser cannot be asked whether a watch would succeed — so running a
-  // fresh one is the only way to find out. Doing that to a watch that was
-  // alive costs nothing there: it gets an immediate delivery.
-  //
-  // Sources whose capture outlives the page opt out whether they are
-  // blocked or not: their recorder must never be touched by a mere
-  // foreground, and they recover through the currentRefusal loop above,
-  // which asks the platform instead of guessing. Capability, not platform
-  // — the engine never switches on where it is running.
+  // The foreground handler (engine/session.ts) and the error screen's Try
+  // Again both arrive here, and both mean the same thing: ask the source
+  // to find out where it stands. What that costs is the source's own
+  // business (ARCHITECTURE.md); whatever it finds comes back through
+  // onRefusal like any other report. Capability, not platform: the engine
+  // never switches on where it is running.
   retry(): void {
-    if (!this.core.source.watchCanDieSilently) return;
-    this.bounceWatch();
+    this.core.source.revive?.();
   }
 
   async discard(): Promise<void> {
@@ -831,7 +649,6 @@ export class GeolocationRecordingEngine implements RecordingEngine {
     this.reachInside.clear();
     this.reachedIds.clear();
     this.error = null;
-    this.recoveryAttempted = false;
     this.invalidate();
     await this.walQueue;
     // Only the WAL's owner may destroy it: a passive tab (busy) clearing
@@ -935,7 +752,7 @@ export class GeolocationRecordingEngine implements RecordingEngine {
     const latest = this.buffer[this.buffer.length - 1];
     this.stopWatch = this.core.source.watch(
       (positions) => this.handlePositions(positions),
-      (error) => this.handleWatchError(error),
+      (refusal) => this.handleRefusal(refusal),
       { since: latest?.timestamp },
     );
     // Config follows the watch: initial start and post-reload rehydration
@@ -944,60 +761,43 @@ export class GeolocationRecordingEngine implements RecordingEngine {
     this.core.setWaypoints(this.activeWaypoints());
   }
 
-  private handleWatchError(error: SourceError) {
-    console.warn("geolocation error:", error.message);
-    // Once the flight starts, we're going: no source error may
-    // transition a started flight toward "blocked" (or any error state).
-    // Whatever fixes still arrive get consumed; a permanently dead
-    // source ends the flight through the stale-gap path, never through
-    // an error screen.
+  // Every report the source makes about whether it can record arrives
+  // here: its watch refusing, and a revive answering. One channel and one
+  // set of rules, so the same refusal cannot render as two different
+  // screens depending on which path carried it.
+  private handleRefusal(refusal: SourceError | null) {
+    // The source knows of no refusal. On one that can ask its platform
+    // that is an answer; on one that cannot, it means "try a fresh watch
+    // and find out". Either way the response is the same, and bounceWatch
+    // holds the rules for when a bounce is legal.
+    if (refusal === null) {
+      this.bounceWatch();
+      return;
+    }
+    console.warn("geolocation error:", refusal.message);
+    // Once the flight starts, we're going: no report may transition a
+    // started flight toward "blocked" (or any error state). Whatever
+    // fixes still arrive get consumed; a permanently dead source ends the
+    // flight through the stale-gap path, never through an error screen.
     if (this.session && this.session.takeoffIndex !== null) return;
-    this.error = toEngineError(error);
+    // busy is not the source's to replace: another tab holds the recorder
+    // lock, and nothing a location source reports can change that.
+    if (this.error?.code === "busy") return;
+    const fresh = toEngineError(refusal);
+    // A non-blocking report never replaces a takeover: it would drop the
+    // screen to acquiring behind a watch that is still refused.
+    if (this.blockingError() !== null && !isBlockingError(fresh)) return;
+    // Already the reason on screen. Publishing it again would wake every
+    // subscriber for as long as a source keeps repeating itself.
+    if (fresh.code === this.error?.code) return;
+    this.error = fresh;
     this.invalidate();
   }
 
   private clearWatch() {
-    this.clearImpreciseTimer();
     if (this.stopWatch !== null) {
       this.stopWatch();
       this.stopWatch = null;
-    }
-  }
-
-  // Wall-clock latch for the reduced-accuracy signature: armed by the
-  // first reduced fix while acquiring, disarmed by any non-reduced fix
-  // (or the watch going away). If it survives the sustain window and the
-  // latest fix still looks reduced, Precise Location is off.
-  private impreciseTimer: ReturnType<typeof setTimeout> | null = null;
-
-  private armImpreciseTimer() {
-    if (this.impreciseTimer !== null) return;
-    this.impreciseTimer = setTimeout(() => {
-      this.impreciseTimer = null;
-      const latest = this.buffer[this.buffer.length - 1];
-      // Note a pending storage error cannot mask this: storage is not a
-      // blocking code, so status is still "acquiring" through it (a
-      // Settings trip severs IndexedDB in WKWebView — exactly when this
-      // latch is about to matter).
-      if (
-        this.deriveStatus() === "acquiring" &&
-        latest &&
-        fixLooksReduced(latest)
-      ) {
-        this.error = {
-          code: "imprecise",
-          message:
-            "Kilometer-coarse fixes with no altitude; Precise Location is likely off.",
-        };
-        this.invalidate();
-      }
-    }, IMPRECISE_SUSTAIN_MS);
-  }
-
-  private clearImpreciseTimer() {
-    if (this.impreciseTimer !== null) {
-      clearTimeout(this.impreciseTimer);
-      this.impreciseTimer = null;
     }
   }
 
@@ -1081,38 +881,14 @@ export class GeolocationRecordingEngine implements RecordingEngine {
       // the duplicate filter below (a burst double, 44 ms apart). The
       // takeover is already cleared, so that has to be PUBLISHED: an
       // error cleared without an invalidation leaves the takeover on a
-      // cached snapshot that is never rebuilt, and the recovery loop —
-      // which now sees no blocking error — ends for good. On native that
-      // is a screen with no way out but Cancel.
+      // cached snapshot that is never rebuilt. On native that is a screen
+      // with no way out but Cancel.
       if (receivedGoodFix) this.invalidate();
       return;
     }
     // Fixes flowing again means GPS has recovered; a storage error is a
     // different channel — only a successful write clears it.
     if (this.error?.code !== "storage") this.error = null;
-    // A delivered fix is the only proof a recovery attempt actually
-    // worked, so it is the only thing that ends the episode: the next
-    // block gets its immediate check back.
-    this.recoveryAttempted = false;
-    // Heuristic net for sources that CANNOT self-report reduced
-    // accuracy (the web Geolocation API offers no way to ask): without
-    // it, Precise Location off hangs acquiring forever with no
-    // explanation. Sources with the real API (native CoreLocation)
-    // report through the error channel instead and never guess.
-    // Wall-clock latched, because a grid-pinned coarse source may
-    // deliver ONE fix then go silent — a count of arrivals would never
-    // accumulate. Any non-reduced fix disarms the latch.
-    const latestFix = this.buffer[this.buffer.length - 1];
-    if (
-      !this.core.source.reportsAccuracyAuthorization &&
-      this.deriveStatus() === "acquiring" &&
-      latestFix &&
-      fixLooksReduced(latestFix)
-    ) {
-      this.armImpreciseTimer();
-    } else {
-      this.clearImpreciseTimer();
-    }
     // The flight of record is final: stop consuming. The WAL is retained
     // until the consumer persists the flight and calls discard().
     if (this.deriveStatus() === "ended") this.clearWatch();

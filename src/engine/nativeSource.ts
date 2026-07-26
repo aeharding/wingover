@@ -1,5 +1,6 @@
 import { invoke } from "@tauri-apps/api/core";
 
+import { coordsLookReduced } from "../flight/takeoff";
 import type {
   CoreClient,
   PositionSource,
@@ -61,15 +62,14 @@ export function classifyDrainError(message: string): SourceError {
 
 // The refusal DECISION lives here, not in Swift (the sensor layer senses
 // and actuates; it does not decide). One rule serving both the watch's
-// pre-capture gate and the blocked screen's recovery loop, so the two
-// can never drift apart.
+// pre-capture gate and revive's probe, so the two can never drift apart.
 //
 // "prompt" is NOT a refusal: the question has not been asked, and asking
 // is the app's job, not a trip to Settings. Both callers resolve it the
 // same way — the watch requests permissions before judging (below), and
-// currentRefusal answers null so the engine retries, which bounces the watch
-// into that same request with the app frontmost and the system alert
-// finally appears. Treating it as a refusal is what left Settings ->
+// revive's probe answers null, which bounces the watch into that same
+// request with the app frontmost and the system alert finally appears.
+// Treating it as a refusal is what left Settings ->
 // Never -> Ask Next Time stuck on the red takeover until a SECOND trip
 // out of the app.
 export function permissionRefusal(
@@ -105,15 +105,15 @@ export function permissionRefusal(
   return null;
 }
 
-// What refuses to record right now, for the blocked screen's recovery
-// loop. null means nothing does: recordable (granted, full accuracy) or
-// merely unasked ("prompt"), since the engine's answer to null is a watch
-// bounce and the fresh watch does the ask. Only what the pilot must
-// change in Settings — denied, Location Services off, Precise Location
-// off — holds the screen, and the answer says WHICH of them stands at
-// this moment: the pilot can trade one for another with no watch running,
-// and the takeover must follow the current reason rather than the one
-// that first raised it.
+// What refuses to record right now: one round trip to the real
+// authorization API. null means nothing does — recordable (granted, full
+// accuracy) or merely unasked ("prompt"), since the engine's answer to
+// null is a watch bounce and the fresh watch does the ask. Only what the
+// pilot must change in Settings — denied, Location Services off, Precise
+// Location off — holds the screen, and the answer says WHICH of them
+// stands at this moment: the pilot can trade one for another with no watch
+// running, and the takeover must follow the current reason rather than the
+// one that first raised it.
 export async function nativeLocationRefusal(): Promise<SourceError | null> {
   const status = await invoke<PermissionStatus>(
     "plugin:wingover|check_permissions",
@@ -136,18 +136,47 @@ function toSourcePosition(fix: NativeFix): SourcePosition {
   };
 }
 
+// The live watch, as revive() needs to see it. One plugin, one
+// CoreLocation session, so there is one of these at a time; a teardown
+// only clears it if a newer watch has not already taken it.
+interface LiveWatch {
+  report: (refusal: SourceError | null) => void;
+  refuse: (refusal: SourceError) => void;
+  // What this watch last refused with, and the ONLY thing revive() will
+  // speak from. Reporting null means "bounce me", and a bounce costs a
+  // stop_watch: CoreLocation stopped and the native session log deleted
+  // (core.rs Core::stop). Every foreground calls revive, so nothing but a
+  // refusal a fresh watch could actually clear may arm it.
+  refusal: SourceError | null;
+}
+
+let live: LiveWatch | null = null;
+
 export const nativePositionSource: PositionSource = {
-  // CoreLocation reports accuracyAuthorization directly — the engine's
-  // fix-signature heuristic must stay out of the way. Capture is
-  // process-level and survives webview visibility, so no foreground
-  // bounce either; recovery is the currentRefusal loop.
-  reportsAccuracyAuthorization: true,
-  currentRefusal: nativeLocationRefusal,
-  watch(onPositions, onError, options) {
+  watch(onPositions, onRefusal, options) {
     let stopped = false;
     let timer: ReturnType<typeof setInterval> | undefined;
     let cursor = options?.since ?? 0;
     let inFlight = false;
+
+    // Every refusal this watch reports travels through refuse(), so the
+    // held one cannot drift from what the engine was told.
+    const mine: LiveWatch = {
+      report: onRefusal,
+      refuse: (refusal) => {
+        // A bounce puts up a fresh watch, so it can only clear what a
+        // fresh watch judges: permission and accuracy. A dead plugin call
+        // or a GPS shadow reaches the engine all the same, but leaves
+        // revive with nothing to ask about.
+        if (refusal.permissionDenied || refusal.imprecise === true) {
+          mine.refusal = refusal;
+        }
+        onRefusal(refusal);
+      },
+      refusal: null,
+    };
+    live = mine;
+    const refuse = (refusal: SourceError) => mine.refuse(refusal);
 
     async function poll() {
       if (inFlight || stopped) return;
@@ -161,18 +190,31 @@ export const nativePositionSource: PositionSource = {
         // One poll response = one batch: a backlog replay reaches the
         // engine as a single call, not a loop of per-fix deliveries.
         if (response.fixes.length > 0) {
+          const positions = response.fixes.map(toSourcePosition);
+          // Drop the held refusal on exactly the evidence the ENGINE
+          // accepts, or the two disagree about whether a takeover is
+          // still up: a non-reduced fix disproves reduced accuracy
+          // (real.ts handlePositions), and nothing disproves a permission
+          // refusal — that takeover absorbs its own fixes, so only a
+          // fresh watch retires it and revive is what asks for one.
+          if (
+            mine.refusal?.imprecise === true &&
+            positions.some((position) => !coordsLookReduced(position.coords))
+          ) {
+            mine.refusal = null;
+          }
           for (const fix of response.fixes) {
             cursor = Math.max(cursor, fix.timestamp);
           }
-          onPositions(response.fixes.map(toSourcePosition));
+          onPositions(positions);
         }
         // A stale error with fixes still flowing is already resolved.
         if (response.error != null && response.fixes.length === 0) {
-          onError(classifyDrainError(response.error));
+          refuse(classifyDrainError(response.error));
         }
       } catch (error) {
         if (!stopped)
-          onError({
+          refuse({
             permissionDenied: false,
             imprecise: /precise/i.test(String(error)),
             message: String(error),
@@ -190,7 +232,7 @@ export const nativePositionSource: PositionSource = {
         // The ask, and the only place it happens: permissionRefusal
         // returns no refusal for "prompt" precisely so this sequence —
         // not a trip to Settings — is what resolves an unasked
-        // permission, including on the retry that recovery polling fires.
+        // permission, including on the watch a revive bounces into.
         if (status.location === "prompt") {
           status = await invoke<PermissionStatus>(
             "plugin:wingover|request_permissions",
@@ -201,7 +243,7 @@ export const nativePositionSource: PositionSource = {
         if (stopped) return;
         const refusal = permissionRefusal(status);
         if (refusal !== null) {
-          onError(refusal);
+          refuse(refusal);
           return;
         }
         await invoke("plugin:wingover|start_watch");
@@ -210,7 +252,7 @@ export const nativePositionSource: PositionSource = {
         timer = setInterval(() => void poll(), POLL_MS);
       } catch (error) {
         if (stopped) return;
-        onError({
+        refuse({
           permissionDenied: /denied|permission/i.test(String(error)),
           imprecise: /precise/i.test(String(error)),
           message: String(error),
@@ -220,12 +262,40 @@ export const nativePositionSource: PositionSource = {
 
     return () => {
       stopped = true;
+      if (live === mine) live = null;
       if (timer !== undefined) clearInterval(timer);
       // Finalize: stop CoreLocation and clear the native session file.
       // Tauri IPC is FIFO per webview, so a stop immediately followed by
       // a new watch's start_watch cannot be reordered.
       void invoke("plugin:wingover|stop_watch");
     };
+  },
+
+  // Every foreground and every Try Again lands here. Capture is
+  // process-level and outlives the webview, so a foreground on its own is
+  // no evidence that anything changed — but a trip to Settings is a
+  // foreground too, and a watch refused at start never began polling, so
+  // nothing is left running to notice what the pilot did there. So: from
+  // a standing refusal, ask the real authorization API once and report
+  // what it says. A refusal that has not changed is silent at the engine;
+  // null bounces the watch, and the fresh one does the asking.
+  revive() {
+    const watching = live;
+    if (watching === null || watching.refusal === null) return;
+    void nativeLocationRefusal()
+      .then((refusal) => {
+        // A watch torn down while the round trip was out must not report.
+        if (live !== watching) return;
+        // Nor may a probe outrank the platform itself: fixes that landed
+        // while it was out already answered the question.
+        if (watching.refusal === null) return;
+        if (refusal === null) watching.report(null);
+        else watching.refuse(refusal);
+      })
+      // The plugin not answering says nothing about what refuses, so
+      // nothing is acted on: the takeover holds and the next foreground
+      // asks again.
+      .catch(() => {});
   },
 };
 

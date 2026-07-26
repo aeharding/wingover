@@ -121,14 +121,23 @@ const NO_TAURI = {
 
 /** @type {RestrictedPattern} */
 const ENGINE_SOURCES_PRIVATE = {
-  group: ["./core", "./nativeSource", "./gpxSource", "./simulatorSource"],
+  group: [
+    "./core",
+    "./nativeSource",
+    "./gpxSource",
+    "./simulatorSource",
+    "./webSource",
+  ],
   message:
     "Source selection happens in exactly one place, src/engine/index.ts: one interface, a web implementation, a native implementation (ARCHITECTURE.md).",
 };
 
 // src/engine's platform-aware edge: the source-SELECTION modules, and only
 // those. index.ts picks the CoreClient; nativeSource.ts is the native one.
-// Everything else under src/engine is platform-blind. The seam itself
+// webSource.ts is the web one and is not on this list because its platform
+// surface is globals (navigator.geolocation), not imports — the rules below
+// have nothing to catch there. Everything else under src/engine is
+// platform-blind. The seam itself
 // (isTauri) and the one-shot Center-on-me selector moved out to
 // src/platform, so this list is as short as the doctrine says it should be.
 const ENGINE_PLATFORM_AWARE = [
