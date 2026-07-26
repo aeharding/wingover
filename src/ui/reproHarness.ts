@@ -333,6 +333,43 @@ async function loseDuringResize(mk: typeof mapkit): Promise<string> {
   return `G lose during resize: mid=${mid} after=${after}`;
 }
 
+/**
+ * Leaves a real map alive on screen with a health band that updates twice a
+ * second, so the state can be read from a screenshot at any moment while
+ * gestures are driven from outside (Device > App Switcher / Home / Rotate).
+ */
+async function liveWatch(mk: typeof mapkit) {
+  const host = makeHost(false);
+  host.style.cssText =
+    "position:fixed;left:0;right:0;top:120px;bottom:120px;z-index:2147483000";
+  const map = new mk.Map(host, {
+    isRotationEnabled: true,
+    center: new mk.Coordinate(39.8, -98.5),
+  }) as unknown as MapLike;
+
+  const band = document.createElement("div");
+  band.style.cssText =
+    "position:fixed;left:0;right:0;top:0;height:120px;z-index:2147483647;color:#fff;font:700 26px/1.2 ui-monospace,monospace;padding:52px 10px 0;background:#060";
+  document.body.appendChild(band);
+
+  let poisonedAt = 0;
+  let ticks = 0;
+  setInterval(() => {
+    ticks++;
+    const state = health(map);
+    const dead = state.startsWith("POISONED");
+    if (dead && !poisonedAt) poisonedAt = ticks;
+    band.style.background = dead ? "#c00" : "#060";
+    const canvas = host.querySelector('canvas[aria-hidden="true"]');
+    const gl = canvas
+      ? ((canvas as HTMLCanvasElement).getContext("webgl2") ??
+        (canvas as HTMLCanvasElement).getContext("webgl"))
+      : null;
+    const lost = gl ? (gl as WebGLRenderingContext).isContextLost() : "no-gl";
+    band.textContent = `${dead ? "POISONED" : "OK"} t=${ticks} lost=${lost} vp=${window.innerWidth}x${window.innerHeight}`;
+  }, 500);
+}
+
 export async function runReproHarness() {
   const lines: string[] = [];
   try {
@@ -361,4 +398,15 @@ export async function runReproHarness() {
     lines.some((l) => l.includes("after=POISONED") || l.includes(": POISONED")),
     lines,
   );
+  // Then hand the screen over to a live map whose health can be read from a
+  // screenshot while gestures are driven from the host.
+  try {
+    document.querySelectorAll("div").forEach((d) => {
+      if (d.style.zIndex === "2147483647") d.remove();
+    });
+    const mk = await loadMapKit();
+    await liveWatch(mk);
+  } catch {
+    // nothing to watch
+  }
 }
