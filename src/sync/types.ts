@@ -86,6 +86,14 @@ export interface SyncAccount {
 export type SyncStatus =
   | { state: "off" }
   | { state: "connecting" }
+  /**
+   * The first attempt has not reached the server. Replication is still
+   * retrying underneath — this is what the pilot is TOLD, not a state the
+   * machine rests in. "Connecting" forever reads as "wait, something is
+   * happening"; offline it never resolves, and the honest answer is that
+   * flights are queued locally.
+   */
+  | { state: "offline"; lastSyncedAt: number | null }
   | {
       state: "syncing";
       lastSyncedAt: number | null;

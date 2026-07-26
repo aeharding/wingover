@@ -29,6 +29,15 @@ export function describe(status: sync.SyncStatus): {
       };
     case "connecting":
       return { label: "Connecting", detail: "", tone: "neutral" };
+    case "offline":
+      // Neutral, not a warning: nothing is broken and nothing is lost, so the
+      // detail line is the whole point. Replication is still retrying, and
+      // will heal on its own the moment there is signal.
+      return {
+        label: "Offline",
+        detail: "Flights are saved here and will sync when you have signal.",
+        tone: "neutral",
+      };
     case "paused":
       // Recording outranks sync, always — and saying so is better than looking
       // broken mid-flight. Neutral: it is not a warning.
