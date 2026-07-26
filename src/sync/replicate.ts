@@ -329,7 +329,16 @@ function connect() {
         // which only ever appeared while nothing had yet crossed the wire.
         lastSyncedAt = Date.now();
         settle();
+        return;
       }
+      // Still on the FIRST attempt, so there is no "last synced" to fall back
+      // on and nothing else will ever move us: retry:true routes transport
+      // failures to backOff(), which emits requestError and this paused(error)
+      // rather than a terminal `error` (pouchdb-browser index.es.js:9650-9663).
+      // A replication starts in state 'pending' (:10268), which is inside that
+      // guard, so the very first failed request lands here.
+      if (status.state === "connecting")
+        set({ state: "offline", lastSyncedAt });
     });
   }
 }

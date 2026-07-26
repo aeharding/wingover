@@ -348,3 +348,44 @@ describe("flushPush (the pre-logout proof)", () => {
     expect(await replicate.flushPush()).toBe(false);
   });
 });
+
+// Reported from the device: with no network, Settings sat on "Connecting…"
+// forever. retry:true means PouchDB swallows transport failures instead of
+// emitting a terminal `error`, so nothing ever moved the state along, and the
+// pilot watched a state that could not change (#171).
+describe("a first attempt that reaches nobody says so", () => {
+  test("a failed first attempt reports offline, not connecting forever", () => {
+    replicate.start(entitled);
+    expect(status().state).toBe("connecting");
+
+    // What retry:true actually emits for a transport failure: backOff() sends
+    // paused WITH the error instead of a terminal `error`.
+    kit.seen.sync!.push!.emit("paused", new Error("Failed to fetch"));
+
+    expect(status().state).toBe("offline");
+  });
+
+  test("it heals on its own when the network comes back", () => {
+    replicate.start(entitled);
+    kit.seen.sync!.push!.emit("paused", new Error("Failed to fetch"));
+    expect(status().state).toBe("offline");
+
+    kit.seen.sync!.emit("change");
+
+    expect(status().state).toBe("syncing");
+  });
+
+  test("a dropped longpoll after a good connection does not report offline", () => {
+    replicate.start(entitled);
+    kit.seen.sync!.push!.emit("paused"); // caught up
+    vi.advanceTimersByTime(1500);
+    expect(status().state).toBe("syncing");
+
+    // "Last synced …" is already the honest answer here, and crying offline
+    // on every reconnect blip is what teaches a pilot to ignore the row.
+    kit.seen.sync!.push!.emit("paused", new Error("Failed to fetch"));
+    vi.advanceTimersByTime(6000);
+
+    expect(status().state).toBe("syncing");
+  });
+});
