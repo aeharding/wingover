@@ -349,11 +349,21 @@ async function liveWatch(mk: typeof mapkit) {
 
   const band = document.createElement("div");
   band.style.cssText =
-    "position:fixed;left:0;right:0;top:0;height:120px;z-index:2147483647;color:#fff;font:700 26px/1.2 ui-monospace,monospace;padding:52px 10px 0;background:#060";
+    "position:fixed;left:0;right:0;top:0;height:150px;z-index:2147483647;color:#fff;font:700 21px/1.2 ui-monospace,monospace;padding:48px 8px 0;white-space:pre;background:#060";
   document.body.appendChild(band);
 
   let poisonedAt = 0;
   let ticks = 0;
+  // Does the app switcher / home actually deliver a pointercancel to the web
+  // view? The whole mechanism depends on it, and it has been assumed, not
+  // measured.
+  const counts: Record<string, number> = { down: 0, move: 0, up: 0, cancel: 0 };
+  const tally = (k: string) => () => { counts[k] = (counts[k] ?? 0) + 1; };
+  window.addEventListener("pointerdown", tally("down"), true);
+  window.addEventListener("pointermove", tally("move"), true);
+  window.addEventListener("pointerup", tally("up"), true);
+  window.addEventListener("pointercancel", tally("cancel"), true);
+  window.addEventListener("touchcancel", tally("cancel"), true);
   setInterval(() => {
     ticks++;
     const state = health(map);
@@ -373,7 +383,7 @@ async function liveWatch(mk: typeof mapkit) {
     } catch {
       ctr = "THROWS";
     }
-    band.textContent = `${dead ? "POISONED" : "OK"} c=${ctr} lost=${lost}`;
+    band.textContent = `${dead ? "POISONED" : "OK"} c=${ctr}\nd${counts.down} m${counts.move} u${counts.up} CANCEL=${counts.cancel}`;
   }, 500);
 }
 
