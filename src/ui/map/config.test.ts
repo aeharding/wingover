@@ -46,6 +46,27 @@ describe("resolveMapStyle", () => {
     await expect(resolveMapStyle("street", "dark")).resolves.toBeNull();
   });
 
+  // Answering a satellite request with street is the map showing a view
+  // nobody asked for, and it hides the reason: there is no key.
+  it("returns null for satellite with no MapTiler key, rather than street", async () => {
+    respond(true);
+    await expect(resolveMapStyle("satellite", "dark")).resolves.toBeNull();
+    expect(globalThis.fetch).not.toHaveBeenCalled();
+  });
+
+  // Street is reachable here, so a null answer can only come from refusing to
+  // substitute it for the satellite view that was asked for.
+  it("returns null when the key cannot fetch the hybrid style", async () => {
+    settings.getSetting.mockResolvedValue("a-key");
+    globalThis.fetch = vi.fn((url: string) =>
+      Promise.resolve({
+        ok: !url.includes("hybrid"),
+        json: () => Promise.resolve(STYLE),
+      }),
+    ) as unknown as typeof fetch;
+    await expect(resolveMapStyle("satellite", "dark")).resolves.toBeNull();
+  });
+
   // Asked for, not failed. The distinction matters: a requested blank style
   // must never be retried, while an unreachable one must be.
   it("returns NO_BASEMAP_STYLE verbatim when ?map-style=blank asked for it", async () => {

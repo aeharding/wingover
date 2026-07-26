@@ -94,18 +94,15 @@ export async function resolveMaptilerKey(): Promise<string | null> {
 // satellite-v2 source for @2x maps/satellite tiles: 1024px per tile (~2x
 // the source pixels per screen pixel, the Apple-Maps sharpness
 // difference) up to maxzoom 22. @3x/@4x are not offered (HTTP 400).
-async function satelliteStyle(
-  key: string,
-  appearance: MapAppearance,
-): Promise<StyleSpecification | null> {
+async function satelliteStyle(key: string): Promise<StyleSpecification | null> {
   const style = await fetchStyle(
     `https://api.maptiler.com/maps/hybrid-v4/style.json?key=${key}`,
   );
   if (!style?.sources) {
     console.warn(
-      "Satellite unavailable (MapTiler hybrid style — key not valid for this origin); showing street view",
+      "Satellite unavailable (MapTiler hybrid style — key not valid for this origin)",
     );
-    return fetchStyle(streetStyleUrl(key, appearance));
+    return null;
   }
 
   const base = style.sources.satellite;
@@ -150,11 +147,9 @@ async function fetchStyle(url: string): Promise<StyleSpecification | null> {
 /**
  * The basemap style, or null when there is no reaching it.
  *
- * null is the whole contract: callers decide what an unreachable basemap
- * means. At construction it means NO_BASEMAP_STYLE (a map that always loads, so the
- * track always has somewhere to live); on a later swap it means keep what is
- * already up, because a failed satellite toggle must not blank a working
- * street map.
+ * null is the whole contract: callers decide what nothing-to-show means. The
+ * adapter answers it with the no-basemap grid when the pilot asked for this
+ * view, and by keeping what is already up when they did not, then retries.
  */
 export async function resolveMapStyle(
   view: MapViewKind,
@@ -163,11 +158,9 @@ export async function resolveMapStyle(
   // Asked for, not failed — so it is a real answer, and never retried.
   if (blankStyleRequested()) return NO_BASEMAP_STYLE;
   const key = await resolveMaptilerKey();
-  // No key, no satellite (a stored "satellite" preference degrades to
-  // street rather than erroring) — the toggle is hidden in that state via
-  // MapView.supportsSatellite.
-  if (view === "street" || !key) {
-    return fetchStyle(streetStyleUrl(key, appearance));
-  }
-  return satelliteStyle(key, appearance);
+  if (view === "street") return fetchStyle(streetStyleUrl(key, appearance));
+  // Satellite is the pilot's own MapTiler key or nothing. Answering with
+  // street would be the map showing a view nobody asked for; null gets the
+  // grid instead, and the caller's retry picks a key up if one arrives.
+  return key ? satelliteStyle(key) : null;
 }
