@@ -107,7 +107,6 @@ async function loseOwnContext(mk: typeof mapkit): Promise<string> {
 /** B: flood contexts so WebKit evicts the oldest — which is the map's. */
 async function floodContexts(mk: typeof mapkit): Promise<string> {
   const [map, host] = await newMap(mk);
-  const before = health(map);
   const hogs: HTMLCanvasElement[] = [];
   for (let i = 0; i < CONTEXT_FLOOD; i++) {
     const c = document.createElement("canvas");
@@ -180,19 +179,19 @@ async function driveAfterContextLoss(mk: typeof mapkit): Promise<string> {
     center: new mk.Coordinate(39.8, -98.5),
   }) as unknown as MapLike;
   await wait(1800);
-  const rendered = health(map);
 
   const canvas = host.querySelector("canvas") as HTMLCanvasElement | null;
   const gl = canvas?.getContext("webgl2") ?? canvas?.getContext("webgl");
   const ext = (gl as WebGLRenderingContext | null)?.getExtension(
     "WEBGL_lose_context",
   ) as { loseContext(): void } | null;
+  const steps0: string[] = [];
   ext?.loseContext();
   await wait(1000);
-  const afterLoss = health(map);
+  steps0.push(`lost=${health(map)}`);
 
   // Now everything the app does that a probe never did, on a dead context.
-  const steps: string[] = [];
+  const steps: string[] = steps0;
   const m = map as unknown as Record<string, unknown> & {
     convertCoordinateToPointOnPage(c: unknown): unknown;
   };
