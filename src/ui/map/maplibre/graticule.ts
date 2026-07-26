@@ -23,8 +23,12 @@ import type { CustomLayerInterface, Map as MapLibreMap } from "maplibre-gl";
  *   bit-identical across the change.
  */
 
-// Roughly how many grid boxes should span the viewport.
-const TARGET_BOXES = 10;
+// Roughly how many established cells span the viewport width. The count
+// drifts between this and half of it as a band is zoomed through, and the
+// subdivision doubles it again while fading in — so the busiest moment shows
+// about 2x this. Tuned by eye on a phone: the grid is a reference, not a
+// texture.
+const TARGET_BOXES = 5;
 const LINE_WIDTH_PX = 1;
 const LINE_COLOR: [number, number, number] = [0.447, 0.49, 0.549]; // #727d8c
 const LINE_ALPHA = 0.4;
