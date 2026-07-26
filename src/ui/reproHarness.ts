@@ -29,9 +29,9 @@ const wait = (ms: number) => new Promise((r) => setTimeout(r, ms));
 
 function paint(poisoned: boolean, lines: string[]) {
   const el = document.createElement("div");
-  el.style.cssText = `position:fixed;left:0;right:0;bottom:0;height:46%;z-index:2147483647;background:${
+  el.style.cssText = `position:fixed;inset:0;z-index:2147483647;background:${
     poisoned ? "#c00" : "#060"
-  };color:#fff;font:600 17px/1.3 ui-monospace,monospace;padding:12px;white-space:pre-wrap;overflow:auto`;
+  };color:#fff;font:600 12px/1.25 ui-monospace,monospace;padding:60px 8px 8px;white-space:pre-wrap;overflow:hidden`;
   el.textContent = (poisoned ? "REPRODUCED\n\n" : "not reproduced\n\n") + lines.join("\n");
   document.body.appendChild(el);
   document.title = poisoned ? "REPRO:YES" : "REPRO:NO";
@@ -101,7 +101,7 @@ async function loseOwnContext(mk: typeof mapkit): Promise<string> {
   const state = canvasState(host);
   map.destroy();
   host.remove();
-  return `A lose own context: before=${before} after=${after} | ${state}`;
+  return `A loseCtx: b=${before} a=${after} ${state}`;
 }
 
 /** B: flood contexts so WebKit evicts the oldest — which is the map's. */
@@ -121,7 +121,7 @@ async function floodContexts(mk: typeof mapkit): Promise<string> {
   const state = canvasState(host);
   map.destroy();
   host.remove();
-  return `B flood ${CONTEXT_FLOOD} contexts: before=${before} after=${after} | ${state}`;
+  return `B flood: a=${after} ${state}`;
 }
 
 /** C: padding write + container resize in one frame, rect refresh suppressed. */
@@ -168,7 +168,7 @@ async function padAndResize(mk: typeof mapkit, skip: boolean): Promise<string> {
   }
   map.destroy();
   host.remove();
-  return `C(skip=${skip}): survived ${CYCLES}`;
+  return `C skip=${skip}: survived`;
 }
 
 /** D: a map whose context is already lost, then driven the way the app drives it. */
@@ -220,7 +220,7 @@ async function driveAfterContextLoss(mk: typeof mapkit): Promise<string> {
   } catch (e) {
     steps.push(`rotGate threw ${String(e).slice(0, 40)}`);
   }
-  const out = `D after-loss: rendered=${rendered} lost=${afterLoss}\n   ${steps.join("\n   ")}\n   ${canvasState(host)}`;
+  const out = `D afterLoss: ${steps.join(" ")}`;
   // Leave the map on screen so the screenshot shows whether it is grey.
   return out;
 }
