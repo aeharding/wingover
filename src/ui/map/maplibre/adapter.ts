@@ -370,8 +370,19 @@ export async function createMapLibreMapView(
 
   const view: MapView = {
     el: container,
+    // MapCanvas holds the canvas at opacity 0 until this resolves, so it
+    // decides when the pilot may see their track.
+    //
+    // On style.load, not maplibre's `load`. The map is built on
+    // NO_BASEMAP_STYLE, so the first style.load is the moment the overlays go
+    // in — there is a track to show from then on, and it is the only thing
+    // here the pilot cannot get anywhere else. `load` additionally waits for
+    // the sprite, which is a basemap detail: measured with a sprite that never
+    // answers, `load` never fired at all and a track drawn at 311ms stayed
+    // invisible until the fallback expired at 4549ms.
     ready: new Promise<void>((resolve) => {
-      map.once("load", () => resolve());
+      map.once("style.load", () => resolve());
+      // Backstop for a style that never loads at all.
       setTimeout(resolve, REVEAL_FALLBACK_MS);
     }),
     supportsSatellite,
