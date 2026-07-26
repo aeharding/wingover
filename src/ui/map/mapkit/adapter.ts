@@ -6,6 +6,7 @@ import type {
 } from "apple-mapkit";
 import type { Feature } from "geojson";
 
+import { breadcrumb, registerDiagProbe } from "../../diag";
 import type { MapAppearance, MapViewKind } from "../config";
 import type {
   Aircraft,
@@ -221,6 +222,42 @@ export async function createMapKitMapView(
     }
     return [map.center.longitude, map.center.latitude];
   }
+
+  // DIAGNOSTIC (#185): the one fact that decides the root cause is whether
+  // `map.center` is readable at the moment of the crash — a degenerate rect
+  // makes MapKit throw from inside the getter. Read through try/catch here so
+  // asking the question can never itself be the crash.
+  let lastInsets: unknown = null;
+  registerDiagProbe("mapkit", () => {
+    const out: Record<string, unknown> = { lastInsets };
+    try {
+      const c = map.center;
+      out.center = [c.longitude, c.latitude];
+    } catch (error) {
+      out.centerThrew = String(error);
+    }
+    try {
+      out.rotation = map.rotation;
+    } catch (error) {
+      out.rotationThrew = String(error);
+    }
+    try {
+      const r = map.visibleMapRect as unknown as {
+        origin?: { x?: number; y?: number };
+        size?: { width?: number; height?: number };
+      };
+      out.visibleMapRect = [
+        r?.origin?.x,
+        r?.origin?.y,
+        r?.size?.width,
+        r?.size?.height,
+      ];
+    } catch (error) {
+      out.visibleMapRectThrew = String(error);
+    }
+    out.container = [container.clientWidth, container.clientHeight];
+    return out;
+  });
 
   function width() {
     return container.clientWidth || 390;
@@ -450,6 +487,11 @@ export async function createMapKitMapView(
     // cascading var(--ion-safe-area-*) (MapCanvas resolves them off the same
     // probe), so the logo and the buttons move as one.
     setInsets(insets) {
+      lastInsets = {
+        insets,
+        container: [container.clientWidth, container.clientHeight],
+      };
+      breadcrumb("mapkit.setInsets", lastInsets);
       const padding = new mapkit.Padding(
         insets.top,
         insets.right,
@@ -481,10 +523,18 @@ export async function createMapKitMapView(
     },
 
     destroy() {
+      breadcrumb("mapkit.destroy", [
+        container.clientWidth,
+        container.clientHeight,
+      ]);
       map.destroy();
     },
 
     camera(): Camera {
+      breadcrumb("mapkit.camera", [
+        container.clientWidth,
+        container.clientHeight,
+      ]);
       return {
         center: [map.center.longitude, map.center.latitude],
         // Pre-layout the projection has no answer; 3 (the construction-time
