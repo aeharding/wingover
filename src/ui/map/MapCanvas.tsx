@@ -61,6 +61,28 @@ async function createBackend(
   return createMapLibreMapView(container, base, appearance);
 }
 
+/**
+ * Resolves once the element has a real size, or false if the caller gave up
+ * first. A hidden tab measures 0x0 and stays that way until it is shown, so
+ * this waits indefinitely by design: no map is better than a map built from
+ * geometry that does not exist, and nobody is looking at a hidden tab.
+ */
+function laidOut(el: HTMLElement, cancelled: () => boolean): Promise<boolean> {
+  if (el.clientWidth > 0 && el.clientHeight > 0) return Promise.resolve(true);
+  return new Promise((resolve) => {
+    const observer = new ResizeObserver(() => {
+      if (cancelled()) {
+        observer.disconnect();
+        resolve(false);
+      } else if (el.clientWidth > 0 && el.clientHeight > 0) {
+        observer.disconnect();
+        resolve(true);
+      }
+    });
+    observer.observe(el);
+  });
+}
+
 // The React host for a map. It owns the container div and the backend
 // lifecycle, handing the abstract MapView to its parent via onReady — the one
 // place either concrete backend is named, which eslint's NO_MAP_BACKEND_MODULE
@@ -134,6 +156,14 @@ export default function MapCanvas({
     let view: MapView | undefined;
     (async () => {
       if (!container) return;
+      // A map is not built into a container that has no size. Ionic mounts
+      // every TAB page up front and hides the inactive ones, so Plan's map was
+      // constructed at 0x0 and MapKit derived its geometry from that — the map
+      // then greyed out and any camera read threw
+      // ("map rect property origin.x is not a number"), which unmounted the
+      // app (#185). A pushed page like flight detail is laid out before it
+      // mounts, which is exactly why its map never rotted.
+      if (!(await laidOut(container, () => cancelled))) return;
       const createdWith = baseRef.current;
       const createdAppearance = appearanceRef.current;
       view = await createBackend(container, createdWith, createdAppearance);
