@@ -225,6 +225,115 @@ async function driveAfterContextLoss(mk: typeof mapkit): Promise<string> {
   return out;
 }
 
+function getImpl(map: MapLike): Record<string, unknown> | null {
+  const proto = Object.getPrototypeOf(map) as { _?: (k: unknown) => unknown };
+  const accessor = proto._;
+  if (typeof accessor !== "function") return null;
+  let key: unknown;
+  proto._ = function (this: unknown, k: unknown) {
+    key = k;
+    return accessor.call(this, k);
+  };
+  try {
+    void map.center;
+  } finally {
+    proto._ = accessor;
+  }
+  try {
+    return (accessor.call(map, key) ?? null) as Record<string, unknown> | null;
+  } catch {
+    return null;
+  }
+}
+
+/** E: what atomicPanZoom does — REMOVE a field from Apple's object. */
+async function deleteVisibleMapRect(mk: typeof mapkit): Promise<string> {
+  const [map, host] = await newMap(mk);
+  const impl = getImpl(map);
+  if (!impl) {
+    host.remove();
+    return "E: no impl";
+  }
+  const had = Object.prototype.hasOwnProperty.call(impl, "_visibleMapRect");
+  delete impl._visibleMapRect;
+  const after = health(map);
+  // and again after a resize, which forces a recompute
+  host.style.height = "640px";
+  await frame();
+  await frame();
+  const afterResize = health(map);
+  map.destroy();
+  host.remove();
+  return `E delete _visibleMapRect (own=${had}): after=${after} afterResize=${afterResize}`;
+}
+
+/** F: drive a context-lost map harder — fitBounds / animated region. */
+async function regionOnDeadContext(mk: typeof mapkit): Promise<string> {
+  const [map, host] = await newMap(mk);
+  const canvas = host.querySelector("canvas") as HTMLCanvasElement | null;
+  const gl = canvas?.getContext("webgl2") ?? canvas?.getContext("webgl");
+  (
+    (gl as WebGLRenderingContext | null)?.getExtension("WEBGL_lose_context") as
+      | { loseContext(): void }
+      | null
+  )?.loseContext();
+  await wait(800);
+  const steps: string[] = [];
+  const m = map as unknown as Record<string, unknown>;
+  try {
+    (m as { setRegionAnimated(r: unknown, a: boolean): void }).setRegionAnimated(
+      new mk.CoordinateRegion(
+        new mk.Coordinate(43.0, -89.4),
+        new mk.CoordinateSpan(0.2, 0.2),
+      ),
+      true,
+    );
+    await wait(900);
+    steps.push(`region=${health(map)}`);
+  } catch (e) {
+    steps.push(`region threw ${String(e).slice(0, 45)}`);
+  }
+  // a degenerate, zero-span region — fitBounds can produce this
+  try {
+    (m as { setRegionAnimated(r: unknown, a: boolean): void }).setRegionAnimated(
+      new mk.CoordinateRegion(
+        new mk.Coordinate(43.0, -89.4),
+        new mk.CoordinateSpan(0, 0),
+      ),
+      false,
+    );
+    await wait(600);
+    steps.push(`zeroSpan=${health(map)}`);
+  } catch (e) {
+    steps.push(`zeroSpan threw ${String(e).slice(0, 45)}`);
+  }
+  map.destroy();
+  host.remove();
+  return `F dead-context region: ${steps.join(" ")}`;
+}
+
+/** G: lose the context DURING a resize rather than at rest. */
+async function loseDuringResize(mk: typeof mapkit): Promise<string> {
+  const [map, host] = await newMap(mk);
+  const canvas = host.querySelector("canvas") as HTMLCanvasElement | null;
+  const gl = canvas?.getContext("webgl2") ?? canvas?.getContext("webgl");
+  const ext = (gl as WebGLRenderingContext | null)?.getExtension(
+    "WEBGL_lose_context",
+  ) as { loseContext(): void } | null;
+  host.style.height = "420px";
+  ext?.loseContext(); // same frame as the resize
+  await frame();
+  const mid = health(map);
+  await wait(900);
+  host.style.height = "714px";
+  await frame();
+  await frame();
+  const after = health(map);
+  map.destroy();
+  host.remove();
+  return `G lose during resize: mid=${mid} after=${after}`;
+}
+
 export async function runReproHarness() {
   const lines: string[] = [];
   try {
@@ -236,6 +345,9 @@ export async function runReproHarness() {
       () => padAndResize(mk, true),
       () => padAndResize(mk, false),
       () => driveAfterContextLoss(mk),
+      () => deleteVisibleMapRect(mk),
+      () => regionOnDeadContext(mk),
+      () => loseDuringResize(mk),
     ]) {
       try {
         lines.push(await run());

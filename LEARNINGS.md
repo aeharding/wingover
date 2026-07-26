@@ -118,23 +118,69 @@ what they measure. Poisonings clustered near those pastes.
 - NOT available: Safari Web Inspector headlessly, `ios_webkit_debug_proxy`,
   Homebrew.
 
+## Simulator harness — WORKING, and results
+
+Hands-free loop is built and proven: a boot-time harness (`src/ui/reproHarness.ts`,
+branch `repro/sim-padding-resize`) runs experiments with no console, no touch
+and no inspector, and paints its verdict so `xcrun simctl io <udid> screenshot`
+reads it. Build → install → launch → screenshot all work headlessly over
+`ssh mac`. Sim: `87165517-6BAD-4856-966B-398CCF0C5FD2` (iPhone 17 Pro, iOS 26).
+Fresh sim app lands in DerivedData
+(`.../Build/Products/debug-iphonesimulator/Wingover.app`), NOT in
+`gen/apple/build/arm64-sim` — the `tauri ios build` rename error means that
+path stays stale.
+
+Measured in the simulator, mapkit 6.0.122:
+
+- **Losing the map's own GL context does NOT poison it.** `contextLost=true`
+  and `map.center` still reads fine. So GL context loss is not the NaN.
+- **Flooding 24 WebGL contexts does not poison it either** (same result).
+- **Padding + resize with the rect refresh suppressed: survived 20 cycles.**
+  Its control also survived. That hypothesis is DEAD.
+
+But a context-lost map renders nothing, which IS a grey map. So the likely
+shape is two steps: context loss greys it, and something done TO a
+context-lost map produces the NaN.
+
+## MapKit facts, from Apple's shipped bundle
+
+- MapKit JS 6 renders in **WebGL** and has **zero** context-loss handling:
+  no `webglcontextlost`, no `webglcontextrestored`, no `isContextLost` in any
+  of its 39 chunks.
+- On `getContext` failure it runs a silent teardown that removes its canvas
+  and nulls its context **but leaves `destroyed = false`**.
+- The thrown string comes from a generic map-rect validator in
+  `mapkit.core.afe1f1.js`; the NaN is produced upstream in `984238`.
+- **MapKit JS has no Workers at all** (zero `Worker` tokens, v5 and v6). The
+  `this.df[t][v]` blob-worker error is therefore NOT MapKit's — maplibre's
+  bundle does use a blob worker. The earlier "MapKit's worker dies" note is
+  wrong and must not be built on.
+- No suspend/resume API exists. `destroy()` is the only lifecycle method, so
+  recovery can only be destroy + recreate.
+- The loader does not pin a version (`@apple/mapkit-loader` defaults to "6"),
+  so Apple ships new builds under us silently. Pinning works and is verified
+  (`6.0.121` and `6.0.122` are genuinely different files), so Apple's builds
+  can be bisected.
+- Nobody on the public internet has ever reported this exact error string.
+
 ## NEXT STEPS (actionable, in order)
 
-1. **Reproduce the leading hypothesis in the simulator, hands-free.** Add a
-   temporary boot-time harness to a throwaway branch that, in the sim,
-   builds a MapKit map and cycles: `impl.setPadding(top 50/0,
-   {updateVisibleMapRect:false})` + container height 714↔748 (the tab-bar
-   delta) on successive frames, reading `map.center` after each cycle.
-   Paint the verdict as a full-screen colour (green = survived, red =
-   POISONED) so `xcrun simctl io <udid> screenshot` reads it with no
-   console and no touch. Control arm: the same cycle with
-   `updateVisibleMapRect: true`.
-2. If that reproduces, the 2×2 confirmation is: (a) freeze the tab-bar
-   height so only padding changes, (b) freeze the insets so only the
-   container resizes. Neither alone should poison.
-3. If it does NOT reproduce, add Reachability itself: check whether the
-   Simulator's Device menu exposes it (AppleScript can now enumerate and
-   click menus), and drive the app-switcher gestures via springboard in
-   XCUITest.
-4. Fix the diag probe key (per-map, unregistered in `destroy()`) before
-   trusting any further `__wingoverDiag()` output.
+1. **Drive a context-lost map** (harness v3, running): pad it, resize it,
+   project coordinates through it, gate rotation on it. If any of those
+   produces the NaN on a dead context, that is the mechanism, reproduced
+   headlessly.
+2. **Confirm the grey visually in the sim**: leave a context-lost map on
+   screen and screenshot it. If it renders grey, the grey map is reproduced
+   deterministically and the first half of the bug is closed.
+3. If the sim still will not produce the NaN, escalate the trigger: drive
+   Reachability + the app switcher. AppleScript GUI scripting over SSH now
+   WORKS (accessibility granted), so the Simulator's menus and window can
+   be driven; enumerate the Device menu for a Reachability item, and drive
+   springboard gestures from XCUITest for the app switcher.
+4. Bisect Apple's MapKit builds (`load({version: "6.0.121"})` etc.) to test
+   whether this is a recent Apple regression. Pin the version regardless —
+   an unpinned loader means Apple can change flight behaviour with no
+   deploy from us.
+5. Fix the diag probe key (per-map, unregistered in `destroy()`) before
+   trusting any further `__wingoverDiag()` output — with several tab pages
+   mounted it currently reports whichever map was constructed LAST.
