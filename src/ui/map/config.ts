@@ -52,19 +52,16 @@ function blankStyleRequested(): boolean {
   return launchParam("map-style") === "blank";
 }
 
-export type MapBackend = "mapkit" | "maplibre" | "fake";
+export type MapBackend = "mapkit" | "maplibre";
 
 // MapKit JS is the default map backend everywhere — its token authorizes on
-// localhost, so plain `vite` and the Tauri dev webview get it too. Overrides
-// (highest first): ?map= in the URL, then a "wingover.map" localStorage flag
-// (how e2e forces the fake, deterministic, network-free backend), then the
-// blank debug style (implies MapLibre for offline manual debugging), then
-// the pilot's Settings choice.
+// localhost, so plain `vite` and the Tauri dev webview get it too. Overrides,
+// highest first: ?map= in the URL, then a "wingover.map" localStorage flag,
+// then ?map-style=blank (which implies MapLibre, since the no-basemap style is
+// a maplibre style), then the pilot's Settings choice.
 export async function resolveBackend(): Promise<MapBackend> {
   const override = backendOverride();
-  if (override === "mapkit" || override === "maplibre" || override === "fake") {
-    return override;
-  }
+  if (override === "mapkit" || override === "maplibre") return override;
   if (blankStyleRequested()) return "maplibre";
   const chosen = await getSetting("mapBackend");
   if (chosen === "mapkit" || chosen === "maplibre") return chosen;
