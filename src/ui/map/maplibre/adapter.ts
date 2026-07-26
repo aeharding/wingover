@@ -141,6 +141,8 @@ export async function createMapLibreMapView(
     const bs = channel(-0.0196376 * r - 0.0786361 * g + 1.0982735 * b);
     return `rgba(${rs}, ${gs}, ${bs}, ${m[4] ?? 1})`;
   }
+  // Set from style.load, cleared before each setStyle. See sync().
+  let styleReady = false;
   const lines: LineRecord[] = [];
   let aircraftState: AircraftState | null = null;
   let aircraftRegistered = false;
@@ -150,8 +152,16 @@ export async function createMapLibreMapView(
   // Idempotent and independent per item: a mid-flight setStyle drops every
   // runtime-added layer, and the aircraft custom layer must be restored on
   // its own even when a geojson line source outlived it.
+  //
+  // Gated on whether the STYLE finished loading, which is all addSource and
+  // addLayer require. isStyleLoaded() answers a bigger question: it waits on
+  // every source and on the sprite, and drops back to false while a geojson
+  // source re-parses. Our overlays are lines and a custom layer, so they need
+  // no sprite — but reading it here meant a sprite that never answered took
+  // the track down with it, and a track is local data that owes the network
+  // nothing.
   function sync() {
-    if (!map.isStyleLoaded()) return;
+    if (!styleReady) return;
     for (const rec of lines) {
       if (!map.getSource(rec.sourceId)) {
         map.addSource(rec.sourceId, { type: "geojson", data: rec.data });
@@ -218,12 +228,6 @@ export async function createMapLibreMapView(
       NO_BASEMAP_BACKGROUND[appearance],
     );
   }
-
-  // What addLayer needs is that the STYLE finished loading. isStyleLoaded()
-  // answers a bigger question — it waits on every source too, and drops back
-  // to false while a geojson source re-parses — so reading it here dropped the
-  // grid whenever the track happened to be parsing, with nothing to try again.
-  let styleReady = false;
 
   // The grid stands IN for a basemap, so a style with tiles retires it. Asked
   // of the style each time rather than remembered, so either direction settles
