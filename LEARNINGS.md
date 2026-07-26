@@ -49,7 +49,52 @@ our config writes (trace empty); map born at 0×0 (fix deployed and
 confirmed live, still reproduces); backgrounding alone; panning alone; a
 synchronous `map.center` read inside `region-change-end`.
 
-## Leading hypothesis (NOT yet proven)
+## ROOT CAUSE (read from Apple's source, and reproduced by running it)
+
+`camera.center.x` becomes NaN. Padding is not involved.
+
+1. The throw comes from a *coercer* whose first line is
+   `if (t instanceof H) return t` — a real MapRect is never validated, so the
+   value reaching it is the plain object from `Camera.toMapRect()`, i.e. the
+   NaN is in `camera.center`.
+2. `MapPoint`/`MapRect`/`Coordinate`/`MapSize` all validate NaN in their
+   constructors. Exactly two writes bypass that, and both are in
+   `Camera.translate()` / `setCameraAnimated`, which build the point with
+   `Object.create(MapPoint.prototype)`. `translate()` is fed by
+   `_panMapCameraBy` — the pan gesture and its deceleration.
+3. The NaN delta comes from `locationInElement()`: `e.x /= t` where `t` is the
+   tracked touch count. **Empty list → 0/0 → NaN.** `_updateTargetTouches`
+   empties that list AND nulls the `_lastKnownEventLocation` fallback on every
+   move.
+4. **`touchesCancelled(t) {}` is EMPTY** and the pan recognizer never overrides
+   it. `enterCancelledState()` is reachable from exactly one place in the whole
+   library: the `enabled` setter. So no MapKit recognizer EVER unwinds on
+   `pointercancel`. When iOS steals a touch — Reachability, app switcher,
+   Control Center — the recognizer stays armed with an empty touch list, and
+   the next stray `pointermove` detonates it.
+5. A NaN velocity passes the too-slow filter (`!(NaN < 62500)` is true) and
+   never self-terminates (`Math.abs(NaN) <= 10` is false forever) — which is
+   why every captured stack ended in `_decelerationEnded`.
+
+`this.df[t][v]` is Syrup's (`mk-csr.js` line 30 col 505, the label-collision
+grid), downstream of the NaN. NOT MapKit-core, NOT a cause.
+
+### Repair and prevention, both verified against Apple's real code
+
+- Detect: `try { void map.center } catch { poisoned }`. `zoomLevel` and
+  `rotation` stay readable and finite.
+- **Repair: `map.center = <Coordinate>`** (or `map.visibleMapRect = <MapRect>`).
+  Resizes, padding writes and region sets do NOT repair; the public padding
+  setter and region setters THROW because they read the rect.
+- **Prevent: on `pointercancel`/`touchcancel`, `map.isScrollEnabled = false;
+  map.isScrollEnabled = true`** — MapKit's own internal `interrupt()` idiom and
+  the only path that reaches `enterCancelledState()`.
+
+Nothing the app does causes this. `writePaddingWithoutRect` is not implicated,
+and the "public padding setter poisons a map" side-finding is explained: it
+throws only because the camera was ALREADY NaN.
+
+## Superseded hypothesis (kept so it is not re-tried)
 
 **Padding write and container resize in the same frame, with the rect
 re-derivation suppressed.**
@@ -165,22 +210,26 @@ context-lost map produces the NaN.
 
 ## NEXT STEPS (actionable, in order)
 
-1. **Drive a context-lost map** (harness v3, running): pad it, resize it,
-   project coordinates through it, gate rotation on it. If any of those
-   produces the NaN on a dead context, that is the mechanism, reproduced
-   headlessly.
-2. **Confirm the grey visually in the sim**: leave a context-lost map on
-   screen and screenshot it. If it renders grey, the grey map is reproduced
-   deterministically and the first half of the bug is closed.
-3. If the sim still will not produce the NaN, escalate the trigger: drive
-   Reachability + the app switcher. AppleScript GUI scripting over SSH now
-   WORKS (accessibility granted), so the Simulator's menus and window can
-   be driven; enumerate the Device menu for a Reachability item, and drive
-   springboard gestures from XCUITest for the app switcher.
-4. Bisect Apple's MapKit builds (`load({version: "6.0.121"})` etc.) to test
-   whether this is a recent Apple regression. Pin the version regardless —
-   an unpinned loader means Apple can change flight behaviour with no
-   deploy from us.
-5. Fix the diag probe key (per-map, unregistered in `destroy()`) before
+1. **Confirm the mechanism in the simulator** (harness experiment H, in
+   flight): synthesize `pointerdown` → moves → `pointercancel` → stray
+   `pointermove`, then read `map.center`. Verify the repair
+   (`map.center = <Coordinate>`) and the guard (`isScrollEnabled`
+   false/true) in the same run. Only then write a fix.
+2. **The fix, once H confirms** — three separable parts:
+   - Guard: on `pointercancel`/`touchcancel`, bounce `isScrollEnabled` so the
+     recognizer unwinds. Prevents the poisoning at source.
+   - Repair: detect a throwing `map.center` and reassign the last known good
+     centre. Heals a map that got poisoned anyway.
+   - Containment: no MapKit read may escape into React. `projectedZoom`
+     (`mapkit/adapter.ts:238`) reads `map.center` as its first statement, and
+     `CompassButton` reads the camera from React's RENDER phase — either
+     throws straight into a commit with no boundary.
+3. Pin the MapKit version. The loader defaults to "6", so Apple ships new
+   builds under us with no deploy; pinning is verified to work and lets their
+   builds be bisected.
+4. Fix the diag probe key (per-map, unregistered in `destroy()`) before
    trusting any further `__wingoverDiag()` output — with several tab pages
    mounted it currently reports whichever map was constructed LAST.
+5. Grey map is a SEPARATE defect, already reproduced in the sim: WebGL
+   context loss with no handling in MapKit. Recovery requires destroy +
+   recreate; there is no resume API.

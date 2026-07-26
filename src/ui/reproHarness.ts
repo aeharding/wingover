@@ -378,44 +378,89 @@ async function liveWatch(mk: typeof mapkit) {
  * divides by zero touches, and Camera.translate writes the NaN straight into
  * camera.center via Object.create, bypassing every validator.
  */
-async function cancelledGesture(mk: typeof mapkit, prevent: boolean): Promise<string> {
+async function cancelledGesture(mk: typeof mapkit, mode: string): Promise<string> {
   const [map, host] = await newMap(mk);
-  const before = health(map);
-  const el = (host.querySelector("canvas") ?? host) as HTMLElement;
-  const pe = (type: string, x: number, y: number, id = 1) =>
+  host.style.visibility = "visible";
+  const startLat = (map as unknown as { center: { latitude: number } }).center.latitude;
+
+  // MapKit binds pointerdown on its own interaction surface; dispatch on the
+  // container and let it bubble, with the button state a real touch carries.
+  const target: HTMLElement = host;
+  const pe = (type: string, x: number, y: number, id: number) =>
     new PointerEvent(type, {
       pointerId: id,
       pointerType: "touch",
       isPrimary: true,
       clientX: x,
       clientY: y,
+      screenX: x,
+      screenY: y,
+      button: type === "pointerdown" ? 0 : -1,
+      buttons: type === "pointerup" || type === "pointercancel" ? 0 : 1,
+      pressure: type === "pointerup" || type === "pointercancel" ? 0 : 0.5,
       bubbles: true,
       cancelable: true,
+      composed: true,
     });
+  const te = (type: string, x: number, y: number, id: number, empty = false) => {
+    const t = new Touch({
+      identifier: id,
+      target,
+      clientX: x,
+      clientY: y,
+      screenX: x,
+      screenY: y,
+      pageX: x,
+      pageY: y,
+    });
+    const list = empty ? [] : [t];
+    return new TouchEvent(type, {
+      touches: list,
+      targetTouches: list,
+      changedTouches: [t],
+      bubbles: true,
+      cancelable: true,
+      composed: true,
+    });
+  };
 
-  el.dispatchEvent(pe("pointerdown", 180, 300));
+  const usePointer = mode.startsWith("ptr");
+  const send = (type: string, x: number, y: number, id = 1, empty = false) => {
+    const ev = usePointer ? pe(type, x, y, id) : te(type, x, y, id, empty);
+    target.dispatchEvent(ev);
+    window.dispatchEvent(ev.constructor === PointerEvent ? pe(type, x, y, id) : te(type, x, y, id, empty));
+  };
+
+  const down = usePointer ? "pointerdown" : "touchstart";
+  const move = usePointer ? "pointermove" : "touchmove";
+  const cancel = usePointer ? "pointercancel" : "touchcancel";
+
+  send(down, 180, 300);
   await frame();
-  window.dispatchEvent(pe("pointermove", 200, 320));
-  await frame();
-  window.dispatchEvent(pe("pointermove", 230, 350));
+  for (let i = 1; i <= 4; i++) {
+    send(move, 180 + i * 18, 300 + i * 14);
+    await frame();
+  }
+  const panned =
+    Math.abs(
+      (map as unknown as { center: { latitude: number } }).center.latitude - startLat,
+    ) > 1e-9;
+
+  send(cancel, 250, 356);
   await frame();
 
-  // iOS steals the touch.
-  window.dispatchEvent(pe("pointercancel", 230, 350));
-  await frame();
-
-  if (prevent) {
-    // MapKit's own interrupt idiom: the only path to enterCancelledState.
+  if (mode.endsWith("guard")) {
     (map as unknown as { isScrollEnabled: boolean }).isScrollEnabled = false;
     (map as unknown as { isScrollEnabled: boolean }).isScrollEnabled = true;
     await frame();
   }
 
-  // A stray move with nothing tracked.
-  window.dispatchEvent(pe("pointermove", 260, 380));
+  // A stray move with nothing tracked — the detonator.
+  send(move, 300, 400, 9, true);
   await frame();
+  send(move, 340, 440, 9, true);
   await frame();
-  await wait(700);
+  await wait(800);
 
   const after = health(map);
   let repaired = "n/a";
@@ -425,12 +470,12 @@ async function cancelledGesture(mk: typeof mapkit, prevent: boolean): Promise<st
       await wait(600);
       repaired = health(map);
     } catch (e) {
-      repaired = `repair threw ${String(e).slice(0, 40)}`;
+      repaired = `threw ${String(e).slice(0, 30)}`;
     }
   }
   map.destroy();
   host.remove();
-  return `H cancel${prevent ? "+guard" : ""}: b=${before} a=${after} repair=${repaired}`;
+  return `H ${mode}: panned=${panned} a=${after} repair=${repaired}`;
 }
 
 export async function runReproHarness() {
@@ -447,8 +492,9 @@ export async function runReproHarness() {
       () => deleteVisibleMapRect(mk),
       () => regionOnDeadContext(mk),
       () => loseDuringResize(mk),
-      () => cancelledGesture(mk, false),
-      () => cancelledGesture(mk, true),
+      () => cancelledGesture(mk, "ptr"),
+      () => cancelledGesture(mk, "touch"),
+      () => cancelledGesture(mk, "touch+guard"),
     ]) {
       try {
         lines.push(await run());
