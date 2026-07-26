@@ -61,11 +61,12 @@ async function createBackend(
   return createMapLibreMapView(container, base, appearance);
 }
 
-// The React host for a map. It owns the `.map-container` div and the backend
+// The React host for a map. It owns the container div and the backend
 // lifecycle, handing the abstract MapView to its parent via onReady — the one
-// place any concrete backend (maplibre/adapter, later a mapkit one) is named.
-// The maplibre adapter is dynamically imported so maplibre-gl stays in a lazy
-// chunk that loads only when a map is first shown.
+// place either concrete backend is named, which eslint's NO_MAP_BACKEND_MODULE
+// now enforces rather than merely asks for. Both adapters are imported
+// DYNAMICALLY, so each backend stays in a lazy chunk that loads only when a map
+// is first shown; a static import from app code would undo that.
 export default function MapCanvas({
   base,
   appearance,

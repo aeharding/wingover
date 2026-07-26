@@ -1,6 +1,5 @@
 import { getSetting, onSettingChanged, setSetting } from "../../storage/local";
 import { resolveBackend } from "./config";
-import { resolveMaptilerKey } from "./maplibre/style";
 
 /**
  * Satellite is free on MapKit but needs the pilot's own MapTiler key on
@@ -15,7 +14,7 @@ import { resolveMaptilerKey } from "./maplibre/style";
 export async function degradeUnreachableSatellite() {
   if ((await getSetting("mapView")) !== "satellite") return;
   if ((await resolveBackend()) !== "maplibre") return;
-  if (await resolveMaptilerKey()) return;
+  if (await getSetting("maptilerKey")) return;
   await setSetting("mapView", "street");
 }
 

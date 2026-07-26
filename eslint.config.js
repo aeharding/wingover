@@ -96,6 +96,29 @@ const NO_MAP_BACKEND = {
     "Consumers speak MapView only; backends live in src/ui/map/maplibre and src/ui/map/mapkit (src/ui/map/types.ts).",
 };
 
+/**
+ * The package ban above is not enough on its own: inside a backend directory
+ * it is lifted, so a single app-code import of a backend MODULE re-exposes
+ * everything it was meant to keep out — and statically, on the boot path,
+ * which also drags the backend out of the lazy chunk MapCanvas puts it in.
+ */
+/** @type {RestrictedPattern} */
+const NO_MAP_BACKEND_MODULE = {
+  // Specifier strings, not resolved paths — so every spelling a caller could
+  // reach a backend by has to be listed. From src/ui/map that is
+  // "./maplibre/x"; from anywhere else "../map/maplibre/x".
+  group: [
+    "**/maplibre/*",
+    "**/mapkit/*",
+    "./maplibre/*",
+    "./mapkit/*",
+    "**/maplibre/**",
+    "**/mapkit/**",
+  ],
+  message:
+    "Backends are reached through MapCanvas's dynamic import, never statically from app code (src/ui/map/types.ts).",
+};
+
 /** @type {RestrictedPattern} */
 const NO_POUCHDB = {
   group: ["pouchdb*"],
@@ -260,6 +283,7 @@ export default defineConfig(
         ENGINE_PUBLIC_ONLY,
         SYNC_PUBLIC_ONLY,
         NO_MAP_BACKEND,
+        NO_MAP_BACKEND_MODULE,
         NO_POUCHDB,
       ),
     },
