@@ -366,7 +366,14 @@ async function liveWatch(mk: typeof mapkit) {
         (canvas as HTMLCanvasElement).getContext("webgl"))
       : null;
     const lost = gl ? (gl as WebGLRenderingContext).isContextLost() : "no-gl";
-    band.textContent = `${dead ? "POISONED" : "OK"} t=${ticks} lost=${lost} vp=${window.innerWidth}x${window.innerHeight}`;
+    let ctr = "?";
+    try {
+      const c = (map as unknown as { center: { latitude: number; longitude: number } }).center;
+      ctr = `${c.latitude.toFixed(3)},${c.longitude.toFixed(3)}`;
+    } catch {
+      ctr = "THROWS";
+    }
+    band.textContent = `${dead ? "POISONED" : "OK"} c=${ctr} lost=${lost}`;
   }, 500);
 }
 
@@ -511,7 +518,7 @@ export async function runReproHarness() {
   );
   // Hand over to the live map only after the verdict has been readable for a
   // while — the screenshot has to catch the results, not the watcher.
-  await wait(150000);
+  await wait(1000);
   try {
     document.querySelectorAll("div").forEach((d) => {
       if (d.style.zIndex === "2147483647") d.remove();
