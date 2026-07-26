@@ -109,10 +109,22 @@ test("the basemap arrives on its own once the network returns", async ({
   // Waits out a real retry cycle, so it needs more than the default budget.
   test.setTimeout(90_000);
   let blocked = true;
+  // Coverage "returning" is served locally. Letting the real CDN answer would
+  // put a third party inside a suite that runs zero retries by design.
+  const STYLE = {
+    version: 8,
+    sources: {
+      demo: { type: "raster", tiles: ["http://localhost/{z}/{x}/{y}.png"] },
+    },
+    layers: [{ id: "bg", type: "background", paint: {} }],
+  };
   await page.route("**/*", (route) => {
     const host = new global.URL(route.request().url()).hostname;
     if (host === "localhost" || host === "127.0.0.1") return route.continue();
-    if (!blocked) return route.continue();
+    if (blocked) return route.abort("internetdisconnected");
+    if (/styles?\//.test(route.request().url())) {
+      return route.fulfill({ json: STYLE });
+    }
     return route.abort("internetdisconnected");
   });
 

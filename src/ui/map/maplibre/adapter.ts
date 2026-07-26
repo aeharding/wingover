@@ -198,10 +198,32 @@ export async function createMapLibreMapView(
 
   // A swap keeps what is already up when the basemap cannot be reached: a
   // failed satellite toggle must not blank a working street map.
+  let retryTimer: ReturnType<typeof setInterval> | undefined;
+
+  // Latest wins. Two overlapping calls are ordinary here — the retry ticks on
+  // a timer while the pilot can toggle satellite — and without this the
+  // older-issued fetch can settle LAST and silently undo the newer choice.
+  let styleSeq = 0;
+
   async function applyStyle() {
+    const seq = ++styleSeq;
     const next = await resolveMapStyle(currentBase, appearance);
-    if (!next) return;
+    if (!next || seq !== styleSeq) return;
     onBlankStyle = next === BLANK_STYLE;
+    // Custom layers are invisible to maplibre's diff, so a style swap neither
+    // removes nor repositions them: left alone the grid outlives the blank
+    // basemap it belongs to, draws over the real one wherever no fill covers,
+    // and burns a full-screen fragment pass every frame for the rest of the
+    // flight. sync() re-adds it if we go back to blank.
+    if (!onBlankStyle && map.getLayer(GRATICULE_LAYER)) {
+      map.removeLayer(GRATICULE_LAYER);
+    }
+    // A manual swap that succeeds also ends the hunt; otherwise one more tick
+    // fires and re-fetches for nothing.
+    if (!onBlankStyle && retryTimer !== undefined) {
+      clearInterval(retryTimer);
+      retryTimer = undefined;
+    }
     // Carry our own sources and layers INTO the incoming style, rather than
     // letting the swap drop them and re-adding them afterwards.
     //
@@ -242,7 +264,6 @@ export async function createMapLibreMapView(
   // safe where listening to `online` was not — a failure cannot damage a
   // working map. `online` is also the wrong signal here, since cell coverage
   // returning mid-flight frequently never changes it.
-  let retryTimer: ReturnType<typeof setInterval> | undefined;
   if (resolved === null) {
     retryTimer = setInterval(() => {
       // Pointless while hidden, and iOS suspends the timer anyway; leaving it

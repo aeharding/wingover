@@ -136,8 +136,15 @@ async function satelliteStyle(
 // Safe to hand back a parsed object: OpenFreeMap's styles use absolute URLs
 // for sprite, glyphs and every source, so nothing resolves relative to the
 // style URL we just dropped.
+// Eight seconds, because a connection that black-holes rather than refusing
+// (captive portals, dying signal — iOS waits ~60s) would otherwise leave the
+// map with no style object at all. The catch below turns the abort into null,
+// which is the whole point of the contract: a hang becomes BLANK_STYLE plus a
+// retry rather than a blank screen.
+const STYLE_FETCH_TIMEOUT_MS = 8000;
+
 async function fetchStyle(url: string): Promise<StyleSpecification | null> {
-  return fetch(url)
+  return fetch(url, { signal: AbortSignal.timeout(STYLE_FETCH_TIMEOUT_MS) })
     .then((response) =>
       response.ok ? (response.json() as Promise<StyleSpecification>) : null,
     )

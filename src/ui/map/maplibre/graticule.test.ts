@@ -18,7 +18,10 @@ describe("gridForZoom", () => {
   // the rendered result is unchanged across the flip. If fade did not reach 1
   // first, the grid would visibly pop.
   it("reaches full opacity immediately before a band flip", () => {
-    for (let zoom = 10; zoom < 18; zoom += 0.5) {
+    // 0.001, not 0.5: band flips land at z ~ 10.285, 11.285 ... and a coarse
+    // stride steps straight over every one of them, so this test ran ZERO
+    // assertions and passed.
+    for (let zoom = 10; zoom < 18; zoom += 0.001) {
       const { spacing } = gridForZoom(zoom, VIEWPORT_PX);
       const nudged = gridForZoom(zoom + 0.001, VIEWPORT_PX);
       if (nudged.spacing === spacing) continue;

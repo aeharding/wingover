@@ -49,9 +49,14 @@ void main() {
 }`;
 
 // Distance to the nearest line is converted to PIXELS analytically, from a
-// uniform, rather than with fwidth(): the map is never pitched, so the scale
-// is uniform across the frame and the derivative is known. That keeps this on
-// plain GLSL ES 1.00 with no derivatives extension to feature-detect.
+// uniform, rather than with fwidth(). That keeps this on plain GLSL ES 1.00
+// with no derivatives extension to feature-detect.
+//
+// It assumes a uniform scale across the frame, which holds while the map is
+// unpitched. maplibre's defaults leave touchPitch and dragRotate ENABLED, so a
+// two-finger vertical drag currently breaks that assumption and the lines go
+// uneven. Tracked separately; the flight surface probably wants maxPitch 0
+// regardless.
 const FRAGMENT_SHADER = `
 precision highp float;
 varying vec2 v_pos;
@@ -108,6 +113,10 @@ function compile(
  */
 export function gridForZoom(zoom: number, viewportPx: number) {
   const worldSize = 512 * 2 ** zoom;
+  // A hidden tab reports clientWidth 0, and log2(0) is -Infinity: it would
+  // poison both uniforms and divide by zero in the shader. Nothing is visible
+  // at that size anyway.
+  if (viewportPx <= 0) return { spacing: 1, fade: 0, worldSize };
   const target = viewportPx / worldSize / TARGET_BOXES;
   const level = Math.log2(target);
   const spacing = 2 ** Math.ceil(level);
