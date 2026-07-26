@@ -86,20 +86,21 @@ export async function createMapLibreMapView(
   appearance: MapAppearance,
 ): Promise<MapView> {
   let currentBase = initialBase;
-  // null means the basemap is unreachable. Falling back to BLANK_STYLE here is
-  // the whole offline story: the map ALWAYS gets a style that loads, so
-  // style.load always fires, so the overlay registry below always runs and the
-  // track is drawn whether or not there is a network. The track is local data
-  // and must never depend on one.
-  const resolved = await resolveMapStyle(initialBase, appearance);
-  const style = resolved ?? BLANK_STYLE;
+  // Built on the local blank style, ALWAYS, and upgraded after. Blocking
+  // construction on the style fetch meant a network that hangs rather than
+  // refusing left no map object at all — measured at 8s of empty loading veil
+  // against a black-holed host, which is what a joined-but-dead wifi does.
+  //
+  // So the map exists from the first frame: style.load fires immediately, the
+  // overlay registry below runs, and the track draws whether or not there is a
+  // network. The track is local data and must never wait on one.
   // Decided once at creation: satellite here costs MapTiler quota, so it
   // exists only on the pilot's own key. A key added in Settings takes
   // effect on the next map, which is fine — Settings has no map.
   const supportsSatellite = !!(await resolveMaptilerKey());
   const map = new MapLibreMap({
     container,
-    style,
+    style: BLANK_STYLE,
     center: [-98.5, 39.8],
     zoom: 3,
     fadeDuration: 0,
@@ -228,10 +229,8 @@ export async function createMapLibreMapView(
   // ── basemap ───────────────────────────────────────────────────────────
 
   // Which style is actually up. Not inferred from events — we chose it.
-  let onBlankStyle = style === BLANK_STYLE;
+  let onBlankStyle = true;
 
-  // A swap keeps what is already up when the basemap cannot be reached: a
-  // failed satellite toggle must not blank a working street map.
   let retryTimer: ReturnType<typeof setInterval> | undefined;
 
   // Latest wins. Two overlapping calls are ordinary here — the retry ticks on
@@ -239,26 +238,27 @@ export async function createMapLibreMapView(
   // older-issued fetch can settle LAST and silently undo the newer choice.
   let styleSeq = 0;
 
-  async function applyStyle() {
+  // A swap keeps what is already up when the basemap cannot be reached: a
+  // failed satellite toggle must not blank a working street map. Resolves
+  // false only for UNREACHABLE, which is what starts the hunt; a requested
+  // blank style is an answer, not a failure.
+  async function applyStyle(): Promise<boolean> {
     const seq = ++styleSeq;
     const next = await resolveMapStyle(currentBase, appearance);
-    if (!next || seq !== styleSeq) return;
+    if (!next) return false;
+    if (seq !== styleSeq) return true;
     onBlankStyle = next === BLANK_STYLE;
-    // A manual swap that succeeds also ends the hunt; otherwise one more tick
+    // A successful manual swap also ends the hunt; otherwise one more tick
     // fires and re-fetches for nothing.
     if (!onBlankStyle && retryTimer !== undefined) {
       clearInterval(retryTimer);
       retryTimer = undefined;
     }
-    // Carry our own sources and layers INTO the incoming style, rather than
-    // letting the swap drop them and re-adding them afterwards.
-    //
-    // Without this the track visibly blinks out for about a second when the
-    // basemap arrives: a style change removes every runtime-added layer, and
-    // putting a geojson source back costs a worker parse before it draws
-    // again. Committed as part of the new style it is simply never absent.
-    // (This is what transformStyle is for — maplibre's own first listed use is
-    // carrying state from the previous style across gracefully.)
+    // Carry our own sources and layers INTO the incoming style rather than
+    // letting the swap drop them and re-adding them afterwards: a style change
+    // removes every runtime-added layer, and putting a geojson source back
+    // costs a worker parse before it draws again, so the track visibly blinked
+    // out for about a second when the basemap arrived.
     map.setStyle(next, {
       transformStyle: (previous, incoming) => {
         if (!previous) return incoming;
@@ -277,6 +277,7 @@ export async function createMapLibreMapView(
         };
       },
     });
+    return true;
   }
 
   // Tiles heal themselves — maplibre re-requests them per viewport — but a
@@ -290,19 +291,21 @@ export async function createMapLibreMapView(
   // safe where listening to `online` was not — a failure cannot damage a
   // working map. `online` is also the wrong signal here, since cell coverage
   // returning mid-flight frequently never changes it.
-  if (resolved === null) {
+  function huntForBasemap() {
+    if (retryTimer !== undefined) return;
     retryTimer = setInterval(() => {
       // Pointless while hidden, and iOS suspends the timer anyway; leaving it
       // out keeps the flight surface quiet.
       if (document.visibilityState !== "visible") return;
-      void applyStyle().then(() => {
-        if (!onBlankStyle) {
-          clearInterval(retryTimer);
-          retryTimer = undefined;
-        }
-      });
+      void applyStyle();
     }, BASEMAP_RETRY_MS);
   }
+
+  // The upgrade the map was built to receive. Only an UNREACHABLE basemap
+  // starts the hunt; a requested blank style is an answer, not a failure.
+  void applyStyle().then((reached) => {
+    if (!reached) huntForBasemap();
+  });
 
   // ── gesture fan-out ───────────────────────────────────────────────────
   const longPressHandlers = new Set<(e: GestureEvent) => void>();
