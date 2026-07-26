@@ -38,10 +38,8 @@ const LONG_PRESS_MS = 500;
 const MOVE_TOLERANCE_PX = 10;
 const ATTRIBUTION_LINGER_MS = 6000;
 const REVEAL_FALLBACK_MS = 4000;
-// How often to re-attempt an unreachable basemap. A failed fetch with no
-// coverage is a fast DNS failure and negligible next to GPS, so this is tuned
-// for how soon the map should reappear when a pilot flies back into signal
-// rather than for the cost of missing.
+// How soon the map should reappear once a pilot flies back into signal. The
+// cost of a missed attempt on a long flight has not been measured; see #170.
 const BASEMAP_RETRY_MS = 10_000;
 
 // One-per-launch attribution reveal: the MapTiler credit expands the first
@@ -154,7 +152,6 @@ export async function createMapLibreMapView(
   // its own even when a geojson line source outlived it.
   function sync() {
     if (!map.isStyleLoaded()) return;
-    syncNoBasemap();
     for (const rec of lines) {
       if (!map.getSource(rec.sourceId)) {
         map.addSource(rec.sourceId, { type: "geojson", data: rec.data });
@@ -240,6 +237,15 @@ export async function createMapLibreMapView(
   map.on("styledata", sync);
   map.on("idle", sync);
 
+  // NOT on idle, which fires 9-18x/s while the map moves. hasBasemap() reads
+  // getStyle(), and maplibre serializes the whole style to answer that —
+  // measured at ~1000-2000 cloned layer specs per second on the flight
+  // surface. The answer only changes when the style does.
+  map.on("style.load", () => {
+    syncNoBasemap();
+    if (hasBasemap()) stopHunting();
+  });
+
   // ── basemap ───────────────────────────────────────────────────────────
 
   let retryTimer: ReturnType<typeof setInterval> | undefined;
@@ -250,7 +256,10 @@ export async function createMapLibreMapView(
   const carryOverlays: NonNullable<
     Parameters<MapLibreMap["setStyle"]>[1]
   >["transformStyle"] = (previous, incoming) => {
-    if (!previous) return incoming;
+    // Throwing here is fatal, not recoverable: maplibre catches it, tears the
+    // CURRENT style down and rebuilds, calls this again, throws again — and
+    // the map is left with no style, no track and no way back.
+    if (!previous || !Array.isArray(incoming?.layers)) return incoming;
     const ours = new Set(lines.map((rec) => rec.layerId));
     const sources = { ...incoming.sources };
     for (const rec of lines) {
@@ -270,23 +279,38 @@ export async function createMapLibreMapView(
 
   // The retry ticks while the pilot can also toggle satellite, so an older
   // fetch can settle last; without this it would silently undo the newer one.
+  // A destroyed map counts as stale: an in-flight resolve would otherwise
+  // build a whole Style on a removed map and restart the hunt after cleanup.
   let styleSeq = 0;
-  const isStale = (seq: number) => seq !== styleSeq;
+  let destroyed = false;
+  const isStale = (seq: number) => destroyed || seq !== styleSeq;
 
   function fallBackToNoBasemap() {
-    if (hasBasemap()) map.setStyle(NO_BASEMAP_STYLE);
+    if (hasBasemap()) {
+      map.setStyle(NO_BASEMAP_STYLE, { transformStyle: carryOverlays });
+    }
     huntForBasemap();
   }
 
-  // An unreachable basemap falls back rather than leaving the previous one up:
-  // asking for satellite and still seeing the street map is the map lying
-  // about what it is showing.
-  async function applyStyle(): Promise<void> {
+  /**
+   * @param pilotAsked whether this came from the pilot choosing a view.
+   *
+   * Only a pilot's own choice may drop a working basemap. Showing the street
+   * map after they tapped satellite is the map lying about what it shows — but
+   * an appearance flip or a retry tick is not a request to change the view, and
+   * blanking a basemap they are flying on because the OS went dark is worse
+   * than a stale one.
+   */
+  async function applyStyle(pilotAsked = false): Promise<void> {
     const seq = ++styleSeq;
     const next = await resolveMapStyle(currentBase, appearance);
     if (isStale(seq)) return;
-    if (!next) return fallBackToNoBasemap();
-    if (next !== NO_BASEMAP_STYLE) stopHunting();
+    if (!next) {
+      if (pilotAsked || !hasBasemap()) fallBackToNoBasemap();
+      else huntForBasemap();
+      return;
+    }
+    if (next === NO_BASEMAP_STYLE) return;
     map.setStyle(next, { transformStyle: carryOverlays });
   }
 
@@ -349,7 +373,7 @@ export async function createMapLibreMapView(
     setInsets() {},
     setBaseMap(base) {
       currentBase = base;
-      void applyStyle();
+      void applyStyle(true);
     },
     setAppearance(next) {
       // Restyle in place — the content registry re-adds overlays on the
@@ -363,6 +387,7 @@ export async function createMapLibreMapView(
     },
 
     destroy() {
+      destroyed = true;
       stopHunting();
       map.remove();
     },

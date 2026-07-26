@@ -134,10 +134,9 @@ async function satelliteStyle(
 // for sprite, glyphs and every source, so nothing resolves relative to the
 // style URL we just dropped.
 
-// A connection that black-holes rather than refusing (dying signal; iOS waits
-// ~60s) would otherwise leave the map with no style object at all. The catch
-// below turns the abort into null, which is the point of the contract: a hang
-// becomes NO_BASEMAP_STYLE plus a retry, not a blank screen.
+// A connection that black-holes rather than refusing would otherwise leave the
+// map with no style at all. The catch below turns the abort into null, so a
+// hang becomes NO_BASEMAP_STYLE plus a retry rather than a blank screen.
 const STYLE_FETCH_TIMEOUT_MS = 8000;
 
 async function fetchStyle(url: string): Promise<StyleSpecification | null> {

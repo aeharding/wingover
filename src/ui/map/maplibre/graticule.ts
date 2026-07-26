@@ -137,6 +137,9 @@ export function createGraticuleLayer(
 ): CustomLayerInterface {
   let map: MapLibreMap;
   let program: WebGLProgram | null = null;
+  // Deleted with the layer: the program and buffer were freed, the shaders
+  // were not, so each add/remove leaked two.
+  const shaders: WebGLShader[] = [];
   let buffer: WebGLBuffer;
   let aPos: number;
   let uMatrix: WebGLUniformLocation;
@@ -155,11 +158,11 @@ export function createGraticuleLayer(
     onAdd(addedMap, gl) {
       map = addedMap;
       program = gl.createProgram()!;
-      gl.attachShader(program, compile(gl, gl.VERTEX_SHADER, VERTEX_SHADER));
-      gl.attachShader(
-        program,
+      shaders.push(
+        compile(gl, gl.VERTEX_SHADER, VERTEX_SHADER),
         compile(gl, gl.FRAGMENT_SHADER, FRAGMENT_SHADER),
       );
+      for (const shader of shaders) gl.attachShader(program, shader);
       gl.linkProgram(program);
       aPos = gl.getAttribLocation(program, "a_pos");
       uMatrix = gl.getUniformLocation(program, "u_matrix")!;
@@ -173,6 +176,8 @@ export function createGraticuleLayer(
     },
 
     onRemove(_map, gl) {
+      for (const shader of shaders) gl.deleteShader(shader);
+      shaders.length = 0;
       if (program) gl.deleteProgram(program);
       gl.deleteBuffer(buffer);
       program = null;
