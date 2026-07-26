@@ -1,8 +1,10 @@
 import { expect, type Page, test } from "@playwright/test";
 
-// Deliberately the DEFAULT backend, not ?map=maplibre: forcing maplibre skips
-// the MapKit loader entirely, which is the thing under test.
-const URL = "/?e2e=0";
+// The DEFAULT backend, deliberately: every other spec passes ?map-style=blank,
+// which forces MapLibre and skips the MapKit loader entirely — which is why
+// none of them can see this bug. The query string is not a flag, it is what
+// keeps dev's `/` on the app instead of the landing page (dev/landing-plugin).
+const URL = "/?app";
 
 // Kill the map's network without killing the app's. On device the app is a
 // local Tauri bundle, so a dead network must never stop it loading.
@@ -24,6 +26,14 @@ function mapExists(page: Page) {
       (HTMLElement & { __map?: unknown }) | null;
     return !!el?.__map;
   });
+}
+
+function loaderTagCount(page: Page) {
+  return page.evaluate(
+    () =>
+      document.querySelectorAll('script[data-callback="initMapKitLoaderV2"]')
+        .length,
+  );
 }
 
 async function openTrack(page: Page) {
@@ -58,5 +68,13 @@ test("a failed MapKit load does not kill every map after it", async ({
     await page.getByRole("heading", { name: "Tomahawk Test Flight" }).click();
     await expect(page.getByTestId("map-container")).toBeVisible();
     await expect.poll(() => mapExists(page), { timeout: 25_000 }).toBe(true);
+
+    // The map existing is not enough: it can be satisfied by the loader
+    // hanging and something else eventually giving up. What proves the dead
+    // tag was cleared is that a retry built a FRESH one rather than waiting on
+    // the corpse — and that there is never more than one, since a second live
+    // tag re-executes mapkit.core.js and swaps the namespace under any map
+    // already built from it.
+    expect(await loaderTagCount(page)).toBeLessThanOrEqual(1);
   }
 });
