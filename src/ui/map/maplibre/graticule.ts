@@ -86,7 +86,14 @@ void main() {
   // solid and lifts only the half-steps between them.
   float alpha = max(coarse, u_fade * fine);
   if (alpha <= 0.0) discard;
-  gl_FragColor = vec4(u_color, u_alpha * alpha);
+  // PREMULTIPLIED, because that is what maplibre's context and blend func
+  // expect (premultipliedAlpha: true, [ONE, ONE_MINUS_SRC_ALPHA]). Emitting
+  // straight colour only looked right because the grid sits on an opaque
+  // backdrop; over anything transparent the canvas alpha collapses toward a²
+  // and on the light appearance the lines composite BRIGHTER than their
+  // background, which is the polarity inverted.
+  float out_a = u_alpha * alpha;
+  gl_FragColor = vec4(u_color * out_a, out_a);
 }`;
 
 function compile(
@@ -259,8 +266,10 @@ export function createGraticuleLayer(
       gl.bufferData(gl.ARRAY_BUFFER, quad, gl.DYNAMIC_DRAW);
       gl.enableVertexAttribArray(aPos);
       gl.vertexAttribPointer(aPos, 2, gl.FLOAT, false, 0, 0);
+      // No blendFunc: maplibre already set [ONE, ONE_MINUS_SRC_ALPHA] for the
+      // translucent pass, which is the premultiplied pairing the shader emits
+      // for. Overriding it was the other half of the same bug.
       gl.enable(gl.BLEND);
-      gl.blendFunc(gl.SRC_ALPHA, gl.ONE_MINUS_SRC_ALPHA);
       gl.drawArrays(gl.TRIANGLE_STRIP, 0, 4);
     },
   };

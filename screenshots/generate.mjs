@@ -341,7 +341,10 @@ const SHOTS = [
     async prep(page) {
       await page.getByRole("button", { name: "Start Flight" }).click();
       await page.getByTestId("recording").waitFor({ timeout: 15000 });
-      await page.locator(".map-container").first().waitFor({ timeout: 15000 });
+      await page
+        .locator('[data-testid="map-container"]')
+        .first()
+        .waitFor({ timeout: 15000 });
       // Let the whole clipped track replay and the aircraft settle at its
       // final point (compression 300: a ~30min track replays in ~6s).
       await page.waitForTimeout(9000);
@@ -387,11 +390,13 @@ const SHOTS = [
         url: `/logbook/${SEED_FLIGHTS[0].id}?mock-speed=1`,
         async prep(page) {
           await page
-            .locator(".map-container")
+            .locator('[data-testid="map-container"]')
             .first()
             .waitFor({ timeout: 8000 });
           await page
-            .locator('[data-testid="track"], .map-container canvas')
+            .locator(
+              '[data-testid="track"], [data-testid="map-container"] canvas',
+            )
             .first()
             .waitFor({ timeout: 8000 });
           // The back panel reads in MAP mode (dark streets) so the two
@@ -408,11 +413,13 @@ const SHOTS = [
         url: `/logbook/${REPLAY_FLIGHT.id}?mock-speed=1`,
         async prep(page) {
           await page
-            .locator(".map-container")
+            .locator('[data-testid="map-container"]')
             .first()
             .waitFor({ timeout: 8000 });
           await page
-            .locator('[data-testid="track"], .map-container canvas')
+            .locator(
+              '[data-testid="track"], [data-testid="map-container"] canvas',
+            )
             .first()
             .waitFor({ timeout: 8000 });
           // The back panel flipped the persisted view to street; take
@@ -444,7 +451,9 @@ const SHOTS = [
           await page.getByTestId("replay-follow").click();
           await page.getByTestId("replay-trackup").click();
           const region = await page
-            .locator(".flight-detail-map-fullroot .map-container")
+            .locator(
+              '[data-testid="flight-detail-map-fullroot"] [data-testid="map-container"]',
+            )
             .boundingBox();
           await page.mouse.move(
             region.x + region.width / 2,
@@ -468,7 +477,7 @@ const SHOTS = [
     url: "/plan?mock-speed=1",
     async prep(page) {
       await page
-        .locator(".plan-map .map-container")
+        .locator('[data-testid="plan-map"] [data-testid="map-container"]')
         .first()
         .waitFor({ timeout: 8000 });
       await page.getByTestId("plan-distance").waitFor({ timeout: 8000 });
@@ -489,7 +498,10 @@ const SHOTS = [
     async prep(page) {
       await page.getByRole("button", { name: "Start Flight" }).click();
       await page.getByTestId("recording").waitFor({ timeout: 15000 });
-      await page.locator(".map-container").first().waitFor({ timeout: 15000 });
+      await page
+        .locator('[data-testid="map-container"]')
+        .first()
+        .waitFor({ timeout: 15000 });
       await page.waitForTimeout(9000);
       await page.getByRole("button", { name: "Follow aircraft" }).click();
       await waitForMapIdle(page);
@@ -604,17 +616,20 @@ const CAPTURE_CSS_GROUND = `
 `;
 
 async function waitForMapIdle(page) {
-  // maplibre exposes __map; MapKit doesn't, so fall back to a tile-canvas
-  // heuristic (a settled MapKit surface stops mutating).
+  // BOTH backends set __map, but MapKit's is a {getBearing} shim, not a
+  // maplibre Map — calling loaded() on it throws inside the predicate, and a
+  // throwing predicate never settles. Feature-detect instead of assuming, and
+  // fall back to the canvas for MapKit (a settled surface stops mutating).
   await page
     .waitForFunction(
       () => {
-        const c = document.querySelector(".map-container");
+        const c = document.querySelector('[data-testid="map-container"]');
         const m = c && c.__map;
-        if (m) return m.loaded() && m.areTilesLoaded();
-        // MapKit: consider it ready once the map canvas/tiles exist.
+        if (m && typeof m.loaded === "function") {
+          return m.loaded() && m.areTilesLoaded();
+        }
         return !!document.querySelector(
-          ".map-container canvas, .map-container .mk-tile-loaded, .mk-map-view",
+          '[data-testid="map-container"] canvas, .mk-map-view',
         );
       },
       { timeout: 12000 },
