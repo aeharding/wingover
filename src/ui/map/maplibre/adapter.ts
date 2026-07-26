@@ -148,6 +148,7 @@ export async function createMapLibreMapView(
   // its own even when a geojson line source outlived it.
   function sync() {
     if (!map.isStyleLoaded()) return;
+    syncGraticule();
     for (const rec of lines) {
       if (!map.getSource(rec.sourceId)) {
         map.addSource(rec.sourceId, { type: "geojson", data: rec.data });
@@ -177,14 +178,26 @@ export async function createMapLibreMapView(
       map.addLayer(createAircraftLayer(() => aircraftState));
       container.setAttribute("data-aircraft-layer", "true");
     }
-    // The grid belongs to the blank basemap only: a real basemap has its own
-    // scale cues. On an empty background a moving map reads as a still one and
-    // zoom carries no scale, so these lines are the pilot's only reference for
-    // distance and drift. Added UNDER the overlays so the track wins.
-    if (onBlankStyle && !map.getLayer(GRATICULE_LAYER)) {
-      const first = lines[0]?.layerId;
-      map.addLayer(createGraticuleLayer(GRATICULE_LAYER), first);
-    }
+  }
+
+  // The grid sits directly above the basemap's own background and below
+  // everything else, on EVERY style — not just the blank one.
+  //
+  // Imagery covers it the moment tiles arrive, so it costs nothing visually
+  // when the map is working. It reappears exactly where tiles have not: lose
+  // signal mid-flight and pan into uncached ground and the pilot still has a
+  // reference for scale and drift instead of a void. That case is the whole
+  // point, and it is invisible to a blank-style-only grid because the style
+  // itself loaded fine.
+  //
+  // Anchored by finding the first NON-background layer rather than by index:
+  // getStyle() serialises runtime layers too, so an index would drift.
+  function syncGraticule() {
+    if (!map.isStyleLoaded() || map.getLayer(GRATICULE_LAYER)) return;
+    const above = map
+      .getStyle()
+      ?.layers?.find((layer) => layer.type !== "background")?.id;
+    map.addLayer(createGraticuleLayer(GRATICULE_LAYER), above);
   }
 
   map.on("style.load", sync);
@@ -210,14 +223,6 @@ export async function createMapLibreMapView(
     const next = await resolveMapStyle(currentBase, appearance);
     if (!next || seq !== styleSeq) return;
     onBlankStyle = next === BLANK_STYLE;
-    // Custom layers are invisible to maplibre's diff, so a style swap neither
-    // removes nor repositions them: left alone the grid outlives the blank
-    // basemap it belongs to, draws over the real one wherever no fill covers,
-    // and burns a full-screen fragment pass every frame for the rest of the
-    // flight. sync() re-adds it if we go back to blank.
-    if (!onBlankStyle && map.getLayer(GRATICULE_LAYER)) {
-      map.removeLayer(GRATICULE_LAYER);
-    }
     // A manual swap that succeeds also ends the hunt; otherwise one more tick
     // fires and re-fetches for nothing.
     if (!onBlankStyle && retryTimer !== undefined) {
