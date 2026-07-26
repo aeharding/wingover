@@ -2,10 +2,10 @@ import type { Feature } from "geojson";
 
 import type { MapAppearance, MapViewKind } from "./config";
 
-// The backend-agnostic map surface. One implementation wraps MapLibre GL
-// (maplibre/adapter.ts); a MapKit JS implementation can slot in behind the
-// same interface. Consumers (pages, LiveTrackMap) speak only MapView — none
-// of them import maplibre-gl.
+// The backend-agnostic map surface. Two implementations sit behind it:
+// mapkit/adapter.ts (the default) and maplibre/adapter.ts. Consumers (pages,
+// LiveTrackMap) speak only MapView, and reach neither backend directly —
+// MapCanvas imports them dynamically and eslint holds that line.
 //
 // Split of concerns: MapView is a DUMB primitive surface. All app-specific
 // choreography (following, track-up, zoom) lives ABOVE it in the consumer and
