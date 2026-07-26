@@ -106,7 +106,7 @@ function compile(
  * that line is solid and IS the established grid. Apparent density never
  * changes and nothing pops.
  */
-function gridForZoom(zoom: number, viewportPx: number) {
+export function gridForZoom(zoom: number, viewportPx: number) {
   const worldSize = 512 * 2 ** zoom;
   const target = viewportPx / worldSize / TARGET_BOXES;
   const level = Math.log2(target);

@@ -100,19 +100,15 @@ export async function resolveMaptilerKey(): Promise<string | null> {
 async function satelliteStyle(
   key: string,
   appearance: MapAppearance,
-): Promise<StyleSpecification | string> {
-  const style = await fetch(
+): Promise<StyleSpecification | null> {
+  const style = await fetchStyle(
     `https://api.maptiler.com/maps/hybrid-v4/style.json?key=${key}`,
-  )
-    .then((response) =>
-      response.ok ? (response.json() as Promise<StyleSpecification>) : null,
-    )
-    .catch(() => null);
+  );
   if (!style?.sources) {
     console.warn(
       "Satellite unavailable (MapTiler hybrid style — key not valid for this origin); showing street view",
     );
-    return streetStyleUrl(key, appearance);
+    return fetchStyle(streetStyleUrl(key, appearance));
   }
 
   const base = style.sources.satellite;
@@ -131,15 +127,44 @@ async function satelliteStyle(
   return style;
 }
 
+// Fetched here rather than handed to maplibre as a URL, so that a style we
+// cannot reach is a value the caller can SEE. Given a URL, maplibre fetches it
+// itself and a failure leaves the map with no style at all — which takes the
+// track down with it, because the overlay registry runs on style.load. The
+// satellite path already worked this way; this makes street match it.
+//
+// Safe to hand back a parsed object: OpenFreeMap's styles use absolute URLs
+// for sprite, glyphs and every source, so nothing resolves relative to the
+// style URL we just dropped.
+async function fetchStyle(url: string): Promise<StyleSpecification | null> {
+  return fetch(url)
+    .then((response) =>
+      response.ok ? (response.json() as Promise<StyleSpecification>) : null,
+    )
+    .catch(() => null);
+}
+
+/**
+ * The basemap style, or null when there is no reaching it.
+ *
+ * null is the whole contract: callers decide what an unreachable basemap
+ * means. At construction it means BLANK_STYLE (a map that always loads, so the
+ * track always has somewhere to live); on a later swap it means keep what is
+ * already up, because a failed satellite toggle must not blank a working
+ * street map.
+ */
 export async function resolveMapStyle(
   view: MapViewKind,
   appearance: MapAppearance,
-): Promise<StyleSpecification | string> {
+): Promise<StyleSpecification | null> {
+  // Asked for, not failed — so it is a real answer, and never retried.
   if (blankStyleRequested()) return BLANK_STYLE;
   const key = await resolveMaptilerKey();
   // No key, no satellite (a stored "satellite" preference degrades to
   // street rather than erroring) — the toggle is hidden in that state via
   // MapView.supportsSatellite.
-  if (view === "street" || !key) return streetStyleUrl(key, appearance);
+  if (view === "street" || !key) {
+    return fetchStyle(streetStyleUrl(key, appearance));
+  }
   return satelliteStyle(key, appearance);
 }

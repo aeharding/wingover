@@ -33,6 +33,11 @@ const LONG_PRESS_MS = 500;
 const MOVE_TOLERANCE_PX = 10;
 const ATTRIBUTION_LINGER_MS = 6000;
 const REVEAL_FALLBACK_MS = 4000;
+// How often to re-attempt an unreachable basemap. A failed fetch with no
+// coverage is a fast DNS failure and negligible next to GPS, so this is tuned
+// for how soon the map should reappear when a pilot flies back into signal
+// rather than for the cost of missing.
+const BASEMAP_RETRY_MS = 10_000;
 
 // One-per-launch attribution reveal: the MapTiler credit expands the first
 // time the app shows a map, lingers, then collapses and stays collapsed.
@@ -76,7 +81,13 @@ export async function createMapLibreMapView(
   appearance: MapAppearance,
 ): Promise<MapView> {
   let currentBase = initialBase;
-  const style = await resolveMapStyle(initialBase, appearance);
+  // null means the basemap is unreachable. Falling back to BLANK_STYLE here is
+  // the whole offline story: the map ALWAYS gets a style that loads, so
+  // style.load always fires, so the overlay registry below always runs and the
+  // track is drawn whether or not there is a network. The track is local data
+  // and must never depend on one.
+  const resolved = await resolveMapStyle(initialBase, appearance);
+  const style = resolved ?? BLANK_STYLE;
   // Decided once at creation: satellite here costs MapTiler quota, so it
   // exists only on the pilot's own key. A key added in Settings takes
   // effect on the next map, which is fine — Settings has no map.
@@ -93,19 +104,6 @@ export async function createMapLibreMapView(
   (container as HTMLElement & { __map?: MapLibreMap }).__map = map;
 
   setupAttribution(container);
-
-  // Every real style is a remote URL, and maplibre with no style never
-  // fires style.load — so the registry above never runs and the TRACK
-  // vanishes along with the basemap. That is the wrong failure: the track,
-  // position and waypoints are local data and owe the network nothing.
-  // An error before any style has loaded means we have no basemap at all,
-  // so take the blank one and let the overlays draw on it.
-  // Two different facts, so not one boolean: the graticule cares only that
-  // the blank style is UP, while healing cares that we FELL BACK to it —
-  // ?map-style=blank asked for blank and must keep it when the network
-  // returns.
-  let blankStyle: "requested" | "fallback" | null =
-    style === BLANK_STYLE ? "requested" : null;
 
   // ── content registry (survives setBaseMap) ───────────────────────────
 
@@ -180,9 +178,10 @@ export async function createMapLibreMapView(
       container.setAttribute("data-aircraft-layer", "true");
     }
     // The grid belongs to the blank basemap only: a real basemap has its own
-    // scale cues. Restored here because a style swap drops custom layers with
-    // everything else, and added UNDER the overlays so the track wins.
-    if (blankStyle && !map.getLayer(GRATICULE_LAYER)) {
+    // scale cues. On an empty background a moving map reads as a still one and
+    // zoom carries no scale, so these lines are the pilot's only reference for
+    // distance and drift. Added UNDER the overlays so the track wins.
+    if (onBlankStyle && !map.getLayer(GRATICULE_LAYER)) {
       const first = lines[0]?.layerId;
       map.addLayer(createGraticuleLayer(GRATICULE_LAYER), first);
     }
@@ -192,30 +191,45 @@ export async function createMapLibreMapView(
   map.on("styledata", sync);
   map.on("idle", sync);
 
-  // ── offline basemap ───────────────────────────────────────────────────
+  // ── basemap ───────────────────────────────────────────────────────────
 
-  let styleLoaded = false;
-  map.on("style.load", () => {
-    styleLoaded = true;
-  });
-  map.on("error", () => {
-    if (styleLoaded || blankStyle) return;
-    blankStyle = "fallback";
-    map.setStyle(BLANK_STYLE);
-  });
+  // Which style is actually up. Not inferred from events — we chose it.
+  let onBlankStyle = style === BLANK_STYLE;
 
+  // A swap keeps what is already up when the basemap cannot be reached: a
+  // failed satellite toggle must not blank a working street map.
   async function applyStyle() {
     const next = await resolveMapStyle(currentBase, appearance);
-    blankStyle = next === BLANK_STYLE ? "requested" : null;
+    if (!next) return;
+    onBlankStyle = next === BLANK_STYLE;
     map.setStyle(next);
   }
 
-  // The pilot flies back into coverage: upgrade in place, no reload and no
-  // tap. Only from the blank fallback — a real style is already right.
-  const retryWhenOnline = () => {
-    if (blankStyle === "fallback") void applyStyle();
-  };
-  window.addEventListener("online", retryWhenOnline);
+  // Tiles heal themselves — maplibre re-requests them per viewport — but a
+  // style that never arrived does not, and that has to recover DURING a
+  // flight: the Fly map is mounted for the whole flight, so there is no next
+  // navigation to re-resolve it. A pilot who takes off out of coverage would
+  // otherwise stay on the grid even after signal returns.
+  //
+  // The retry is its own verification: resolveMapStyle fetches, so an attempt
+  // either produces a real style or changes nothing. That is what makes this
+  // safe where listening to `online` was not — a failure cannot damage a
+  // working map. `online` is also the wrong signal here, since cell coverage
+  // returning mid-flight frequently never changes it.
+  let retryTimer: ReturnType<typeof setInterval> | undefined;
+  if (resolved === null) {
+    retryTimer = setInterval(() => {
+      // Pointless while hidden, and iOS suspends the timer anyway; leaving it
+      // out keeps the flight surface quiet.
+      if (document.visibilityState !== "visible") return;
+      void applyStyle().then(() => {
+        if (!onBlankStyle) {
+          clearInterval(retryTimer);
+          retryTimer = undefined;
+        }
+      });
+    }, BASEMAP_RETRY_MS);
+  }
 
   // ── gesture fan-out ───────────────────────────────────────────────────
   const longPressHandlers = new Set<(e: GestureEvent) => void>();
@@ -262,7 +276,7 @@ export async function createMapLibreMapView(
     },
 
     destroy() {
-      window.removeEventListener("online", retryWhenOnline);
+      clearInterval(retryTimer);
       map.remove();
     },
 
