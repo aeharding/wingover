@@ -197,44 +197,43 @@ export async function createMapLibreMapView(
     );
   }
 
-  /**
-   * Everything that depends on there being no basemap: the grid that stands in
-   * for one, and the backdrop it stands on.
-   *
-   * Derived from the style every time rather than remembered, so a swap in
-   * either direction settles itself with nothing to keep in sync. The grid is
-   * a stand-in, not an overlay, so a style with tiles removes it.
-   *
-   * Deliberately coarse for now: a basemap whose tiles fail INDIVIDUALLY still
-   * suppresses the grid, so losing signal mid-flight and panning into uncached
-   * ground gives a bare basemap rather than a reference. The precise version
-   * hangs the grid off maplibre's per-tile error hook — which carries the tile
-   * and excludes 404s, so it can tell "the network failed here" from "there is
-   * nothing here" — and is tracked on the offline epic.
-   */
-  function syncNoBasemap() {
-    if (!map.isStyleLoaded()) return;
-    if (hasBasemap()) {
-      if (map.getLayer(GRATICULE_LAYER)) map.removeLayer(GRATICULE_LAYER);
-      return;
-    }
-    // One shared style constant cannot bake a per-appearance backdrop, so it
-    // is painted here; without it the offline map stayed dark in light mode.
-    if (map.getLayer(NO_BASEMAP_BACKGROUND_LAYER)) {
-      map.setPaintProperty(
-        NO_BASEMAP_BACKGROUND_LAYER,
-        "background-color",
-        NO_BASEMAP_BACKGROUND[appearance],
-      );
-    }
+  function showGrid() {
     if (map.getLayer(GRATICULE_LAYER)) return;
-    const above = map
+    // Custom layers are absent from getStyle(), so anchor on a real one.
+    const aboveBackdrop = map
       .getStyle()
       ?.layers?.find((layer) => layer.type !== "background")?.id;
     map.addLayer(
       createGraticuleLayer(GRATICULE_LAYER, () => appearance),
-      above,
+      aboveBackdrop,
     );
+  }
+
+  function hideGrid() {
+    if (map.getLayer(GRATICULE_LAYER)) map.removeLayer(GRATICULE_LAYER);
+  }
+
+  function paintBackdrop() {
+    if (!map.getLayer(NO_BASEMAP_BACKGROUND_LAYER)) return;
+    map.setPaintProperty(
+      NO_BASEMAP_BACKGROUND_LAYER,
+      "background-color",
+      NO_BASEMAP_BACKGROUND[appearance],
+    );
+  }
+
+  // The grid stands IN for a basemap, so a style with tiles retires it. Asked
+  // of the style each time rather than remembered, so either direction settles
+  // itself. See #170 for why a basemap whose tiles die individually still
+  // counts as having one.
+  function syncNoBasemap() {
+    if (!map.isStyleLoaded()) return;
+    if (hasBasemap()) {
+      hideGrid();
+      return;
+    }
+    paintBackdrop();
+    showGrid();
   }
 
   map.on("style.load", sync);
@@ -245,12 +244,9 @@ export async function createMapLibreMapView(
 
   let retryTimer: ReturnType<typeof setInterval> | undefined;
 
-  // Carry our own sources and layers INTO the incoming style rather than
-  // letting the swap drop them and re-adding them after. A style change
-  // removes every runtime-added layer, and restoring a geojson source costs a
-  // worker parse before it draws again — the track visibly blinked out for
-  // about a second when the basemap arrived. Committed with the new style, it
-  // is simply never absent.
+  // A style swap drops every runtime-added layer, and re-adding a geojson
+  // source costs a worker parse before it draws — long enough that the track
+  // visibly blinked out. Carried in with the style, it is never absent.
   const carryOverlays: NonNullable<
     Parameters<MapLibreMap["setStyle"]>[1]
   >["transformStyle"] = (previous, incoming) => {
@@ -272,45 +268,33 @@ export async function createMapLibreMapView(
     };
   };
 
-  // Latest wins. Two overlapping calls are ordinary here — the retry ticks on
-  // a timer while the pilot can toggle satellite — and without this the
-  // older-issued fetch can settle LAST and silently undo the newer choice.
+  // The retry ticks while the pilot can also toggle satellite, so an older
+  // fetch can settle last; without this it would silently undo the newer one.
   let styleSeq = 0;
+  const isStale = (seq: number) => seq !== styleSeq;
 
-  // The basemap is whatever we could resolve; when we could not resolve one,
-  // it is the no-basemap style. Same rule at construction and at every swap.
-  //
-  // In particular an unreachable basemap does NOT leave the previous one up.
-  // Ask for satellite, get the street map still sitting there, and the map is
-  // lying about what it is showing — the toggle looks like it silently did
-  // nothing. The grid says "this is what I have", and the hunt below picks the
-  // real one up as soon as it can be fetched.
+  function fallBackToNoBasemap() {
+    if (hasBasemap()) map.setStyle(NO_BASEMAP_STYLE);
+    huntForBasemap();
+  }
+
+  // An unreachable basemap falls back rather than leaving the previous one up:
+  // asking for satellite and still seeing the street map is the map lying
+  // about what it is showing.
   async function applyStyle(): Promise<void> {
     const seq = ++styleSeq;
     const next = await resolveMapStyle(currentBase, appearance);
-    if (seq !== styleSeq) return;
-    if (!next) {
-      if (hasBasemap()) map.setStyle(NO_BASEMAP_STYLE);
-      huntForBasemap();
-      return;
-    }
-    // Reaching a real basemap ends the hunt; otherwise one more tick fires and
-    // re-fetches for nothing.
+    if (isStale(seq)) return;
+    if (!next) return fallBackToNoBasemap();
     if (next !== NO_BASEMAP_STYLE) stopHunting();
     map.setStyle(next, { transformStyle: carryOverlays });
   }
 
-  // Tiles heal themselves — maplibre re-requests them per viewport — but a
-  // style that never arrived does not, and that has to recover DURING a
-  // flight: the Fly map is mounted for the whole flight, so there is no next
-  // navigation to re-resolve it. A pilot who takes off out of coverage would
-  // otherwise stay on the grid even after signal returns.
-  //
-  // The retry is its own verification: resolveMapStyle fetches, so an attempt
-  // either produces a real style or changes nothing. That is what makes this
-  // safe where listening to `online` was not — a failure cannot damage a
-  // working map. `online` is also the wrong signal here, since cell coverage
-  // returning mid-flight frequently never changes it.
+  // Tiles re-request themselves per viewport; a style that never arrived does
+  // not, and the Fly map is mounted for a whole flight, so nothing else would
+  // ever re-resolve it. Not driven by `online`: cell coverage returning
+  // mid-flight frequently never changes it, and each attempt fetches, so a
+  // failure changes nothing.
   function stopHunting() {
     clearInterval(retryTimer);
     retryTimer = undefined;
