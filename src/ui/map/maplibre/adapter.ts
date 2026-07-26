@@ -219,12 +219,18 @@ export async function createMapLibreMapView(
     );
   }
 
+  // What addLayer needs is that the STYLE finished loading. isStyleLoaded()
+  // answers a bigger question — it waits on every source too, and drops back
+  // to false while a geojson source re-parses — so reading it here dropped the
+  // grid whenever the track happened to be parsing, with nothing to try again.
+  let styleReady = false;
+
   // The grid stands IN for a basemap, so a style with tiles retires it. Asked
   // of the style each time rather than remembered, so either direction settles
   // itself. See #170 for why a basemap whose tiles die individually still
   // counts as having one.
   function syncNoBasemap() {
-    if (!map.isStyleLoaded()) return;
+    if (!styleReady) return;
     if (hasBasemap()) {
       hideGrid();
       return;
@@ -242,6 +248,7 @@ export async function createMapLibreMapView(
   // measured at ~1000-2000 cloned layer specs per second on the flight
   // surface. The answer only changes when the style does.
   map.on("style.load", () => {
+    styleReady = true;
     syncNoBasemap();
     if (hasBasemap()) stopHunting();
   });
@@ -287,6 +294,7 @@ export async function createMapLibreMapView(
 
   function fallBackToNoBasemap() {
     if (hasBasemap()) {
+      styleReady = false;
       map.setStyle(NO_BASEMAP_STYLE, { transformStyle: carryOverlays });
     }
     huntForBasemap();
@@ -311,6 +319,7 @@ export async function createMapLibreMapView(
       return;
     }
     if (next === NO_BASEMAP_STYLE) return;
+    styleReady = false;
     map.setStyle(next, { transformStyle: carryOverlays });
   }
 
