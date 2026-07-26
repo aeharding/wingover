@@ -1,3 +1,4 @@
+import { withTimeout } from "es-toolkit";
 import {
   type ReactNode,
   useEffect,
@@ -38,6 +39,10 @@ interface MapCanvasProps {
   onReady?: (view: MapView | null) => void;
 }
 
+// Long enough that a slow but working MapKit still wins on a poor connection,
+// short enough that a pilot is not staring at nothing.
+const MAPKIT_DEADLINE_MS = 8000;
+
 // Instantiate the resolved backend, each in its own lazy chunk. MapKit is the
 // default; if it can't load or authorize (offline, blocked, wrong origin) fall
 // back to MapLibre so a map always appears. The fake backend is network-free
@@ -55,7 +60,15 @@ async function createBackend(
   if (backend === "mapkit") {
     try {
       const { createMapKitMapView } = await import("./mapkit/adapter");
-      return await createMapKitMapView(container, base, appearance);
+      // Bounded, because "falls back on failure" is only true if failure
+      // ARRIVES. MapKit's loader can hang rather than reject (a stale failed
+      // script tag it will not replace), and awaiting that forever means the
+      // catch never runs and the pilot gets no map at all — strictly worse
+      // than the plain basemap this was meant to degrade to.
+      return await withTimeout(
+        () => createMapKitMapView(container, base, appearance),
+        MAPKIT_DEADLINE_MS,
+      );
     } catch (error) {
       console.warn("MapKit unavailable; falling back to MapLibre", error);
     }

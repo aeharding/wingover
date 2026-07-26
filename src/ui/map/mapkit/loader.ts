@@ -36,6 +36,20 @@ export function loadMapKit(): Promise<typeof mapkit> {
     () => mapkit,
     (error: unknown) => {
       ready = null;
+      // Apple's loader finds an existing script tag by data-callback and
+      // REUSES it rather than making a new one. After a failed load that tag
+      // is still in the head with its error event long since fired, so the
+      // next call attaches load/error listeners to a corpse and waits on
+      // events that can never fire again — it hangs, forever.
+      //
+      // That is not a slow map, it is NO map: createBackend awaits this, so a
+      // hang means the catch never runs and the MapLibre fallback never
+      // happens. One offline failure would otherwise poison every map for the
+      // life of the page. Reported from device: first offline entry drew fine,
+      // every entry after it was blank.
+      document
+        .querySelector('script[data-callback="initMapKitLoaderV2"]')
+        ?.remove();
       throw error;
     },
   );
