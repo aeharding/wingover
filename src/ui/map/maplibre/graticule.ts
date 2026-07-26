@@ -31,7 +31,10 @@ import type { CustomLayerInterface, Map as MapLibreMap } from "maplibre-gl";
 const TARGET_BOXES = 5;
 const LINE_WIDTH_PX = 1;
 const LINE_COLOR: [number, number, number] = [0.447, 0.49, 0.549]; // #727d8c
-const LINE_ALPHA = 0.4;
+// Opacity of a fully established line. Deliberately quiet: the grid is a
+// reference for drift and scale, and it shares the screen with the track,
+// which must always be the brightest thing on it.
+const LINE_ALPHA = 0.24;
 
 // Mercator is not degrees: spacing is a power-of-two fraction of the world,
 // so cells stay SQUARE on screen at any latitude (a lat/lon graticule
