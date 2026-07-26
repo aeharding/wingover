@@ -4,6 +4,7 @@ import type {
 } from "maplibre-gl";
 
 import { getSetting } from "../../storage/local";
+import { BLANK_STYLE } from "./blankStyle";
 
 export type MapViewKind = "street" | "satellite";
 
@@ -79,18 +80,6 @@ function backendOverride(): string | null {
     return null;
   }
 }
-
-const BLANK_STYLE: StyleSpecification = {
-  version: 8,
-  sources: {},
-  layers: [
-    {
-      id: "background",
-      type: "background",
-      paint: { "background-color": "#191b1e" },
-    },
-  ],
-};
 
 // The pilot's own MapTiler key, or null. There is deliberately no built-in
 // key and no build-time env fallback: satellite is MapKit's job (free on the

@@ -3,6 +3,12 @@ import { AttributionControl, Map as MapLibreMap, Marker } from "maplibre-gl";
 import type { GeoJSONSource, MapMouseEvent } from "maplibre-gl";
 
 import {
+  BLANK_STYLE,
+  GRATICULE_SOURCE,
+  graticuleBaseLevel,
+  graticuleFeatures,
+} from "../blankStyle";
+import {
   type MapAppearance,
   type MapViewKind,
   resolveMapStyle,
@@ -170,6 +176,96 @@ export async function createMapLibreMapView(
   map.on("styledata", sync);
   map.on("idle", sync);
 
+  // ── offline basemap ───────────────────────────────────────────────────
+
+  // Every real style is a remote URL, and maplibre with no style never
+  // fires style.load — so the registry above never runs and the TRACK
+  // vanishes along with the basemap. That is the wrong failure: the track,
+  // position and waypoints are local data and owe the network nothing.
+  // An error before any style has loaded means we have no basemap at all,
+  // so take the blank one and let the overlays draw on it.
+  // Two different facts, so not one boolean: the graticule cares only that
+  // the blank style is UP, while healing cares that we FELL BACK to it —
+  // ?map-style=blank asked for blank and must keep it when the network
+  // returns.
+  let blankStyle: "requested" | "fallback" | null =
+    style === BLANK_STYLE ? "requested" : null;
+  let styleLoaded = false;
+  map.on("style.load", () => {
+    styleLoaded = true;
+  });
+  map.on("error", () => {
+    if (styleLoaded || blankStyle) return;
+    blankStyle = "fallback";
+    map.setStyle(BLANK_STYLE);
+  });
+
+  // The adapter only FEEDS the graticule; the fade is a zoom curve baked
+  // into the style (see blankStyle). Nothing here runs per frame beyond two
+  // comparisons, and neither branch can flicker: new geometry is always
+  // levels that are fully transparent at the current zoom, and dropped
+  // geometry is likewise already invisible.
+  let drawnBaseLevel: number | null = null;
+  let drawnArea: { w: number; e: number; s: number; n: number } | null = null;
+
+  function drawGraticule(baseLevel: number) {
+    const source = map.getSource(GRATICULE_SOURCE) as GeoJSONSource | undefined;
+    if (!source) return;
+    const b = map.getBounds();
+    const padX = (b.getEast() - b.getWest()) / 2;
+    const padY = (b.getNorth() - b.getSouth()) / 2;
+    const area = {
+      w: b.getWest() - padX,
+      e: b.getEast() + padX,
+      s: b.getSouth() - padY,
+      n: b.getNorth() + padY,
+    };
+    source.setData(graticuleFeatures(area, baseLevel));
+    drawnBaseLevel = baseLevel;
+    drawnArea = area;
+  }
+
+  function viewportEscapedDrawn(): boolean {
+    if (!drawnArea) return true;
+    const b = map.getBounds();
+    return (
+      b.getWest() < drawnArea.w ||
+      b.getEast() > drawnArea.e ||
+      b.getSouth() < drawnArea.s ||
+      b.getNorth() > drawnArea.n
+    );
+  }
+
+  function updateGraticule() {
+    if (!blankStyle || !map.getSource(GRATICULE_SOURCE)) return;
+    const baseLevel = graticuleBaseLevel(map.getZoom());
+    // Zooming OUT never needs new geometry: a coarse line is also a fine
+    // one, so what is drawn already covers it.
+    const needFiner = drawnBaseLevel === null || baseLevel < drawnBaseLevel;
+    if (needFiner || viewportEscapedDrawn()) drawGraticule(baseLevel);
+  }
+
+  map.on("move", updateGraticule);
+  // A style swap rebuilds the source, so what was drawn is gone with it.
+  map.on("style.load", () => {
+    drawnBaseLevel = null;
+    drawnArea = null;
+    updateGraticule();
+  });
+
+  async function applyStyle() {
+    const next = await resolveMapStyle(currentBase, appearance);
+    blankStyle = next === BLANK_STYLE ? "requested" : null;
+    map.setStyle(next);
+  }
+
+  // The pilot flies back into coverage: upgrade in place, no reload and no
+  // tap. Only from the blank fallback — a real style is already right.
+  const retryWhenOnline = () => {
+    if (blankStyle === "fallback") void applyStyle();
+  };
+  window.addEventListener("online", retryWhenOnline);
+
   // ── gesture fan-out ───────────────────────────────────────────────────
   const longPressHandlers = new Set<(e: GestureEvent) => void>();
 
@@ -205,18 +301,17 @@ export async function createMapLibreMapView(
     setInsets() {},
     setBaseMap(base) {
       currentBase = base;
-      void resolveMapStyle(base, appearance).then((next) => map.setStyle(next));
+      void applyStyle();
     },
     setAppearance(next) {
       // Restyle in place — the content registry re-adds overlays on the
       // style swap exactly as it does for setBaseMap.
       appearance = next;
-      void resolveMapStyle(currentBase, appearance).then((style2) =>
-        map.setStyle(style2),
-      );
+      void applyStyle();
     },
 
     destroy() {
+      window.removeEventListener("online", retryWhenOnline);
       map.remove();
     },
 
