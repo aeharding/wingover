@@ -42,6 +42,7 @@ export function createAircraftLayer(
 ): CustomLayerInterface {
   let map: MapLibreMap;
   let program: WebGLProgram | null = null;
+  const shaders: WebGLShader[] = [];
   let buffer: WebGLBuffer;
   let aPos: number;
   let uMatrix: WebGLUniformLocation;
@@ -61,6 +62,7 @@ export function createAircraftLayer(
       gl.shaderSource(fragment, FRAGMENT_SHADER);
       gl.compileShader(fragment);
       program = gl.createProgram()!;
+      shaders.push(vertex, fragment);
       gl.attachShader(program, vertex);
       gl.attachShader(program, fragment);
       gl.linkProgram(program);
@@ -68,6 +70,18 @@ export function createAircraftLayer(
       uMatrix = gl.getUniformLocation(program, "u_matrix")!;
       uColor = gl.getUniformLocation(program, "u_color")!;
       buffer = gl.createBuffer()!;
+    },
+
+    // A style that cannot be diffed is rebuilt from scratch, which removes
+    // custom layers and re-adds them into the SAME gl context. Without this
+    // the old program, shaders and buffer are stranded there. graticule.ts
+    // already does it; this layer was the one that did not.
+    onRemove(_map, gl) {
+      for (const shader of shaders) gl.deleteShader(shader);
+      shaders.length = 0;
+      if (program) gl.deleteProgram(program);
+      gl.deleteBuffer(buffer);
+      program = null;
     },
 
     render(gl, args) {
