@@ -2,12 +2,7 @@ import type { Feature, FeatureCollection } from "geojson";
 import { AttributionControl, Map as MapLibreMap, Marker } from "maplibre-gl";
 import type { GeoJSONSource, MapMouseEvent } from "maplibre-gl";
 
-import {
-  BLANK_STYLE,
-  GRATICULE_SOURCE,
-  graticuleBaseLevel,
-  graticuleFeatures,
-} from "../blankStyle";
+import { BLANK_STYLE, GRATICULE_LAYER } from "../blankStyle";
 import {
   type MapAppearance,
   type MapViewKind,
@@ -32,6 +27,7 @@ import type {
   Unsub,
 } from "../types";
 import { createAircraftLayer } from "./aircraft";
+import { createGraticuleLayer } from "./graticule";
 
 const LONG_PRESS_MS = 500;
 const MOVE_TOLERANCE_PX = 10;
@@ -97,6 +93,19 @@ export async function createMapLibreMapView(
   (container as HTMLElement & { __map?: MapLibreMap }).__map = map;
 
   setupAttribution(container);
+
+  // Every real style is a remote URL, and maplibre with no style never
+  // fires style.load — so the registry above never runs and the TRACK
+  // vanishes along with the basemap. That is the wrong failure: the track,
+  // position and waypoints are local data and owe the network nothing.
+  // An error before any style has loaded means we have no basemap at all,
+  // so take the blank one and let the overlays draw on it.
+  // Two different facts, so not one boolean: the graticule cares only that
+  // the blank style is UP, while healing cares that we FELL BACK to it —
+  // ?map-style=blank asked for blank and must keep it when the network
+  // returns.
+  let blankStyle: "requested" | "fallback" | null =
+    style === BLANK_STYLE ? "requested" : null;
 
   // ── content registry (survives setBaseMap) ───────────────────────────
 
@@ -170,6 +179,13 @@ export async function createMapLibreMapView(
       map.addLayer(createAircraftLayer(() => aircraftState));
       container.setAttribute("data-aircraft-layer", "true");
     }
+    // The grid belongs to the blank basemap only: a real basemap has its own
+    // scale cues. Restored here because a style swap drops custom layers with
+    // everything else, and added UNDER the overlays so the track wins.
+    if (blankStyle && !map.getLayer(GRATICULE_LAYER)) {
+      const first = lines[0]?.layerId;
+      map.addLayer(createGraticuleLayer(GRATICULE_LAYER), first);
+    }
   }
 
   map.on("style.load", sync);
@@ -178,18 +194,6 @@ export async function createMapLibreMapView(
 
   // ── offline basemap ───────────────────────────────────────────────────
 
-  // Every real style is a remote URL, and maplibre with no style never
-  // fires style.load — so the registry above never runs and the TRACK
-  // vanishes along with the basemap. That is the wrong failure: the track,
-  // position and waypoints are local data and owe the network nothing.
-  // An error before any style has loaded means we have no basemap at all,
-  // so take the blank one and let the overlays draw on it.
-  // Two different facts, so not one boolean: the graticule cares only that
-  // the blank style is UP, while healing cares that we FELL BACK to it —
-  // ?map-style=blank asked for blank and must keep it when the network
-  // returns.
-  let blankStyle: "requested" | "fallback" | null =
-    style === BLANK_STYLE ? "requested" : null;
   let styleLoaded = false;
   map.on("style.load", () => {
     styleLoaded = true;
@@ -198,59 +202,6 @@ export async function createMapLibreMapView(
     if (styleLoaded || blankStyle) return;
     blankStyle = "fallback";
     map.setStyle(BLANK_STYLE);
-  });
-
-  // The adapter only FEEDS the graticule; the fade is a zoom curve baked
-  // into the style (see blankStyle). Nothing here runs per frame beyond two
-  // comparisons, and neither branch can flicker: new geometry is always
-  // levels that are fully transparent at the current zoom, and dropped
-  // geometry is likewise already invisible.
-  let drawnBaseLevel: number | null = null;
-  let drawnArea: { w: number; e: number; s: number; n: number } | null = null;
-
-  function drawGraticule(baseLevel: number) {
-    const source = map.getSource(GRATICULE_SOURCE) as GeoJSONSource | undefined;
-    if (!source) return;
-    const b = map.getBounds();
-    const padX = (b.getEast() - b.getWest()) / 2;
-    const padY = (b.getNorth() - b.getSouth()) / 2;
-    const area = {
-      w: b.getWest() - padX,
-      e: b.getEast() + padX,
-      s: b.getSouth() - padY,
-      n: b.getNorth() + padY,
-    };
-    source.setData(graticuleFeatures(area, baseLevel));
-    drawnBaseLevel = baseLevel;
-    drawnArea = area;
-  }
-
-  function viewportEscapedDrawn(): boolean {
-    if (!drawnArea) return true;
-    const b = map.getBounds();
-    return (
-      b.getWest() < drawnArea.w ||
-      b.getEast() > drawnArea.e ||
-      b.getSouth() < drawnArea.s ||
-      b.getNorth() > drawnArea.n
-    );
-  }
-
-  function updateGraticule() {
-    if (!blankStyle || !map.getSource(GRATICULE_SOURCE)) return;
-    const baseLevel = graticuleBaseLevel(map.getZoom());
-    // Zooming OUT never needs new geometry: a coarse line is also a fine
-    // one, so what is drawn already covers it.
-    const needFiner = drawnBaseLevel === null || baseLevel < drawnBaseLevel;
-    if (needFiner || viewportEscapedDrawn()) drawGraticule(baseLevel);
-  }
-
-  map.on("move", updateGraticule);
-  // A style swap rebuilds the source, so what was drawn is gone with it.
-  map.on("style.load", () => {
-    drawnBaseLevel = null;
-    drawnArea = null;
-    updateGraticule();
   });
 
   async function applyStyle() {
