@@ -139,6 +139,30 @@ export async function createMapKitMapView(
     mapType: baseToMapType(initialBase),
     center: new mapkit.Coordinate(39.8, -98.5),
   });
+
+  // A touch that BEGINS on the map and is CANCELLED leaves MapKit's pan
+  // recognizer armed forever: `touchesCancelled` is empty in the v6 bundle and
+  // `enterCancelledState()` is reachable from nothing but the `enabled` setter.
+  // An armed recognizer keeps handling window-level moves with an EMPTY touch
+  // list, so `locationInElement()` divides by zero and the NaN reaches
+  // `camera.center` through an unvalidated MapPoint. Every camera read after
+  // that throws, uncaught, and the screen goes black (#185).
+  //
+  // iOS steals such a touch whenever a system gesture starts over the map,
+  // which Reachability makes routine: it slides the app down, so the screen's
+  // bottom edge lands on the map instead of the tab bar.
+  //
+  // Bouncing the flag is MapKit's own interrupt idiom, and the only path in the
+  // library that reaches the unwind.
+  container.addEventListener(
+    "touchcancel",
+    () => {
+      map.isScrollEnabled = false;
+      map.isScrollEnabled = true;
+    },
+    { capture: true },
+  );
+
   // Ground screens ride dark like the rest of the app; the live flight
   // map is always light (sunlight-readable, STEERING).
   map.colorScheme =
