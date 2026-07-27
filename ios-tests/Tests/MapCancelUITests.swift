@@ -2,36 +2,44 @@ import XCTest
 
 // #185 REPRODUCTION DRILL — throwaway branch, never merged.
 //
-// Root cause, read out of Apple's shipped bundle: MapKit's pan recognizer
-// inherits an EMPTY `touchesCancelled`, and `enterCancelledState()` is reachable
-// from nowhere but the `enabled` setter. So no MapKit recognizer ever unwinds on
-// a cancelled touch. It stays armed with an empty touch list,
-// `locationInElement()` divides by that zero, and `Camera.translate()` writes the
-// NaN into `camera.center` through an unvalidated
-// `Object.create(MapPoint.prototype)`. A NaN velocity then passes the too-slow
-// filter and never self-terminates, which is why every captured stack ended in
-// `_decelerationEnded`.
+// The device gave up the whole mechanism. Trail pulled off the phone after the
+// owner's 100%-reliable repro (Reachability, end it with a swipe up from the
+// bottom of the screen over the app, then the app switcher):
 //
-// Owner-confirmed ceremony: Reachability, then END IT WITH A SWIPE UP FROM THE
-// BOTTOM OF THE SCREEN, OVER THE APP, then open the app switcher. The close
-// button does not do it. A swipe in the empty half above the app does not do it.
-// So Reachability contributes one thing: it slides the app down, so the
-// bottom-edge swipe begins on the MAP instead of the tab bar.
+//   184879  pointerdown    261,461   mk-map-node-element
+//   184884  pointermove    260,440   mk-map-node-element
+//   184890  pointermove    258,424   mk-map-node-element
+//   184892  pointercancel  258,424   mk-map-node-element   <-- ARMS
+//      ...1170 ms...
+//   186063  pointerdown    258,799   ios tab-bar-translucent
+//   186072  pointermove    258,787   ios tab-bar-translucent
+//   186088  pointermove    258,777   ios tab-bar-translucent
+//   186097  TypeError: [MapKit] map rect property origin.x is not a number
 //
-// MEASURED SO FAR:
-//  - Top-edge system gestures deliver NOTHING to the page. iOS eats them whole.
-//  - Bottom-edge swipes DO deliver `touchstart` then `touchcancel`.
-//  - With a map docked to the bottom edge, that cancel lands on
-//    `mk-map-node-element` — MapKit's own element — and the map SURVIVES.
+// Two facts in that trail, neither of which was guessed:
 //
-// That last line is why this file now sweeps gesture PARAMETERS. The surviving
-// case cancelled after two moves (`p1/2/1/0`): a gesture MapKit's recognizer
-// never began, which is not the experiment. The owner's swipe is long and fast,
-// and the stacks end in deceleration, so what has to be cancelled is a pan
-// already in flight — or a fling already decelerating.
+//  1. The arming touch begins at page-y 461 of an 812 pt viewport — the middle
+//     of the page — while the finger was at the physical bottom edge. That is
+//     Reachability's slide, and it puts the bottom edge on the MAP.
+//  2. The DETONATING moves are on the TAB BAR. They never touch the map. From
+//     Apple's bundle: a gesture attaches window-level move listeners when it
+//     begins and drops them when it ends, but `touchesCancelled` is EMPTY, so
+//     after a cancel it keeps receiving every move on the page with an empty
+//     touch list. `locationInElement()` divides by that zero, and
+//     `Camera.translate()` writes the NaN into `camera.center`.
 //
-// The probe now reports moves-in-the-cancelled-touch (`/mvN`) and the map's
-// centre, so "did the pan actually engage" is visible rather than assumed.
+// This is why five earlier simulator drills all passed: each one followed the
+// steal by panning THE MAP, and a fresh `touchstart` on the map repopulates the
+// touch list. They were healing it, not detonating it.
+//
+// It also explains, with no special pleading, why the fullscreen logbook map
+// never reproduces: it is `inset: 0`, so the follow-up swipe lands on the map
+// and repopulates. On Plan and Fly the tab bar owns the bottom edge, so the
+// follow-up misses the map and the list stays empty.
+//
+// Layout under test: `cancelProbe.ts` docks a real mapkit.Map to the bottom
+// 280 pt (the only place a system gesture delivers a cancel here), leaving the
+// rest of the page bare for the detonating touch.
 //
 // A FAILING ASSERTION HERE IS THE RESULT BEING LOOKED FOR.
 final class MapCancelUITests: XCTestCase {
@@ -81,119 +89,81 @@ final class MapCancelUITests: XCTestCase {
     XCTAssertFalse(line.contains("POISONED"), "MAP POISONED [\(name)] — \(line)")
   }
 
-  /// A pan entirely inside the docked map (the bottom 280 pt).
-  private func panDockedMap(_ app: XCUIApplication) {
-    at(app, 0.5, 0.88).press(forDuration: 0.1, thenDragTo: at(app, 0.38, 0.80))
-    usleep(1_200_000)
-  }
-
-  /// A hard fling on the docked map: releases with momentum, so MapKit is
-  /// decelerating afterwards. This is the state every captured stack was in.
-  private func flingDockedMap(_ app: XCUIApplication) {
-    at(app, 0.5, 0.93).press(
-      forDuration: 0.02, thenDragTo: at(app, 0.2, 0.72),
-      withVelocity: .fast, thenHoldForDuration: 0)
-  }
-
-  private func pans(_ app: XCUIApplication, _ n: Int) {
-    for _ in 0..<n { panDockedMap(app) }
-  }
-
-  private func comeBack(_ app: XCUIApplication) {
+  /// ARM: a touch that begins on the docked map and is cancelled by iOS. The
+  /// device's arming touch saw two moves before its cancel; so does this.
+  private func arm(_ app: XCUIApplication) {
+    at(app, 0.5, 1.0).withOffset(CGVector(dx: 0, dy: -1))
+      .press(forDuration: 0.05, thenDragTo: at(app, 0.5, 0.86))
     usleep(1_200_000)
     app.activate()
-    usleep(2_000_000)
+    usleep(1_500_000)
   }
 
-  // Baseline the earlier cycle already established, kept as the control.
-  func testControlPlainPans() {
-    let app = start("control")
-    pans(app, 5)
-    check(app, "control")
+  /// DETONATE: moves delivered to the page from a touch that is NOT on the map,
+  /// so nothing repopulates the touch list. The device's were on the tab bar.
+  private func detonateOffMap(_ app: XCUIApplication) {
+    at(app, 0.5, 0.30).press(forDuration: 0.1, thenDragTo: at(app, 0.5, 0.18))
+    usleep(1_000_000)
   }
 
-  // A FAST theft: the owner's swipe is fast, and speed changes how many moves
-  // the page sees before iOS claims the gesture.
-  func testFastBottomSteal() {
-    let app = start("fast steal")
-    for i in 1...3 {
-      at(app, 0.5, 1.0).withOffset(CGVector(dx: 0, dy: -1)).press(
-        forDuration: 0.01, thenDragTo: at(app, 0.5, 0.35),
-        withVelocity: .fast, thenHoldForDuration: 0)
-      comeBack(app)
-      report(app, "fast steal \(i)")
-      pans(app, 2)
-      report(app, "fast steal \(i) after pans")
-    }
-    check(app, "fast steal")
+  /// The counter-experiment: the same follow-up, but ON the map. This is what
+  /// every earlier drill did, and what the fullscreen logbook map does.
+  private func panOnMap(_ app: XCUIApplication) {
+    at(app, 0.5, 0.88).press(forDuration: 0.1, thenDragTo: at(app, 0.38, 0.80))
+    usleep(1_000_000)
   }
 
-  // A theft that does NOT background the app: a short flick from the bottom
-  // edge, released before iOS commits to going home. Closest thing a simulator
-  // has to dismissing Reachability, where the app never leaves the foreground.
-  func testShortBottomFlickKeepsAppForeground() {
-    let app = start("short flick")
-    for i in 1...5 {
-      at(app, 0.5, 1.0).withOffset(CGVector(dx: 0, dy: -1)).press(
-        forDuration: 0.01, thenDragTo: at(app, 0.5, 0.93),
-        withVelocity: .fast, thenHoldForDuration: 0)
-      usleep(800_000)
-      report(app, "short flick \(i)")
-      panDockedMap(app)
-      report(app, "short flick \(i) after pan")
+  // THE REPRODUCTION. Arm on the map, detonate off it.
+  func testArmOnMapThenDetonateOffMap() {
+    let app = start("arm+detonate")
+    for round in 1...4 {
+      arm(app)
+      report(app, "round \(round) armed")
+      detonateOffMap(app)
+      report(app, "round \(round) detonated")
       if probe(app).contains("POISONED") { break }
     }
-    check(app, "short flick")
+    check(app, "arm+detonate")
   }
 
-  // Hold first so MapKit's pan recognizer definitely begins, THEN let iOS take
-  // the gesture. Cancels a pan in flight rather than a gesture that never was.
-  func testHoldThenSteal() {
-    let app = start("hold then steal")
-    for i in 1...3 {
-      at(app, 0.5, 1.0).withOffset(CGVector(dx: 0, dy: -1)).press(
-        forDuration: 0.6, thenDragTo: at(app, 0.5, 0.40),
-        withVelocity: .default, thenHoldForDuration: 0)
-      comeBack(app)
-      report(app, "hold then steal \(i)")
-      pans(app, 2)
-      report(app, "hold then steal \(i) after pans")
-    }
-    check(app, "hold then steal")
-  }
-
-  // THE DECELERATION CASE. Fling the map, then steal a touch while it is still
-  // coasting. Every stack captured on device ended in `_decelerationEnded`.
-  func testStealDuringDeceleration() {
-    let app = start("steal during decel")
-    for i in 1...4 {
-      flingDockedMap(app)
-      // No sleep: the steal has to land inside the coast.
-      at(app, 0.5, 1.0).withOffset(CGVector(dx: 0, dy: -1)).press(
-        forDuration: 0.01, thenDragTo: at(app, 0.5, 0.93),
-        withVelocity: .fast, thenHoldForDuration: 0)
-      usleep(900_000)
-      report(app, "decel steal \(i)")
-      panDockedMap(app)
-      report(app, "decel steal \(i) after pan")
+  // Same arming, follow-up ON the map. Predicted to SURVIVE — and if it does,
+  // it is the difference between the Plan tab and the fullscreen logbook map.
+  func testArmOnMapThenPanOnMap() {
+    let app = start("arm+pan-on-map")
+    for round in 1...4 {
+      arm(app)
+      panOnMap(app)
+      report(app, "round \(round)")
       if probe(app).contains("POISONED") { break }
     }
-    check(app, "steal during decel")
+    check(app, "arm+pan-on-map")
   }
 
-  // Fling, then background and return mid-coast: the deceleration timer is
-  // suspended and resumed, which is the other half of the device ceremony.
-  func testFlingThenBackgroundMidCoast() {
-    let app = start("fling then background")
-    for i in 1...3 {
-      flingDockedMap(app)
+  // Off-map drags with NO arming touch. Isolates the detonation half: it must
+  // be harmless on its own, or the arming step is not what matters.
+  func testOffMapDragsWithoutArming() {
+    let app = start("no arming")
+    for _ in 0..<6 { detonateOffMap(app) }
+    check(app, "no arming")
+  }
+
+  // The device waited 1170 ms between the cancel and the detonating touch, and
+  // backgrounded in between. This holds that shape as closely as a simulator
+  // can, in case the delay or the background matters.
+  func testArmBackgroundThenDetonate() {
+    let app = start("arm+bg+detonate")
+    for round in 1...3 {
+      arm(app)
       XCUIDevice.shared.press(.home)
-      comeBack(app)
-      report(app, "fling+bg \(i)")
-      pans(app, 2)
-      report(app, "fling+bg \(i) after pans")
+      usleep(1_200_000)
+      app.activate()
+      usleep(2_000_000)
+      report(app, "round \(round) after background")
+      detonateOffMap(app)
+      detonateOffMap(app)
+      report(app, "round \(round) detonated")
       if probe(app).contains("POISONED") { break }
     }
-    check(app, "fling then background")
+    check(app, "arm+bg+detonate")
   }
 }

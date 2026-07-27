@@ -144,6 +144,10 @@ async function dockMapAtBottomEdge() {
   await loadMapKit();
   const host = document.createElement("div");
   host.setAttribute("data-docked-map", "");
+  // Flush to the bottom edge, because that is the one place a system gesture is
+  // measured to deliver `touchcancel` to this webview — the arming step. The
+  // DETONATING touch has to land outside the map (on device it was the tab
+  // bar), and everything above 280 px is bare page for exactly that.
   host.style.cssText =
     "position:fixed;left:0;right:0;bottom:0;height:280px;z-index:2147483646";
   document.body.append(host);
