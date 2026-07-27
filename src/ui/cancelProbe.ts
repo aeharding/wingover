@@ -45,6 +45,12 @@ const counts: Record<string, number> = {
 
 /** The last cancel seen, whichever family it came from. */
 let lastCancel: string = "-";
+/**
+ * Moves in the CURRENT touch. A cancel that arrives after two moves cancels a
+ * gesture MapKit's pan recognizer never began, which is a different experiment
+ * from cancelling a pan in flight.
+ */
+let movesThisTouch = 0;
 
 /** A touch event carries its point in `changedTouches`; a pointer event does not. */
 function pointOf(event: Event): { x: number; y: number } {
@@ -60,20 +66,30 @@ function maps(): Set<{ center: unknown }> {
   return w.__wingoverMaps as Set<{ center: unknown }>;
 }
 
-function health(): { ok: number; dead: number; error: string | null } {
+interface Health {
+  ok: number;
+  dead: number;
+  error: string | null;
+  /** The last readable centre, so a drill can see whether a pan ENGAGED. */
+  centre: string;
+}
+
+function health(): Health {
   let ok = 0;
   let dead = 0;
   let error: string | null = null;
+  let centre = "-";
   for (const map of maps()) {
     try {
-      void map.center;
+      const c = map.center as { latitude: number; longitude: number };
+      centre = `${c.latitude.toFixed(3)},${c.longitude.toFixed(3)}`;
       ok++;
     } catch (e) {
       dead++;
       error ??= String(e);
     }
   }
-  return { ok, dead, error };
+  return { ok, dead, error, centre };
 }
 
 let latched = false;
@@ -102,6 +118,7 @@ function line(state: ReturnType<typeof health>): string {
     `PROBE p${c.pointerdown}/${c.pointermove}/${c.pointercancel}/${c.pointerup}`,
     `t${c.touchstart}/${c.touchmove}/${c.touchend}/${c.touchcancel}`,
     `x${lastCancel}`,
+    `@${state.centre}`,
     `maps${state.ok + state.dead}`,
     status,
   ].join(" ");
@@ -167,8 +184,10 @@ export function installCancelProbe() {
         const point = pointOf(event);
         const target = event.target as Element | null;
         const where = target?.className?.toString().slice(0, 24) ?? "?";
+        if (type === "touchstart" || type === "pointerdown") movesThisTouch = 0;
+        if (type === "touchmove" || type === "pointermove") movesThisTouch++;
         if (type.endsWith("cancel")) {
-          lastCancel = `${type[0]}@${point.x},${point.y}:${where}`;
+          lastCancel = `${type[0]}@${point.x},${point.y}:${where}/mv${movesThisTouch}`;
         }
         trail.push({
           t: Math.round(performance.now()),

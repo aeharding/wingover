@@ -8,30 +8,30 @@ import XCTest
 // a cancelled touch. It stays armed with an empty touch list,
 // `locationInElement()` divides by that zero, and `Camera.translate()` writes the
 // NaN into `camera.center` through an unvalidated
-// `Object.create(MapPoint.prototype)`.
+// `Object.create(MapPoint.prototype)`. A NaN velocity then passes the too-slow
+// filter and never self-terminates, which is why every captured stack ended in
+// `_decelerationEnded`.
 //
-// The device ceremony, owner-confirmed: Reachability, then END IT WITH A SWIPE
-// UP FROM THE BOTTOM OF THE SCREEN, OVER THE APP, then open the app switcher.
-// Dismissing Reachability with its close button, or with a swipe in the empty
-// half above the app, never reproduces. So Reachability contributes exactly one
-// thing: it slides the app down, so that the bottom-edge swipe begins on the MAP
-// rather than on the tab bar.
+// Owner-confirmed ceremony: Reachability, then END IT WITH A SWIPE UP FROM THE
+// BOTTOM OF THE SCREEN, OVER THE APP, then open the app switcher. The close
+// button does not do it. A swipe in the empty half above the app does not do it.
+// So Reachability contributes one thing: it slides the app down, so the
+// bottom-edge swipe begins on the MAP instead of the tab bar.
 //
-// Two measurements shaped this drill:
-//  - Top-edge system gestures deliver NOTHING to the page — not even a
-//    pointerdown. iOS consumes them whole. An earlier drill built on them was
-//    silent for that reason, not because the mechanism is wrong.
-//  - The BOTTOM edge does deliver: a home-indicator swipe produced a real
-//    `touchcancel` in the page, at (201,860), on `ios tab-bar-translucent`.
-//    That is the theft, landing on the wrong element.
+// MEASURED SO FAR:
+//  - Top-edge system gestures deliver NOTHING to the page. iOS eats them whole.
+//  - Bottom-edge swipes DO deliver `touchstart` then `touchcancel`.
+//  - With a map docked to the bottom edge, that cancel lands on
+//    `mk-map-node-element` — MapKit's own element — and the map SURVIVES.
 //
-// So the simulator cannot slide the app, but it can put a map where the slide
-// would have put one: `src/ui/cancelProbe.ts` docks a real mapkit.Map to the
-// bottom 280 px. Now the same measured theft begins on a map.
+// That last line is why this file now sweeps gesture PARAMETERS. The surviving
+// case cancelled after two moves (`p1/2/1/0`): a gesture MapKit's recognizer
+// never began, which is not the experiment. The owner's swipe is long and fast,
+// and the stacks end in deceleration, so what has to be cancelled is a pan
+// already in flight — or a fling already decelerating.
 //
-// Real touches, not synthetic: synthetic DOM events were measured not to engage
-// MapKit's recognizers at all (`panned=false`), while an XCUITest drag moves the
-// camera Kansas → Antarctica.
+// The probe now reports moves-in-the-cancelled-touch (`/mvN`) and the map's
+// centre, so "did the pan actually engage" is visible rather than assumed.
 //
 // A FAILING ASSERTION HERE IS THE RESULT BEING LOOKED FOR.
 final class MapCancelUITests: XCTestCase {
@@ -62,15 +62,23 @@ final class MapCancelUITests: XCTestCase {
     print("WINGOVER-PROBE [\(stage)] \(probe(app))")
   }
 
-  /// Waits for the docked map to exist, which the banner reports as `maps1`.
-  private func waitForDockedMap(_ app: XCUIApplication) {
+  private func start(_ name: String) -> XCUIApplication {
+    let app = self.app()
+    app.launch()
     let deadline = Date().addingTimeInterval(45)
     while Date() < deadline {
       let line = probe(app)
-      if line.contains("maps") && !line.contains("maps0") { return }
+      if line.contains("maps") && !line.contains("maps0") { break }
       usleep(500_000)
     }
-    XCTFail("docked map never appeared — \(probe(app))")
+    report(app, "\(name) baseline")
+    return app
+  }
+
+  private func check(_ app: XCUIApplication, _ name: String) {
+    let line = probe(app)
+    report(app, "\(name) FINAL")
+    XCTAssertFalse(line.contains("POISONED"), "MAP POISONED [\(name)] — \(line)")
   }
 
   /// A pan entirely inside the docked map (the bottom 280 pt).
@@ -79,68 +87,113 @@ final class MapCancelUITests: XCTestCase {
     usleep(1_200_000)
   }
 
-  /// The measured theft: a swipe up from the very bottom edge. iOS wins it, and
-  /// the page gets `touchstart` then `touchcancel` — on the docked map.
-  private func stealFromBottomEdge(_ app: XCUIApplication) {
-    at(app, 0.5, 1.0).withOffset(CGVector(dx: 0, dy: -1))
-      .press(forDuration: 0.12, thenDragTo: at(app, 0.5, 0.45))
-    usleep(1_500_000)
+  /// A hard fling on the docked map: releases with momentum, so MapKit is
+  /// decelerating afterwards. This is the state every captured stack was in.
+  private func flingDockedMap(_ app: XCUIApplication) {
+    at(app, 0.5, 0.93).press(
+      forDuration: 0.02, thenDragTo: at(app, 0.2, 0.72),
+      withVelocity: .fast, thenHoldForDuration: 0)
+  }
+
+  private func pans(_ app: XCUIApplication, _ n: Int) {
+    for _ in 0..<n { panDockedMap(app) }
+  }
+
+  private func comeBack(_ app: XCUIApplication) {
+    usleep(1_200_000)
     app.activate()
     usleep(2_000_000)
   }
 
-  // Control. Real pans on the docked map, no theft. If this ever fails, nothing
-  // else in this file means anything.
-  func testDockedMapSurvivesPlainPans() {
-    let app = self.app()
-    app.launch()
-    waitForDockedMap(app)
-    report(app, "baseline")
-    for _ in 0..<5 { panDockedMap(app) }
-    let line = probe(app)
-    report(app, "after 5 plain pans")
-    XCTAssertFalse(line.contains("POISONED"), "control poisoned — \(line)")
+  // Baseline the earlier cycle already established, kept as the control.
+  func testControlPlainPans() {
+    let app = start("control")
+    pans(app, 5)
+    check(app, "control")
   }
 
-  // THE MECHANISM. Steal a touch that began on the map, then pan.
-  func testBottomEdgeStealOverADockedMap() {
-    let app = self.app()
-    app.launch()
-    waitForDockedMap(app)
-    report(app, "baseline")
-
-    stealFromBottomEdge(app)
-    report(app, "after steal 1")
-
-    // The device sequence steals twice: the swipe that ends Reachability, then
-    // the swipe that opens the app switcher. The second touch is also the stray
-    // move that detonates a recognizer the first one armed.
-    stealFromBottomEdge(app)
-    report(app, "after steal 2")
-
-    for i in 1...4 {
-      panDockedMap(app)
-      report(app, "pan \(i)")
+  // A FAST theft: the owner's swipe is fast, and speed changes how many moves
+  // the page sees before iOS claims the gesture.
+  func testFastBottomSteal() {
+    let app = start("fast steal")
+    for i in 1...3 {
+      at(app, 0.5, 1.0).withOffset(CGVector(dx: 0, dy: -1)).press(
+        forDuration: 0.01, thenDragTo: at(app, 0.5, 0.35),
+        withVelocity: .fast, thenHoldForDuration: 0)
+      comeBack(app)
+      report(app, "fast steal \(i)")
+      pans(app, 2)
+      report(app, "fast steal \(i) after pans")
     }
-
-    let line = probe(app)
-    XCTAssertFalse(line.contains("POISONED"), "MAP POISONED — \(line)")
+    check(app, "fast steal")
   }
 
-  // Steal, pan, steal, pan — in case arming and detonation have to interleave.
-  func testInterleavedStealsAndPans() {
-    let app = self.app()
-    app.launch()
-    waitForDockedMap(app)
-    report(app, "baseline")
-    for round in 1...4 {
-      stealFromBottomEdge(app)
+  // A theft that does NOT background the app: a short flick from the bottom
+  // edge, released before iOS commits to going home. Closest thing a simulator
+  // has to dismissing Reachability, where the app never leaves the foreground.
+  func testShortBottomFlickKeepsAppForeground() {
+    let app = start("short flick")
+    for i in 1...5 {
+      at(app, 0.5, 1.0).withOffset(CGVector(dx: 0, dy: -1)).press(
+        forDuration: 0.01, thenDragTo: at(app, 0.5, 0.93),
+        withVelocity: .fast, thenHoldForDuration: 0)
+      usleep(800_000)
+      report(app, "short flick \(i)")
       panDockedMap(app)
-      panDockedMap(app)
-      report(app, "round \(round)")
+      report(app, "short flick \(i) after pan")
       if probe(app).contains("POISONED") { break }
     }
-    let line = probe(app)
-    XCTAssertFalse(line.contains("POISONED"), "MAP POISONED — \(line)")
+    check(app, "short flick")
+  }
+
+  // Hold first so MapKit's pan recognizer definitely begins, THEN let iOS take
+  // the gesture. Cancels a pan in flight rather than a gesture that never was.
+  func testHoldThenSteal() {
+    let app = start("hold then steal")
+    for i in 1...3 {
+      at(app, 0.5, 1.0).withOffset(CGVector(dx: 0, dy: -1)).press(
+        forDuration: 0.6, thenDragTo: at(app, 0.5, 0.40),
+        withVelocity: .default, thenHoldForDuration: 0)
+      comeBack(app)
+      report(app, "hold then steal \(i)")
+      pans(app, 2)
+      report(app, "hold then steal \(i) after pans")
+    }
+    check(app, "hold then steal")
+  }
+
+  // THE DECELERATION CASE. Fling the map, then steal a touch while it is still
+  // coasting. Every stack captured on device ended in `_decelerationEnded`.
+  func testStealDuringDeceleration() {
+    let app = start("steal during decel")
+    for i in 1...4 {
+      flingDockedMap(app)
+      // No sleep: the steal has to land inside the coast.
+      at(app, 0.5, 1.0).withOffset(CGVector(dx: 0, dy: -1)).press(
+        forDuration: 0.01, thenDragTo: at(app, 0.5, 0.93),
+        withVelocity: .fast, thenHoldForDuration: 0)
+      usleep(900_000)
+      report(app, "decel steal \(i)")
+      panDockedMap(app)
+      report(app, "decel steal \(i) after pan")
+      if probe(app).contains("POISONED") { break }
+    }
+    check(app, "steal during decel")
+  }
+
+  // Fling, then background and return mid-coast: the deceleration timer is
+  // suspended and resumed, which is the other half of the device ceremony.
+  func testFlingThenBackgroundMidCoast() {
+    let app = start("fling then background")
+    for i in 1...3 {
+      flingDockedMap(app)
+      XCUIDevice.shared.press(.home)
+      comeBack(app)
+      report(app, "fling+bg \(i)")
+      pans(app, 2)
+      report(app, "fling+bg \(i) after pans")
+      if probe(app).contains("POISONED") { break }
+    }
+    check(app, "fling then background")
   }
 }
