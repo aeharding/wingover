@@ -34,6 +34,16 @@ function paint(poisoned: boolean, lines: string[]) {
   };color:#fff;font:600 12px/1.25 ui-monospace,monospace;padding:60px 8px 8px;white-space:pre-wrap;overflow:hidden`;
   el.textContent = (poisoned ? "REPRODUCED\n\n" : "not reproduced\n\n") + lines.join("\n");
   document.body.appendChild(el);
+  // Screenshot timing has bitten this twice. Persist the verdict where the
+  // host can read it out of the app container regardless of what is on screen.
+  try {
+    localStorage.setItem(
+      "wingover.repro.verdict",
+      JSON.stringify({ poisoned, lines }),
+    );
+  } catch {
+    // nothing to do; the overlay is still there
+  }
   document.title = poisoned ? "REPRO:YES" : "REPRO:NO";
 }
 
@@ -187,7 +197,7 @@ async function driveAfterContextLoss(mk: typeof mapkit): Promise<string> {
   ) as { loseContext(): void } | null;
   const steps0: string[] = [];
   ext?.loseContext();
-  await wait(1000);
+  await wait(120000);
   steps0.push(`lost=${health(map)}`);
 
   // Now everything the app does that a probe never did, on a dead context.
@@ -593,7 +603,7 @@ export async function runReproHarness() {
   );
   // Hand over to the live map only after the verdict has been readable for a
   // while — the screenshot has to catch the results, not the watcher.
-  await wait(1000);
+  await wait(120000);
   try {
     document.querySelectorAll("div").forEach((d) => {
       if (d.style.zIndex === "2147483647") d.remove();
