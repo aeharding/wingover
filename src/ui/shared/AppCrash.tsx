@@ -64,8 +64,8 @@ export default function AppCrash({ inFlight }: { inFlight: boolean }) {
       title="App Crashed"
       body={
         inFlight
-          ? "Wingover hit an unexpected error. Your flight is still being recorded and will not be lost. Reload to continue."
-          : "Wingover hit an unexpected error. Your saved flights are safe. Reload to continue."
+          ? "Wingover hit an unexpected error. Your flight is still being recorded and will not be lost."
+          : "Wingover hit an unexpected error. Your saved flights are safe."
       }
     />
   );
@@ -82,7 +82,7 @@ export function BootFailedScreen() {
     <RootFailure
       testId="boot-failed"
       title="Something Went Wrong"
-      body="Wingover could not read its saved flight data. Nothing has been erased. Reload to try again."
+      body="Wingover could not read its saved flight data. Nothing has been erased."
     />
   );
 }
