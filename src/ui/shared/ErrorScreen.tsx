@@ -75,29 +75,6 @@ export function BootFailedScreen() {
   );
 }
 
-// The last resort: React's tree is gone, so this is what the pilot sees
-// instead of a black screen (#185). Deliberately says nothing about what
-// broke — the pilot cannot act on a stack trace, and the reassurance that
-// matters is that the flight is not lost. Recording keeps running through a
-// React crash: the engine is module-scoped and the WAL is native-side.
-export function CrashScreen() {
-  return (
-    <div className={cx(styles.screen, styles.urgent)} data-testid="app-crashed">
-      <h2>App Crashed</h2>
-      <p>
-        Wingover hit an unexpected error. Any flight in progress is still being
-        recorded and nothing has been erased. Reload to continue.
-      </p>
-      <button
-        className={styles.action}
-        onClick={() => window.location.reload()}
-      >
-        Reload
-      </button>
-    </div>
-  );
-}
-
 export default function ErrorScreen({
   error,
   onRetry,

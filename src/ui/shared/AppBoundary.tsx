@@ -1,12 +1,13 @@
-import { Component, type ReactNode } from "react";
+import type { ReactNode } from "react";
+import { ErrorBoundary } from "react-error-boundary";
 
-import { CrashScreen } from "./ErrorScreen";
+import AppCrash from "./AppCrash";
 
 /**
  * The app's only error boundary. Without one, a throw during render or commit
  * unmounts the root and the pilot gets a black screen with no way out — which
- * is exactly what #185 did, via
- * commitLayoutEffectOnFiber -> defaultOnUncaughtError -> rootChildren: 0.
+ * is what #185 did, via commitLayoutEffectOnFiber -> defaultOnUncaughtError ->
+ * rootChildren: 0.
  *
  * One prop decides the whole policy, and PLACEMENT decides the prop:
  *
@@ -19,8 +20,7 @@ import { CrashScreen } from "./ErrorScreen";
  * Placement is not an approximation of "is a flight in progress" — it is
  * exactly equivalent, because App.tsx sheds the entire Ionic shell for the
  * flight surface the moment the engine leaves "idle". The two are never both
- * mounted, which is also why the window-level listeners below can live on the
- * instance rather than in a registry.
+ * mounted.
  *
  * A reload is the strongest recovery available and, mid-flight, close to
  * invisible: recording is engine-side and WAL-backed, and boot re-hydrates it
@@ -32,11 +32,11 @@ const HEALED_AT_KEY = "wingover.crash.healedAt";
 const HEAL_WINDOW_MS = 60_000;
 
 /**
- * The entire heal policy, pure so it can be tested without a DOM.
+ * The entire heal policy, pure so it can be tested without a DOM or a reload.
  *
- * The marker has to be PERSISTED, not held in a field: the reload destroys
- * every variable in the page, so an in-memory counter cannot enforce "once
- * per 60 s" and the result is an unbounded reload loop.
+ * The marker has to be PERSISTED, not held in a variable: the reload destroys
+ * every value in the page, so an in-memory counter cannot enforce "once per
+ * 60 s" and the result is an unbounded reload loop.
  */
 export function mayHeal(now: number, healedAt: number | null): boolean {
   if (healedAt === null) return true;
@@ -50,49 +50,39 @@ function lastHealedAt(): number | null {
     const at = Number(raw);
     return Number.isFinite(at) ? at : null;
   } catch {
-    // No store, or it threw. Treat it as "never healed": one reload attempt
-    // is the safer failure, since the alternative is a crash screen the
-    // pilot has to tap through.
+    // No store, or it threw. Treat it as "never healed": one reload attempt is
+    // the safer failure, since the alternative is a crash screen mid-flight.
     return null;
   }
 }
 
-interface Props {
+function heal() {
+  const now = Date.now();
+  if (!mayHeal(now, lastHealedAt())) return;
+  try {
+    // Written BEFORE the reload, or the next crash cannot see it.
+    localStorage.setItem(HEALED_AT_KEY, String(now));
+  } catch {
+    // An unwritable store means the window cannot be enforced across the
+    // reload, so do not reload at all: a loop is worse than a crash screen.
+    return;
+  }
+  window.location.reload();
+}
+
+export default function AppBoundary({
+  attemptHeal,
+  children,
+}: {
   attemptHeal?: boolean;
   children: ReactNode;
-}
-
-interface State {
-  crashed: boolean;
-}
-
-export default class AppBoundary extends Component<Props, State> {
-  override state: State = { crashed: false };
-
-  static getDerivedStateFromError(): State {
-    return { crashed: true };
-  }
-
-  override componentDidCatch() {
-    this.recover();
-  }
-
-  private recover() {
-    if (!this.props.attemptHeal) return;
-    const now = Date.now();
-    if (!mayHeal(now, lastHealedAt())) return;
-    try {
-      // Written BEFORE the reload, or the next crash cannot see it.
-      localStorage.setItem(HEALED_AT_KEY, String(now));
-    } catch {
-      // Unwritable store means the window cannot be enforced across the
-      // reload, so do not reload at all: a loop is worse than a crash screen.
-      return;
-    }
-    window.location.reload();
-  }
-
-  override render() {
-    return this.state.crashed ? <CrashScreen /> : this.props.children;
-  }
+}) {
+  return (
+    <ErrorBoundary
+      FallbackComponent={AppCrash}
+      onError={attemptHeal ? heal : undefined}
+    >
+      {children}
+    </ErrorBoundary>
+  );
 }

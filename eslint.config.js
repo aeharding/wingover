@@ -494,7 +494,11 @@ export default defineConfig(
     // src/ui/shared and both about a page that is already broken: the error
     // screens' Reload button (pilot-initiated, WAL-rehydrated) and
     // AppBoundary's one automatic heal per 60 s (AGENTS.md).
-    ignores: ["src/ui/shared/ErrorScreen.tsx", "src/ui/shared/AppBoundary.tsx"],
+    ignores: [
+      "src/ui/shared/ErrorScreen.tsx",
+      "src/ui/shared/AppBoundary.tsx",
+      "src/ui/shared/AppCrash.tsx",
+    ],
     rules: {
       "no-restricted-syntax": ["error", NO_RELOAD],
     },
