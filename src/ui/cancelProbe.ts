@@ -140,8 +140,6 @@ function line(state: ReturnType<typeof health>): string {
  * removed.
  */
 async function dockMapAtBottomEdge() {
-  const { loadMapKit } = await import("./map/mapkit/loader");
-  await loadMapKit();
   const host = document.createElement("div");
   host.setAttribute("data-docked-map", "");
   // Flush to the bottom edge, because that is the one place a system gesture is
@@ -151,14 +149,12 @@ async function dockMapAtBottomEdge() {
   host.style.cssText =
     "position:fixed;left:0;right:0;bottom:0;height:280px;z-index:2147483646";
   document.body.append(host);
-  const map = new mapkit.Map(host, {
-    center: new mapkit.Coordinate(39.8, -98.5),
-    showsCompass: mapkit.FeatureVisibility.Hidden,
-    showsScale: mapkit.FeatureVisibility.Hidden,
-    showsZoomControl: false,
-    showsMapTypeControl: false,
-  });
-  maps().add(map);
+  // Through the REAL adapter, not a raw `new mapkit.Map`. A drill that builds
+  // its own map cannot see a fix that lives in the adapter — which is exactly
+  // how the first verification run lied. The adapter registers every map it
+  // creates in `__wingoverMaps`, so the poll below picks this one up.
+  const { createMapKitMapView } = await import("./map/mapkit/adapter");
+  await createMapKitMapView(host, "street", "light");
 }
 
 export function installCancelProbe() {
