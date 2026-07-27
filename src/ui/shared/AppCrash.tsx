@@ -42,23 +42,31 @@ function RootFailure({
 }
 
 /**
- * React's tree is gone (#185). Deliberately says nothing about what broke: a
- * stack is not something a pilot can act on, and the fact that matters is that
- * the flight is not lost. Recording survives a React crash — the engine is
- * module-scoped and the WAL is native-side.
+ * React's tree is gone (#185). Says nothing about WHAT broke: a stack is not
+ * something a pilot can act on, and surfacing it properly is the diagnostics
+ * work anyway.
  *
- * Takes no props, though react-error-boundary offers the error and a reset.
+ * What it does say depends on whether a flight is up, because the reassurance
+ * is only true in one of those cases. Mid-flight the recording genuinely
+ * survives: the engine is module-scoped and kept running through the crash in
+ * #185 (the page never died, only React's tree), and the WAL is written
+ * outside it. On the ground there is no flight to reassure anyone about, and
+ * promising otherwise would be a lie the pilot might act on.
+ *
+ * The error and the reset that react-error-boundary offers are both unused.
  * Resetting in place cannot fix the class of crash this exists for: a poisoned
  * MapKit map survives a remount, and only the reload cleared it in #185.
- * Surfacing the error properly is the diagnostics work, and that means the
- * whole rust/native/js record, not the one string React happened to catch.
  */
-export default function AppCrash() {
+export default function AppCrash({ inFlight }: { inFlight: boolean }) {
   return (
     <RootFailure
       testId="app-crashed"
       title="App Crashed"
-      body="Wingover hit an unexpected error. Any flight in progress is still being recorded and nothing has been erased. Reload to continue."
+      body={
+        inFlight
+          ? "Wingover hit an unexpected error. Your flight is still being recorded and will not be lost. Reload to carry on."
+          : "Wingover hit an unexpected error. Your saved flights are safe. Reload to carry on."
+      }
     />
   );
 }

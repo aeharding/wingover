@@ -56,7 +56,13 @@ function lastHealedAt(): number | null {
   }
 }
 
-function heal() {
+/**
+ * Named for the situation, not the mechanism, and deliberately not exported.
+ * A shared `reloadPage()` would be a bypass: anything could import it and
+ * reload without the ban ever being reviewed. Reloading is only defensible
+ * from inside this one decision.
+ */
+function onUnrecoverableAppError() {
   const now = Date.now();
   if (!mayHeal(now, lastHealedAt())) return;
   try {
@@ -79,8 +85,11 @@ export default function AppBoundary({
 }) {
   return (
     <ErrorBoundary
-      FallbackComponent={AppCrash}
-      onError={attemptHeal ? heal : undefined}
+      // The same flag that decides whether to heal also decides what the
+      // crash screen may promise: only a flight in progress is still being
+      // recorded, and claiming that on the ground would be a lie.
+      fallbackRender={() => <AppCrash inFlight={attemptHeal === true} />}
+      onError={attemptHeal ? onUnrecoverableAppError : undefined}
     >
       {children}
     </ErrorBoundary>
