@@ -66,21 +66,32 @@ export function gpsReadyIndex(track: Fix[]): number | null {
   return null;
 }
 
-export function detectTakeoff(track: Fix[]): number | null {
-  let run = 0;
-  for (let i = 0; i < track.length; i++) {
-    const fix = track[i];
-    run = hasCredibleSpeed(fix) && fix.speed >= TAKEOFF_SPEED_MPS ? run + 1 : 0;
-    if (run >= TAKEOFF_SUSTAIN_FIXES) {
-      let start = i - run + 1;
-      while (
-        start > 0 &&
-        hasCredibleSpeed(track[start - 1]) &&
-        track[start - 1].speed >= MOVEMENT_SPEED_MPS
-      )
-        start--;
-      return start;
-    }
+function isFlying(fix: Fix): boolean {
+  return hasCredibleSpeed(fix) && fix.speed >= TAKEOFF_SPEED_MPS;
+}
+
+function isMoving(fix: Fix): boolean {
+  return hasCredibleSpeed(fix) && fix.speed >= MOVEMENT_SPEED_MPS;
+}
+
+function sustainedThrough(track: Fix[], i: number): boolean {
+  if (i < TAKEOFF_SUSTAIN_FIXES - 1) return false;
+  for (let j = i - TAKEOFF_SUSTAIN_FIXES + 1; j <= i; j++) {
+    if (!isFlying(track[j])) return false;
   }
-  return null;
+  return true;
+}
+
+// Takeoff, backdated to where the ground roll began, asked ONE fix at a
+// time: the engine calls this per ingested fix, and a replayed backlog is
+// thousands of fixes in a single batch, so the cost of the question must
+// not scale with the track behind it. Rescanning the whole buffer per fix
+// blocked the main thread for 24 s on a 94k-fix pre-takeoff backlog;
+// windowed, the same backlog costs 113 ms. Only the walk-back reaches
+// further, and only on the fix that triggers.
+export function takeoffAt(track: Fix[], i: number): number | null {
+  if (!sustainedThrough(track, i)) return null;
+  let start = i - TAKEOFF_SUSTAIN_FIXES + 1;
+  while (start > 0 && isMoving(track[start - 1])) start--;
+  return start;
 }

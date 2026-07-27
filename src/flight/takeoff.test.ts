@@ -4,11 +4,12 @@ import type { Fix } from "../engine/types";
 import { FlightSimulator } from "./simulator";
 import {
   coordsLookReduced,
-  detectTakeoff,
   gpsReadyIndex,
   IMPRECISE_M,
   MOVEMENT_SPEED_MPS,
   TAKEOFF_SPEED_MPS,
+  TAKEOFF_SUSTAIN_FIXES,
+  takeoffAt,
 } from "./takeoff";
 
 interface FixSpec {
@@ -32,6 +33,16 @@ function fixesFrom(specs: (number | FixSpec)[]): Fix[] {
       verticalAccuracy: s.verticalAccuracy ?? 8,
     };
   });
+}
+
+// The engine asks takeoffAt per ingested fix; a whole track is that same
+// question walked forward, which is the shape the rule reads best in.
+function firstTakeoff(track: Fix[]): number | null {
+  for (let i = 0; i < track.length; i++) {
+    const start = takeoffAt(track, i);
+    if (start !== null) return start;
+  }
+  return null;
 }
 
 describe("gpsReadyIndex", () => {
@@ -76,10 +87,10 @@ describe("coordsLookReduced", () => {
   });
 });
 
-describe("detectTakeoff", () => {
+describe("the takeoff rule", () => {
   it("detects takeoff in a simulated flight and backdates to movement start", () => {
     const track = new FlightSimulator(42, 0).fixesUpTo(300);
-    const index = detectTakeoff(track);
+    const index = firstTakeoff(track);
     expect(index).not.toBeNull();
     expect(index!).toBeGreaterThan(30);
     expect(index!).toBeLessThan(60);
@@ -88,11 +99,11 @@ describe("detectTakeoff", () => {
   });
 
   it("returns null while standing around", () => {
-    expect(detectTakeoff(fixesFrom([0, 0.4, 0.2, 0.6, 0.1, 0.3]))).toBe(null);
+    expect(firstTakeoff(fixesFrom([0, 0.4, 0.2, 0.6, 0.1, 0.3]))).toBe(null);
   });
 
   it("ignores brief speed spikes", () => {
-    expect(detectTakeoff(fixesFrom([0, 0, 6, 6, 6, 0.5, 0, 0.2]))).toBe(null);
+    expect(firstTakeoff(fixesFrom([0, 0, 6, 6, 6, 0.5, 0, 0.2]))).toBe(null);
   });
 
   it("ignores fast fixes with poor accuracy", () => {
@@ -106,11 +117,11 @@ describe("detectTakeoff", () => {
       { speed: 9, horizontalAccuracy: 30, verticalAccuracy: 50 },
       0.2,
     ]);
-    expect(detectTakeoff(track)).toBe(null);
+    expect(firstTakeoff(track)).toBe(null);
   });
 
   it("backdates through the launch run", () => {
-    expect(detectTakeoff(fixesFrom([0.2, 0.1, 2, 3, 4, 5.5, 6, 7, 8, 9]))).toBe(
+    expect(firstTakeoff(fixesFrom([0.2, 0.1, 2, 3, 4, 5.5, 6, 7, 8, 9]))).toBe(
       2,
     );
   });
@@ -127,12 +138,12 @@ describe("detectTakeoff", () => {
       8,
       9,
     ]);
-    expect(detectTakeoff(track)).toBe(2);
+    expect(firstTakeoff(track)).toBe(2);
   });
 
   it("starts at the first fast fix when there is no slow run-up", () => {
     expect(
-      detectTakeoff(fixesFrom([0.2, 0.1, TAKEOFF_SPEED_MPS + 1, 6, 7, 8, 9])),
+      firstTakeoff(fixesFrom([0.2, 0.1, TAKEOFF_SPEED_MPS + 1, 6, 7, 8, 9])),
     ).toBe(2);
   });
 
@@ -149,6 +160,26 @@ describe("detectTakeoff", () => {
       { speed: 6.9, horizontalAccuracy: 30, verticalAccuracy: 48 },
       { speed: 7.1, horizontalAccuracy: 22, verticalAccuracy: 35 },
     ]);
-    expect(detectTakeoff(track)).toBe(1);
+    expect(firstTakeoff(track)).toBe(1);
+  });
+});
+
+describe("takeoffAt", () => {
+  // The 24 s freeze (?mock-speed=1, a 94k-fix pre-takeoff backlog): the
+  // engine asks per ingested fix, so a question whose cost grows with the
+  // track behind it is quadratic over a batch. Counted, not timed, so it
+  // cannot flake.
+  it("reads a bounded number of fixes however long the track is", () => {
+    const track = fixesFrom(new Array(5000).fill(0));
+    let reads = 0;
+    const counted = new Proxy(track, {
+      get(target, prop, receiver) {
+        if (typeof prop === "string" && /^\d+$/.test(prop)) reads++;
+        return Reflect.get(target, prop, receiver);
+      },
+    });
+
+    expect(takeoffAt(counted, track.length - 1)).toBe(null);
+    expect(reads).toBeLessThanOrEqual(TAKEOFF_SUSTAIN_FIXES);
   });
 });

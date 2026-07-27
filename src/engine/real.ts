@@ -5,11 +5,7 @@ import {
 } from "../flight/landing";
 import { bearingBetween } from "../flight/nav";
 import { haversineMeters } from "../flight/stats";
-import {
-  coordsLookReduced,
-  detectTakeoff,
-  gpsReadyIndex,
-} from "../flight/takeoff";
+import { coordsLookReduced, gpsReadyIndex, takeoffAt } from "../flight/takeoff";
 import { WAYPOINT_RADIUS_M } from "../flight/waypoints";
 import type {
   EngineError,
@@ -865,7 +861,7 @@ export class GeolocationRecordingEngine implements RecordingEngine {
       if (this.updateReach(this.buffer.length - 1, fix)) reachedChanged = true;
 
       if (this.session.takeoffIndex === null) {
-        const takeoffIndex = detectTakeoff(this.buffer);
+        const takeoffIndex = takeoffAt(this.buffer, this.buffer.length - 1);
         if (takeoffIndex !== null) {
           this.session = { ...this.session, takeoffIndex };
           const session = this.session;
