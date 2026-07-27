@@ -1,10 +1,14 @@
 import { useEffect, useState } from "react";
 
+import { startFlight } from "../../engine/session";
 import { formatDistance } from "../../flight/format";
-import type { Units } from "../../flight/format";
 import { haversineMeters } from "../../flight/stats";
 import { sunFactLabel } from "../../flight/sun";
 import type { Flight, Pin } from "../../storage/db";
+import { useSettings } from "../settings/SettingsContext";
+import { useLatestFlight } from "./useLatestFlight";
+import { useLiveViewPrefs } from "./useLiveViewPrefs";
+import { usePlannedPins } from "./usePlannedPins";
 
 import styles from "./FlightSurface.module.css";
 
@@ -15,18 +19,35 @@ import styles from "./FlightSurface.module.css";
  * surface). The sun fact needs a location: the last flight's launch, else
  * the first planned pin — where they last flew or where they're planning
  * is where a pilot flies next. No location, no line.
+ *
+ * Wired rather than propped, unlike its Armed/Recording siblings: those are
+ * arms of FlightSurface's status switch, while this is a screen the shells
+ * mount directly. Its data is idle-only and would otherwise be subscribed for
+ * a whole flight to feed nothing.
+ *
+ * Renders only behind the app root's boot gate: pre-hydration the engine
+ * reports "idle", and Start Flight below clears the WAL — on an ungated render
+ * that destroys a live flight still sitting in it, unread. If the gate ever
+ * narrows, this dependency moves with it.
  */
-export default function IdleSurface({
-  units,
-  plannedPins,
-  lastFlight,
-  onStart,
-}: {
-  units: Units;
-  plannedPins: Pin[];
-  lastFlight: Flight | null;
-  onStart: () => void;
-}) {
+export default function IdleSurface() {
+  const { units } = useSettings();
+  const plannedPins = usePlannedPins();
+  // The newest logbook flight feeds the idle facts (the sun fact needs a
+  // location; its launch point is the best guess for the next one).
+  const lastFlight = useLatestFlight();
+  const liveView = useLiveViewPrefs();
+
+  async function onStart() {
+    // Arming resets the live view to the flight's default: snapped to the
+    // aircraft, north-up. (Unsnapping later takes track-up down with it —
+    // see RecordingSurface's changeFollow.) Written through before the
+    // status flips, because FlightSurface reads it back on mount.
+    liveView.update({ follow: true });
+    liveView.update({ trackUp: false });
+    await startFlight();
+  }
+
   // The sun fact is relative time through most of the cycle; re-render
   // by the minute while this surface is up so it cannot go stale on a
   // propped phone.
@@ -37,18 +58,20 @@ export default function IdleSurface({
   const hasPlannedRoute = plannedRouteMeters > 0;
 
   return (
-    <div className={styles.idle}>
-      <div className={styles.facts} data-testid="idle-facts">
-        {sunFact && <div>{sunFact}</div>}
-        {hasPlannedRoute && (
-          <div data-testid="planned-route">
-            Planned route: {formatDistance(plannedRouteMeters, units)}
-          </div>
-        )}
+    <div className={styles.content} data-testid="fly-content">
+      <div className={styles.idle}>
+        <div className={styles.facts} data-testid="idle-facts">
+          {sunFact && <div>{sunFact}</div>}
+          {hasPlannedRoute && (
+            <div data-testid="planned-route">
+              Planned route: {formatDistance(plannedRouteMeters, units)}
+            </div>
+          )}
+        </div>
+        <button className={styles.start} onClick={() => void onStart()}>
+          Start Flight
+        </button>
       </div>
-      <button className={styles.start} onClick={onStart}>
-        Start Flight
-      </button>
     </div>
   );
 }

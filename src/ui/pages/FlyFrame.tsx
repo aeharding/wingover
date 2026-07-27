@@ -7,8 +7,8 @@ import {
 } from "@ionic/react";
 import { useEffect, useState } from "react";
 
-import FlightSurface from "../flight/FlightSurface";
 import FlyTrace from "../flight/FlyTrace";
+import IdleSurface from "../flight/IdleSurface";
 
 import styles from "./FlyFrame.module.css";
 
@@ -113,7 +113,7 @@ export default function FlyFrame() {
             <IonTitle size="large">{greeting}</IonTitle>
           </IonToolbar>
         </IonHeader>
-        <FlightSurface />
+        <IdleSurface />
       </IonContent>
     </IonPage>
   );

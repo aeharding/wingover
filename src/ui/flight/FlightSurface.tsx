@@ -1,50 +1,29 @@
 import { useSyncExternalStore } from "react";
 
 import { engine } from "../../engine";
-import { startFlight } from "../../engine/session";
 import { useSettings } from "../settings/SettingsContext";
 import ArmedSurface from "./ArmedSurface";
 import { useBigConfirm } from "./BigConfirm";
 import ErrorScreen from "./ErrorScreen";
-import IdleSurface from "./IdleSurface";
 import RecordingSurface from "./RecordingSurface";
 import { useFlightCollection } from "./useFlightCollection";
-import { useLatestFlight } from "./useLatestFlight";
 import { useLiveViewPrefs } from "./useLiveViewPrefs";
-import { usePlannedPins } from "./usePlannedPins";
 
 import styles from "./FlightSurface.module.css";
 
 export default function FlightSurface() {
   const { units } = useSettings();
-  // The engine is the single owner of flight state; this page is a view.
+  // The engine is the single owner of flight state; this surface is a view.
   // Snapshots are cached (stable identity between changes) and the change
   // signal is coalesced per task, so a replay burst lands as one render of
   // a complete track — there is no per-fix mirror to fall behind.
   const snapshot = useSyncExternalStore(engine.subscribe, engine.snapshotSync);
   const { confirm: bigConfirm, element: confirmElement } = useBigConfirm();
   const liveView = useLiveViewPrefs();
-  const plannedPins = usePlannedPins();
-  // The newest logbook flight feeds the idle facts (the sun fact needs a
-  // location; its launch point is the best guess for the next one).
-  const lastFlight = useLatestFlight();
 
-  // This page renders only behind the app root's boot gate: pre-hydration
-  // the engine reports "idle", and IdleSurface's Start Flight clears the
-  // WAL — on an ungated render that destroys the live flight still sitting
-  // in it, unread. If the gate ever narrows, this dependency moves with it.
   const status = snapshot.status;
 
   useFlightCollection(status);
-
-  async function armFlight() {
-    // Arming resets the live view to the flight's default: snapped to the
-    // aircraft, north-up. (Unsnapping later takes track-up down with it —
-    // see RecordingSurface's changeFollow.)
-    liveView.update({ follow: true });
-    liveView.update({ trackUp: false });
-    await startFlight();
-  }
 
   async function cancelArmed() {
     await engine.discard();
@@ -80,18 +59,11 @@ export default function FlightSurface() {
   }
 
   // One surface per engine state. "ended" (collection is already running)
-  // deliberately paints nothing but the surface's own background.
+  // deliberately paints nothing but the surface's own background, and "idle"
+  // never reaches here: App.tsx sheds this surface for the shell, which mounts
+  // IdleSurface itself.
   function surface() {
     switch (status) {
-      case "idle":
-        return (
-          <IdleSurface
-            units={units}
-            plannedPins={plannedPins}
-            lastFlight={lastFlight}
-            onStart={armFlight}
-          />
-        );
       case "acquiring":
       case "armed":
         return (
