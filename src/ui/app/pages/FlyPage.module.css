@@ -109,6 +109,14 @@ ion-tabs:has(.frame:not(:global(.ion-page-hidden))) ion-tab-bar {
     text-shadow: none;
   }
 }
+/* The Clock-app Start idiom (per Alex): a true pill, tinted glass green
+   with the label carrying the color, not a solid web-green slab. Tuned
+   for sun, where glare lifts the black level and dark-on-dark melts
+   together: the tint runs stronger than Apple's, a hairline edge keeps
+   the pill's boundary when the fill washes out, and the label is a
+   LUMINOUS green (the systemGreen family), because sunlight readability
+   is a luminance game before it is a hue game. */
+
 .start {
   width: min(100%, 420px);
   padding: 1.5rem;

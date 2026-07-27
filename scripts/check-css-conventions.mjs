@@ -10,7 +10,8 @@
  *                     classes imported into this file with @value. Owned
  *                     classes from another module are IMPORTED, never
  *                     hard-coded.
- *  3. value-imports — every `@value x from "./m.module.css"` resolves, and
+ *  3. cross-imports — every `@value x from "./m.module.css"` and every
+ *                     `composes: x from "./m.module.css"` resolves, and
  *                     m actually declares .x.
  *  4. dts-pairing   — every module has a GENERATED .d.ts (gitignored;
  *                     postinstall/prebuild run tcm) and every .d.ts a
@@ -103,17 +104,30 @@ const valueImportsOf = (text) => {
   return map;
 };
 
+// `composes: x from "./m.module.css"` — the OTHER cross-file mechanism, and
+// the one that fails silently: a typo'd class name builds with no error or
+// warning and drops every declaration it should have brought in (tcm still
+// emits the locally-declared key, so tsc says nothing either).
+const composesOf = (text) => {
+  const map = new Map();
+  for (const m of text.matchAll(
+    /composes:\s*([\w-]+(?:\s+[\w-]+)*)\s+from\s+["']([^"']+)["']/g,
+  )) {
+    for (const name of m[1].split(/\s+/))
+      map.set(name, { original: name, from: m[2] });
+  }
+  return map;
+};
+
 for (const f of modules) {
   const text = stripComments(readFileSync(f, "utf8"));
   const values = valueImportsOf(text);
 
-  // ── 3. value-imports resolve and declare the class ──
-  for (const [local, { original, from }] of values) {
+  // ── 3. cross-imports resolve and declare the class ──
+  for (const [local, { original, from }] of [...values, ...composesOf(text)]) {
     const target = resolve(dirname(f), from);
     if (!existsSync(target)) {
-      violations.push(
-        `${rel(f)}: @value ${local} from "${from}" — file not found`,
-      );
+      violations.push(`${rel(f)}: ${local} from "${from}" — file not found`);
       continue;
     }
     const targetText = stripComments(readFileSync(target, "utf8"));
@@ -121,7 +135,7 @@ for (const f of modules) {
     // wrongly match a lone .foo-bar declaration.
     if (!new RegExp(`\\.${original}(?![\\w-])`).test(targetText)) {
       violations.push(
-        `${rel(f)}: @value ${original} from "${from}" — ${rel(target)} declares no .${original}`,
+        `${rel(f)}: ${original} from "${from}" — ${rel(target)} declares no .${original}`,
       );
     }
   }
@@ -190,7 +204,7 @@ for (const f of modules) {
 for (const f of modules) {
   if (!imported.has(f)) {
     violations.push(
-      `${rel(f)}: imported by nothing (no ts/tsx import, no @value) — dead file?`,
+      `${rel(f)}: imported by nothing (no ts/tsx import, no @value, no composes) — dead file?`,
     );
   }
 }

@@ -19,7 +19,7 @@ import type { MapAppearance } from "../shared/map/config";
  * styling, so the palette can never disagree with the class.
  *
  * The FLIGHT surface is exempt by construction: its chrome is pinned in
- * FlightSurface.css/theme.css and its own map view lives in liveViewState, so
+ * FlightSurface.module.css/theme.css and its own map view lives in liveViewState, so
  * neither the class nor the global view reaches it.
  */
 const media = window.matchMedia("(prefers-color-scheme: dark)");

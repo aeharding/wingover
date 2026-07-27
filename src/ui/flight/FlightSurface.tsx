@@ -60,8 +60,8 @@ export default function FlightSurface() {
 
   // One surface per engine state. "ended" (collection is already running)
   // deliberately paints nothing but the surface's own background, and "idle"
-  // never reaches here: App.tsx sheds this surface for the shell, which mounts
-  // IdleSurface itself.
+  // never reaches here: App.tsx sheds this surface for the shell, whose Fly
+  // tab is the home screen (app/pages/FlyPage).
   function surface() {
     switch (status) {
       case "acquiring":

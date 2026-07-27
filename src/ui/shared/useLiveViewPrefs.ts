@@ -23,7 +23,7 @@ export type LiveView = LiveViewPrefs & {
  * Per-component state, not a shared store: call it in exactly ONE place per
  * mounted tree and pass the result down. Two live copies would disagree.
  *
- * There are two owners, and they are never mounted together: IdleSurface (the
+ * There are two owners, and they are never mounted together: FlyPage (the
  * arming reset, written through before the status flips) and FlightSurface
  * (everything after). The handoff goes through liveViewState, not React —
  * App.tsx swaps one for the other, so neither instance survives the

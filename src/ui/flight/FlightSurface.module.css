@@ -4,10 +4,9 @@
   position: absolute;
   inset: 0;
   overflow: hidden;
-  /* NO base background: idle is transparent so the host-rendered
-     FlyTrace backdrop (the page's actual background, spanning under
-     the translucent tab bar) reads through; armed and recording paint
-     their own black below and cover it entirely. */
+  /* NO base background: armed and recording each paint their own black
+     over the whole box. Nothing shows through — App.tsx sheds the shell
+     for this surface, so there is no page backdrop behind it. */
   /* The flight surface never themes — one sunlight-tuned design (STEERING).
      The ground app follows the system scheme and deepens the accent for
      light chrome (theme.css); re-pin the flight-tile cyan here so the
@@ -34,14 +33,6 @@
      black surface. The surface owns its text color in both schemes. */
   color: #fff;
 }
-
-/* The Clock-app Start idiom (per Alex): a true pill, tinted glass green
-   with the label carrying the color, not a solid web-green slab. Tuned
-   for sun, where glare lifts the black level and dark-on-dark melts
-   together: the tint runs stronger than Apple's, a hairline edge keeps
-   the pill's boundary when the fill washes out, and the label is a
-   LUMINOUS green (the systemGreen family), because sunlight readability
-   is a luminance game before it is a hue game. */
 
 .armed {
   display: flex;
