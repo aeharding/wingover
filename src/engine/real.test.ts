@@ -588,6 +588,66 @@ describe("GeolocationRecordingEngine", () => {
     expect(snapshot.track).toEqual(flown.track);
   });
 
+  // The same poisoned WAL, one ordinary ground fix later. This is the
+  // shape that separates the three implementations: the full rescan that
+  // ingest used to run found the launch behind ANY later fix, and asking
+  // only at the newest one cannot. Passes before the windowed detector,
+  // fails with it, passes again with rebuildTakeoff.
+  it("recovers a lost takeoff when an ordinary later fix arrives", async () => {
+    const owner = createEngine();
+    await armAndTakeOff(owner);
+    const flown = await owner.getSnapshot();
+    const { session } = await readWal();
+    await writeWalSession({ ...session!, takeoffIndex: null });
+
+    const reloaded = createEngine();
+    await reloaded.getSnapshot();
+    geolocation.emit(position({ speed: 0.3 }));
+    expect(reloaded.snapshotSync().status).toBe("recording");
+    expect(reloaded.snapshotSync().startedAt).toBe(flown.startedAt);
+  });
+
+  // Still airborne after the reload. Accuracy degrades in motion
+  // (2026-07-10 device testing), and a fix over the credible bound stops
+  // the backdate walk-back — so a takeoff re-derived from the fixes after
+  // the reload would anchor HERE and silently cut the pre-reload half of
+  // the flight out of the record.
+  it("keeps the backdated start when the fix after a reload is inaccurate", async () => {
+    const owner = createEngine();
+    await armAndTakeOff(owner);
+    const flown = await owner.getSnapshot();
+    const { session } = await readWal();
+    await writeWalSession({ ...session!, takeoffIndex: null });
+
+    const reloaded = createEngine();
+    await reloaded.getSnapshot();
+    geolocation.emit(position({ speed: 6, accuracy: 50 }));
+    for (let i = 0; i < 5; i++) geolocation.emit(position({ speed: 6 }));
+
+    expect(reloaded.snapshotSync().startedAt).toBe(flown.startedAt);
+  });
+
+  // A blocking screen must never hide a flight — and after rebuildTakeoff
+  // the flight in progress may be one only this tab has worked out.
+  it("a passive tab derives the takeoff without writing the owner's WAL", async () => {
+    const owner = createEngine();
+    await armAndTakeOff(owner);
+    await owner.getSnapshot();
+    const { session } = await readWal();
+    await writeWalSession({ ...session!, takeoffIndex: null });
+
+    (globalThis.navigator as unknown as { locks: unknown }).locks = {
+      request: (_name: string, _opts: unknown, cb: (lock: null) => unknown) =>
+        Promise.resolve(cb(null)),
+    };
+    const viewer = createEngine();
+    const snapshot = await viewer.getSnapshot();
+    expect(snapshot.status).toBe("recording");
+    expect(snapshot.error).toBeNull();
+    // Derived in memory only: a tab that lost the lock writes nothing.
+    expect((await readWal()).session?.takeoffIndex).toBe(null);
+  });
+
   it("a passive (busy) tab can never destroy the owner's WAL, and mid-flight adoption stays a viewer", async () => {
     // Owner records a flight (lock-less env: owner by default).
     const owner = createEngine();
@@ -1003,6 +1063,44 @@ describe("GeolocationRecordingEngine", () => {
     const { fixes } = await readWal();
     expect(fixes.length).toBeGreaterThanOrEqual(snapshot.track.length);
     expect(fixes.length).toBeLessThanOrEqual(throughLanding);
+  });
+
+  // The break is finality only. A pilot who opted out of auto-finalize
+  // has not finalized anything: the grace expiring leaves them "landed"
+  // and prompting, and the flight may still continue — so the batch must
+  // drain in full, exactly as it did before the break existed.
+  it("drains the whole batch when the pilot opted out of auto-finalize", async () => {
+    let deliver: ((batch: SourcePosition[]) => void) | null = null;
+    const engine = new GeolocationRecordingEngine({
+      source: {
+        watch(onPositions) {
+          deliver = onPositions;
+          return () => {
+            deliver = null;
+          };
+        },
+      },
+      setWaypoints: () => {},
+    });
+    engines.push(engine);
+    await engine.start({ autoEnd: false });
+    await settle();
+
+    const batch: SourcePosition[] = [];
+    for (let i = 0; i < 3; i++) batch.push(sourceFix());
+    for (let i = 0; i < 5; i++) batch.push(sourceFix(1000, { speed: 6 }));
+    for (let i = 0; i < LANDING_SUSTAIN_FIXES + 35; i++) {
+      batch.push(sourceFix(1000, { speed: 0.3 }));
+    }
+    for (let i = 0; i < 200; i++) batch.push(sourceFix());
+
+    deliver!(batch);
+    await settle();
+    await settle();
+
+    expect(engine.snapshotSync().status).toBe("landed");
+    const { fixes } = await readWal();
+    expect(fixes.length).toBe(batch.length);
   });
 
   it("drops burst duplicates faster than 500 ms", async () => {

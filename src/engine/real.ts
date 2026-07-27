@@ -266,7 +266,10 @@ export class GeolocationRecordingEngine implements RecordingEngine {
     if (!session || this.deriveStatus() === "ended") return;
     if (await this.acquireRecorderLock()) {
       this.ensureWatch();
-    } else if (session.takeoffIndex === null) {
+      // this.session, not the WAL's copy: rebuildTakeoff may have just
+      // derived a takeoff the session write never recorded, and that IS a
+      // flight in progress.
+    } else if (this.session?.takeoffIndex == null) {
       // Pre-takeoff: the busy takeover owns the surface. A flight
       // already in progress instead keeps this tab as a passive
       // read-only viewer — a blocking screen must never hide a
