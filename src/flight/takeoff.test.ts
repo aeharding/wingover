@@ -9,6 +9,8 @@ import {
   IMPRECISE_M,
   MOVEMENT_SPEED_MPS,
   TAKEOFF_SPEED_MPS,
+  TAKEOFF_SUSTAIN_FIXES,
+  takeoffAt,
 } from "./takeoff";
 
 interface FixSpec {
@@ -76,7 +78,7 @@ describe("coordsLookReduced", () => {
   });
 });
 
-describe("detectTakeoff", () => {
+describe("the takeoff rule", () => {
   it("detects takeoff in a simulated flight and backdates to movement start", () => {
     const track = new FlightSimulator(42, 0).fixesUpTo(300);
     const index = detectTakeoff(track);
@@ -150,5 +152,25 @@ describe("detectTakeoff", () => {
       { speed: 7.1, horizontalAccuracy: 22, verticalAccuracy: 35 },
     ]);
     expect(detectTakeoff(track)).toBe(1);
+  });
+});
+
+describe("takeoffAt", () => {
+  // The 24 s freeze (?mock-speed=1, a 94k-fix pre-takeoff backlog): the
+  // engine asks per ingested fix, so a question whose cost grows with the
+  // track behind it is quadratic over a batch. Counted, not timed, so it
+  // cannot flake.
+  it("reads a bounded number of fixes however long the track is", () => {
+    const track = fixesFrom(new Array(5000).fill(0));
+    let reads = 0;
+    const counted = new Proxy(track, {
+      get(target, prop, receiver) {
+        if (typeof prop === "string" && /^\d+$/.test(prop)) reads++;
+        return Reflect.get(target, prop, receiver);
+      },
+    });
+
+    expect(takeoffAt(counted, track.length - 1)).toBe(null);
+    expect(reads).toBeLessThanOrEqual(TAKEOFF_SUSTAIN_FIXES);
   });
 });
