@@ -82,6 +82,16 @@ class FakeMap {
   mapType = "standard";
   isRotationEnabled = true;
   isZoomEnabled = true;
+  // Every write, in order: the guard is a bounce, so the ORDER is the assertion.
+  scrollEnabledWrites: boolean[] = [];
+  private scrollEnabled = true;
+  get isScrollEnabled() {
+    return this.scrollEnabled;
+  }
+  set isScrollEnabled(next: boolean) {
+    this.scrollEnabled = next;
+    this.scrollEnabledWrites.push(next);
+  }
   isRotationAvailable = true;
   selectedAnnotation: unknown = null;
   annotations: FakeAnnotation[] = [];
@@ -662,5 +672,41 @@ describe("mapkit adapter: aircraft glyph vs the camera that exists", () => {
     // MapKit can flush a queued event after destroy(); the adapter's
     // map-level rotation-end listener must ride it out.
     expect(() => theMap().twistTo(45)).not.toThrow();
+  });
+});
+
+// A cancelled touch on the map leaves MapKit's pan recognizer armed, and the
+// next move anywhere on the page poisons the camera. The whole investigation,
+// the device trail and the XCUITest reproduction are on #185.
+describe("mapkit adapter: a cancelled touch unwinds the pan recognizer", () => {
+  beforeEach(() => {
+    (globalThis as unknown as { mapkit: unknown }).mapkit = fakeMapKit;
+    created.length = 0;
+    privateSurface.setPadding = true;
+    privateSurface.honorsOptions = true;
+    document.body.innerHTML = "";
+  });
+
+  it("bounces isScrollEnabled when a touch on the map is cancelled", async () => {
+    const container = document.createElement("div");
+    document.body.appendChild(container);
+    await createMapKitMapView(container, "street", "light");
+    expect(theMap().scrollEnabledWrites).toEqual([]);
+
+    // MapKit builds its own DOM inside the container, so the real cancel
+    // targets a descendant — the listener has to catch it on the way down.
+    const inner = document.createElement("div");
+    container.appendChild(inner);
+    inner.dispatchEvent(new Event("touchcancel", { bubbles: true }));
+
+    expect(theMap().scrollEnabledWrites).toEqual([false, true]);
+    expect(theMap().isScrollEnabled).toBe(true);
+  });
+
+  it("leaves scrolling alone when no touch is cancelled", async () => {
+    const view = await createView();
+    view.moveTo({ center: AT, bearing: 270 }, { animate: false });
+
+    expect(theMap().scrollEnabledWrites).toEqual([]);
   });
 });

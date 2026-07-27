@@ -139,6 +139,19 @@ export async function createMapKitMapView(
     mapType: baseToMapType(initialBase),
     center: new mapkit.Coordinate(39.8, -98.5),
   });
+
+  // MapKit's pan recognizer never unwinds on a cancelled touch, and bouncing
+  // this flag is the only path in the library that unwinds it. Why that matters
+  // and how it was proven: #185.
+  container.addEventListener(
+    "touchcancel",
+    () => {
+      map.isScrollEnabled = false;
+      map.isScrollEnabled = true;
+    },
+    { capture: true },
+  );
+
   // Ground screens ride dark like the rest of the app; the live flight
   // map is always light (sunlight-readable, STEERING).
   map.colorScheme =
