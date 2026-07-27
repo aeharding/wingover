@@ -993,6 +993,11 @@ describe("GeolocationRecordingEngine", () => {
     for (const p of fixture) liveSource.push([p]);
     const liveSnapshot = live.snapshotSync();
     expect(liveSnapshot.status).toBe("ended");
+    // getSnapshot drains the WAL queue, so this is what live delivery made
+    // durable — the half of "byte-identical" a visible-track comparison
+    // cannot see.
+    await live.getSnapshot();
+    const liveWal = (await readWal()).fixes;
     await live.discard();
 
     // Replay: everything in one batch, with one coalesced notification.
@@ -1015,6 +1020,11 @@ describe("GeolocationRecordingEngine", () => {
     expect(burstSnapshot.startedAt).toBe(liveSnapshot.startedAt);
     expect(burstSnapshot.landingAt).toBe(liveSnapshot.landingAt);
     expect(burstSnapshot.track).toEqual(liveSnapshot.track);
+    // "Byte-identical results" (STEERING) is an equality over what the two
+    // made DURABLE, not just over the visible slice: the same track above a
+    // different WAL is what a batch-size-dependent record looks like.
+    await burst.getSnapshot();
+    expect((await readWal()).fixes).toEqual(liveWal);
   });
 
   // A backlog does not stop arriving because the flight ended: a reopened

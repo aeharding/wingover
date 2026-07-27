@@ -153,10 +153,12 @@ export class GeolocationRecordingEngine implements RecordingEngine {
   private pendingWalFixes: Fix[] = [];
   private walFlushQueued = false;
   // Derived nav state — a cache of a pure function of (buffer × planned ×
-  // ad-hoc). Rebuilt from the buffer on hydration (rebuildReachState); never
-  // journaled, so a lost session write is rebuilt from the durable fix stream
-  // exactly like takeoffIndex/landingIndex. reachInside = per-waypoint arm
-  // state (outside/inside); reachedIds = the set that has crossed inside.
+  // ad-hoc), rebuilt from the buffer on hydration (rebuildReachState) and
+  // never journaled, so no session write can lose it. takeoffIndex has the
+  // same twin (rebuildTakeoff). landingIndex does NOT yet: it is journaled
+  // only, so a lost write leaves detectLanding to re-anchor it from the
+  // trailing window. reachInside = per-waypoint arm state (outside/inside);
+  // reachedIds = the set that has crossed inside.
   private reachInside = new Map<string, boolean>();
   private reachedIds = new Set<string>();
   private hydrated = false;
