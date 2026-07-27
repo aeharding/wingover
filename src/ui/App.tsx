@@ -114,7 +114,9 @@ function AppBody() {
   // Desktop gets its own shell: plain react-router, no Ionic outlet (see
   // DesktopShell). Phones keep the Ionic tab shell untouched.
   return (
-    <AppBoundary>
+    // THROWAWAY TEST BRANCH — never merge. attemptHeal forced ON so healing
+    // can be exercised from the Plan page on device.
+    <AppBoundary attemptHeal>
       <IonApp>
         {/* Above the shells, so a sheet can be raised from anywhere without
             each page owning a modal; inside IonApp, because IonModal
