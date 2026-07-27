@@ -35,7 +35,7 @@ import { useCanRecord } from "./app/useCanRecord";
 import { useIsDesktop } from "./app/useIsDesktop";
 import FlightSurface from "./flight/FlightSurface";
 import AppBoundary from "./shared/AppBoundary";
-import { BootFailedScreen } from "./shared/ErrorScreen";
+import { BootFailedScreen } from "./shared/AppCrash";
 import { SettingsProvider } from "./shared/settings/SettingsContext";
 
 setupIonicReact({

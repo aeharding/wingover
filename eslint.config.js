@@ -490,12 +490,12 @@ export default defineConfig(
     },
   },
   {
-    // No location.reload() in app code. Two sanctioned exceptions, both in
-    // src/ui/shared and both about a page that is already broken: the error
-    // screens' Reload button (pilot-initiated, WAL-rehydrated) and
-    // AppBoundary's one automatic heal per 60 s (AGENTS.md).
+    // No location.reload() in app code. The sanctioned exceptions are all
+    // screens for a page that is already broken: their Reload button is
+    // pilot-initiated and WAL-rehydrated, plus AppBoundary's one automatic
+    // heal per 60 s in flight (AGENTS.md).
     ignores: [
-      "src/ui/shared/ErrorScreen.tsx",
+      "src/ui/flight/ErrorScreen.tsx",
       "src/ui/shared/AppBoundary.tsx",
       "src/ui/shared/AppCrash.tsx",
     ],
