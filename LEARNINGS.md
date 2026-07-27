@@ -263,14 +263,76 @@ build → install → XCUITest → read the verdict out of the AX tree.
 - Verify freshness by mtime against `dist/`, never by grepping the binary for a
   source string: tauri compresses the embedded frontend, so the grep is blind.
 
+## DEVICE CAPTURE — the mechanism, with its input trail (2026-07-26)
+
+An instrumented build went to the phone, the owner ran the repro, and the
+payload was pulled off the device over WiFi. No console, no relaying.
+
+Crash: `url tauri://localhost/plan`, `centerThrew "[MapKit] map rect property
+origin.x is not a number"`, `rotation 0` still readable, container 375x714 and
+insets top:50 both NORMAL, `rootChildren 1`.
+
+```
+184879  pointerdown    261,461   mk-map-node-element     <- ARMS
+184884  pointermove    260,440   mk-map-node-element
+184890  pointermove    258,424   mk-map-node-element
+184892  pointercancel  258,424   mk-map-node-element
+   ...1170 ms...
+186063  pointerdown    258,799   ios tab-bar-translucent <- DETONATES
+186072  pointermove    258,787   ios tab-bar-translucent
+186088  pointermove    258,777   ios tab-bar-translucent
+186097  TypeError: map rect property origin.x is not a number
+```
+
+**Two ingredients, and neither alone does it:**
+
+- **ARM** — a touch that BEGINS on the map and is CANCELLED.
+- **DETONATE** — any later move on the page from a touch that is NOT on the map,
+  so nothing repopulates the touch list.
+
+Reachability's whole contribution is geometric and the numbers prove it: the
+arming touch is at page-y 461 of an 812 pt viewport — the page's middle — while
+the finger was at the physical bottom edge. The app is slid down, so the bottom
+edge lands on the map. Owner confirms the close button and a swipe in the empty
+half above the app both fail to reproduce.
+
+The detonating moves are on the TAB BAR and never touch the map. A gesture
+attaches window-level move listeners when it begins and drops them when it ends,
+but `touchesCancelled` is empty, so after a cancel it never unsubscribes.
+
+**This is why five simulator drills passed.** Every one followed the steal by
+panning THE MAP, and a fresh `touchstart` there repopulates the touch list. They
+were healing it, not detonating it.
+
+It also explains the logbook exemption with no special pleading: that map is
+`inset: 0`, so the follow-up swipe lands on it and repopulates. On Plan and Fly
+the tab bar owns the bottom edge, so the follow-up misses.
+
+### Device tooling that works, all over WiFi
+
+- `xcrun devicectl device copy from --device <udid> --domain-type
+  appDataContainer --domain-identifier app.wingover.wingover --user mobile
+  --source <path> --destination <path>`. The flag is `--user`, NOT `--username`
+  (which `device info files` does accept — they disagree).
+- localStorage lives at `Library/WebKit/WebsiteData/Default/<hash>/<hash>/
+  LocalStorage/localstorage.sqlite3`. Copy the `-wal` too; a value written
+  seconds ago may live only there.
+- Values are UTF-16LE blobs. `cast(value as text)` truncates at the first NUL
+  and yields one character. Use `hex(value)` and decode off-device.
+- NOT available for live inspection: macOS 26's `log stream` has no `--device`
+  option at all, so device log streaming is gone. `log` is also a zsh builtin —
+  `/usr/bin/log` or a `sh` script, or it fails with "too many arguments".
+
 ## NEXT STEPS (actionable, in order)
 
-1. **Confirm the mechanism in the simulator** (harness experiment H, in
-   flight): synthesize `pointerdown` → moves → `pointercancel` → stray
-   `pointermove`, then read `map.center`. Verify the repair
-   (`map.center = <Coordinate>`) and the guard (`isScrollEnabled`
-   false/true) in the same run. Only then write a fix.
-2. **The fix, once H confirms** — three separable parts:
+1. **Reproduce ARM+DETONATE in the simulator** (`MapCancelUITests`, running):
+   arm by cancelling a touch that began on a map docked to the bottom edge, then
+   detonate with a drag that lands OFF the map. Two counter-experiments ride
+   along and both are predicted to survive — same arming with the follow-up ON
+   the map (the logbook case), and off-map drags with no arming. If all three
+   survive, the missing factor is device-only and the next move is another
+   instrumented device run, not another sim cycle.
+2. **The fix, once the drill confirms** — three separable parts:
    - Guard: on `pointercancel`/`touchcancel`, bounce `isScrollEnabled` so the
      recognizer unwinds. Prevents the poisoning at source.
    - Repair: detect a throwing `map.center` and reassign the last known good
