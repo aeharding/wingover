@@ -66,11 +66,16 @@ const CAPTURE_CSS = `
 `;
 // Live flight deck: same optical-size split as the phone (Text for labels,
 // Display for the big stat numerals); no iPhone safe-area pushes on iPad.
+/* Selected by data-* hooks, never by class: CSS Modules hash every app class
+   (.instruments is emitted as _instruments_12zf7), so a bare class selector
+   matches nothing and fails SILENTLY — the capture just renders unstyled. Two
+   rounds of store screenshots shipped with these selectors dead, so the flight
+   deck was captured in Chromium's default sans. */
 const CAPTURE_CSS_FLIGHT = `
-  .fly-content, .fly-content * {
+  [data-testid="fly-content"], [data-testid="fly-content"] * {
     font-family: 'SF Pro Text', system-ui, -apple-system, sans-serif !important;
   }
-  .fly-content .tile .value {
+  [data-testid="fly-content"] [data-tile-value] {
     font-family: 'SF Pro Display', system-ui, -apple-system, sans-serif !important;
   }
 `;

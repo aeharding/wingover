@@ -105,6 +105,7 @@ export default function ZoomControl({
   return (
     <div
       className={styles.strip}
+      data-testid="zoom-strip"
       data-active={active}
       data-variant={variant}
       role="slider"

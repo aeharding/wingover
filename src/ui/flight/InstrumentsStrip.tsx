@@ -89,7 +89,7 @@ export default function InstrumentsStrip({
   }
 
   return (
-    <div className={styles.instruments} ref={ref}>
+    <div className={styles.instruments} ref={ref} data-testid="instruments">
       <Tile
         label="Above launch"
         value={aboveLaunch()}
