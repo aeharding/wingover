@@ -15,16 +15,16 @@ import { resume } from "./sync";
 import { installCapacitorShim, installKeyboardLayout } from "./tauri-ionic";
 import App from "./ui/App";
 import { initAppTheme } from "./ui/appTheme";
+import { installCancelProbe } from "./ui/cancelProbe";
 import { installDiagnostics } from "./ui/diag";
-import { runReproHarness } from "./ui/reproHarness";
 import { installExternalLinkHandler } from "./ui/externalLinks";
 import { captureLaunchUrl } from "./ui/map/config";
 import { initSatelliteAvailability } from "./ui/map/satelliteAvailability";
 
 // DIAGNOSTIC (#185): first, so it is watching before anything else runs.
 installDiagnostics();
-// #185 REPRO HARNESS — throwaway branch. Runs itself on boot.
-setTimeout(() => void runReproHarness(), 3000);
+// #185 CANCEL PROBE — throwaway branch. Watches the real page's maps.
+installCancelProbe();
 installExternalLinkHandler();
 // Resize <ion-app> and flag html.keyboard-open when tauri-plugin-ionic
 // reports the on-screen keyboard (dormant off-device).

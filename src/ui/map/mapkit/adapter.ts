@@ -140,6 +140,14 @@ export async function createMapKitMapView(
     mapType: baseToMapType(initialBase),
     center: new mapkit.Coordinate(39.8, -98.5),
   });
+  // #185 CANCEL PROBE (throwaway branch): the probe polls every live map's
+  // center, so it has to know they exist.
+  ((window as unknown as Record<string, unknown>).__wingoverMaps ??=
+    new Set()) as Set<unknown>;
+  (
+    (window as unknown as Record<string, unknown>).__wingoverMaps as Set<unknown>
+  ).add(map);
+
   // Ground screens ride dark like the rest of the app; the live flight
   // map is always light (sunlight-readable, STEERING).
   map.colorScheme =
