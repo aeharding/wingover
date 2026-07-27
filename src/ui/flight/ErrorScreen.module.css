@@ -42,7 +42,7 @@
 }
 
 .cancel {
-  composes: cancel from "../shared/controls.module.css";
+  composes: cancel from "./controls.module.css";
 }
 
 /* Location-class errors: full alarm red. The pilot is about to pocket

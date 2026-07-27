@@ -80,7 +80,7 @@ export function BootFailedScreen() {
     <RootFailure
       testId="boot-failed"
       title="Something Went Wrong"
-      body="Wingover could not read its saved flight data. Your flights are still there."
+      body="Wingover could not read its saved flight data. Nothing has been erased."
     />
   );
 }

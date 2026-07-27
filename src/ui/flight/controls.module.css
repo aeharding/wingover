@@ -1,0 +1,16 @@
+/* The in-flight secondary button, shared by the two surfaces that need one:
+   ErrorScreen's Cancel and the flight surface's own. It briefly lived in
+   shared/ because ErrorScreen did; when ErrorScreen moved here this was
+   orphaned there, with zero consumers in app/. check:css enforces the
+   direction of a cross-bucket compose, not whether a shared module is still
+   shared, so nothing caught it. */
+
+.cancel {
+  width: min(60%, 280px);
+  padding: 1rem;
+  font-size: 1.2rem;
+  color: #fff;
+  background: #333;
+  border: none;
+  border-radius: 14px;
+}

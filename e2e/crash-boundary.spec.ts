@@ -66,3 +66,62 @@ test("a crash on a ground page shows the crash screen, not a blank page", async 
     page.locator('[data-testid="map-container"]').first(),
   ).toBeVisible({ timeout: 15_000 });
 });
+
+// The two drills #188 specified for the in-flight boundary, which the first
+// version of this file skipped. Their absence let a regression ship green: a
+// compare-and-set inside the fallback answered `true` to the render React
+// discards and `false` to the one that commits, so the heal silently never
+// fired while every gate stayed green.
+//
+// The crash is injected by breaking a Number method the instruments format
+// through, which is a render-phase read on the flight surface — the same shape
+// as #185's camera getter, and the only injection point that does not need a
+// production seam.
+async function flyThenCrash(page: import("@playwright/test").Page) {
+  await page.getByRole("button", { name: "Start Flight" }).click();
+  await expect(page.getByTestId("recording")).toBeVisible({ timeout: 30_000 });
+  await page.evaluate(() => {
+    (window as unknown as { __alive?: boolean }).__alive = true;
+    Number.prototype.toFixed = () => {
+      throw new Error("e2e: simulated render failure on the flight surface");
+    };
+  });
+}
+
+test("a crash in flight heals itself, and the flight is still recording", async ({
+  page,
+}) => {
+  await page.goto("/?mock-speed=40&map-style=blank");
+  await page.evaluate(() => localStorage.removeItem("wingover.crash.healedAt"));
+  await flyThenCrash(page);
+
+  // The reload is the assertion: __alive was set before the crash and only a
+  // fresh document clears it.
+  await expect
+    .poll(
+      () => page.evaluate(() => (window as { __alive?: boolean }).__alive),
+      { timeout: 20_000 },
+    )
+    .toBeUndefined();
+  await expect(page.getByTestId("recording")).toBeVisible({ timeout: 30_000 });
+  await expect(page.getByTestId("app-crashed")).toBeHidden();
+});
+
+test("a second crash inside the window stops reloading and surfaces", async ({
+  page,
+}) => {
+  await page.goto("/?mock-speed=40&map-style=blank");
+  // A heal already spent, one second ago: the window has not elapsed.
+  await page.evaluate(() =>
+    localStorage.setItem("wingover.crash.healedAt", String(Date.now() - 1000)),
+  );
+  await flyThenCrash(page);
+
+  await expect(page.getByTestId("app-crashed")).toBeVisible({
+    timeout: 20_000,
+  });
+  // Still the same document: it must NOT have reloaded.
+  expect(
+    await page.evaluate(() => (window as { __alive?: boolean }).__alive),
+  ).toBe(true);
+});

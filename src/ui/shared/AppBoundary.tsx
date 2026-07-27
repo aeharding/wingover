@@ -47,20 +47,29 @@ export function mayHeal(now: number, healedAt: number | null): boolean {
  * Takes this page-load's one heal, or returns false. Called in exactly one
  * place, by the fallback, so the decision is made once and nothing re-checks.
  *
- * Claiming means WRITING the marker, not just reading it, and the reload below
- * is conditional on that write. An earlier version reloaded even when the
- * write threw, reasoning that nothing was on screen to fall back to. On a full
- * disk — `setItem` throws, `getItem` keeps returning null — that never
- * enforces the window: measured at 101 navigations in 12 seconds, a hard
- * reload every 90 ms during an active recording. A crash screen is always
- * better than that.
- *
- * The write happens during render, which is impure, and the failure that buys
- * is benign in the only direction it can fail: a render React discards after
- * the claim spends the window without reloading, so the next crash shows the
- * crash screen instead of healing. Never a loop, never a blank page.
+ * Claiming means WRITING the marker, not just reading it, and the reload is
+ * conditional on that write. An earlier version reloaded even when the write
+ * threw, reasoning that nothing was on screen to fall back to. On a full disk
+ * — `setItem` throws, `getItem` keeps returning null — that never enforces the
+ * window: measured at 101 navigations in 12 seconds, a hard reload every 90 ms
+ * during an active recording. A crash screen is always better than that.
  */
+let claimed: boolean | null = null;
+
 function claimHeal(): boolean {
+  // Decided ONCE per page load. React 19 renders a pass that threw, discards
+  // it, then renders again from the root — so an un-memoised compare-and-set
+  // answers `true` to the render that is thrown away and `false` to the one
+  // that commits, and the heal never happens at all. That is not a hazard, it
+  // is measured: three harnesses, production React included, all showed
+  // AppCrash committing and reload() never called.
+  //
+  // A page-load memo is the right lifetime because a reload is what clears it.
+  claimed ??= takeHeal();
+  return claimed;
+}
+
+function takeHeal(): boolean {
   try {
     const raw = localStorage.getItem(HEALED_AT_KEY);
     const at = raw === null ? null : Number(raw);
@@ -98,7 +107,15 @@ function Healing() {
  * reload without the ban ever being reviewed.
  */
 function onUnrecoverableAppError() {
-  window.location.reload();
+  try {
+    window.location.reload();
+  } catch {
+    // A throw here lands in the fallback's own subtree, which no boundary can
+    // catch, and unmounts the root: rootChildren 0, i.e. the #185 signature
+    // this file exists to prevent. reload() can throw SecurityError in a
+    // sandboxed context. Swallowing leaves the pilot on a blank frame, but the
+    // crash screen is one render away rather than gone.
+  }
 }
 
 export default function AppBoundary({
