@@ -363,6 +363,22 @@ test("the unsnapped compass realigns north, instantly", async ({ page }) => {
       ),
     );
 
+  // The adapter chunk loads lazily, so the handle lands well after
+  // "recording": 2.6s post-load in the trace for #152, against a Track up
+  // click at 2.7s. Reading the handle early throws, and expect.poll calls
+  // its function OUTSIDE its try — a throw ends the test then and there
+  // instead of polling, so no timeout can cover this. Gate on the handle.
+  await page.waitForFunction(
+    () =>
+      !!(
+        document.querySelector(
+          '[data-testid="live-map"] [data-testid="map-container"]',
+        ) as HTMLElement & { __map?: unknown }
+      )?.__map,
+    undefined,
+    { timeout: 15_000 },
+  );
+
   // Track-up rotates the camera to course; the sim flies a curving path,
   // so a nonzero bearing arrives within a few fixes.
   await page.getByRole("button", { name: "Track up" }).click();
