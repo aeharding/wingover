@@ -145,7 +145,8 @@ export async function createMapKitMapView(
   ((window as unknown as Record<string, unknown>).__wingoverMaps ??=
     new Set()) as Set<unknown>;
   (
-    (window as unknown as Record<string, unknown>).__wingoverMaps as Set<unknown>
+    (window as unknown as Record<string, unknown>)
+      .__wingoverMaps as Set<unknown>
   ).add(map);
 
   // MapKit's recognizers never unwind on a cancelled touch: `touchesCancelled`
