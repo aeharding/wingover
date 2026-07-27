@@ -7,14 +7,14 @@ import {
 } from "ionicons/icons";
 
 import type { Waypoint } from "../../engine/types";
-import NativeIcon from "../components/NativeIcon";
-import { cx } from "../cx";
-import type { MapViewKind } from "../map/config";
-import MapCluster from "../map/MapCluster";
-import type { MapView } from "../map/types";
-import ViewToggle from "../map/ViewToggle";
+import NativeIcon from "../shared/components/NativeIcon";
+import { cx } from "../shared/cx";
+import type { MapViewKind } from "../shared/map/config";
+import MapCluster from "../shared/map/MapCluster";
+import type { MapView } from "../shared/map/types";
+import ViewToggle from "../shared/map/ViewToggle";
 
-import mapCss from "../map/map.module.css";
+import mapCss from "../shared/map/map.module.css";
 import styles from "./FlightSurface.module.css";
 
 /**

@@ -12,6 +12,7 @@ import tseslint from "typescript-eslint";
 import defaultImportName from "./eslint-rules/default-import-name.js";
 import maxUseState from "./eslint-rules/max-usestate.js";
 import simpleJsxGuard from "./eslint-rules/simple-jsx-guard.js";
+import uiBucketIsolation from "./eslint-rules/ui-bucket-isolation.js";
 
 // ─── The seams, as restriction entries ──────────────────────────────────
 //
@@ -94,7 +95,7 @@ const NO_MAP_BACKEND = {
   regex: "^(maplibre-gl|apple-mapkit|@apple/mapkit-loader)$",
   allowTypeImports: true,
   message:
-    "Consumers speak MapView only; backends live in src/ui/map/maplibre and src/ui/map/mapkit (src/ui/map/types.ts).",
+    "Consumers speak MapView only; backends live in src/ui/shared/map/maplibre and src/ui/shared/map/mapkit (src/ui/shared/map/types.ts).",
 };
 
 /**
@@ -117,7 +118,7 @@ const NO_MAP_BACKEND_MODULE = {
     "**/mapkit/**",
   ],
   message:
-    "Backends are reached through MapCanvas's dynamic import, never statically from app code (src/ui/map/types.ts).",
+    "Backends are reached through MapCanvas's dynamic import, never statically from app code (src/ui/shared/map/types.ts).",
 };
 
 /** @type {RestrictedPattern} */
@@ -270,6 +271,7 @@ export default defineConfig(
           "default-import-name": defaultImportName,
           "max-usestate": maxUseState,
           "simple-jsx-guard": simpleJsxGuard,
+          "ui-bucket-isolation": uiBucketIsolation,
         },
       },
     },
@@ -280,6 +282,9 @@ export default defineConfig(
       "wingover/default-import-name": "error",
       // >5 useState in one component = state that wants a hook/object.
       "wingover/max-usestate": "error",
+      // src/ui/app and src/ui/flight never import each other; what both need
+      // lives in src/ui/shared (ui-bucket-isolation.js).
+      "wingover/ui-bucket-isolation": "error",
       // The base layer: the manual-memoization ban plus the seams that are
       // inert inside the directory they protect (a relative import within
       // src/engine reads "./real", not "engine/real"), so they cost nothing
@@ -354,7 +359,7 @@ export default defineConfig(
   },
   {
     // The map backends themselves — the only place a backend is named.
-    files: ["src/ui/map/maplibre/**", "src/ui/map/mapkit/**"],
+    files: ["src/ui/shared/map/maplibre/**", "src/ui/shared/map/mapkit/**"],
     rules: {
       "no-restricted-imports": restrict(
         NO_MANUAL_MEMO,
@@ -487,7 +492,7 @@ export default defineConfig(
     // No location.reload() in app code. The one sanctioned exception is the
     // web denied-error screen's Reload button: pilot-initiated, pre-flight,
     // WAL-rehydrated (AGENTS.md).
-    ignores: ["src/ui/flight/ErrorScreen.tsx"],
+    ignores: ["src/ui/shared/ErrorScreen.tsx"],
     rules: {
       "no-restricted-syntax": ["error", NO_RELOAD],
     },

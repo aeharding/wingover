@@ -16,8 +16,9 @@
  *                     postinstall/prebuild run tcm) and every .d.ts a
  *                     module — catches generation not running, and
  *                     orphans from renames/deletes.
- *  5. module-used   — every module is imported by some ts/tsx or @value'd
- *                     by another module (dead file detection).
+ *  5. module-used   — every module is imported by some ts/tsx, or @value'd
+ *                     or composed from by another module (dead file
+ *                     detection).
  *
  * Exit 0 clean; exit 1 with a per-violation report otherwise.
  */
@@ -173,6 +174,11 @@ for (const s of sources) {
 for (const f of modules) {
   const text = stripComments(readFileSync(f, "utf8"));
   for (const m of text.matchAll(/@value[^"']+["']([^"']+)["']/g)) {
+    imported.add(resolve(dirname(f), m[1]));
+  }
+  // `composes: x from "./m.module.css"` is the other cross-file mechanism, and
+  // a module reachable ONLY that way is not dead.
+  for (const m of text.matchAll(/composes:[^"';]+from\s+["']([^"']+)["']/g)) {
     imported.add(resolve(dirname(f), m[1]));
   }
 }

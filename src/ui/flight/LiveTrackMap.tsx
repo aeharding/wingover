@@ -1,11 +1,14 @@
 import { useEffect, useEffectEvent, useRef, useState } from "react";
 
 import type { Fix, Waypoint } from "../../engine/types";
-import { cx } from "../cx";
-import type { MapViewKind } from "../map/config";
-import { applyFollowWheelZoom } from "../map/followZoom";
-import { readLiveViewState, writeLiveViewState } from "../map/liveViewState";
-import MapCanvas from "../map/MapCanvas";
+import { cx } from "../shared/cx";
+import type { MapViewKind } from "../shared/map/config";
+import { applyFollowWheelZoom } from "../shared/map/followZoom";
+import {
+  readLiveViewState,
+  writeLiveViewState,
+} from "../shared/map/liveViewState";
+import MapCanvas from "../shared/map/MapCanvas";
 import {
   ACCENT_CYAN,
   ADHOC_COLOR,
@@ -19,8 +22,8 @@ import {
   type MarkerSpec,
   PLANNED_COLOR,
   TRACK_LINE_WIDTH_PX,
-} from "../map/types";
-import ZoomControl from "../map/ZoomControl";
+} from "../shared/map/types";
+import ZoomControl from "../shared/map/ZoomControl";
 
 import styles from "./LiveTrackMap.module.css";
 

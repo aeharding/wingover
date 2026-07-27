@@ -2,7 +2,7 @@ import type { EngineErrorCode, Fix } from "../../engine/types";
 import { formatAltitude, formatSpeed } from "../../flight/format";
 import type { Units } from "../../flight/format";
 import { isTauri } from "../../platform";
-import { cx } from "../cx";
+import { cx } from "../shared/cx";
 
 import styles from "./FlightSurface.module.css";
 

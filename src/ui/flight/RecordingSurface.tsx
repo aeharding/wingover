@@ -3,14 +3,14 @@ import { useState } from "react";
 import type { EngineSnapshot } from "../../engine/types";
 import type { Units } from "../../flight/format";
 import { LANDING_GRACE_MS } from "../../flight/landing";
-import type { MapViewKind } from "../map/config";
-import type { MapView } from "../map/types";
+import type { MapViewKind } from "../shared/map/config";
+import type { MapView } from "../shared/map/types";
+import type { LiveView } from "../shared/useLiveViewPrefs";
 import { ConfirmSurface } from "./BigConfirm";
 import InstrumentsStrip from "./InstrumentsStrip";
 import LiveTrackMap from "./LiveTrackMap";
 import MapControls from "./MapControls";
 import { useInstrumentInsets } from "./useInstrumentInsets";
-import type { LiveView } from "./useLiveViewPrefs";
 import { useWaypointUi } from "./useWaypointUi";
 
 import styles from "./FlightSurface.module.css";

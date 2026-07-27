@@ -1,13 +1,13 @@
 import { useSyncExternalStore } from "react";
 
 import { engine } from "../../engine";
-import { useSettings } from "../settings/SettingsContext";
+import ErrorScreen from "../shared/ErrorScreen";
+import { useSettings } from "../shared/settings/SettingsContext";
+import { useLiveViewPrefs } from "../shared/useLiveViewPrefs";
 import ArmedSurface from "./ArmedSurface";
 import { useBigConfirm } from "./BigConfirm";
-import ErrorScreen from "./ErrorScreen";
 import RecordingSurface from "./RecordingSurface";
 import { useFlightCollection } from "./useFlightCollection";
-import { useLiveViewPrefs } from "./useLiveViewPrefs";
 
 import styles from "./FlightSurface.module.css";
 

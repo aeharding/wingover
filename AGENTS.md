@@ -32,6 +32,12 @@ plugin from `src-tauri/plugins/wingover/` when touching Rust.
 - No `location.reload()` in app code (instance-swap + notify instead).
   The one sanctioned exception is the web denied-error screen's Reload
   button — pilot-initiated, pre-flight, WAL-rehydrated.
+- `src/ui/` has three buckets and the two ends never meet: `app/` (the
+  ground app), `flight/` (the in-flight surface, which replaces the whole
+  shell in flight), `shared/` (what both genuinely need). `app` and
+  `flight` never import each other — anything both want moves to
+  `shared`, deliberately (`wingover/ui-bucket-isolation`).
+  `src/ui/App.tsx` is the one exception: it is the switch between them.
 - Pilot-facing strings: no em dashes; plain words (UI Principles in
   STEERING). Colors are display-p3 with no sRGB fallbacks.
 - The engine (`src/engine/`, `src/flight/`, `src/storage/`) imports no

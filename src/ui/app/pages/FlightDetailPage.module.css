@@ -1,0 +1,148 @@
+@value overlay from "../../shared/map/map.module.css";
+
+/* Map on top, details below — a split, not an overlay. The old floating card
+   covered the track it existed to show, and its title duplicated the header's.
+   The frame owns the map's height and always stays in the scroll flow. Inline
+   it's a non-interactive preview (see below), so it only needs to tease the
+   track and hand off to Expand — details get the rest of the screen. vh (not %)
+   because IonContent's scroll host doesn't size against the page. */
+.frame {
+  position: relative;
+  /* svh: stable against the PWA URL bar collapsing/expanding mid-scroll.
+     Roughly half the screen: enough map to read the track shape at a
+     glance, details start above the fold. */
+  height: 46svh;
+  min-height: 300px;
+}
+
+/* The map surface fills whichever slot the portal parks it in — the inline
+   frame or the fullscreen overlay. The view-transition-name is what makes
+   the expand/collapse a "magic move": startViewTransition (see the tsx)
+   morphs this element's box between the two layouts. Inert on engines
+   without the API. */
+.map {
+  position: absolute;
+  inset: 0;
+  view-transition-name: flight-map;
+  /* Column so fullscreen can dock the replay bar under the map region. */
+  display: flex;
+  flex-direction: column;
+
+  /* Inline (not full screen), the map is a scroll-through preview: single-finger
+     swipes scroll the details past it instead of panning the map, which would
+     trap the scroll — worst with the keyboard up, when the map can be the whole
+     scrollable area. pointer-events fall through to Ionic's scroller; the controls
+     (view toggle, expand pill) opt back in. Tap the pill to go full screen, where
+     the map pans/zooms normally. Phone-only page (desktop uses a different view). */
+  &:not(.full) {
+    pointer-events: none;
+
+    .tapLayer,
+    :global(.overlay),
+    .expandPill {
+      pointer-events: auto;
+    }
+
+    /* Inline, the view toggle moves to the top-right, out of the way of the scroll
+       and the centered pill (MapView.css stacks it bottom-right, right again once
+       full screen). No home-indicator inset — the map box is mid-page here (and
+       the region is consume-all anyway, so the safe-area vars already read 0). */
+    :global(.overlay) {
+      top: 0.9rem;
+      bottom: auto;
+    }
+  }
+}
+
+/* The map itself (canvas, controls, pills). Inline it is the whole box;
+   fullscreen the replay dock takes the bottom and this flexes above it. */
+.region {
+  position: relative;
+  flex: 1;
+  min-height: 0;
+
+  /* The bottom inset GLIDES when the replay pane seats/unseats the edge
+     below (the consume-bottom flip lands on the slide's first frame —
+     see ownsBottom in the tsx): same duration and curve as the drawer
+     slide (ReplayDrawer.css — keep in lockstep), so the bottom-anchored
+     chrome rides one continuous path with the moving region edge instead
+     of stepping by the inset at either end. Both attributions come along
+     free: MapLibre's margin reads the interpolating var directly, MapKit
+     re-reads it per frame via the probe bridge's ResizeObserver. Needs
+     the @property registration in theme.css. Gated on BOTH classes: only
+     fullscreen AND only while the pane exists (paneOpen spans the whole
+     close slide) — armed by .full alone, expand and rotation with the
+     pane closed would glide an inset that must step with the layout. */
+  .full &.paneOpen {
+    transition: --ion-safe-area-bottom 300ms cubic-bezier(0.32, 0.72, 0, 1);
+
+    @media (prefers-reduced-motion: reduce) {
+      transition: none;
+    }
+  }
+}
+
+/* Snappier than the UA's default morph; the group is the moving box. */
+::view-transition-group(flight-map) {
+  animation-duration: 280ms;
+  animation-timing-function: cubic-bezier(0.32, 0.72, 0, 1);
+}
+
+/* Full screen: a fixed overlay portaled INTO ion-app, outside the page
+   scroller and ion-content. That placement does the heavy lifting by
+   construction: the details' layout and scroll position never change
+   (nothing to save or restore), drags anywhere on the overlay have no
+   scrollable ancestor to grab, a status-bar tap's center hit-test finds no
+   ion-content to scroll (the overlay's ancestry never enters one), and the
+   header/tab bar are simply covered. Inside ion-app rather than body ON
+   PURPOSE: ion-app is a stacking context, so Ionic overlays (internal
+   z-index 20001) paint ABOVE this — the clip editor's confirm alert
+   presents over the fullscreen pane; body-level, every alert/toast was
+   invisible under it. dvh so that when browser fullscreen isn't granted
+   (e.g. iPhone Safari PWA) the overlay tracks the viewport the URL bar
+   actually leaves and the bottom controls stay reachable. touch-action:
+   none is belt-and-braces on top. */
+.fullroot {
+  position: fixed;
+  inset: 0;
+  height: 100dvh;
+  /* Above the page, the header and the tab bar; below Ionic's overlay
+     range (20001) within the shared ion-app stacking context. */
+  z-index: 1000;
+  touch-action: none;
+  background: var(--ion-background-color, #000);
+}
+
+/* Inline, a full-cover layer turns a tap into "expand" while a vertical drag
+   scrolls the details straight through it (touch-action: pan-y). Sits below the
+   controls (z-index 10) so the toggle and pill still win their own taps. */
+.tapLayer {
+  position: absolute;
+  inset: 0;
+  z-index: 5;
+  touch-action: pan-y;
+}
+
+/* Inline expand affordance: a labelled pill centered at the bottom of the map
+   box (the whole map is a preview now, so the corner icon button wasn't
+   discoverable). Matches .map-button's fill; pill-shaped. */
+.expandPill {
+  position: absolute;
+  bottom: 0.9rem;
+  left: 50%;
+  transform: translateX(-50%);
+  z-index: 10;
+  display: flex;
+  align-items: center;
+  gap: 0.35rem;
+  padding: 0.5rem 0.9rem;
+  font-size: 0.9rem;
+  font-weight: 600;
+  color: var(--map-chip-text);
+  background: var(--map-chip-bg);
+  border-radius: 999px;
+
+  &:active {
+    background: var(--map-chip-bg-active);
+  }
+}

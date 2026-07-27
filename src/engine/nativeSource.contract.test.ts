@@ -56,7 +56,7 @@ const CLAIMED_ELSEWHERE: Record<string, string> = {
   keychain_delete: "src/sync/nativeContract.test.ts",
   keychain_get: "src/sync/nativeContract.test.ts",
   keychain_set: "src/sync/nativeContract.test.ts",
-  share_file: "src/ui/download.test.ts",
+  share_file: "src/ui/app/download.test.ts",
   sign_in_with_apple: "src/sync/nativeContract.test.ts",
   storekit_current_entitlement: "src/sync/nativeContract.test.ts",
   storekit_environment: "src/sync/nativeContract.test.ts",

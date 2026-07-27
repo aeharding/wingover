@@ -1,4 +1,4 @@
-@value button from "../map/map.module.css";
+@value button from "../shared/map/map.module.css";
 
 .content {
   position: absolute;
@@ -101,13 +101,7 @@
 }
 
 .cancel {
-  width: min(60%, 280px);
-  padding: 1rem;
-  font-size: 1.2rem;
-  color: #fff;
-  background: #333;
-  border: none;
-  border-radius: 14px;
+  composes: cancel from "../shared/controls.module.css";
 }
 
 .recording {
