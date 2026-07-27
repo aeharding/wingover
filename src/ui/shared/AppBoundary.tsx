@@ -43,16 +43,24 @@ export function mayHeal(now: number, healedAt: number | null): boolean {
   return now - healedAt >= HEAL_WINDOW_MS;
 }
 
-function lastHealedAt(): number | null {
+/**
+ * Whether a reload is about to happen. Read by BOTH the fallback render and
+ * the error handler, and it must give them the same answer: the fallback runs
+ * first and paints nothing when a heal is coming, so a handler that then
+ * declined would leave a blank page forever.
+ *
+ * That is why an unusable store answers "no" rather than "never healed" — the
+ * two paths agreeing matters more than getting one extra reload attempt out of
+ * a browser whose storage is broken.
+ */
+function healableNow(): boolean {
   try {
     const raw = localStorage.getItem(HEALED_AT_KEY);
-    if (raw === null) return null;
+    if (raw === null) return true;
     const at = Number(raw);
-    return Number.isFinite(at) ? at : null;
+    return mayHeal(Date.now(), Number.isFinite(at) ? at : null);
   } catch {
-    // No store, or it threw. Treat it as "never healed": one reload attempt is
-    // the safer failure, since the alternative is a crash screen mid-flight.
-    return null;
+    return false;
   }
 }
 
@@ -63,15 +71,16 @@ function lastHealedAt(): number | null {
  * from inside this one decision.
  */
 function onUnrecoverableAppError() {
-  const now = Date.now();
-  if (!mayHeal(now, lastHealedAt())) return;
+  if (!healableNow()) return;
   try {
     // Written BEFORE the reload, or the next crash cannot see it.
-    localStorage.setItem(HEALED_AT_KEY, String(now));
+    localStorage.setItem(HEALED_AT_KEY, String(Date.now()));
   } catch {
-    // An unwritable store means the window cannot be enforced across the
-    // reload, so do not reload at all: a loop is worse than a crash screen.
-    return;
+    // Reload anyway. The fallback has already painted nothing on the strength
+    // of healableNow(), so bailing out here would leave a blank page forever,
+    // which is the exact bug this whole file exists to prevent. A reload whose
+    // window could not be recorded is the lesser failure, and it needs the
+    // store to fail between a successful read and a write to happen at all.
   }
   window.location.reload();
 }
@@ -83,12 +92,21 @@ export default function AppBoundary({
   attemptHeal?: boolean;
   children: ReactNode;
 }) {
+  function fallback() {
+    // Paint NOTHING when a reload is coming. The fallback renders one commit
+    // before onError runs, so drawing the crash screen here flashes it red for
+    // a frame and then reloads — observed on device. Blank for that frame
+    // reads as the reload it is.
+    if (attemptHeal && healableNow()) return null;
+    // Otherwise the same flag that decides whether to heal decides what the
+    // screen may promise: only a flight in progress is still being recorded,
+    // and claiming that on the ground would be a lie.
+    return <AppCrash inFlight={attemptHeal === true} />;
+  }
+
   return (
     <ErrorBoundary
-      // The same flag that decides whether to heal also decides what the
-      // crash screen may promise: only a flight in progress is still being
-      // recorded, and claiming that on the ground would be a lie.
-      fallbackRender={() => <AppCrash inFlight={attemptHeal === true} />}
+      fallbackRender={fallback}
       onError={attemptHeal ? onUnrecoverableAppError : undefined}
     >
       {children}
