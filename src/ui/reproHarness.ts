@@ -495,6 +495,67 @@ async function cancelledGesture(mk: typeof mapkit, mode: string): Promise<string
   return `H ${mode}: panned=${panned} a=${after} repair=${repaired}`;
 }
 
+/**
+ * I: the transform hypothesis. MapKit's GestureController converts page
+ * coordinates to element coordinates by INVERTING the accumulated CSS
+ * transform of the element's ancestors. A singular matrix (scale 0) inverts
+ * to non-finite, and Reachability/app-switcher animations apply exactly that
+ * kind of transform to the window while the app stays live and interactive.
+ */
+async function transformDuringGesture(mk: typeof mapkit, kind: string): Promise<string> {
+  const wrap = document.createElement("div");
+  wrap.style.cssText = "position:fixed;left:0;top:150px;width:380px;height:420px";
+  document.body.appendChild(wrap);
+  const host = document.createElement("div");
+  host.style.cssText = "position:absolute;inset:0";
+  wrap.appendChild(host);
+
+  const map = new mk.Map(host, {
+    isRotationEnabled: true,
+    center: new mk.Coordinate(39.8, -98.5),
+  }) as unknown as MapLike;
+  await wait(1500);
+  const before = health(map);
+
+  const transforms: Record<string, string> = {
+    scale0: "scale(0)",
+    translateHalf: "translateY(50%)",
+    scaleTiny: "scale(0.0000001)",
+    matrixSingular: "matrix(1, 0, 0, 0, 0, 0)",
+  };
+  const t = transforms[kind] ?? "scale(0)";
+
+  // Apply the transform, then let MapKit do coordinate work through it.
+  wrap.style.transform = t;
+  await frame();
+  await frame();
+  const m = map as unknown as {
+    convertCoordinateToPointOnPage(c: unknown): unknown;
+    convertPointOnPageToCoordinate(p: unknown): unknown;
+  };
+  const steps: string[] = [];
+  try {
+    m.convertPointOnPageToCoordinate(new DOMPoint(190, 300));
+    steps.push(`p2c=${health(map)}`);
+  } catch (e) {
+    steps.push(`p2c threw ${String(e).slice(0, 30)}`);
+  }
+  try {
+    const c = (map as unknown as { center: { latitude: number; longitude: number } }).center;
+    m.convertCoordinateToPointOnPage(new mk.Coordinate(c.latitude, c.longitude));
+    steps.push(`c2p=${health(map)}`);
+  } catch (e) {
+    steps.push(`c2p threw ${String(e).slice(0, 30)}`);
+  }
+  wrap.style.transform = "";
+  await frame();
+  await wait(500);
+  const after = health(map);
+  map.destroy();
+  wrap.remove();
+  return `I ${kind}: b=${before} ${steps.join(" ")} end=${after}`;
+}
+
 export async function runReproHarness() {
   const lines: string[] = [];
   try {
@@ -512,6 +573,10 @@ export async function runReproHarness() {
       () => cancelledGesture(mk, "ptr"),
       () => cancelledGesture(mk, "touch"),
       () => cancelledGesture(mk, "touch+guard"),
+      () => transformDuringGesture(mk, "scale0"),
+      () => transformDuringGesture(mk, "matrixSingular"),
+      () => transformDuringGesture(mk, "scaleTiny"),
+      () => transformDuringGesture(mk, "translateHalf"),
     ]) {
       try {
         lines.push(await run());
