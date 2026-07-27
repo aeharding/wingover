@@ -1,4 +1,4 @@
-import { type ReactNode, useEffect } from "react";
+import { type ReactNode, useLayoutEffect } from "react";
 import { ErrorBoundary } from "react-error-boundary";
 
 import AppCrash from "./AppCrash";
@@ -44,52 +44,60 @@ export function mayHeal(now: number, healedAt: number | null): boolean {
 }
 
 /**
- * Whether a reload is allowed right now. Read in exactly one place, by the
- * fallback: once it decides, nothing re-checks.
+ * Takes this page-load's one heal, or returns false. Called in exactly one
+ * place, by the fallback, so the decision is made once and nothing re-checks.
  *
- * An unusable store answers "no" rather than "never healed". Without a marker
- * the once-per-60s window cannot be enforced across the reload, and an
- * unbounded reload loop is worse than a crash screen.
+ * Claiming means WRITING the marker, not just reading it, and the reload below
+ * is conditional on that write. An earlier version reloaded even when the
+ * write threw, reasoning that nothing was on screen to fall back to. On a full
+ * disk — `setItem` throws, `getItem` keeps returning null — that never
+ * enforces the window: measured at 101 navigations in 12 seconds, a hard
+ * reload every 90 ms during an active recording. A crash screen is always
+ * better than that.
+ *
+ * The write happens during render, which is impure, and the failure that buys
+ * is benign in the only direction it can fail: a render React discards after
+ * the claim spends the window without reloading, so the next crash shows the
+ * crash screen instead of healing. Never a loop, never a blank page.
  */
-function healableNow(): boolean {
+function claimHeal(): boolean {
   try {
     const raw = localStorage.getItem(HEALED_AT_KEY);
-    if (raw === null) return true;
-    const at = Number(raw);
-    return mayHeal(Date.now(), Number.isFinite(at) ? at : null);
+    const at = raw === null ? null : Number(raw);
+    if (!mayHeal(Date.now(), at !== null && Number.isFinite(at) ? at : null)) {
+      return false;
+    }
+    // Written BEFORE the reload, or the next crash cannot see it.
+    localStorage.setItem(HEALED_AT_KEY, String(Date.now()));
+    return true;
   } catch {
+    // Unusable store: the window cannot be enforced across a reload, so there
+    // is no safe reload to offer.
     return false;
   }
 }
 
 /**
  * Renders nothing and reloads, which is what a heal looks like: the crash
- * screen must not paint for the frame before the page goes away.
+ * screen must not paint for the frame before the page goes away. The heal was
+ * already claimed by the fallback that rendered this.
  *
- * The decision was already made by the fallback that rendered this. Nothing
- * here re-checks it, deliberately — two `Date.now()` reads can straddle the
- * window edge, and a second check that came back "no" after the fallback had
- * already committed to painting nothing would leave a blank page forever,
- * which is the exact bug this file exists to prevent.
+ * A LAYOUT effect, not a passive one. Passive effects are what React defers
+ * under main-thread pressure, and until it runs this shows nothing — #185's
+ * own report is "app black for 5 to 10 seconds", so a deferred reload would
+ * recreate the symptom it is curing.
  */
 function Healing() {
-  useEffect(onUnrecoverableAppError, []);
+  useLayoutEffect(onUnrecoverableAppError, []);
   return null;
 }
 
 /**
  * Named for the situation, not the mechanism, and deliberately not exported.
  * A shared `reloadPage()` would be a bypass: anything could import it and
- * reload without the ban ever being reviewed. Reloading is only defensible
- * from inside this one decision.
+ * reload without the ban ever being reviewed.
  */
 function onUnrecoverableAppError() {
-  try {
-    // Written BEFORE the reload, or the next crash cannot see it.
-    localStorage.setItem(HEALED_AT_KEY, String(Date.now()));
-  } catch {
-    // Reload anyway: nothing is on screen to fall back to.
-  }
   window.location.reload();
 }
 
@@ -106,11 +114,8 @@ export default function AppBoundary({
   // on device), and deciding in both means two Date.now() reads that can
   // disagree at the window edge.
   function fallback() {
-    if (attemptHeal && healableNow()) return <Healing />;
-    // Not healing, so the screen is what the pilot is left with. The same flag
-    // decides what it may promise: only a flight in progress is still being
-    // recorded, and claiming that on the ground would be a lie.
-    return <AppCrash inFlight={attemptHeal === true} />;
+    if (attemptHeal && claimHeal()) return <Healing />;
+    return <AppCrash />;
   }
 
   return <ErrorBoundary fallbackRender={fallback}>{children}</ErrorBoundary>;

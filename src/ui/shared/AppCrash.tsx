@@ -46,27 +46,25 @@ function RootFailure({
  * something a pilot can act on, and surfacing it properly is the diagnostics
  * work anyway.
  *
- * What it does say depends on whether a flight is up, because the reassurance
- * is only true in one of those cases. Mid-flight the recording genuinely
- * survives: the engine is module-scoped and kept running through the crash in
- * #185 (the page never died, only React's tree), and the WAL is written
- * outside it. On the ground there is no flight to reassure anyone about, and
- * promising otherwise would be a lie the pilot might act on.
+ * It also says nothing about the flight, and that is the second lesson. An
+ * earlier version promised "your flight is still being recorded" whenever the
+ * boundary was the in-flight one, which is `status !== "idle"` — false in four
+ * of the six states it covers. `acquiring` and `armed` have no flight yet;
+ * `ended` has already called clearWatch(); and `blocked` means location is
+ * denied, so telling a pilot their flight is safe is the worst sentence this
+ * app could show. What survives a React crash is everything already recorded,
+ * in every state, so that is all it claims.
  *
  * The error and the reset that react-error-boundary offers are both unused.
  * Resetting in place cannot fix the class of crash this exists for: a poisoned
  * MapKit map survives a remount, and only the reload cleared it in #185.
  */
-export default function AppCrash({ inFlight }: { inFlight: boolean }) {
+export default function AppCrash() {
   return (
     <RootFailure
       testId="app-crashed"
       title="App Crashed"
-      body={
-        inFlight
-          ? "Wingover hit an unexpected error. Your flight is still being recorded and will not be lost."
-          : "Wingover hit an unexpected error. Your saved flights are safe."
-      }
+      body="Wingover hit an unexpected error. Your recorded flight tracks are safe."
     />
   );
 }
@@ -82,7 +80,7 @@ export function BootFailedScreen() {
     <RootFailure
       testId="boot-failed"
       title="Something Went Wrong"
-      body="Wingover could not read its saved flight data. Nothing has been erased."
+      body="Wingover could not read its saved flight data. Your flights are still there."
     />
   );
 }

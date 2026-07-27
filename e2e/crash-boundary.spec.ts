@@ -41,21 +41,28 @@ test("a crash on a ground page shows the crash screen, not a blank page", async 
     };
   });
 
-  // CompassButton subscribes to "rotate", not "move", so a pan would never
-  // make it re-read. Fire the event the store actually listens to; firing it
-  // directly also avoids calling the getter we just broke from inside
-  // page.evaluate, where the throw would land in the test instead of in React.
+  // CompassButton subscribes to "rotate", not "move", so nudge the stream it
+  // actually listens to. Every hop is optional on purpose: depending on
+  // timing the map may re-read the broken getter and crash on its own first,
+  // in which case React has already removed this element and a non-optional
+  // chain would throw here — failing the drill at the moment the feature
+  // worked. Firing the event directly (rather than reading the getter from
+  // page.evaluate) also keeps the throw inside React, where the boundary is.
   await page.evaluate(() => {
-    const el = document.querySelector(
-      '[data-testid="map-container"]',
-    ) as HTMLElement & { __map?: { fire(type: string): void } };
-    el.__map!.fire("rotate");
+    const el = document.querySelector('[data-testid="map-container"]') as
+      (HTMLElement & { __map?: { fire?(type: string): void } }) | null;
+    el?.__map?.fire?.("rotate");
   });
-
   await expect(page.getByTestId("app-crashed")).toBeVisible({
     timeout: 15_000,
   });
-  await expect(page.getByRole("button", { name: "Reload" })).toBeVisible();
-  // The point of the boundary: a body with something in it.
-  expect(await page.locator("#root").innerHTML()).not.toBe("");
+
+  // Clicked, not merely visible. A crash screen whose only way out is dead
+  // leaves the pilot exactly where the black screen did, and `toBeVisible`
+  // would ship that green.
+  await page.getByRole("button", { name: "Reload" }).click();
+  await expect(page.getByTestId("app-crashed")).toBeHidden({ timeout: 15_000 });
+  await expect(
+    page.locator('[data-testid="map-container"]').first(),
+  ).toBeVisible({ timeout: 15_000 });
 });
