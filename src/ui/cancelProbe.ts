@@ -208,9 +208,13 @@ export function installCancelProbe() {
     banner.textContent = latched ? `${line(state)} LATCHED` : line(state);
   }, 200);
 
-  void dockMapAtBottomEdge().catch((error) => {
-    console.error("WINGOVER-CANCEL dock failed", String(error));
-  });
+  // Simulator drills only. On a real device the docked map would sit on top of
+  // the tab bar, and the device run needs the app navigable.
+  if (import.meta.env.VITE_DOCK_MAP) {
+    void dockMapAtBottomEdge().catch((error) => {
+      console.error("WINGOVER-CANCEL dock failed", String(error));
+    });
+  }
 
   // Whatever the previous run latched, surfaced on this one.
   try {
