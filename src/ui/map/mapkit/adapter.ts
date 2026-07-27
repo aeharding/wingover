@@ -148,6 +148,23 @@ export async function createMapKitMapView(
     (window as unknown as Record<string, unknown>).__wingoverMaps as Set<unknown>
   ).add(map);
 
+  // MapKit's recognizers never unwind on a cancelled touch: `touchesCancelled`
+  // is empty and `enterCancelledState()` is reachable only from the `enabled`
+  // setter (read in the v6 bundle; reproduced by XCUITest). A recognizer left
+  // armed keeps handling window moves with an EMPTY touch list, so
+  // `locationInElement()` divides by zero and the NaN reaches `camera.center`
+  // through an unvalidated MapPoint — after which every camera read throws.
+  // iOS steals a touch whenever a system gesture starts on the map, which
+  // Reachability makes routine. Bouncing the flag is MapKit's own interrupt.
+  container.addEventListener(
+    "touchcancel",
+    () => {
+      map.isScrollEnabled = false;
+      map.isScrollEnabled = true;
+    },
+    { capture: true },
+  );
+
   // Ground screens ride dark like the rest of the app; the live flight
   // map is always light (sunlight-readable, STEERING).
   map.colorScheme =
