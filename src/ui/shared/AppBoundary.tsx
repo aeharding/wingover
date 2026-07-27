@@ -1,4 +1,4 @@
-import type { ReactNode } from "react";
+import { type ReactNode, useEffect } from "react";
 import { ErrorBoundary } from "react-error-boundary";
 
 import AppCrash from "./AppCrash";
@@ -44,14 +44,12 @@ export function mayHeal(now: number, healedAt: number | null): boolean {
 }
 
 /**
- * Whether a reload is about to happen. Read by BOTH the fallback render and
- * the error handler, and it must give them the same answer: the fallback runs
- * first and paints nothing when a heal is coming, so a handler that then
- * declined would leave a blank page forever.
+ * Whether a reload is allowed right now. Read in exactly one place, by the
+ * fallback: once it decides, nothing re-checks.
  *
- * That is why an unusable store answers "no" rather than "never healed" — the
- * two paths agreeing matters more than getting one extra reload attempt out of
- * a browser whose storage is broken.
+ * An unusable store answers "no" rather than "never healed". Without a marker
+ * the once-per-60s window cannot be enforced across the reload, and an
+ * unbounded reload loop is worse than a crash screen.
  */
 function healableNow(): boolean {
   try {
@@ -65,22 +63,32 @@ function healableNow(): boolean {
 }
 
 /**
+ * Renders nothing and reloads, which is what a heal looks like: the crash
+ * screen must not paint for the frame before the page goes away.
+ *
+ * The decision was already made by the fallback that rendered this. Nothing
+ * here re-checks it, deliberately — two `Date.now()` reads can straddle the
+ * window edge, and a second check that came back "no" after the fallback had
+ * already committed to painting nothing would leave a blank page forever,
+ * which is the exact bug this file exists to prevent.
+ */
+function Healing() {
+  useEffect(onUnrecoverableAppError, []);
+  return null;
+}
+
+/**
  * Named for the situation, not the mechanism, and deliberately not exported.
  * A shared `reloadPage()` would be a bypass: anything could import it and
  * reload without the ban ever being reviewed. Reloading is only defensible
  * from inside this one decision.
  */
 function onUnrecoverableAppError() {
-  if (!healableNow()) return;
   try {
     // Written BEFORE the reload, or the next crash cannot see it.
     localStorage.setItem(HEALED_AT_KEY, String(Date.now()));
   } catch {
-    // Reload anyway. The fallback has already painted nothing on the strength
-    // of healableNow(), so bailing out here would leave a blank page forever,
-    // which is the exact bug this whole file exists to prevent. A reload whose
-    // window could not be recorded is the lesser failure, and it needs the
-    // store to fail between a successful read and a write to happen at all.
+    // Reload anyway: nothing is on screen to fall back to.
   }
   window.location.reload();
 }
@@ -92,24 +100,18 @@ export default function AppBoundary({
   attemptHeal?: boolean;
   children: ReactNode;
 }) {
+  // The one place the heal is decided. It has to be here rather than in an
+  // onError handler: the fallback renders a commit EARLIER, so deciding later
+  // means the crash screen paints red for a frame and then reloads (observed
+  // on device), and deciding in both means two Date.now() reads that can
+  // disagree at the window edge.
   function fallback() {
-    // Paint NOTHING when a reload is coming. The fallback renders one commit
-    // before onError runs, so drawing the crash screen here flashes it red for
-    // a frame and then reloads — observed on device. Blank for that frame
-    // reads as the reload it is.
-    if (attemptHeal && healableNow()) return null;
-    // Otherwise the same flag that decides whether to heal decides what the
-    // screen may promise: only a flight in progress is still being recorded,
-    // and claiming that on the ground would be a lie.
+    if (attemptHeal && healableNow()) return <Healing />;
+    // Not healing, so the screen is what the pilot is left with. The same flag
+    // decides what it may promise: only a flight in progress is still being
+    // recorded, and claiming that on the ground would be a lie.
     return <AppCrash inFlight={attemptHeal === true} />;
   }
 
-  return (
-    <ErrorBoundary
-      fallbackRender={fallback}
-      onError={attemptHeal ? onUnrecoverableAppError : undefined}
-    >
-      {children}
-    </ErrorBoundary>
-  );
+  return <ErrorBoundary fallbackRender={fallback}>{children}</ErrorBoundary>;
 }
