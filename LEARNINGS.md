@@ -1,5 +1,8 @@
 # #185 — grey map / black screen: learnings
 
+**SOLVED. Fix is PR #186, confirmed on device against the owner's repro.**
+See "RESOLUTION" at the bottom for what is still open.
+
 Working notes for the MapKit corruption bug. Every entry is either a
 measured fact or an explicitly-labelled hypothesis. **Do not add to this
 file without leaving an actionable next step at the bottom.**
@@ -323,30 +326,49 @@ the tab bar owns the bottom edge, so the follow-up misses.
   option at all, so device log streaming is gone. `log` is also a zsh builtin —
   `/usr/bin/log` or a `sh` script, or it fails with "too many arguments".
 
+## RESOLUTION
+
+Reproduced in the simulator (arm on the map, detonate off it — poisoned on
+rounds 2 and 1; both counter-experiments clean), fixed in PR #186, and the fix
+confirmed on the owner's device against his own repro.
+
+The fix is five lines in `mapkit/adapter.ts`: bounce `isScrollEnabled` on
+`touchcancel`, the only path in MapKit that reaches `enterCancelledState()`.
+
+**The false negative worth remembering:** the first verification run reported
+the fix as BROKEN. The drill was building its map with a raw
+`new mapkit.Map(...)`, so a fix living inside `createMapKitMapView` never
+applied to the map under test. A drill that constructs its own subject cannot
+see a fix in the constructor.
+
 ## NEXT STEPS (actionable, in order)
 
-1. **Reproduce ARM+DETONATE in the simulator** (`MapCancelUITests`, running):
-   arm by cancelling a touch that began on a map docked to the bottom edge, then
-   detonate with a drag that lands OFF the map. Two counter-experiments ride
-   along and both are predicted to survive — same arming with the follow-up ON
-   the map (the logbook case), and off-map drags with no arming. If all three
-   survive, the missing factor is device-only and the next move is another
-   instrumented device run, not another sim cycle.
-2. **The fix, once the drill confirms** — three separable parts:
-   - Guard: on `pointercancel`/`touchcancel`, bounce `isScrollEnabled` so the
-     recognizer unwinds. Prevents the poisoning at source.
-   - Repair: detect a throwing `map.center` and reassign the last known good
-     centre. Heals a map that got poisoned anyway.
-   - Containment: no MapKit read may escape into React. `projectedZoom`
-     (`mapkit/adapter.ts:238`) reads `map.center` as its first statement, and
-     `CompassButton` reads the camera from React's RENDER phase — either
-     throws straight into a commit with no boundary.
-3. Pin the MapKit version. The loader defaults to "6", so Apple ships new
+1. **Zoom and rotate recognizers have the identical flaw.** Same empty
+   `touchesCancelled`; the same bounce on their flags would cover them. Left out
+   of #186 because the captured failure is a pan, that is what the drill
+   exercises, and this app's zoom lock writes those flags so bouncing them is
+   not free. Decide deliberately; do not let it rot into an assumption that only
+   pan is affected.
+2. **Containment, still absent.** No MapKit read may escape into React.
+   `projectedZoom` (`mapkit/adapter.ts`) reads `map.center` as its first
+   statement, and `CompassButton` reads the camera from React's RENDER phase —
+   either throws straight into a commit with no boundary. The guard prevents the
+   poisoning; it does not make a poisoned map survivable.
+3. **Owner's phases 2 and 3**, in his order: unified persistent diagnostics
+   across Rust/native/JS, then a React error boundary with a full-screen
+   fallback — except on Fly, which attempts ONE automatic full-page reload, at
+   most once per 60 s, falling through to the crash page on a second crash in
+   that window. This crash is the acceptance test for both. `src/ui/diag.ts` and
+   `src/ui/cancelProbe.ts` on this branch are the groundwork.
+4. Pin the MapKit version. The loader defaults to "6", so Apple ships new
    builds under us with no deploy; pinning is verified to work and lets their
    builds be bisected.
-4. Fix the diag probe key (per-map, unregistered in `destroy()`) before
+5. Fix the diag probe key (per-map, unregistered in `destroy()`) before
    trusting any further `__wingoverDiag()` output — with several tab pages
    mounted it currently reports whichever map was constructed LAST.
-5. Grey map is a SEPARATE defect, already reproduced in the sim: WebGL
+6. Grey map is a SEPARATE defect, already reproduced in the sim: WebGL
    context loss with no handling in MapKit. Recovery requires destroy +
    recreate; there is no resume API.
+7. **This file lives only on a throwaway branch.** Decide whether it moves into
+   the repo proper or is superseded by the #185 issue thread, which carries the
+   same record. If neither, it dies with the branch.
