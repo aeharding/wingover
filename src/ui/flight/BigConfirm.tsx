@@ -9,13 +9,13 @@ interface Pending {
 }
 
 /**
- * The in-flight dialog surface: plain DOM, no Ionic. FlyPage is almost a
- * separate app (Ionic leaves the live surface entirely one day), and the
+ * The in-flight dialog surface: plain DOM, no Ionic. The flight surface is
+ * almost a separate app (Ionic leaves it entirely one day), and the
  * Ionic alert was the wrong shape for it anyway: a gloved hand over
  * turbulence gets dialog-sized targets, phone-alert ones are a mistap
  * machine. Big type, two big buttons, solid surfaces for sunlight.
- * Shared by the end-flight confirm (useBigConfirm) and FlyPage's landing
- * prompt — one dialog language in flight, one DOM shape.
+ * Shared by the end-flight confirm (useBigConfirm) and FlightSurface's
+ * landing prompt — one dialog language in flight, one DOM shape.
  */
 export function ConfirmSurface({
   title,

@@ -805,7 +805,7 @@ describe("GeolocationRecordingEngine", () => {
 
   // The user-reported straight-line bug: sleep during acquiring, wake after
   // takeoff. The whole backlog replays in ONE synchronous task while a
-  // snapshot (FlyPage's collect-on-mount) is mid-read. Hydrate-once means
+  // snapshot (FlightSurface's collect-on-mount) is mid-read. Hydrate-once means
   // that read can never clobber the live buffer/session the burst built.
   it("a snapshot racing a replay burst must not clobber live state", async () => {
     const engine = createEngine();

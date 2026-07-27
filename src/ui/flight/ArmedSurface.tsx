@@ -2,9 +2,9 @@ import type { EngineErrorCode, Fix } from "../../engine/types";
 import { formatAltitude, formatSpeed } from "../../flight/format";
 import type { Units } from "../../flight/format";
 import { isTauri } from "../../platform";
-import { cx } from "../cx";
+import { cx } from "../shared/cx";
 
-import styles from "./FlyPage.module.css";
+import styles from "./FlightSurface.module.css";
 
 // Locking the phone is only safe where the native layer records through
 // it (background location); the PWA is foreground-only.

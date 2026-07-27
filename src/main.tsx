@@ -14,10 +14,10 @@ import { stripMintedFlightNames } from "./storage/db";
 import { resume } from "./sync";
 import { installCapacitorShim, installKeyboardLayout } from "./tauri-ionic";
 import App from "./ui/App";
-import { initAppTheme } from "./ui/appTheme";
-import { installExternalLinkHandler } from "./ui/externalLinks";
-import { captureLaunchUrl } from "./ui/map/config";
-import { initSatelliteAvailability } from "./ui/map/satelliteAvailability";
+import { initAppTheme } from "./ui/app/appTheme";
+import { initSatelliteAvailability } from "./ui/app/map/satelliteAvailability";
+import { installExternalLinkHandler } from "./ui/shared/externalLinks";
+import { captureLaunchUrl } from "./ui/shared/map/config";
 
 installExternalLinkHandler();
 // Resize <ion-app> and flag html.keyboard-open when tauri-plugin-ionic

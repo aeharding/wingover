@@ -9,8 +9,10 @@ import { defineConfig } from "eslint/config";
 import globals from "globals";
 import tseslint from "typescript-eslint";
 
+import defaultImportName from "./eslint-rules/default-import-name.js";
 import maxUseState from "./eslint-rules/max-usestate.js";
 import simpleJsxGuard from "./eslint-rules/simple-jsx-guard.js";
+import uiBucketIsolation from "./eslint-rules/ui-bucket-isolation.js";
 
 // ─── The seams, as restriction entries ──────────────────────────────────
 //
@@ -49,7 +51,7 @@ const NO_REACT = {
 const NO_IONIC = {
   group: ["@ionic/*"],
   message:
-    "Flight UI never imports Ionic; wrap at the shell seam (src/ui/pages/FlyFrame.tsx).",
+    "Flight UI never imports Ionic. It renders bare from src/ui/App.tsx, which sheds the whole Ionic shell for it.",
 };
 
 /** @type {RestrictedPattern} */
@@ -93,7 +95,7 @@ const NO_MAP_BACKEND = {
   regex: "^(maplibre-gl|apple-mapkit|@apple/mapkit-loader)$",
   allowTypeImports: true,
   message:
-    "Consumers speak MapView only; backends live in src/ui/map/maplibre and src/ui/map/mapkit (src/ui/map/types.ts).",
+    "Consumers speak MapView only; backends live in src/ui/shared/map/maplibre and src/ui/shared/map/mapkit (src/ui/shared/map/types.ts).",
 };
 
 /**
@@ -116,7 +118,7 @@ const NO_MAP_BACKEND_MODULE = {
     "**/mapkit/**",
   ],
   message:
-    "Backends are reached through MapCanvas's dynamic import, never statically from app code (src/ui/map/types.ts).",
+    "Backends are reached through MapCanvas's dynamic import, never statically from app code (src/ui/shared/map/types.ts).",
 };
 
 /** @type {RestrictedPattern} */
@@ -266,14 +268,23 @@ export default defineConfig(
     plugins: {
       wingover: {
         rules: {
+          "default-import-name": defaultImportName,
           "max-usestate": maxUseState,
           "simple-jsx-guard": simpleJsxGuard,
+          "ui-bucket-isolation": uiBucketIsolation,
         },
       },
     },
     rules: {
+      // A default import renamed at the import site splits one component into
+      // two identities that neither grep nor a reader can reconcile
+      // (default-import-name.js).
+      "wingover/default-import-name": "error",
       // >5 useState in one component = state that wants a hook/object.
       "wingover/max-usestate": "error",
+      // src/ui/app and src/ui/flight never import each other; what both need
+      // lives in src/ui/shared (ui-bucket-isolation.js).
+      "wingover/ui-bucket-isolation": "error",
       // The base layer: the manual-memoization ban plus the seams that are
       // inert inside the directory they protect (a relative import within
       // src/engine reads "./real", not "engine/real"), so they cost nothing
@@ -348,7 +359,7 @@ export default defineConfig(
   },
   {
     // The map backends themselves — the only place a backend is named.
-    files: ["src/ui/map/maplibre/**", "src/ui/map/mapkit/**"],
+    files: ["src/ui/shared/map/maplibre/**", "src/ui/shared/map/mapkit/**"],
     rules: {
       "no-restricted-imports": restrict(
         NO_MANUAL_MEMO,
@@ -360,8 +371,9 @@ export default defineConfig(
   },
   {
     // The flight surface is Ionic-free (STEERING: ultra reliable, battery
-    // sensitive; it will one day run with Ionic fully disabled). The one
-    // Ionic frame around it lives in src/ui/pages/FlyFrame.tsx.
+    // sensitive; it will one day run with Ionic fully disabled). Nothing
+    // frames it: App.tsx sheds the entire Ionic shell the moment the engine
+    // leaves "idle" and renders this surface bare.
     files: ["src/ui/flight/**"],
     rules: {
       "no-restricted-imports": restrict(
@@ -481,7 +493,7 @@ export default defineConfig(
     // No location.reload() in app code. The one sanctioned exception is the
     // web denied-error screen's Reload button: pilot-initiated, pre-flight,
     // WAL-rehydrated (AGENTS.md).
-    ignores: ["src/ui/flight/ErrorScreen.tsx"],
+    ignores: ["src/ui/shared/ErrorScreen.tsx"],
     rules: {
       "no-restricted-syntax": ["error", NO_RELOAD],
     },

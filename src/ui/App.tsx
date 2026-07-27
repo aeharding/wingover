@@ -20,22 +20,22 @@ import { Redirect, Route } from "react-router-dom";
 
 import { engine } from "../engine";
 import { isTauri } from "../platform";
-import DesktopShell from "./desktop/DesktopShell";
-import { BootFailedScreen } from "./flight/ErrorScreen";
-import FlightSurface from "./flight/FlyPage";
-import AllFlightsMapPage from "./pages/AllFlightsMapPage";
-import AppearancePage from "./pages/AppearancePage";
-import FlightDetailPage from "./pages/FlightDetailPage";
-import FlyFrame from "./pages/FlyFrame";
-import LogbookPage from "./pages/LogbookPage";
-import MapProviderPage from "./pages/MapProviderPage";
-import PlanPage from "./pages/PlanPage";
-import SettingsPage from "./pages/SettingsPage";
-import UnitsPage from "./pages/UnitsPage";
-import { SettingsProvider } from "./settings/SettingsContext";
-import { SyncSheetsProvider } from "./sync/SyncSheets";
-import { useCanRecord } from "./useCanRecord";
-import { useIsDesktop } from "./useIsDesktop";
+import DesktopShell from "./app/desktop/DesktopShell";
+import AllFlightsMapPage from "./app/pages/AllFlightsMapPage";
+import AppearancePage from "./app/pages/AppearancePage";
+import FlightDetailPage from "./app/pages/FlightDetailPage";
+import FlyPage from "./app/pages/FlyPage";
+import LogbookPage from "./app/pages/LogbookPage";
+import MapProviderPage from "./app/pages/MapProviderPage";
+import PlanPage from "./app/pages/PlanPage";
+import SettingsPage from "./app/pages/SettingsPage";
+import UnitsPage from "./app/pages/UnitsPage";
+import { SyncSheetsProvider } from "./app/sync/SyncSheets";
+import { useCanRecord } from "./app/useCanRecord";
+import { useIsDesktop } from "./app/useIsDesktop";
+import FlightSurface from "./flight/FlightSurface";
+import { BootFailedScreen } from "./shared/ErrorScreen";
+import { SettingsProvider } from "./shared/settings/SettingsContext";
 
 setupIonicReact({
   mode: "ios",
@@ -126,7 +126,7 @@ function TabShell() {
               gate because the opt-in is mirrored to localStorage, so
               canRecord is correct synchronously at first render. */}
           {canRecord ? (
-            <Route exact path="/fly" component={FlyFrame} />
+            <Route exact path="/fly" component={FlyPage} />
           ) : (
             <Route exact path="/fly">
               <Redirect to="/logbook" />

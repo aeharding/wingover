@@ -1,4 +1,4 @@
-import { cx } from "../cx";
+import { cx } from "../shared/cx";
 
 import styles from "./Tile.module.css";
 

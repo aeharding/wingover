@@ -346,9 +346,10 @@ test("precise off during a Settings trip surfaces the screen despite a dead watc
 const SHELL_WATCHER = `(() => {
   window.__shellSeen = [];
   window.__nodesSeen = 0;
-  // ion-tabs/ion-tab-bar are the nav shell; idle-facts is IdleSurface's
-  // always-rendered marker. IdleSurface is watched because its ungated
-  // render is the dangerous one: Start Flight clears a live flight's WAL.
+  // ion-tabs/ion-tab-bar are the nav shell; idle-facts is the home screen's
+  // always-rendered marker (app/pages/FlyPage). The home screen is watched
+  // because its ungated render is the dangerous one: Start Flight clears a
+  // live flight's WAL.
   const WRONG = 'ion-tabs, ion-tab-bar, [data-testid="idle-facts"]';
   const mark = (el) =>
     window.__shellSeen.push(

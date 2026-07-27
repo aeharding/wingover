@@ -15,7 +15,7 @@ import { bearingBetween, relativeBearing } from "../../flight/nav";
 import { haversineMeters } from "../../flight/stats";
 import Tile from "./Tile";
 
-import styles from "./FlyPage.module.css";
+import styles from "./FlightSurface.module.css";
 
 /**
  * The in-flight readouts. Eight tiles over the live map, laid out by
