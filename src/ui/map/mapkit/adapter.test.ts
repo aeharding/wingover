@@ -82,9 +82,7 @@ class FakeMap {
   mapType = "standard";
   isRotationEnabled = true;
   isZoomEnabled = true;
-  // Every write, in order. MapKit's `enabled` setter is the only path in the
-  // library that reaches enterCancelledState(), so the guard is a bounce and
-  // the ORDER is the whole assertion.
+  // Every write, in order: the guard is a bounce, so the ORDER is the assertion.
   scrollEnabledWrites: boolean[] = [];
   private scrollEnabled = true;
   get isScrollEnabled() {
@@ -677,18 +675,9 @@ describe("mapkit adapter: aircraft glyph vs the camera that exists", () => {
   });
 });
 
-// #185. When iOS steals a touch that began on the map — which Reachability
-// makes routine, since it slides the app so the screen's bottom edge lands on
-// the map — the page gets `touchcancel`. MapKit's recognizers never unwind on
-// one: `touchesCancelled` is empty and enterCancelledState() is reachable only
-// from the `enabled` setter. A recognizer left armed keeps handling window
-// moves with an EMPTY touch list, locationInElement() divides by zero, and the
-// NaN reaches camera.center — after which every camera read throws, uncaught,
-// into React's commit, and the screen goes black.
-//
-// Reproduced on device (the input trail is on the issue) and then in the
-// simulator under XCUITest, where arming on the map and detonating OFF it
-// poisons the map while the same arming with the follow-up ON the map does not.
+// A cancelled touch on the map leaves MapKit's pan recognizer armed, and the
+// next move anywhere on the page poisons the camera. The whole investigation,
+// the device trail and the XCUITest reproduction are on #185.
 describe("mapkit adapter: a cancelled touch unwinds the pan recognizer", () => {
   beforeEach(() => {
     (globalThis as unknown as { mapkit: unknown }).mapkit = fakeMapKit;
