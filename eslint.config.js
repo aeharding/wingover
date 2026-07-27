@@ -51,7 +51,7 @@ const NO_REACT = {
 const NO_IONIC = {
   group: ["@ionic/*"],
   message:
-    "Flight UI never imports Ionic; wrap at the shell seam (src/ui/pages/FlyFrame.tsx).",
+    "Flight UI never imports Ionic. It renders bare from src/ui/App.tsx, which sheds the whole Ionic shell for it.",
 };
 
 /** @type {RestrictedPattern} */
@@ -371,8 +371,9 @@ export default defineConfig(
   },
   {
     // The flight surface is Ionic-free (STEERING: ultra reliable, battery
-    // sensitive; it will one day run with Ionic fully disabled). The one
-    // Ionic frame around it lives in src/ui/pages/FlyFrame.tsx.
+    // sensitive; it will one day run with Ionic fully disabled). Nothing
+    // frames it: App.tsx sheds the entire Ionic shell the moment the engine
+    // leaves "idle" and renders this surface bare.
     files: ["src/ui/flight/**"],
     rules: {
       "no-restricted-imports": restrict(
