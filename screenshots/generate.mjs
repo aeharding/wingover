@@ -586,19 +586,25 @@ function saveRaw(dev, id, buf) {
 // And render the app UI in real SF Pro (Apple's system font) instead of
 // Chromium-on-Linux's default sans. Map labels come from Apple already.
 // 54/34 logical px ≈ the Dynamic-Island device insets.
+/* CSS Modules hash every app class (.instruments is emitted as
+   _instruments_12zf7), so a bare class selector here matches nothing and
+   fails SILENTLY — the capture just renders unstyled. Match the stable
+   [local] segment instead, or a data-testid where one exists. Two rounds of
+   store screenshots shipped with these selectors dead: the fonts below never
+   applied and the flight deck rendered in Chromium's default sans. */
 const CAPTURE_CSS_FLIGHT = `
-  .instruments { margin-top: 54px !important; padding-top: 0 !important; }
-  .flight-controls { bottom: calc(0.9rem + 34px) !important; }
-  .zoom-strip { bottom: calc(9.5rem + 34px) !important; }
+  [class*="_instruments_"] { margin-top: 54px !important; padding-top: 0 !important; }
+  [class*="_controls_"] { bottom: calc(0.9rem + 34px) !important; }
+  [class*="_strip_"] { bottom: calc(9.5rem + 34px) !important; }
   div[style*="safe-area-inset-bottom"][style*="visibility"] { height: 34px !important; }
-  .fly-content, .fly-content * {
+  [data-testid="fly-content"], [data-testid="fly-content"] * {
     font-family: 'SF Pro Text', system-ui, -apple-system, sans-serif !important;
   }
   /* iOS optical sizing: small UI (labels) uses SF Pro Text, but the large
      stat numerals cross into SF Pro Display territory (~20pt+), whose strokes
      are lighter than Text at the same weight. Forcing Text everywhere made
      the values read heavier than a real device — use Display for them. */
-  .fly-content .tile .value {
+  [data-testid="fly-content"] [class*="_tile_"] [class*="_value_"] {
     font-family: 'SF Pro Display', system-ui, -apple-system, sans-serif !important;
   }
 `;
