@@ -95,3 +95,16 @@ export function takeoffAt(track: Fix[], i: number): number | null {
   while (start > 0 && isMoving(track[start - 1])) start--;
   return start;
 }
+
+// The same question over a track nobody watched arrive — a WAL rehydrated
+// after the app was killed. Fixes reach the log before the session write
+// that names their takeoff, so a durable buffer can hold a launch the
+// session still calls pre-takeoff; this is what re-derives it. Once per
+// hydration, never per fix.
+export function detectTakeoff(track: Fix[]): number | null {
+  for (let i = 0; i < track.length; i++) {
+    const start = takeoffAt(track, i);
+    if (start !== null) return start;
+  }
+  return null;
+}

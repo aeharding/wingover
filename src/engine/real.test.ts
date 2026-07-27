@@ -10,7 +10,7 @@ import {
   type SourceError,
   type SourcePosition,
 } from "./real";
-import { readWal } from "./wal";
+import { readWal, writeWalSession } from "./wal";
 import { createNavigatorSource } from "./webSource";
 
 class FakeGeolocation {
@@ -564,6 +564,30 @@ describe("GeolocationRecordingEngine", () => {
     expect(engine.snapshotSync().error?.code).toBe("imprecise");
   });
 
+  // Fixes reach the WAL before the session write that names their takeoff
+  // (queueWalFlush is enqueued first), and a session write that fails is
+  // never retried — so a durable buffer can hold a launch the session
+  // still calls pre-takeoff. Ingest only ever asks about the newest fix,
+  // so hydration is the only place that can look inside that prefix. Left
+  // unrecovered the flight sits armed with an empty track, and the next
+  // start() clears the WAL out from under it.
+  it("re-derives a takeoff the session write never recorded", async () => {
+    const owner = createEngine();
+    await armAndTakeOff(owner);
+    const flown = await owner.getSnapshot();
+    expect(flown.status).toBe("recording");
+    const { session } = await readWal();
+    // The crash window: the fixes are durable, the index that names them
+    // is not.
+    await writeWalSession({ ...session!, takeoffIndex: null });
+
+    const reloaded = createEngine();
+    const snapshot = await reloaded.getSnapshot();
+    expect(snapshot.status).toBe("recording");
+    expect(snapshot.startedAt).toBe(flown.startedAt);
+    expect(snapshot.track).toEqual(flown.track);
+  });
+
   it("a passive (busy) tab can never destroy the owner's WAL, and mid-flight adoption stays a viewer", async () => {
     // Owner records a flight (lock-less env: owner by default).
     const owner = createEngine();
@@ -967,8 +991,17 @@ describe("GeolocationRecordingEngine", () => {
     await settle();
     await settle();
 
-    expect(engine.snapshotSync().status).toBe("ended");
+    const snapshot = engine.snapshotSync();
+    expect(snapshot.status).toBe("ended");
+    // The flight of record is untouched: taxi + flight + the touchdown
+    // fix, exactly what live delivery of the same fixes records.
+    expect(snapshot.track.map((fix) => fix.speed)).toEqual([
+      6, 6, 6, 6, 6, 0.3,
+    ]);
+    // Nothing past the grace expiry is buffered OR persisted, and the
+    // flight itself still is: the break is a tail cut, not a truncation.
     const { fixes } = await readWal();
+    expect(fixes.length).toBeGreaterThanOrEqual(snapshot.track.length);
     expect(fixes.length).toBeLessThanOrEqual(throughLanding);
   });
 

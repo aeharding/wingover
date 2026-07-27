@@ -5,7 +5,12 @@ import {
 } from "../flight/landing";
 import { bearingBetween } from "../flight/nav";
 import { haversineMeters } from "../flight/stats";
-import { coordsLookReduced, gpsReadyIndex, takeoffAt } from "../flight/takeoff";
+import {
+  coordsLookReduced,
+  detectTakeoff,
+  gpsReadyIndex,
+  takeoffAt,
+} from "../flight/takeoff";
 import { WAYPOINT_RADIUS_M } from "../flight/waypoints";
 import type {
   EngineError,
@@ -247,6 +252,7 @@ export class GeolocationRecordingEngine implements RecordingEngine {
     // ensureWatch, so the fed remaining set excludes already-passed
     // waypoints (no re-arm, no re-announce on re-entry).
     this.rebuildReachState();
+    this.rebuildTakeoff();
     // Rehydrating a live session restarts capture; a finalized flight
     // ("ended") stays parked until collected via stop(). If another
     // tab owns the recorder, this one stays a passive viewer.
@@ -608,6 +614,22 @@ export class GeolocationRecordingEngine implements RecordingEngine {
     }
   }
 
+  // Twin of rebuildReachState for takeoff: the durable buffer can hold a
+  // launch the session still calls pre-takeoff, because fixes reach the
+  // WAL before the session write that names their takeoff (queueWalFlush
+  // is enqueued first) and a session write that fails is never retried.
+  // Ingest asks takeoffAt only at the newest fix, so nothing else would
+  // ever look inside a rehydrated prefix, and the flight would stay armed
+  // until the next start() cleared it away. Derived in memory only: a
+  // passive tab that lost the recorder lock must not write the owner's
+  // WAL, and this is a pure function of fixes that already survived.
+  private rebuildTakeoff() {
+    if (!this.session || this.session.takeoffIndex !== null) return;
+    const takeoffIndex = detectTakeoff(this.buffer);
+    if (takeoffIndex === null) return;
+    this.session = { ...this.session, takeoffIndex };
+  }
+
   // The sanctioned exit from "blocked" besides discard()/start(): clear
   // the blocking error and restart the watch with the session intact, so
   // the UI recovers straight back into acquiring — never through idle
@@ -870,12 +892,13 @@ export class GeolocationRecordingEngine implements RecordingEngine {
       } else {
         this.detectLanding();
         // Same rule as the stale-gap break above, reached the ordinary
-        // way: the flight of record is final, so nothing after it belongs
+        // way: the flight of record is over, so nothing after it belongs
         // to this session. Draining the rest of a backlog anyway costs
         // nothing visible but persists it — a day-long replay wrote 100k
         // fixes behind a 7k flight, and every later WAL read paid 3.4 s
-        // for them. activityStatus (not deriveStatus) because only
-        // finality decides this, and it must stay O(1) per fix.
+        // for them. It also makes a burst land where live delivery would:
+        // live, the fix that expires the grace clears the watch, so the
+        // fixes after it were never recorded either.
         if (this.activityStatus() === "ended") {
           ingested = true;
           break;

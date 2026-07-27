@@ -4,6 +4,7 @@ import type { Fix } from "../engine/types";
 import { FlightSimulator } from "./simulator";
 import {
   coordsLookReduced,
+  detectTakeoff,
   gpsReadyIndex,
   IMPRECISE_M,
   MOVEMENT_SPEED_MPS,
@@ -33,16 +34,6 @@ function fixesFrom(specs: (number | FixSpec)[]): Fix[] {
       verticalAccuracy: s.verticalAccuracy ?? 8,
     };
   });
-}
-
-// The engine asks takeoffAt per ingested fix; a whole track is that same
-// question walked forward, which is the shape the rule reads best in.
-function firstTakeoff(track: Fix[]): number | null {
-  for (let i = 0; i < track.length; i++) {
-    const start = takeoffAt(track, i);
-    if (start !== null) return start;
-  }
-  return null;
 }
 
 describe("gpsReadyIndex", () => {
@@ -90,7 +81,7 @@ describe("coordsLookReduced", () => {
 describe("the takeoff rule", () => {
   it("detects takeoff in a simulated flight and backdates to movement start", () => {
     const track = new FlightSimulator(42, 0).fixesUpTo(300);
-    const index = firstTakeoff(track);
+    const index = detectTakeoff(track);
     expect(index).not.toBeNull();
     expect(index!).toBeGreaterThan(30);
     expect(index!).toBeLessThan(60);
@@ -99,11 +90,11 @@ describe("the takeoff rule", () => {
   });
 
   it("returns null while standing around", () => {
-    expect(firstTakeoff(fixesFrom([0, 0.4, 0.2, 0.6, 0.1, 0.3]))).toBe(null);
+    expect(detectTakeoff(fixesFrom([0, 0.4, 0.2, 0.6, 0.1, 0.3]))).toBe(null);
   });
 
   it("ignores brief speed spikes", () => {
-    expect(firstTakeoff(fixesFrom([0, 0, 6, 6, 6, 0.5, 0, 0.2]))).toBe(null);
+    expect(detectTakeoff(fixesFrom([0, 0, 6, 6, 6, 0.5, 0, 0.2]))).toBe(null);
   });
 
   it("ignores fast fixes with poor accuracy", () => {
@@ -117,11 +108,11 @@ describe("the takeoff rule", () => {
       { speed: 9, horizontalAccuracy: 30, verticalAccuracy: 50 },
       0.2,
     ]);
-    expect(firstTakeoff(track)).toBe(null);
+    expect(detectTakeoff(track)).toBe(null);
   });
 
   it("backdates through the launch run", () => {
-    expect(firstTakeoff(fixesFrom([0.2, 0.1, 2, 3, 4, 5.5, 6, 7, 8, 9]))).toBe(
+    expect(detectTakeoff(fixesFrom([0.2, 0.1, 2, 3, 4, 5.5, 6, 7, 8, 9]))).toBe(
       2,
     );
   });
@@ -138,12 +129,12 @@ describe("the takeoff rule", () => {
       8,
       9,
     ]);
-    expect(firstTakeoff(track)).toBe(2);
+    expect(detectTakeoff(track)).toBe(2);
   });
 
   it("starts at the first fast fix when there is no slow run-up", () => {
     expect(
-      firstTakeoff(fixesFrom([0.2, 0.1, TAKEOFF_SPEED_MPS + 1, 6, 7, 8, 9])),
+      detectTakeoff(fixesFrom([0.2, 0.1, TAKEOFF_SPEED_MPS + 1, 6, 7, 8, 9])),
     ).toBe(2);
   });
 
@@ -160,7 +151,7 @@ describe("the takeoff rule", () => {
       { speed: 6.9, horizontalAccuracy: 30, verticalAccuracy: 48 },
       { speed: 7.1, horizontalAccuracy: 22, verticalAccuracy: 35 },
     ]);
-    expect(firstTakeoff(track)).toBe(1);
+    expect(detectTakeoff(track)).toBe(1);
   });
 });
 
