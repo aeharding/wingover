@@ -29,12 +29,29 @@ interface Step {
 }
 
 const trail: Step[] = [];
+// Both families: MapKit's gesture layer may be on touch events, in which case
+// WebKit's `touchcancel` is the signal and the pointer counters read zero while
+// the theft is happening in plain sight.
 const counts: Record<string, number> = {
   pointerdown: 0,
   pointermove: 0,
   pointercancel: 0,
   pointerup: 0,
+  touchstart: 0,
+  touchmove: 0,
+  touchend: 0,
+  touchcancel: 0,
 };
+
+/** The last cancel seen, whichever family it came from. */
+let lastCancel: string = "-";
+
+/** A touch event carries its point in `changedTouches`; a pointer event does not. */
+function pointOf(event: Event): { x: number; y: number } {
+  const touch = (event as TouchEvent).changedTouches?.[0];
+  const source = touch ?? (event as PointerEvent);
+  return { x: Math.round(source.clientX ?? 0), y: Math.round(source.clientY ?? 0) };
+}
 
 /** Live maps, pushed by the mapkit adapter (this branch only). */
 function maps(): Set<{ center: unknown }> {
@@ -81,7 +98,13 @@ function latch(state: ReturnType<typeof health>) {
 function line(state: ReturnType<typeof health>): string {
   const c = counts;
   const status = state.dead > 0 ? "POISONED" : "OK";
-  return `PROBE d${c.pointerdown} m${c.pointermove} c${c.pointercancel} u${c.pointerup} maps${state.ok + state.dead} ${status}`;
+  return [
+    `PROBE p${c.pointerdown}/${c.pointermove}/${c.pointercancel}/${c.pointerup}`,
+    `t${c.touchstart}/${c.touchmove}/${c.touchend}/${c.touchcancel}`,
+    `x${lastCancel}`,
+    `maps${state.ok + state.dead}`,
+    status,
+  ].join(" ");
 }
 
 export function installCancelProbe() {
@@ -108,14 +131,18 @@ export function installCancelProbe() {
       type,
       (event) => {
         counts[type]!++;
-        const pe = event as PointerEvent;
+        const point = pointOf(event);
         const target = event.target as Element | null;
+        const where = target?.className?.toString().slice(0, 24) ?? "?";
+        if (type.endsWith("cancel")) {
+          lastCancel = `${type[0]}@${point.x},${point.y}:${where}`;
+        }
         trail.push({
           t: Math.round(performance.now()),
           type,
-          x: Math.round(pe.clientX),
-          y: Math.round(pe.clientY),
-          target: target?.className?.toString().slice(0, 24) ?? "?",
+          x: point.x,
+          y: point.y,
+          target: where,
         });
         if (trail.length > TRAIL) trail.shift();
       },
