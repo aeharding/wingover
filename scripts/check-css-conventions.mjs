@@ -19,6 +19,11 @@
  *  5. module-used   — every module is imported by some ts/tsx, or @value'd
  *                     or composed from by another module (dead file
  *                     detection).
+ *  6. ui-buckets    — a module in src/ui/app or src/ui/flight never reaches
+ *                     into the other, and src/ui/shared reaches into neither.
+ *                     Same doctrine as wingover/ui-bucket-isolation, which
+ *                     only sees ts/tsx: @value and composes are the other two
+ *                     doors into a stylesheet.
  *
  * Exit 0 clean; exit 1 with a per-violation report otherwise.
  */
@@ -186,6 +191,34 @@ for (const f of modules) {
   if (!imported.has(f)) {
     violations.push(
       `${rel(f)}: imported by nothing (no ts/tsx import, no @value) — dead file?`,
+    );
+  }
+}
+
+// ── 6. ui-buckets ──
+// Mirrors eslint-rules/ui-bucket-isolation.js for the two CSS-only edges.
+const UI = join(SRC, "ui");
+const bucketOf = (f) => {
+  const r = relative(UI, f);
+  if (!r || r.startsWith("..")) return null;
+  const head = r.split("/")[0];
+  return ["app", "flight", "shared"].includes(head) ? head : "root";
+};
+for (const f of modules) {
+  const from = bucketOf(f);
+  if (from !== "app" && from !== "flight" && from !== "shared") continue;
+  const text = stripComments(readFileSync(f, "utf8"));
+  const refs = [
+    ...text.matchAll(/@value[^"']+["']([^"']+)["']/g),
+    ...text.matchAll(/composes:[^"';]+from\s+["']([^"']+)["']/g),
+  ];
+  for (const m of refs) {
+    const to = bucketOf(resolve(dirname(f), m[1]));
+    if (!to || to === from || to === "shared") continue;
+    violations.push(
+      `${rel(f)}: reaches into src/ui/${to} ("${m[1]}") — ` +
+        `src/ui/app and src/ui/flight never meet, and shared reaches into ` +
+        `neither. Move the shared rule into src/ui/shared.`,
     );
   }
 }
