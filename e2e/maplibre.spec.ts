@@ -350,6 +350,9 @@ test("the unsnapped compass realigns north, instantly", async ({ page }) => {
   await page.getByRole("button", { name: "Start Flight" }).click();
   await expect(page.getByTestId("recording")).toBeVisible({ timeout: 10_000 });
 
+  // No `!`: a missing handle reads as NaN, which every numeric matcher
+  // below fails (and keeps polling) instead of throwing. NaN, not 0 — 0
+  // would PASS the realign assertion on a map that was never there.
   const bearing = () =>
     page.evaluate(() =>
       Math.abs(
@@ -359,15 +362,15 @@ test("the unsnapped compass realigns north, instantly", async ({ page }) => {
           ) as HTMLElement & {
             __map?: { getBearing(): number };
           }
-        ).__map!.getBearing(),
+        )?.__map?.getBearing() ?? NaN,
       ),
     );
 
   // The adapter chunk loads lazily, so the handle lands well after
   // "recording": 2.6s post-load in the trace for #152, against a Track up
-  // click at 2.7s. Reading the handle early throws, and expect.poll calls
-  // its function OUTSIDE its try — a throw ends the test then and there
-  // instead of polling, so no timeout can cover this. Gate on the handle.
+  // click at 2.7s. expect.poll calls its function OUTSIDE its try, so a
+  // throwing probe would end the test then and there rather than poll —
+  // no timeout can cover that. Gate on the handle, and probe safely.
   await page.waitForFunction(
     () =>
       !!(
