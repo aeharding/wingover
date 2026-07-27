@@ -490,10 +490,11 @@ export default defineConfig(
     },
   },
   {
-    // No location.reload() in app code. The one sanctioned exception is the
-    // web denied-error screen's Reload button: pilot-initiated, pre-flight,
-    // WAL-rehydrated (AGENTS.md).
-    ignores: ["src/ui/shared/ErrorScreen.tsx"],
+    // No location.reload() in app code. Two sanctioned exceptions, both in
+    // src/ui/shared and both about a page that is already broken: the error
+    // screens' Reload button (pilot-initiated, WAL-rehydrated) and
+    // AppBoundary's one automatic heal per 60 s (AGENTS.md).
+    ignores: ["src/ui/shared/ErrorScreen.tsx", "src/ui/shared/AppBoundary.tsx"],
     rules: {
       "no-restricted-syntax": ["error", NO_RELOAD],
     },

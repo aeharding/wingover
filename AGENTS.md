@@ -30,8 +30,10 @@ plugin from `src-tauri/plugins/wingover/` when touching Rust.
 - Never push to main: every main merge burns a limited TestFlight build.
   Branch + PR, worktrees under `.claude/worktrees/`.
 - No `location.reload()` in app code (instance-swap + notify instead).
-  The one sanctioned exception is the web denied-error screen's Reload
-  button — pilot-initiated, pre-flight, WAL-rehydrated.
+  Two sanctioned exceptions, both in `src/ui/shared`, both on a page that
+  is already broken: the error screens' Reload button (pilot-initiated,
+  WAL-rehydrated), and `AppBoundary`'s single automatic heal per 60 s
+  when a crash happens in flight.
 - `src/ui/` has three buckets and the two ends never meet: `app/` (the
   ground app), `flight/` (the in-flight surface, which replaces the whole
   shell in flight), `shared/` (what both genuinely need). `app` and

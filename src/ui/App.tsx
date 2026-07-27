@@ -34,6 +34,7 @@ import { SyncSheetsProvider } from "./app/sync/SyncSheets";
 import { useCanRecord } from "./app/useCanRecord";
 import { useIsDesktop } from "./app/useIsDesktop";
 import FlightSurface from "./flight/FlightSurface";
+import AppBoundary from "./shared/AppBoundary";
 import { BootFailedScreen } from "./shared/ErrorScreen";
 import { SettingsProvider } from "./shared/settings/SettingsContext";
 
@@ -100,18 +101,29 @@ function AppBody() {
   // Flight clears the WAL a live flight may be sitting in, unread.
   if (hydration === "pending") return null;
   if (hydration === "failed") return <BootFailedScreen />;
-  if (inFlight) return <FlightSurface />;
+  // The two boundaries, and the only place either is mounted. Which one is
+  // live decides whether a crash reloads or surfaces: in flight a reload is
+  // near-invisible and the recording survives it, on the ground there is
+  // nothing to save and the pilot deserves to be told.
+  if (inFlight)
+    return (
+      <AppBoundary attemptHeal>
+        <FlightSurface />
+      </AppBoundary>
+    );
   // Desktop gets its own shell: plain react-router, no Ionic outlet (see
   // DesktopShell). Phones keep the Ionic tab shell untouched.
   return (
-    <IonApp>
-      {/* Above the shells, so a sheet can be raised from anywhere without
-          each page owning a modal; inside IonApp, because IonModal
-          presents against it. */}
-      <SyncSheetsProvider>
-        {isDesktop ? <DesktopShell /> : <TabShell />}
-      </SyncSheetsProvider>
-    </IonApp>
+    <AppBoundary>
+      <IonApp>
+        {/* Above the shells, so a sheet can be raised from anywhere without
+            each page owning a modal; inside IonApp, because IonModal
+            presents against it. */}
+        <SyncSheetsProvider>
+          {isDesktop ? <DesktopShell /> : <TabShell />}
+        </SyncSheetsProvider>
+      </IonApp>
+    </AppBoundary>
   );
 }
 
