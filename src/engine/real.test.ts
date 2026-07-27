@@ -113,7 +113,10 @@ function position(
 // delivers: full accuracy and an altitude, so nothing reads as reduced.
 // stepMs under MIN_FIX_INTERVAL_MS makes it a duplicate the ingest filter
 // drops — still evidence, just not a fix worth buffering.
-function sourceFix(stepMs = 1000): SourcePosition {
+function sourceFix(
+  stepMs = 1000,
+  overrides: CoordOverrides = {},
+): SourcePosition {
   timestamp += stepMs;
   return {
     timestamp,
@@ -125,6 +128,7 @@ function sourceFix(stepMs = 1000): SourcePosition {
       altitudeAccuracy: 8,
       speed: 0,
       heading: 90,
+      ...overrides,
     },
   };
 }
@@ -927,6 +931,45 @@ describe("GeolocationRecordingEngine", () => {
     expect(burstSnapshot.startedAt).toBe(liveSnapshot.startedAt);
     expect(burstSnapshot.landingAt).toBe(liveSnapshot.landingAt);
     expect(burstSnapshot.track).toEqual(liveSnapshot.track);
+  });
+
+  // A backlog does not stop arriving because the flight ended: a reopened
+  // ?mock-speed replay delivers hours of post-landing fixes in the same
+  // batch. Consuming them costs nothing visible and persists all of them —
+  // 100k fixes behind a 7k flight, and every later WAL read paid 3.4 s.
+  it("stops consuming a batch once the flight is final", async () => {
+    let deliver: ((batch: SourcePosition[]) => void) | null = null;
+    const engine = new GeolocationRecordingEngine({
+      source: {
+        watch(onPositions) {
+          deliver = onPositions;
+          return () => {
+            deliver = null;
+          };
+        },
+      },
+      setWaypoints: () => {},
+    });
+    engines.push(engine);
+    await engine.start();
+    await settle();
+
+    const batch: SourcePosition[] = [];
+    for (let i = 0; i < 3; i++) batch.push(sourceFix());
+    for (let i = 0; i < 5; i++) batch.push(sourceFix(1000, { speed: 6 }));
+    for (let i = 0; i < LANDING_SUSTAIN_FIXES + 35; i++) {
+      batch.push(sourceFix(1000, { speed: 0.3 }));
+    }
+    const throughLanding = batch.length;
+    for (let i = 0; i < 5000; i++) batch.push(sourceFix());
+
+    deliver!(batch);
+    await settle();
+    await settle();
+
+    expect(engine.snapshotSync().status).toBe("ended");
+    const { fixes } = await readWal();
+    expect(fixes.length).toBeLessThanOrEqual(throughLanding);
   });
 
   it("drops burst duplicates faster than 500 ms", async () => {

@@ -869,6 +869,17 @@ export class GeolocationRecordingEngine implements RecordingEngine {
         }
       } else {
         this.detectLanding();
+        // Same rule as the stale-gap break above, reached the ordinary
+        // way: the flight of record is final, so nothing after it belongs
+        // to this session. Draining the rest of a backlog anyway costs
+        // nothing visible but persists it — a day-long replay wrote 100k
+        // fixes behind a 7k flight, and every later WAL read paid 3.4 s
+        // for them. activityStatus (not deriveStatus) because only
+        // finality decides this, and it must stay O(1) per fix.
+        if (this.activityStatus() === "ended") {
+          ingested = true;
+          break;
+        }
       }
       ingested = true;
     }
