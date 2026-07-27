@@ -9,6 +9,7 @@ import { defineConfig } from "eslint/config";
 import globals from "globals";
 import tseslint from "typescript-eslint";
 
+import defaultImportName from "./eslint-rules/default-import-name.js";
 import maxUseState from "./eslint-rules/max-usestate.js";
 import simpleJsxGuard from "./eslint-rules/simple-jsx-guard.js";
 
@@ -266,12 +267,17 @@ export default defineConfig(
     plugins: {
       wingover: {
         rules: {
+          "default-import-name": defaultImportName,
           "max-usestate": maxUseState,
           "simple-jsx-guard": simpleJsxGuard,
         },
       },
     },
     rules: {
+      // A default import renamed at the import site splits one component into
+      // two identities that neither grep nor a reader can reconcile
+      // (default-import-name.js).
+      "wingover/default-import-name": "error",
       // >5 useState in one component = state that wants a hook/object.
       "wingover/max-usestate": "error",
       // The base layer: the manual-memoization ban plus the seams that are

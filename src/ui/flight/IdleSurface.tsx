@@ -6,7 +6,7 @@ import { haversineMeters } from "../../flight/stats";
 import { sunFactLabel } from "../../flight/sun";
 import type { Flight, Pin } from "../../storage/db";
 
-import styles from "./FlyPage.module.css";
+import styles from "./FlightSurface.module.css";
 
 /**
  * The pre-flight screen: a couple of quiet facts and one enormous button.

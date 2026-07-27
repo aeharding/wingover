@@ -13,9 +13,9 @@ import { useLatestFlight } from "./useLatestFlight";
 import { useLiveViewPrefs } from "./useLiveViewPrefs";
 import { usePlannedPins } from "./usePlannedPins";
 
-import styles from "./FlyPage.module.css";
+import styles from "./FlightSurface.module.css";
 
-export default function FlyPage() {
+export default function FlightSurface() {
   const { units } = useSettings();
   // The engine is the single owner of flight state; this page is a view.
   // Snapshots are cached (stable identity between changes) and the change

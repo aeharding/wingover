@@ -111,7 +111,7 @@ export default function LiveTrackMap({
   // The real instrument-chrome offsets only (keeps the aircraft clear of
   // the portrait strip / landscape rail). The map container is exactly
   // viewport-sized — no overscan. MapKit ignores moveTo padding and gets
-  // the rail via the safe-area publish instead (FlyPage.module.css);
+  // the rail via the safe-area publish instead (FlightSurface.module.css);
   // MapLibre centers off this.
   function cameraPadding(): Insets {
     return { top: topInset, bottom: 0, left: leftInset, right: 0 };
@@ -331,7 +331,7 @@ export default function LiveTrackMap({
     if (!map) return;
     // Only a SNAPPED camera re-orients on mode change: free-browsing keeps
     // the pilot's bearing (the compass button realigns north imperatively
-    // from FlyPage instead), and nothing in flight ever animates — an
+    // from FlightSurface instead), and nothing in flight ever animates — an
     // animated rotation tweens the basemap while the flown-line overlay
     // re-renders a beat behind it, so the path visibly wiggles.
     if (follow) renderNow();

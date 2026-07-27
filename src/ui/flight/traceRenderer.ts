@@ -1,7 +1,7 @@
 /**
  * traceRenderer — WebGPU backdrop: a glowing comet retraces the last flight.
  *
- * The effect is the idle-screen wallpaper on FlyPage: a point-headed comet
+ * The effect is the idle-screen wallpaper on the flight surface: a point-headed comet
  * flies launch → landing along the pilot's smoothed track, over a TRANSPARENT
  * canvas so the page background composites behind it (pure black in dark mode,
  * pure white in light mode). Because the same effect has to read on both, the

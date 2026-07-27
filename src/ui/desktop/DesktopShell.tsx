@@ -28,7 +28,7 @@ import { isTauri } from "../../platform";
 import { resetSyncedData } from "../../storage/db";
 import * as sync from "../../sync";
 import { cx } from "../cx";
-import FlyPage from "../flight/FlyPage";
+import FlightSurface from "../flight/FlightSurface";
 import FlyTrace from "../flight/FlyTrace";
 import { useFlights } from "../logbook/useFlights";
 import AppearancePage from "../pages/AppearancePage";
@@ -162,7 +162,7 @@ function DesktopFrame() {
                 The section's hidden attribute is what parks its render
                 loop off-tab. */}
             <FlyTrace />
-            <FlyPage />
+            <FlightSurface />
           </section>
         )}
         {visited.has("logbook") && (

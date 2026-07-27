@@ -15,7 +15,7 @@ import type { MapView } from "../map/types";
 import ViewToggle from "../map/ViewToggle";
 
 import mapCss from "../map/map.module.css";
-import styles from "./FlyPage.module.css";
+import styles from "./FlightSurface.module.css";
 
 /**
  * The in-flight map controls: the app-wide 2x2 corner cluster plus the one

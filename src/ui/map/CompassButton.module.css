@@ -21,7 +21,7 @@
 }
 
 /* Themed: near-white on the ground app's dark chrome, re-pinned by the
-   flight surface's frozen palette (FlyPage.css) — the token, not the fill,
+   flight surface's frozen palette (FlightSurface.css) — the token, not the fill,
    is what varies. */
 .south {
   fill: var(--map-compass-south);

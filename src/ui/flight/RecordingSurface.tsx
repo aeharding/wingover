@@ -13,7 +13,7 @@ import { useInstrumentInsets } from "./useInstrumentInsets";
 import type { LiveView } from "./useLiveViewPrefs";
 import { useWaypointUi } from "./useWaypointUi";
 
-import styles from "./FlyPage.module.css";
+import styles from "./FlightSurface.module.css";
 
 /**
  * The live-flight screen: instruments over the map, the corner controls,

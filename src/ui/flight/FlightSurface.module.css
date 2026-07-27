@@ -200,7 +200,7 @@
    LiveTrackMap's own .root (position: relative; flex: 1), and two single
    classes from different modules tie on specificity — the winner is bundle
    emission order, which differs dev vs prod (docs/CSS-MODULES.md). It won
-   here only because FlyPage.tsx happened to import LiveTrackMap above its
+   here only because FlightSurface.tsx happened to import LiveTrackMap above its
    own stylesheet; splitting this surface into components moved that import
    and the map collapsed to zero height. A local ancestor decides it by
    descendant specificity instead, in any order. */
@@ -357,7 +357,7 @@
   }
 }
 
-/* The instruments strip: FlyPage's layout for the Tile components. */
+/* The instruments strip: FlightSurface's layout for the Tile components. */
 .instruments {
   position: absolute;
   top: 0;

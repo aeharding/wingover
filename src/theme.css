@@ -217,7 +217,7 @@
    Light values at :root, dark under .ion-palette-dark — the same split
    the Ionic palette uses above. The FLIGHT surface never themes (STEERING:
    one sunlight-tuned design); it re-pins what it consumes (see
-   .frame in FlyFrame.module.css and .fly-content in FlyPage.css), so these
+   .frame in FlyFrame.module.css and .fly-content in FlightSurface.css), so these
    light-scheme values only ever reach ground UI. */
 :root {
   /* The one app cyan (buttons, stats, flown track) — wide-gamut
@@ -258,7 +258,7 @@
 
   /* On-map chips (view toggle, compass, expand pill, distance/legend
      pills): frosted light over a light basemap, near-black over a dark
-     one. The FLIGHT surface pins these dark (FlyPage.css) — its map is
+     one. The FLIGHT surface pins these dark (FlightSurface.css) — its map is
      always light with dark chrome, frozen. */
   --map-chip-bg: rgba(255, 255, 255, 0.88);
   --map-chip-bg-active: rgba(228, 231, 235, 0.92);
@@ -266,7 +266,7 @@
   /* The engaged (data-active) chip green — the accent cyan is reserved for
      the flown track (map.module.css). Light deepens it: pure P3 green on
      the frosted white chip is invisible (the --status-good precedent). The
-     FLIGHT surface pins this to its frozen --stat-green (FlyPage.css). */
+     FLIGHT surface pins this to its frozen --stat-green (FlightSurface.css). */
   --map-chip-engaged: color(display-p3 0 0.55 0.1);
   --map-compass-south: color(display-p3 0.44 0.47 0.52);
 }

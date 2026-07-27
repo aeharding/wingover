@@ -22,7 +22,7 @@ import { engine } from "../engine";
 import { isTauri } from "../platform";
 import DesktopShell from "./desktop/DesktopShell";
 import { BootFailedScreen } from "./flight/ErrorScreen";
-import FlightSurface from "./flight/FlyPage";
+import FlightSurface from "./flight/FlightSurface";
 import AllFlightsMapPage from "./pages/AllFlightsMapPage";
 import AppearancePage from "./pages/AppearancePage";
 import FlightDetailPage from "./pages/FlightDetailPage";

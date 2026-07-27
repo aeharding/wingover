@@ -35,7 +35,7 @@
      the plain `.frame ion-toolbar` above does not clear it — so the big
      greeting title renders on a scheme-colored band over the backdrop. Same
      condense-scoped fix the sync hero needs (sync.module.css). Desktop
-     renders FlyPage frameless, so this only ever showed on the phone. */
+     renders FlightSurface frameless, so this only ever showed on the phone. */
   ion-header[collapse="condense"] ion-toolbar {
     --background: transparent;
   }

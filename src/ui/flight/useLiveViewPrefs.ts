@@ -21,7 +21,7 @@ export type LiveView = LiveViewPrefs & {
  * the ground maps follow the same street/satellite choice).
  *
  * Per-component state, not a shared store: call it in exactly ONE place
- * and pass the result down (FlyPage owns it, because arming resets follow
+ * and pass the result down (FlightSurface owns it, because arming resets follow
  * and track-up before the recording surface exists). Two call sites would
  * be two disagreeing copies.
  */

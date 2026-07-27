@@ -7,7 +7,7 @@ import {
 } from "@ionic/react";
 import { useEffect, useState } from "react";
 
-import FlyPage from "../flight/FlyPage";
+import FlightSurface from "../flight/FlightSurface";
 import FlyTrace from "../flight/FlyTrace";
 
 import styles from "./FlyFrame.module.css";
@@ -72,7 +72,7 @@ function useGreeting() {
  * router outlet needs an ion-page element to run transitions against;
  * the flight folder itself never imports Ionic (enforced by lint), so
  * the frame lives out here in Ionic land. The desktop shell renders
- * src/ui/flight/FlyPage directly, frameless.
+ * src/ui/flight/FlightSurface directly, frameless.
  *
  * .frame (FlyFrame.module.css) pins the frame black in the DARK scheme
  * only; the idle page themes with the app (FlyTrace has a light-mode
@@ -113,7 +113,7 @@ export default function FlyFrame() {
             <IonTitle size="large">{greeting}</IonTitle>
           </IonToolbar>
         </IonHeader>
-        <FlyPage />
+        <FlightSurface />
       </IonContent>
     </IonPage>
   );

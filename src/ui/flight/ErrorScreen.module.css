@@ -42,7 +42,7 @@
 }
 
 .cancel {
-  composes: cancel from "./FlyPage.module.css";
+  composes: cancel from "./FlightSurface.module.css";
 }
 
 /* Location-class errors: full alarm red. The pilot is about to pocket
