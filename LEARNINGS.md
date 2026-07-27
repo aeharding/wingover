@@ -208,6 +208,61 @@ context-lost map produces the NaN.
   can be bisected.
 - Nobody on the public internet has ever reported this exact error string.
 
+## Why Reachability is required (owner-confirmed, 2026-07-26)
+
+The trigger is **Reachability, then the app switcher** — on every page including
+Fly. Neither alone ever does it. On Fly the same sequence gives an immediate
+blank screen rather than a grey map, which is what the root cause predicts: Fly
+reads the camera continuously (`LiveTrackMap` per fix, `CompassButton` from
+React's render phase), so a poisoned map throws into React at once, while Plan
+just sits grey until something reads it.
+
+Proposed mechanism for the asymmetry, and it is geometric: Reachability slides
+the app down half a screen, so the physical bottom edge — where the next swipe
+begins — stops being the tab bar and becomes the MAP. The stolen touch is a
+touch that BEGAN on the map, which is exactly the input the armed-recognizer
+root cause needs.
+
+**Unexplained by that story:** the fullscreen logbook map is `position: fixed;
+inset: 0` and therefore also owns the bottom edge, yet the owner reports it does
+not reproduce. Either that surface was only tested with the app switcher alone,
+or the geometry is not the whole difference. Do not treat the geometric story as
+settled until one of those is checked.
+
+## XCUITest drills in the simulator — first result is a NEGATIVE
+
+`ios-tests/Tests/MapCancelUITests.swift` (appended into `RecordingUITests.swift`
+at build time — the Mac has no `xcodegen`, and `sources: [Tests]` needs
+regeneration to pick up a new file). Page-side probe: `src/ui/cancelProbe.ts`,
+which polls every live map's `center` through try/catch and paints one line, so
+a screenshot or the AX tree is enough to read the verdict.
+
+Four cases, all PASSED — i.e. nothing was poisoned:
+
+| case | result |
+|---|---|
+| plain pans (control) | `p5/62/0/5` healthy |
+| Notification Center steal (top-left edge), then pans | `p3/34/0/3` healthy |
+| Control Center steal (top-right edge), then pans | `p3/29/0/3` healthy |
+| app switcher from the bottom edge, then pans | healthy |
+
+**The counters are the finding, not the pass.** `c0` everywhere: not one cancel
+was delivered. The pointer counts did not move AT ALL across the steals, so the
+page never even saw a `pointerdown` — iOS consumed those edge touches whole. The
+drill did not deliver the input and find it harmless; it failed to deliver the
+input. No conclusion about the mechanism can be drawn from it.
+
+Tooling that this did establish, and it all works headlessly over `ssh mac`:
+build → install → XCUITest → read the verdict out of the AX tree.
+
+- Build the sim app under `zsh -ilc`. A plain `ssh mac 'cmd'` gets a
+  non-interactive shell where volta's shims are not on PATH and `pnpm` is
+  "not found" — the failure looks like a build failure and is not one.
+- `rm -rf src-tauri/gen/apple/build/arm64-sim` first, or tauri's archive-rename
+  error leaves a STALE .app at that path and the drill tests an old build.
+- Verify freshness by mtime against `dist/`, never by grepping the binary for a
+  source string: tauri compresses the embedded frontend, so the grep is blind.
+
 ## NEXT STEPS (actionable, in order)
 
 1. **Confirm the mechanism in the simulator** (harness experiment H, in

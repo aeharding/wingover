@@ -2,32 +2,38 @@ import XCTest
 
 // #185 REPRODUCTION DRILL — throwaway branch, never merged.
 //
-// Read out of Apple's shipped bundle: MapKit's pan recognizer inherits an EMPTY
-// `touchesCancelled`, and `enterCancelledState()` is reachable from nowhere but
-// the `enabled` setter. So no MapKit recognizer ever unwinds on a cancelled
-// touch. It stays armed with an empty touch list, `locationInElement()` divides
-// by that zero, and `Camera.translate()` writes the NaN straight into
-// `camera.center` through an unvalidated `Object.create(MapPoint.prototype)`.
+// Root cause, read out of Apple's shipped bundle: MapKit's pan recognizer
+// inherits an EMPTY `touchesCancelled`, and `enterCancelledState()` is reachable
+// from nowhere but the `enabled` setter. So no MapKit recognizer ever unwinds on
+// a cancelled touch. It stays armed with an empty touch list,
+// `locationInElement()` divides by that zero, and `Camera.translate()` writes the
+// NaN into `camera.center` through an unvalidated
+// `Object.create(MapPoint.prototype)`.
 //
-// The device repro is Reachability, then the app switcher. Reachability is not
-// the mechanism: it slides the app down half a screen, so the physical bottom
-// edge — where the next system swipe begins — stops being the tab bar and
-// becomes the MAP. What matters is only that iOS steals a touch that BEGAN on
-// the map.
+// The device ceremony, owner-confirmed: Reachability, then END IT WITH A SWIPE
+// UP FROM THE BOTTOM OF THE SCREEN, OVER THE APP, then open the app switcher.
+// Dismissing Reachability with its close button, or with a swipe in the empty
+// half above the app, never reproduces. So Reachability contributes exactly one
+// thing: it slides the app down, so that the bottom-edge swipe begins on the MAP
+// rather than on the tab bar.
 //
-// First drill measured a clean negative: four screen-edge gestures, zero
-// cancels delivered to the page and no `pointerdown` either. iOS consumed those
-// touches whole. So the question ahead of the hypothesis is an empirical one —
-// WHAT, in this webview, actually delivers a cancel? — and that is what the
-// sweep below measures rather than assumes.
+// Two measurements shaped this drill:
+//  - Top-edge system gestures deliver NOTHING to the page — not even a
+//    pointerdown. iOS consumes them whole. An earlier drill built on them was
+//    silent for that reason, not because the mechanism is wrong.
+//  - The BOTTOM edge does deliver: a home-indicator swipe produced a real
+//    `touchcancel` in the page, at (201,860), on `ios tab-bar-translucent`.
+//    That is the theft, landing on the wrong element.
+//
+// So the simulator cannot slide the app, but it can put a map where the slide
+// would have put one: `src/ui/cancelProbe.ts` docks a real mapkit.Map to the
+// bottom 280 px. Now the same measured theft begins on a map.
 //
 // Real touches, not synthetic: synthetic DOM events were measured not to engage
 // MapKit's recognizers at all (`panned=false`), while an XCUITest drag moves the
 // camera Kansas → Antarctica.
 //
-// The verdict is read from the page's own probe banner (src/ui/cancelProbe.ts):
-// pointer and touch counters, the last cancel's target, and every live map's
-// `center` polled through try/catch.
+// A FAILING ASSERTION HERE IS THE RESULT BEING LOOKED FOR.
 final class MapCancelUITests: XCTestCase {
 
   override func setUp() {
@@ -46,22 +52,6 @@ final class MapCancelUITests: XCTestCase {
     return "<no probe>"
   }
 
-  private func waitForProbe(_ app: XCUIApplication) {
-    let deadline = Date().addingTimeInterval(30)
-    while Date() < deadline {
-      if probe(app) != "<no probe>" { return }
-      usleep(300_000)
-    }
-    XCTFail("probe banner never appeared; the page did not boot")
-  }
-
-  private func openPlan(_ app: XCUIApplication) {
-    let plan = app.buttons["Plan"].firstMatch
-    XCTAssertTrue(plan.waitForExistence(timeout: 30), "no Plan tab")
-    plan.tap()
-    usleep(4_000_000)
-  }
-
   private func at(_ app: XCUIApplication, _ dx: Double, _ dy: Double)
     -> XCUICoordinate
   {
@@ -72,118 +62,84 @@ final class MapCancelUITests: XCTestCase {
     print("WINGOVER-PROBE [\(stage)] \(probe(app))")
   }
 
-  /// A gesture that may hand the screen to iOS. Come back the way a pilot
-  /// would, then read the counters.
-  private func gesture(
-    _ app: XCUIApplication, _ name: String,
-    from: XCUICoordinate, to: XCUICoordinate,
-    hold: TimeInterval = 0.12, leavesApp: Bool = true
-  ) {
-    from.press(forDuration: hold, thenDragTo: to)
-    usleep(1_200_000)
-    if leavesApp {
-      XCUIDevice.shared.press(.home)
-      usleep(1_200_000)
-      app.activate()
-      usleep(2_000_000)
+  /// Waits for the docked map to exist, which the banner reports as `maps1`.
+  private func waitForDockedMap(_ app: XCUIApplication) {
+    let deadline = Date().addingTimeInterval(45)
+    while Date() < deadline {
+      let line = probe(app)
+      if line.contains("maps") && !line.contains("maps0") { return }
+      usleep(500_000)
     }
-    report(app, name)
+    XCTFail("docked map never appeared — \(probe(app))")
   }
 
-  // THE SWEEP. One question: which gesture, if any, delivers a cancel to the
-  // page? Counters are cumulative, so a rising `c` names the culprit.
-  func testWhatDeliversACancel() {
+  /// A pan entirely inside the docked map (the bottom 280 pt).
+  private func panDockedMap(_ app: XCUIApplication) {
+    at(app, 0.5, 0.88).press(forDuration: 0.1, thenDragTo: at(app, 0.38, 0.80))
+    usleep(1_200_000)
+  }
+
+  /// The measured theft: a swipe up from the very bottom edge. iOS wins it, and
+  /// the page gets `touchstart` then `touchcancel` — on the docked map.
+  private func stealFromBottomEdge(_ app: XCUIApplication) {
+    at(app, 0.5, 1.0).withOffset(CGVector(dx: 0, dy: -1))
+      .press(forDuration: 0.12, thenDragTo: at(app, 0.5, 0.45))
+    usleep(1_500_000)
+    app.activate()
+    usleep(2_000_000)
+  }
+
+  // Control. Real pans on the docked map, no theft. If this ever fails, nothing
+  // else in this file means anything.
+  func testDockedMapSurvivesPlainPans() {
     let app = self.app()
     app.launch()
-    openPlan(app)
-    waitForProbe(app)
+    waitForDockedMap(app)
+    report(app, "baseline")
+    for _ in 0..<5 { panDockedMap(app) }
+    let line = probe(app)
+    report(app, "after 5 plain pans")
+    XCTAssertFalse(line.contains("POISONED"), "control poisoned — \(line)")
+  }
+
+  // THE MECHANISM. Steal a touch that began on the map, then pan.
+  func testBottomEdgeStealOverADockedMap() {
+    let app = self.app()
+    app.launch()
+    waitForDockedMap(app)
     report(app, "baseline")
 
-    // Control: an ordinary pan, entirely inside the map.
-    gesture(
-      app, "plain pan", from: at(app, 0.5, 0.35), to: at(app, 0.4, 0.5),
-      leavesApp: false)
+    stealFromBottomEdge(app)
+    report(app, "after steal 1")
 
-    // Top edge at three depths. The system's activation band is finite; inside
-    // it the app is delivered touches and then cancelled, outside it the app is
-    // never told at all.
-    for inset in [1.0, 10.0, 26.0, 44.0] {
-      gesture(
-        app, "top edge +\(Int(inset))",
-        from: at(app, 0.3, 0.0).withOffset(CGVector(dx: 0, dy: inset)),
-        to: at(app, 0.3, 0.6))
+    // The device sequence steals twice: the swipe that ends Reachability, then
+    // the swipe that opens the app switcher. The second touch is also the stray
+    // move that detonates a recognizer the first one armed.
+    stealFromBottomEdge(app)
+    report(app, "after steal 2")
+
+    for i in 1...4 {
+      panDockedMap(app)
+      report(app, "pan \(i)")
     }
-
-    // Bottom edge, the home-indicator band. On Plan this begins on the TAB BAR,
-    // which is the geometry Reachability changes.
-    for inset in [1.0, 12.0, 30.0] {
-      gesture(
-        app, "bottom edge -\(Int(inset))",
-        from: at(app, 0.5, 1.0).withOffset(CGVector(dx: 0, dy: -inset)),
-        to: at(app, 0.5, 0.45))
-    }
-
-    // Side edges: back-swipe and its mirror.
-    gesture(
-      app, "left edge",
-      from: at(app, 0.0, 0.4).withOffset(CGVector(dx: 2, dy: 0)),
-      to: at(app, 0.7, 0.4))
-    gesture(
-      app, "right edge",
-      from: at(app, 1.0, 0.4).withOffset(CGVector(dx: -2, dy: 0)),
-      to: at(app, 0.3, 0.4))
-
-    // A long press first, then a drag: a different recognizer wins the touch,
-    // which is another way a pan gets cancelled.
-    gesture(
-      app, "longpress then drag", from: at(app, 0.5, 0.4),
-      to: at(app, 0.35, 0.55), hold: 1.6, leavesApp: false)
-
-    // Whatever armed anything above, detonate it.
-    for _ in 0..<3 {
-      at(app, 0.5, 0.35).press(forDuration: 0.1, thenDragTo: at(app, 0.4, 0.5))
-      usleep(900_000)
-    }
-    report(app, "FINAL after pans")
 
     let line = probe(app)
     XCTAssertFalse(line.contains("POISONED"), "MAP POISONED — \(line)")
   }
 
-  // The same sweep where the map itself owns the bottom edge: the fullscreen
-  // logbook map is `position: fixed; inset: 0`, so a home-indicator swipe there
-  // begins ON the map with no Reachability needed. That is the geometry the
-  // device repro manufactures.
-  func testHomeIndicatorOverAFullscreenMap() {
+  // Steal, pan, steal, pan — in case arming and detonation have to interleave.
+  func testInterleavedStealsAndPans() {
     let app = self.app()
     app.launch()
-    let logbook = app.buttons["Logbook"].firstMatch
-    XCTAssertTrue(logbook.waitForExistence(timeout: 30), "no Logbook tab")
-    logbook.tap()
-    usleep(3_000_000)
-    report(app, "logbook")
-
-    // Whatever opens a map here; the drill reports what it found either way.
-    let mapButton = app.buttons["Map"].firstMatch
-    if mapButton.waitForExistence(timeout: 6) {
-      mapButton.tap()
-      usleep(5_000_000)
+    waitForDockedMap(app)
+    report(app, "baseline")
+    for round in 1...4 {
+      stealFromBottomEdge(app)
+      panDockedMap(app)
+      panDockedMap(app)
+      report(app, "round \(round)")
+      if probe(app).contains("POISONED") { break }
     }
-    waitForProbe(app)
-    report(app, "fullscreen map")
-
-    for inset in [1.0, 12.0, 30.0] {
-      gesture(
-        app, "fullscreen bottom -\(Int(inset))",
-        from: at(app, 0.5, 1.0).withOffset(CGVector(dx: 0, dy: -inset)),
-        to: at(app, 0.5, 0.45))
-    }
-    for _ in 0..<3 {
-      at(app, 0.5, 0.5).press(forDuration: 0.1, thenDragTo: at(app, 0.4, 0.62))
-      usleep(900_000)
-    }
-    report(app, "FINAL after pans")
-
     let line = probe(app)
     XCTAssertFalse(line.contains("POISONED"), "MAP POISONED — \(line)")
   }

@@ -107,6 +107,39 @@ function line(state: ReturnType<typeof health>): string {
   ].join(" ");
 }
 
+/**
+ * A real mapkit.Map docked to the BOTTOM EDGE of the screen.
+ *
+ * The device repro needs Reachability only to slide the app down so that the
+ * swipe which ends it — from the bottom of the screen, over the app — begins on
+ * the map instead of the tab bar. Owner-confirmed: end Reachability with the
+ * close button, or with a swipe in the empty half ABOVE the app, and it never
+ * reproduces.
+ *
+ * A simulator cannot slide the app, but it can put a map where the slide would
+ * have put one. The bottom edge is also the one place a system gesture is
+ * MEASURED to deliver `touchcancel` to this webview (the sweep: top-edge
+ * gestures deliver nothing at all). So this is the mechanism with the ceremony
+ * removed.
+ */
+async function dockMapAtBottomEdge() {
+  const { loadMapKit } = await import("./map/mapkit/loader");
+  await loadMapKit();
+  const host = document.createElement("div");
+  host.setAttribute("data-docked-map", "");
+  host.style.cssText =
+    "position:fixed;left:0;right:0;bottom:0;height:280px;z-index:2147483646";
+  document.body.append(host);
+  const map = new mapkit.Map(host, {
+    center: new mapkit.Coordinate(39.8, -98.5),
+    showsCompass: mapkit.FeatureVisibility.Hidden,
+    showsScale: mapkit.FeatureVisibility.Hidden,
+    showsZoomControl: false,
+    showsMapTypeControl: false,
+  });
+  maps().add(map);
+}
+
 export function installCancelProbe() {
   const banner = document.createElement("div");
   banner.setAttribute("data-cancel-probe", "");
@@ -155,6 +188,10 @@ export function installCancelProbe() {
     if (state.dead > 0) latch(state);
     banner.textContent = latched ? `${line(state)} LATCHED` : line(state);
   }, 200);
+
+  void dockMapAtBottomEdge().catch((error) => {
+    console.error("WINGOVER-CANCEL dock failed", String(error));
+  });
 
   // Whatever the previous run latched, surfaced on this one.
   try {
