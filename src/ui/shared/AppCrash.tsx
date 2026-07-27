@@ -64,8 +64,8 @@ export default function AppCrash({ inFlight }: { inFlight: boolean }) {
       title="App Crashed"
       body={
         inFlight
-          ? "Wingover hit an unexpected error. Your flight is still being recorded and will not be lost. Reload to carry on."
-          : "Wingover hit an unexpected error. Your saved flights are safe. Reload to carry on."
+          ? "Wingover hit an unexpected error. Your flight is still being recorded and will not be lost. Reload to continue."
+          : "Wingover hit an unexpected error. Your saved flights are safe. Reload to continue."
       }
     />
   );
