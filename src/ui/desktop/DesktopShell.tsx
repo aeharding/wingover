@@ -28,10 +28,9 @@ import { isTauri } from "../../platform";
 import { resetSyncedData } from "../../storage/db";
 import * as sync from "../../sync";
 import { cx } from "../cx";
-import FlyTrace from "../flight/FlyTrace";
-import IdleSurface from "../flight/IdleSurface";
 import { useFlights } from "../logbook/useFlights";
 import AppearancePage from "../pages/AppearancePage";
+import FlyPage from "../pages/FlyPage";
 import MapProviderPage from "../pages/MapProviderPage";
 import PlanPage from "../pages/PlanPage";
 import SettingsPage from "../pages/SettingsPage";
@@ -157,12 +156,10 @@ function DesktopFrame() {
       <main className={styles.main} data-testid="desktop-main">
         {canRecord && visited.has("fly") && (
           <section className={styles.section} hidden={section !== "fly"}>
-            {/* The comet backdrop behind the frameless surface — same
-                element the phone frame uses as its content background.
-                The section's hidden attribute is what parks its render
-                loop off-tab. */}
-            <FlyTrace />
-            <IdleSurface />
+            {/* The same page the phone renders, whole — like PlanPage and
+                SettingsPage beside it. The section's hidden attribute is what
+                parks its comet render loop off-tab. */}
+            <FlyPage />
           </section>
         )}
         {visited.has("logbook") && (
