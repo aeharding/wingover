@@ -383,7 +383,7 @@ async function liveWatch(mk: typeof mapkit) {
     } catch {
       ctr = "THROWS";
     }
-    band.textContent = `${dead ? "POISONED" : "OK"} c=${ctr}\nd${counts.down} m${counts.move} u${counts.up} CANCEL=${counts.cancel}`;
+    band.textContent = `${dead ? "POISONED" : "OK"} c=${ctr} gl=${lost}\nd${counts.down} m${counts.move} u${counts.up} CANCEL=${counts.cancel}`;
   }, 500);
 }
 
