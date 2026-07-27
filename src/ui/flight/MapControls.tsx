@@ -58,7 +58,7 @@ export default function MapControls({
   }
 
   return (
-    <div className={styles.controls}>
+    <div className={styles.controls} data-testid="map-controls">
       {/* Contextual: floats ABOVE the fixed control grid (which is
             bottom-anchored) so appearing/disappearing never nudges the
             four regular controls out of their fixed positions. */}
