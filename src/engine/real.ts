@@ -265,7 +265,18 @@ export class GeolocationRecordingEngine implements RecordingEngine {
     // end is detected on the fix stream instead (a >= STALE_FLIGHT_MS
     // gap between consecutive fixes; see handlePositions), so the
     // backlog replays first and only a genuine gap finalizes.
-    if (!session || this.deriveStatus() === "ended") return;
+    if (!session) return;
+    // A finalized flight parks: there is no watch to restart. It still needs
+    // the LOCK, though, because collection is about to consume it and only the
+    // owner may clear the WAL (discard). Returning without it left walOwner
+    // false, so the WAL survived collection and every later launch re-collected
+    // the same flight — re-toasting, and resurrecting one the pilot had
+    // deleted. A tab refused the lock still collects (the deterministic id
+    // makes that a no-op) and correctly leaves the clearing to the owner.
+    if (this.deriveStatus() === "ended") {
+      await this.acquireRecorderLock();
+      return;
+    }
     if (await this.acquireRecorderLock()) {
       this.ensureWatch();
       // this.session, not the WAL's copy: rebuildTakeoff may have just

@@ -1,0 +1,47 @@
+/* The flight surface's frozen sunlight design, like ErrorScreen: black,
+   centered, gloves-first sizing. This one is not an overlay — "ended" has no
+   instruments behind it to cover. */
+.root {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 1.25rem;
+  padding: 0 calc(2rem + env(safe-area-inset-right)) 0
+    calc(2rem + env(safe-area-inset-left));
+  background: #000;
+  text-align: center;
+}
+
+/* Quiet, because the ordinary case is a beat long and nothing is wrong. */
+.saving {
+  color: #9a9fa6;
+  font-size: 1.3rem;
+}
+
+.title {
+  font-size: 1.7rem;
+  font-weight: 700;
+}
+
+.body {
+  max-width: 26rem;
+  color: #9a9fa6;
+  font-size: 1.05rem;
+}
+
+/* The one action, Start-button sized: white on black is the highest
+   luminance contrast the surface has (sunlight readability is a luminance
+   game before it is a hue game). */
+.retry {
+  width: min(100%, 420px);
+  padding: 1.4rem;
+  font-size: 1.4rem;
+  font-weight: 600;
+  color: #000;
+  background: #fff;
+  border: none;
+  border-radius: 1rem;
+}

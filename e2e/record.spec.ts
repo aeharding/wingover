@@ -1,5 +1,7 @@
 import { expect, test } from "@playwright/test";
 
+import { dismissLandingSheet } from "./landingSheet";
+
 test("arm, auto-takeoff, reload kill drill, stop, logbook", async ({
   page,
 }) => {
@@ -81,6 +83,12 @@ test("arm, auto-takeoff, reload kill drill, stop, logbook", async ({
 
   await page.getByRole("button", { name: "Stop flight" }).click();
   await page.getByRole("button", { name: "Stop", exact: true }).click();
+  // The saved flight presents itself over the returning shell; dismissing it
+  // is what puts the pilot back on the tabs. It comes FIRST because a
+  // presented ion-modal marks the app root aria-hidden, and getByRole reads
+  // the accessibility tree — Start Flight is not merely covered, it stops
+  // matching. (CI caught this; locally the assertion won the race.)
+  await dismissLandingSheet(page);
   await expect(page.getByRole("button", { name: "Start Flight" })).toBeVisible({
     timeout: 15_000,
   });
@@ -172,9 +180,8 @@ test("a two-hour flight lands itself and reaches the logbook hands-free", async 
   // The simulated pilot stops in place after two hours of flight; landing
   // detection, the fix-time grace, finalization, and collection all run
   // with zero interaction.
-  await expect(page.getByText("Flight saved to logbook")).toBeVisible({
-    timeout: 20_000,
-  });
+  // The saved flight presents itself as a sheet over the returning shell.
+  await dismissLandingSheet(page);
   await expect(page.getByRole("button", { name: "Start Flight" })).toBeVisible({
     timeout: 15_000,
   });

@@ -127,7 +127,11 @@ final class RecordingUITests: XCTestCase {
     XCTAssertTrue(confirm.waitForExistence(timeout: 5), "no End flight? confirm")
     confirm.tap()
 
-    // Saved: the tab shell replaces the flight surface.
+    // Saved: the sheet announces it, and dismissing it puts the tab shell
+    // back. Until it is dismissed the tab bar is not in the AX tree at all
+    // (see dismissLandingSheet).
+    dismissLandingSheet(app)
+
     let logbookTab = app.buttons["Logbook"].firstMatch
     XCTAssertTrue(
       logbookTab.waitForExistence(timeout: 20),
