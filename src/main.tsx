@@ -7,8 +7,10 @@ import "./theme.css";
 
 import { createRoot } from "react-dom/client";
 
-// Side effect: the engine-side foreground recovery wiring must run from
-// boot, not from whichever page happens to import it first.
+// Side effect: the engine-side foreground recovery AND flight collection
+// wiring must run from boot, not from whichever page happens to import it
+// first — collection has to run with no surface mounted at all, including
+// with the crash screen up in place of the flight surface.
 import "./engine/session";
 import { stripMintedFlightNames } from "./storage/db";
 import { resume } from "./sync";
@@ -20,12 +22,6 @@ import { installExternalLinkHandler } from "./ui/shared/externalLinks";
 import { captureLaunchUrl } from "./ui/shared/map/config";
 
 installExternalLinkHandler();
-// Collection runs engine-side (engine/session.ts) and has one thing to tell
-// the pilot. Subscribed here, outside React, because it reports whether or
-// not any surface is mounted — including with the crash screen up in place of
-// the flight surface. No report can be missed before this line: the earliest
-// collection waits on the WAL read, and module bodies finish before the first
-// microtask does.
 // Resize <ion-app> and flag html.keyboard-open when tauri-plugin-ionic
 // reports the on-screen keyboard (dormant off-device).
 installKeyboardLayout();

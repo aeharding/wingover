@@ -1,5 +1,7 @@
 import { expect, test } from "@playwright/test";
 
+import { dismissLandingSheet } from "./landingSheet";
+
 test("arm, auto-takeoff, reload kill drill, stop, logbook", async ({
   page,
 }) => {
@@ -88,7 +90,7 @@ test("arm, auto-takeoff, reload kill drill, stop, logbook", async ({
 
   // The saved flight presents itself over the returning shell; dismissing it
   // is what puts the pilot back on the tabs.
-  await page.getByTestId("sheet-close").click();
+  await dismissLandingSheet(page);
   await page.getByText("Logbook", { exact: true }).click();
   await expect(page.getByTestId("flight-row")).toBeVisible();
   await expect(page.getByText(/1 flights/)).toBeVisible();
@@ -176,10 +178,7 @@ test("a two-hour flight lands itself and reaches the logbook hands-free", async 
   // detection, the fix-time grace, finalization, and collection all run
   // with zero interaction.
   // The saved flight presents itself as a sheet over the returning shell.
-  await expect(page.getByTestId("sheet-close")).toBeVisible({
-    timeout: 20_000,
-  });
-  await page.getByTestId("sheet-close").click();
+  await dismissLandingSheet(page);
   await expect(page.getByRole("button", { name: "Start Flight" })).toBeVisible({
     timeout: 15_000,
   });

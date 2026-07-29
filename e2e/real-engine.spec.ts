@@ -1,5 +1,7 @@
 import { expect, type Page, test } from "@playwright/test";
 
+import { dismissLandingSheet } from "./landingSheet";
+
 // CDP setGeolocation cannot supply altitude/speed, which the accuracy gate
 // and takeoff detection require — stub watchPosition itself so the test
 // drives the real engine's actual consumption path.
@@ -176,6 +178,7 @@ test("real engine: gate, backdated takeoff, reload kill drill, stop", async ({
   await expect(page.getByRole("button", { name: "Start Flight" })).toBeVisible({
     timeout: 15_000,
   });
+  await dismissLandingSheet(page);
   await page.getByText("Logbook", { exact: true }).click();
   await expect(page.getByText(/1 flights/)).toBeVisible();
   expect(pageErrors).toEqual([]);
@@ -243,6 +246,7 @@ test("landing prompt: dismiss re-arms, stop saves", async ({ page }) => {
   await expect(
     page.getByRole("button", { name: "Start Flight" }),
   ).toBeVisible();
+  await dismissLandingSheet(page);
   await page.getByText("Logbook", { exact: true }).click();
   await expect(page.getByText(/1 flights/)).toBeVisible();
 });
@@ -264,6 +268,7 @@ test("backgrounded landing: a burst-replayed flight finalizes retroactively", as
   await expect(
     page.getByRole("button", { name: "Start Flight" }),
   ).toBeVisible();
+  await dismissLandingSheet(page);
   await page.getByText("Logbook", { exact: true }).click();
   await expect(page.getByText(/1 flights/)).toBeVisible();
 });

@@ -1,5 +1,7 @@
 import { expect, test } from "@playwright/test";
 
+import { dismissLandingSheet } from "./landingSheet";
+
 // Playwright emulates prefers-color-scheme: light by default. The palette is
 // CLASS-driven (appTheme.ts stamps ion-palette-dark on <html>), and the
 // Appearance setting gates it: the DEFAULT is Dark (the class is on even
@@ -276,6 +278,7 @@ test("a provider re-create hands the camera to the successor; pages skip the re-
   await expect(
     page.getByRole("button", { name: "Start Flight" }),
   ).toBeVisible();
+  await dismissLandingSheet(page);
   await page.getByText("Logbook", { exact: true }).click();
   await page.getByTestId("flight-row").click();
   await expect(page.getByText("Max altitude")).toBeVisible();

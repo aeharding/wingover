@@ -1,5 +1,7 @@
 import { expect, test } from "@playwright/test";
 
+import { dismissLandingSheet } from "./landingSheet";
+
 // Tests of the real MapLibre backend and its resilience — the parts a fake
 // map cannot exercise: slow/partial style loading, sprite stalls, and the
 // setStyle layer-teardown restore path. These use plain @playwright/test (no
@@ -222,6 +224,7 @@ test("flight detail draws the track even when the map style loads slowly", async
     page.getByRole("button", { name: "Start Flight" }),
   ).toBeVisible();
 
+  await dismissLandingSheet(page);
   await page.getByText("Logbook", { exact: true }).click();
   await page.getByTestId("flight-row").click();
 
@@ -267,6 +270,7 @@ test("leaving fullscreen eases the flight map back to its framing", async ({
     page.getByRole("button", { name: "Start Flight" }),
   ).toBeVisible();
 
+  await dismissLandingSheet(page);
   await page.getByText("Logbook", { exact: true }).click();
   await page.getByTestId("flight-row").click();
   await expect(page.getByTestId("launch-marker")).toBeVisible({
@@ -465,6 +469,7 @@ test("composite map draws all flights even with a slow style", async ({
     page.getByRole("button", { name: "Start Flight" }),
   ).toBeVisible();
 
+  await dismissLandingSheet(page);
   await page.getByText("Logbook", { exact: true }).click();
   await page.getByTestId("logbook-options").click();
   await page.getByRole("button", { name: "All Flights" }).click();

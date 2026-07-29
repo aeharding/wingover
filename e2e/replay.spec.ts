@@ -1,5 +1,7 @@
 import { expect, test } from "@playwright/test";
 
+import { dismissLandingSheet } from "./landingSheet";
+
 type Page = import("@playwright/test").Page;
 
 async function openImportedFlight(page: Page) {
@@ -136,6 +138,7 @@ async function recordLongFlight(page: Page) {
   await expect(
     page.getByRole("button", { name: "Start Flight" }),
   ).toBeVisible();
+  await dismissLandingSheet(page);
 }
 
 function barogramTotal(page: Page) {
@@ -253,6 +256,7 @@ test("the timeline zooms with the wheel and resets", async ({ page }) => {
     page.getByRole("button", { name: "Start Flight" }),
   ).toBeVisible();
 
+  await dismissLandingSheet(page);
   await page.getByText("Logbook", { exact: true }).click();
   await page.getByTestId("flight-row").click();
   await expect(page.getByText("Max altitude")).toBeVisible();

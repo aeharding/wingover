@@ -1,5 +1,7 @@
 import { expect, test } from "@playwright/test";
 
+import { dismissLandingSheet } from "./landingSheet";
+
 // #185 ended with a black screen because nothing caught the throw: MapKit's
 // camera getter died, CompassButton read it from React's RENDER phase, and the
 // root unmounted. This asserts the outcome the pilot sees now.
@@ -177,7 +179,7 @@ test("a flight that ends behind the crash screen still reaches the logbook", asy
   await expect(page.getByTestId("app-crashed")).toBeHidden({ timeout: 20_000 });
   await expect(page.locator("ion-tab-bar")).toBeVisible();
 
-  await page.getByTestId("sheet-close").click();
+  await dismissLandingSheet(page);
   await page.getByText("Logbook", { exact: true }).click();
   await expect(page.getByTestId("flight-row")).toBeVisible();
   await expect(page.getByText(/1 flights/)).toBeVisible();

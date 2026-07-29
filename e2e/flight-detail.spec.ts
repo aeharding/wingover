@@ -1,5 +1,7 @@
 import { expect, test } from "@playwright/test";
 
+import { dismissLandingSheet } from "./landingSheet";
+
 type Page = import("@playwright/test").Page;
 
 async function openImportedFlight(page: Page) {
@@ -63,6 +65,7 @@ async function recordQuickFlight(page: import("@playwright/test").Page) {
   await expect(
     page.getByRole("button", { name: "Start Flight" }),
   ).toBeVisible();
+  await dismissLandingSheet(page);
 }
 
 test("flight detail shows stats, exports GPX, and deletes", async ({
