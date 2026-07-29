@@ -281,18 +281,30 @@ class FakeMap {
     this.destroyed = true;
   }
 
-  // Web-mercator pixels, so the adapter's projection-derived zoom is real.
+  // Web-mercator pixels, so the adapter's projection-derived zoom is real —
+  // including the camera's rotation, which turns projected vectors on the
+  // page exactly as the real bundle does (the x-only zoom-probe regression
+  // hid behind a fake that never rotated).
   convertCoordinateToPointOnPage(coordinate: {
     latitude: number;
     longitude: number;
   }) {
     const scale = (256 * Math.pow(2, this.zoom)) / 360;
-    return { x: coordinate.longitude * scale, y: -coordinate.latitude * scale };
+    const x = coordinate.longitude * scale;
+    const y = -coordinate.latitude * scale;
+    const r = (this.rotationValue * Math.PI) / 180;
+    return {
+      x: x * Math.cos(r) - y * Math.sin(r),
+      y: x * Math.sin(r) + y * Math.cos(r),
+    };
   }
 
   convertPointOnPageToCoordinate(point: { x: number; y: number }) {
     const scale = (256 * Math.pow(2, this.zoom)) / 360;
-    return { latitude: -point.y / scale, longitude: point.x / scale };
+    const r = (this.rotationValue * Math.PI) / 180;
+    const x = point.x * Math.cos(r) + point.y * Math.sin(r);
+    const y = -point.x * Math.sin(r) + point.y * Math.cos(r);
+    return { latitude: -y / scale, longitude: x / scale };
   }
 
   addEventListener(type: string, listener: (event: unknown) => void) {
@@ -708,5 +720,43 @@ describe("mapkit adapter: a cancelled touch unwinds the pan recognizer", () => {
     view.moveTo({ center: AT, bearing: 270 }, { animate: false });
 
     expect(theMap().scrollEnabledWrites).toEqual([]);
+  });
+});
+
+// The zoom probe projects a small eastward step and reads pixels-per-degree
+// off it. A rotated camera turns that step on screen, so an x-only read
+// shrinks by cos(rotation) and under-reports the zoom — and because every
+// zoom write is applied as a cameraDistance RATIO off that reading, the
+// camera then lands exactly that far past what was asked. Pilot-visible as
+// the ZoomControl's whole range rendering way zoomed in after a Mac trackpad
+// pinch left a twist on the camera (PR #199).
+describe("mapkit adapter: the zoom probe vs a rotated camera", () => {
+  beforeEach(() => {
+    (globalThis as unknown as { mapkit: unknown }).mapkit = fakeMapKit;
+    created.length = 0;
+    privateSurface.setPadding = true;
+    privateSurface.honorsOptions = true;
+    document.body.innerHTML = "";
+  });
+
+  it("reads the same zoom however the camera is turned", async () => {
+    const view = await createView();
+    expect(view.camera().zoom).toBeCloseTo(14, 6);
+
+    // cos(60°) = 0.5: an x-only probe would read a whole level low.
+    theMap().twistTo(60);
+
+    expect(view.camera().zoom).toBeCloseTo(14, 6);
+  });
+
+  it("lands a zoom set exactly where asked on a twisted camera", async () => {
+    const view = await createView();
+    theMap().twistTo(60);
+
+    view.moveTo({ zoom: 12 }, { animate: false });
+
+    // Two levels out from 14 = 4x the camera distance. The x-only probe
+    // read 13, scaled by 2x, and left the camera a level too far in.
+    expect(theMap().cameraDistance).toBeCloseTo(5000 * 4, 6);
   });
 });
