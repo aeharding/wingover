@@ -157,6 +157,12 @@ final class WaypointUITests: XCTestCase {
     let confirm = app.buttons["Stop"].firstMatch
     XCTAssertTrue(confirm.waitForExistence(timeout: 5), "no End flight? confirm")
     confirm.tap()
+    // Every stop here saves a flight, and the sheet that announces it takes
+    // the whole tab shell out of the AX tree until it goes. Cleared HERE
+    // rather than at each call site: the calibration flight's sheet was
+    // still up two hundred lines later, where the failure surfaced as
+    // "Failed to tap Plan Button: No matches found".
+    dismissLandingSheet(app)
   }
 
   // The flight's waypoints exactly as the native announcer holds them: the
