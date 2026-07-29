@@ -241,19 +241,39 @@ describe("collection", () => {
     expect(consumeEndedFlight()).toBeNull();
   });
 
-  it("keeps the engine's copy when the save fails, and leaves nothing to show", async () => {
+  it("keeps the engine's copy when the save fails, and says so", async () => {
     dbMock.saveFlight.mockRejectedValue(new Error("disk full"));
-    const { consumeEndedFlight } = await bootSession();
+    const { consumeEndedFlight, collectionFailedSync } = await bootSession();
 
     endedWith(FLOWN);
     engineMock.notify();
 
     await vi.waitFor(() => expect(dbMock.saveFlight).toHaveBeenCalled());
-    // The WAL is the only copy of this flight; nothing may drop it. And a
-    // flight that did not reach the logbook is not one to announce: the
-    // engine stays on "ended", which is the app's own way of saying so.
+    // The WAL is the only copy of this flight; nothing may drop it.
     expect(engineMock.engine.discard).not.toHaveBeenCalled();
+    // Nothing to ANNOUNCE — a flight that did not reach the logbook is not a
+    // saved one — but the pilot is not left guessing either: this flag is what
+    // gives the "ended" surface something to say (SavingSurface). Asserted
+    // because the failure is silent without it, and silence on this ring is
+    // what STEERING forbids.
     expect(consumeEndedFlight()).toBeNull();
+    expect(collectionFailedSync()).toBe(true);
+  });
+
+  it("clears the failure once a retry gets the flight through", async () => {
+    dbMock.saveFlight.mockRejectedValueOnce(new Error("disk full"));
+    const { collectionFailedSync, retryCollection } = await bootSession();
+
+    endedWith(FLOWN);
+    engineMock.notify();
+    await vi.waitFor(() => expect(collectionFailedSync()).toBe(true));
+
+    retryCollection();
+
+    await vi.waitFor(() =>
+      expect(engineMock.engine.discard).toHaveBeenCalledOnce(),
+    );
+    expect(collectionFailedSync()).toBe(false);
   });
 
   it("retries a failed save on the next foreground", async () => {

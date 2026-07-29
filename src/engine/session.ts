@@ -90,6 +90,43 @@ export function consumeEndedFlight(): string | null {
 // against the discard of the flight it is still reading.
 let collecting = false;
 
+/**
+ * Whether the last collection attempt failed, and a way for the one surface
+ * that can show it to hear about it.
+ *
+ * Its own signal rather than engine state: a save that fails is the storage
+ * layer's problem, not a flight state, and the engine's status has no business
+ * growing a member for it. The engine stays on "ended" either way, which is
+ * what keeps the flight safe.
+ */
+let collectionFailed = false;
+const collectionListeners = new Set<() => void>();
+
+export function subscribeCollection(listener: () => void): () => void {
+  collectionListeners.add(listener);
+  return () => {
+    collectionListeners.delete(listener);
+  };
+}
+
+export function collectionFailedSync(): boolean {
+  return collectionFailed;
+}
+
+/**
+ * The pilot asking again. The automatic retries (foreground, next launch) do
+ * not reach someone who simply keeps looking at the screen.
+ */
+export function retryCollection(): void {
+  collectWhenEnded();
+}
+
+function setCollectionFailed(value: boolean): void {
+  if (collectionFailed === value) return;
+  collectionFailed = value;
+  collectionListeners.forEach((listener) => listener());
+}
+
 function collectWhenEnded() {
   if (engine.snapshotSync().status !== "ended") return;
   void collectEndedFlight();
@@ -105,13 +142,17 @@ async function collectEndedFlight(): Promise<void> {
     try {
       flight = await persistFlight(snapshot.track, snapshot.waypoints);
     } catch (error) {
-      // Quiet, not silent-with-loss: the WAL still holds the flight and the
-      // engine stays on "ended", so the next foreground or launch collects it.
-      // The pilot gets no word of it yet — that gap is tracked, and its home is
-      // the diagnostics work, not a crash.
+      // Not silent: "ended" owns a surface now (SavingSurface), and this flag
+      // is what turns it from "Saving flight" into something the pilot can act
+      // on. STEERING requires a finalization failure to surface loudly on the
+      // ring where the WAL is the only copy, and this is that ring. Nothing is
+      // lost either way — the WAL still holds the flight and the engine stays
+      // on "ended", so a foreground, a relaunch, or Try Again collects it.
       console.error("flight persist failed:", error);
+      setCollectionFailed(true);
       return;
     }
+    setCollectionFailed(false);
     // Set BEFORE the discard: the discard is what mounts the shell that reads
     // it. A reload landing in that gap costs the pilot a toast, never a
     // flight — the logbook already has it.

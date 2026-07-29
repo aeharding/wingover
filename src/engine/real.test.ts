@@ -876,6 +876,33 @@ describe("GeolocationRecordingEngine", () => {
     expect((await createEngine().getSnapshot()).status).toBe("idle");
   });
 
+  // The other half of that fix, and the half nothing covered: the ended path
+  // now ASKS for the lock, so it can also be REFUSED. A second tab must still
+  // collect (the deterministic id makes the save a no-op) and must leave the
+  // clearing to the owner — a viewer that cleared the WAL would drop a flight
+  // the owner has not saved yet, which is the one thing that may never happen.
+  it("a refused tab collects an ended flight without clearing the owner's WAL", async () => {
+    const owner = createEngine();
+    await armAndTakeOff(owner);
+    await owner.end();
+    await owner.getSnapshot();
+    expect((await readWal()).session).not.toBeNull();
+
+    (globalThis.navigator as unknown as { locks: unknown }).locks = {
+      request: (_name: string, _opts: unknown, cb: (lock: null) => unknown) =>
+        Promise.resolve(cb(null)),
+    };
+    const viewer = createEngine();
+    expect((await viewer.getSnapshot()).status).toBe("ended");
+
+    await viewer.discard();
+    const { session } = await readWal();
+    expect(session).not.toBeNull();
+    // And the owner can still finish the job it alone owns.
+    await owner.discard();
+    expect(await readWal()).toEqual({ session: null, fixes: [] });
+  });
+
   it("dismiss returns landed to recording until movement resumes", async () => {
     const engine = createEngine();
     await armAndTakeOff(engine);
