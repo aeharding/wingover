@@ -1,5 +1,12 @@
+/* ONE radius, not the `16px 16px 0 0` shorthand this started as. Ionic feeds
+   --border-radius to logical LONGHANDS for a sheet
+   (border-start-start-radius: var(--border-radius), and the bottom pair
+   hard-zeroed), so a shorthand is invalid there and every corner fell back to
+   0 — the sheet had no rounded top at all. A single value also does the right
+   thing for the desktop card, where the wrapper takes it as a shorthand and
+   rounds all four. */
 .sheet {
-  --border-radius: 16px 16px 0 0;
+  --border-radius: 16px;
 }
 
 /* The iOS close affordance: a small grey circle over the content, not a
@@ -32,6 +39,15 @@
     &:active {
       background: color(display-p3 0.47 0.47 0.5 / 0.5);
     }
+  }
+}
+
+/* Desktop has no detent to be one of: it is a plain centered modal, which
+   Ionic sizes itself (the same thing the sync sheet relies on). The summary
+   just takes the room it needs and the card scrolls. */
+@media (min-width: 992px) {
+  .summary {
+    height: auto;
   }
 }
 
