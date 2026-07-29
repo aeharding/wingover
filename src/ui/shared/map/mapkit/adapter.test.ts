@@ -729,7 +729,7 @@ describe("mapkit adapter: a cancelled touch unwinds the pan recognizer", () => {
 // zoom write is applied as a cameraDistance RATIO off that reading, the
 // camera then lands exactly that far past what was asked. Pilot-visible as
 // the ZoomControl's whole range rendering way zoomed in after a Mac trackpad
-// pinch left a twist on the camera.
+// pinch left a twist on the camera (PR #199).
 describe("mapkit adapter: the zoom probe vs a rotated camera", () => {
   beforeEach(() => {
     (globalThis as unknown as { mapkit: unknown }).mapkit = fakeMapKit;

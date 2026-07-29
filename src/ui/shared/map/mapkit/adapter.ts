@@ -258,7 +258,7 @@ export async function createMapKitMapView(
     // The step's LENGTH, not its x-component: a rotated camera (track-up,
     // a twisted trackpad pinch) turns the step on screen, and an x-only
     // read shrinks by cos(rotation) — every zoom applied off it then lands
-    // that much too far in. Mercator is conformal, so length is
+    // that much too far in (PR #199). Mercator is conformal, so length is
     // rotation-proof.
     const dpx = Math.hypot(p1.x - p0.x, p1.y - p0.y);
     if (!Number.isFinite(dpx) || dpx < 1e-6) return null;

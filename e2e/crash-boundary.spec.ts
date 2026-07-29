@@ -99,14 +99,20 @@ test("a crash in flight heals itself, and the flight is still recording", async 
   // fresh document clears it. The heal IS that navigation, so an evaluate it
   // catches mid-flight dies with "Execution context was destroyed" — and a
   // rejection aborts expect.poll instead of retrying (flaked on CI and
-  // locally, PR #199). The dying document still counts as alive; the next
-  // tick reads the fresh one.
+  // locally, PR #199). That one race retries — the dying document counts as
+  // alive, and the next tick reads the fresh one; any other failure rethrows
+  // so the test reports its real cause, not a heal timeout.
   await expect
     .poll(
       () =>
         page
           .evaluate(() => (window as { __alive?: boolean }).__alive)
-          .catch(() => true),
+          .catch((error) => {
+            if (String(error).includes("Execution context was destroyed")) {
+              return true;
+            }
+            throw error;
+          }),
       { timeout: 20_000 },
     )
     .toBeUndefined();
