@@ -1,5 +1,5 @@
 import { IonInput, IonItem, IonList, IonTextarea } from "@ionic/react";
-import type { KeyboardEvent as ReactKeyboardEvent } from "react";
+import type { KeyboardEvent as ReactKeyboardEvent, Ref } from "react";
 
 import { isTauri } from "../../../platform/index";
 
@@ -21,15 +21,19 @@ export default function FlightFields({
   drafts,
   setDraft,
   commit,
+  nameRef,
 }: {
   drafts: Drafts;
   setDraft: (key: keyof Drafts, value: string) => void;
   commit: () => void;
+  /** The first field, for callers that want to put the cursor in it. */
+  nameRef?: Ref<HTMLIonInputElement>;
 }) {
   return (
     <IonList>
       <IonItem>
         <IonInput
+          ref={nameRef}
           label="Name"
           clearInput
           autocapitalize="words"

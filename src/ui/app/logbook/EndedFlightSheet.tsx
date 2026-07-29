@@ -1,6 +1,6 @@
 import { IonContent, IonIcon, IonModal } from "@ionic/react";
 import { closeOutline } from "ionicons/icons";
-import { type CSSProperties, useState } from "react";
+import { type CSSProperties, type Ref, useRef, useState } from "react";
 
 import { consumeEndedFlight } from "../../../engine/session";
 import {
@@ -63,12 +63,33 @@ export default function EndedFlightSheet() {
   // animation. Clearing the flight instead would empty the sheet mid-slide.
   const [open, setOpen] = useState(flightId !== null);
   const isDesktop = useIsDesktop();
+  const nameRef = useRef<HTMLIonInputElement>(null);
+
+  // Dragging to the top stop is the pilot saying they came for the fields, so
+  // put the cursor in the first one.
+  //
+  // ionDragEnd, not ionBreakpointDidChange: it fires on FINGER-UP and its
+  // detail already carries snapBreakpoint, the stop the sheet is about to
+  // animate to. So the keyboard comes up alongside the sheet instead of a
+  // beat after it settles. (ionBreakpointDidChange fires from the snap
+  // animation's completion — gestures/sheet.js — which is too late, and it
+  // would also fire for a handle tap, where a keyboard nobody asked for is
+  // just rude.)
+  // Optional in the type because a CARD modal's drag has no breakpoint to
+  // snap to; a sheet's always does.
+  function focusFirstFieldAtFullHeight(snapBreakpoint: number | undefined) {
+    if (snapBreakpoint !== 1) return;
+    void nameRef.current?.setFocus();
+  }
 
   return (
     <IonModal
       className={styles.sheet}
       isOpen={open}
       onDidDismiss={() => setFlightId(null)}
+      onIonDragEnd={(event) =>
+        focusFirstFieldAtFullHeight(event.detail.snapBreakpoint)
+      }
       // A gesture sheet on a phone; on desktop a plain modal, which Ionic
       // already centers and sizes as a card (what the sync sheet relies on
       // too). Passing breakpoints is what opts OUT of that styling, so the
@@ -81,12 +102,26 @@ export default function EndedFlightSheet() {
       {...(isDesktop ? {} : SHEET_GESTURES)}
       style={{ "--detent": DETENT } as CSSProperties}
     >
-      {flightId && <EndedFlight id={flightId} onClose={() => setOpen(false)} />}
+      {flightId && (
+        <EndedFlight
+          id={flightId}
+          nameRef={nameRef}
+          onClose={() => setOpen(false)}
+        />
+      )}
     </IonModal>
   );
 }
 
-function EndedFlight({ id, onClose }: { id: string; onClose: () => void }) {
+function EndedFlight({
+  id,
+  nameRef,
+  onClose,
+}: {
+  id: string;
+  nameRef: Ref<HTMLIonInputElement>;
+  onClose: () => void;
+}) {
   const { units } = useSettings();
   const { flight, setFlight, track } = useFlightDoc(id);
   const drafts = useFlightDrafts(flight, setFlight, track);
@@ -115,6 +150,7 @@ function EndedFlight({ id, onClose }: { id: string; onClose: () => void }) {
       </div>
       <div className={styles.details}>
         <FlightFields
+          nameRef={nameRef}
           drafts={drafts.drafts}
           setDraft={drafts.setDraft}
           commit={drafts.commit}
