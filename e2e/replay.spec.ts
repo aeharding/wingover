@@ -135,10 +135,10 @@ async function recordLongFlight(page: Page) {
   await page.waitForTimeout(1500);
   await page.getByRole("button", { name: "Stop flight" }).click();
   await page.getByRole("button", { name: "Stop", exact: true }).click();
+  await dismissLandingSheet(page);
   await expect(
     page.getByRole("button", { name: "Start Flight" }),
   ).toBeVisible();
-  await dismissLandingSheet(page);
 }
 
 function barogramTotal(page: Page) {
@@ -252,11 +252,11 @@ test("the timeline zooms with the wheel and resets", async ({ page }) => {
   await page.waitForTimeout(1000);
   await page.getByRole("button", { name: "Stop flight" }).click();
   await page.getByRole("button", { name: "Stop", exact: true }).click();
+  await dismissLandingSheet(page);
   await expect(
     page.getByRole("button", { name: "Start Flight" }),
   ).toBeVisible();
 
-  await dismissLandingSheet(page);
   await page.getByText("Logbook", { exact: true }).click();
   await page.getByTestId("flight-row").click();
   await expect(page.getByText("Max altitude")).toBeVisible();

@@ -175,10 +175,10 @@ test("real engine: gate, backdated takeoff, reload kill drill, stop", async ({
 
   await page.getByRole("button", { name: "Stop flight" }).click();
   await page.getByRole("button", { name: "Stop", exact: true }).click();
+  await dismissLandingSheet(page);
   await expect(page.getByRole("button", { name: "Start Flight" })).toBeVisible({
     timeout: 15_000,
   });
-  await dismissLandingSheet(page);
   await page.getByText("Logbook", { exact: true }).click();
   await expect(page.getByText(/1 flights/)).toBeVisible();
   expect(pageErrors).toEqual([]);
@@ -243,10 +243,10 @@ test("landing prompt: dismiss re-arms, stop saves", async ({ page }) => {
     .getByTestId("landing-prompt")
     .getByRole("button", { name: /Stop/ })
     .click();
+  await dismissLandingSheet(page);
   await expect(
     page.getByRole("button", { name: "Start Flight" }),
   ).toBeVisible();
-  await dismissLandingSheet(page);
   await page.getByText("Logbook", { exact: true }).click();
   await expect(page.getByText(/1 flights/)).toBeVisible();
 });
@@ -265,10 +265,10 @@ test("backgrounded landing: a burst-replayed flight finalizes retroactively", as
   // wall-clock wait.
   await emit(Array.from({ length: 50 }, () => ({ speed: 0.3 })));
 
+  await dismissLandingSheet(page);
   await expect(
     page.getByRole("button", { name: "Start Flight" }),
   ).toBeVisible();
-  await dismissLandingSheet(page);
   await page.getByText("Logbook", { exact: true }).click();
   await expect(page.getByText(/1 flights/)).toBeVisible();
 });

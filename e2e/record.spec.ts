@@ -83,14 +83,17 @@ test("arm, auto-takeoff, reload kill drill, stop, logbook", async ({
 
   await page.getByRole("button", { name: "Stop flight" }).click();
   await page.getByRole("button", { name: "Stop", exact: true }).click();
+  // The saved flight presents itself over the returning shell; dismissing it
+  // is what puts the pilot back on the tabs. It comes FIRST because a
+  // presented ion-modal marks the app root aria-hidden, and getByRole reads
+  // the accessibility tree — Start Flight is not merely covered, it stops
+  // matching. (CI caught this; locally the assertion won the race.)
+  await dismissLandingSheet(page);
   await expect(page.getByRole("button", { name: "Start Flight" })).toBeVisible({
     timeout: 15_000,
   });
   await expect(page.locator("ion-tab-bar")).toBeVisible();
 
-  // The saved flight presents itself over the returning shell; dismissing it
-  // is what puts the pilot back on the tabs.
-  await dismissLandingSheet(page);
   await page.getByText("Logbook", { exact: true }).click();
   await expect(page.getByTestId("flight-row")).toBeVisible();
   await expect(page.getByText(/1 flights/)).toBeVisible();

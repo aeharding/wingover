@@ -220,11 +220,11 @@ test("flight detail draws the track even when the map style loads slowly", async
   await page.waitForTimeout(500);
   await page.getByRole("button", { name: "Stop flight" }).click();
   await page.getByRole("button", { name: "Stop", exact: true }).click();
+  await dismissLandingSheet(page);
   await expect(
     page.getByRole("button", { name: "Start Flight" }),
   ).toBeVisible();
 
-  await dismissLandingSheet(page);
   await page.getByText("Logbook", { exact: true }).click();
   await page.getByTestId("flight-row").click();
 
@@ -266,11 +266,11 @@ test("leaving fullscreen eases the flight map back to its framing", async ({
   await page.waitForTimeout(500);
   await page.getByRole("button", { name: "Stop flight" }).click();
   await page.getByRole("button", { name: "Stop", exact: true }).click();
+  await dismissLandingSheet(page);
   await expect(
     page.getByRole("button", { name: "Start Flight" }),
   ).toBeVisible();
 
-  await dismissLandingSheet(page);
   await page.getByText("Logbook", { exact: true }).click();
   await page.getByTestId("flight-row").click();
   await expect(page.getByTestId("launch-marker")).toBeVisible({
@@ -465,11 +465,11 @@ test("composite map draws all flights even with a slow style", async ({
   await page.waitForTimeout(500);
   await page.getByRole("button", { name: "Stop flight" }).click();
   await page.getByRole("button", { name: "Stop", exact: true }).click();
+  await dismissLandingSheet(page);
   await expect(
     page.getByRole("button", { name: "Start Flight" }),
   ).toBeVisible();
 
-  await dismissLandingSheet(page);
   await page.getByText("Logbook", { exact: true }).click();
   await page.getByTestId("logbook-options").click();
   await page.getByRole("button", { name: "All Flights" }).click();
