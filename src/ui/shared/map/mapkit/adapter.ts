@@ -255,7 +255,12 @@ export async function createMapKitMapView(
     const p1 = map.convertCoordinateToPointOnPage(
       new mapkit.Coordinate(c.latitude, c.longitude + 0.02),
     );
-    const dpx = Math.abs(p1.x - p0.x);
+    // The step's LENGTH, not its x-component: a rotated camera (track-up,
+    // a twisted trackpad pinch) turns the step on screen, and an x-only
+    // read shrinks by cos(rotation) — every zoom applied off it then lands
+    // that much too far in. Mercator is conformal, so length is
+    // rotation-proof.
+    const dpx = Math.hypot(p1.x - p0.x, p1.y - p0.y);
     if (!Number.isFinite(dpx) || dpx < 1e-6) return null;
     return Math.log2((360 * dpx) / (256 * 0.02));
   }
