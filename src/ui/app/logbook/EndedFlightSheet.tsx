@@ -79,7 +79,14 @@ export default function EndedFlightSheet() {
   // snap to; a sheet's always does.
   function focusFirstFieldAtFullHeight(snapBreakpoint: number | undefined) {
     if (snapBreakpoint !== 1) return;
-    void nameRef.current?.setFocus();
+    // preventScroll, which is why this goes through the native input rather
+    // than IonInput.setFocus() — that is a bare nativeInput.focus(), and the
+    // browser's default is to scroll the focused element into view. The field
+    // is already at the top of a sheet that is still animating there, so the
+    // only thing that scroll can do is move it out from under the pilot.
+    void nameRef.current
+      ?.getInputElement()
+      .then((input) => input.focus({ preventScroll: true }));
   }
 
   return (
