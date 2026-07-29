@@ -86,6 +86,9 @@ test("arm, auto-takeoff, reload kill drill, stop, logbook", async ({
   });
   await expect(page.locator("ion-tab-bar")).toBeVisible();
 
+  // The saved flight presents itself over the returning shell; dismissing it
+  // is what puts the pilot back on the tabs.
+  await page.getByTestId("sheet-close").click();
   await page.getByText("Logbook", { exact: true }).click();
   await expect(page.getByTestId("flight-row")).toBeVisible();
   await expect(page.getByText(/1 flights/)).toBeVisible();
@@ -172,9 +175,11 @@ test("a two-hour flight lands itself and reaches the logbook hands-free", async 
   // The simulated pilot stops in place after two hours of flight; landing
   // detection, the fix-time grace, finalization, and collection all run
   // with zero interaction.
-  await expect(page.getByText("Flight saved to logbook")).toBeVisible({
+  // The saved flight presents itself as a sheet over the returning shell.
+  await expect(page.getByTestId("sheet-close")).toBeVisible({
     timeout: 20_000,
   });
+  await page.getByTestId("sheet-close").click();
   await expect(page.getByRole("button", { name: "Start Flight" })).toBeVisible({
     timeout: 15_000,
   });

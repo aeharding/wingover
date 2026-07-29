@@ -21,6 +21,7 @@ import { Redirect, Route } from "react-router-dom";
 import { engine } from "../engine";
 import { isTauri } from "../platform";
 import DesktopShell from "./app/desktop/DesktopShell";
+import EndedFlightSheet from "./app/logbook/EndedFlightSheet";
 import AllFlightsMapPage from "./app/pages/AllFlightsMapPage";
 import AppearancePage from "./app/pages/AppearancePage";
 import FlightDetailPage from "./app/pages/FlightDetailPage";
@@ -105,17 +106,26 @@ function AppBody() {
   // live decides whether a crash reloads or surfaces: in flight a reload is
   // near-invisible and the recording survives it, on the ground there is
   // nothing to save and the pilot deserves to be told.
+  //
+  // The keys are load-bearing, not decoration. Same component, same position,
+  // so without them React reconciles these two elements into ONE fiber and the
+  // caught error survives the swap: an unhealable flight crash would hand the
+  // ground shell a boundary that is already tripped, and the pilot lands on the
+  // crash screen with no way off it.
   if (inFlight)
     return (
-      <AppBoundary attemptHeal>
+      <AppBoundary key="flight" attemptHeal>
         <FlightSurface />
       </AppBoundary>
     );
   // Desktop gets its own shell: plain react-router, no Ionic outlet (see
   // DesktopShell). Phones keep the Ionic tab shell untouched.
   return (
-    <AppBoundary>
+    <AppBoundary key="ground">
       <IonApp>
+        {/* Here rather than in a page: this shell mounting IS the moment a
+            flight finished, and it outlives navigation between tabs. */}
+        <EndedFlightSheet />
         {/* Above the shells, so a sheet can be raised from anywhere without
             each page owning a modal; inside IonApp, because IonModal
             presents against it. */}

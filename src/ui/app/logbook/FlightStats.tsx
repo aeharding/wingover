@@ -14,17 +14,24 @@ import styles from "./FlightStats.module.css";
 /**
  * The six-row flight summary (Duration, Distance, speeds, altitudes), shared
  * by the phone detail page and the desktop seat card.
+ *
+ * skipDuration is for surfaces that already lead with airtime as a headline
+ * (EndedFlightSheet): the same number twice a screen apart reads as a bug.
  */
 export default function FlightStats({
   stats,
   units,
+  skipDuration,
 }: {
   stats: Stats;
   units: Units;
+  skipDuration?: boolean;
 }) {
   return (
     <IonList>
-      <Stat label="Duration" value={formatAirtime(stats.durationSeconds)} />
+      {!skipDuration && (
+        <Stat label="Duration" value={formatAirtime(stats.durationSeconds)} />
+      )}
       <Stat
         label="Distance"
         value={formatDistance(stats.distanceMeters, units)}

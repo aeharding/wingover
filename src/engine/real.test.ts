@@ -865,6 +865,15 @@ describe("GeolocationRecordingEngine", () => {
     expect(snapshot.track.map((fix) => fix.speed)).toEqual([
       2, 3, 6, 6, 6, 6, 6, 0.3,
     ]);
+
+    // ...and collecting it EMPTIES the WAL. Hydrating an already-ended
+    // session used to return before taking the recorder lock, so walOwner
+    // stayed false and discard() skipped clearWal(): the flight was saved,
+    // the WAL kept it, and every later launch collected the same flight
+    // again — re-toasting, and resurrecting one the pilot had deleted.
+    await reborn.discard();
+    expect(await readWal()).toEqual({ session: null, fixes: [] });
+    expect((await createEngine().getSnapshot()).status).toBe("idle");
   });
 
   it("dismiss returns landed to recording until movement resumes", async () => {

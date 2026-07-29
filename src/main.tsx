@@ -20,6 +20,12 @@ import { installExternalLinkHandler } from "./ui/shared/externalLinks";
 import { captureLaunchUrl } from "./ui/shared/map/config";
 
 installExternalLinkHandler();
+// Collection runs engine-side (engine/session.ts) and has one thing to tell
+// the pilot. Subscribed here, outside React, because it reports whether or
+// not any surface is mounted — including with the crash screen up in place of
+// the flight surface. No report can be missed before this line: the earliest
+// collection waits on the WAL read, and module bodies finish before the first
+// microtask does.
 // Resize <ion-app> and flag html.keyboard-open when tauri-plugin-ionic
 // reports the on-screen keyboard (dormant off-device).
 installKeyboardLayout();

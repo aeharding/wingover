@@ -7,7 +7,6 @@ import ArmedSurface from "./ArmedSurface";
 import { useBigConfirm } from "./BigConfirm";
 import ErrorScreen from "./ErrorScreen";
 import RecordingSurface from "./RecordingSurface";
-import { useFlightCollection } from "./useFlightCollection";
 
 import styles from "./FlightSurface.module.css";
 
@@ -22,8 +21,6 @@ export default function FlightSurface() {
   const liveView = useLiveViewPrefs();
 
   const status = snapshot.status;
-
-  useFlightCollection(status);
 
   async function cancelArmed() {
     await engine.discard();
@@ -58,10 +55,10 @@ export default function FlightSurface() {
     engine.dismissLanding();
   }
 
-  // One surface per engine state. "ended" (collection is already running)
-  // deliberately paints nothing but the surface's own background, and "idle"
-  // never reaches here: App.tsx sheds this surface for the shell, whose Fly
-  // tab is the home screen (app/pages/FlyPage).
+  // One surface per engine state. "ended" (collection is running engine-side,
+  // in engine/session.ts) deliberately paints nothing but the surface's own
+  // background, and "idle" never reaches here: App.tsx sheds this surface for
+  // the shell, whose Fly tab is the home screen (app/pages/FlyPage).
   function surface() {
     switch (status) {
       case "acquiring":
