@@ -98,6 +98,23 @@ The invariants, in priority order:
 
 These invariants double as the primary test suite: the "kill drills" (background 30+ min, force webview termination, force app termination, relaunch mid-recording) are automated in CI against simulators and re-run on physical hardware before each release. See Testing Strategy.
 
+### What the engine and the WAL are NOT
+
+Stated as plainly as the invariants, because this is the boundary that keeps them cheap. Each of these is a thing the engine deliberately does not do, and a proposal to add one needs to argue against this section first.
+
+**The WAL holds exactly one flight.** It is not a queue, a backlog, or a history. A flight is finalized into IndexedDB and the WAL is cleared before anything else may start. If the WAL is not clear, the next flight does not begin — that refusal is the feature, not a limitation to engineer around. Anything that would let two unfinalized flights coexist is out of scope by construction.
+
+**The recovery point is the pilot's next visit, not some earlier instant.** A pilot who flies comes back to the app at least once, to press Start Flight. Being caught up by then is the whole obligation. This is what makes the WAL single-flight safe, and it is why the engine owes nothing to a pilot who never returns: there is no background finalization while the app is closed, no scheduled task, no server.
+
+**Multi-tab is a safety property, not a feature.** The recorder lock exists so a second tab cannot destroy the first's WAL. It is not there to make two tabs work well together, and no effort should go into making the second one a good experience beyond refusing to corrupt anything.
+
+What is actually being bought, and the only things worth complexity:
+
+1. **A crash on the flight surface heals itself.** It reloads once and comes back where it was, track intact, ideally unnoticed — the webview never held the recording to begin with. Anywhere else (logbook, plan, settings) a crash just shows a crash screen, and that is fine.
+2. Recording survives the phone sleeping, the app backgrounding, and the JS process being stopped — **specifically across takeoff and landing**, the two moments the pilot is not looking at the screen and the two the flight is worthless without.
+
+A race that can only be lost while the pilot is present, watching, and would be repaired by the next launch anyway is not in the same class as those two, and should not be priced like it.
+
 ### Background parity: the engine replays, the UI derives
 
 Nearly as load-bearing as webview disposability, and its logical completion:
