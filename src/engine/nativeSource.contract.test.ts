@@ -28,6 +28,7 @@ import {
   PLUGIN_DIR,
 } from "../contractFixtures";
 import { getCurrentPosition } from "../platform/currentPosition";
+import type { SourceError, SourcePosition } from "./engine";
 import {
   classifyDrainError,
   nativeCore,
@@ -36,7 +37,6 @@ import {
   permissionRefusal,
   type PermissionStatus,
 } from "./nativeSource";
-import type { SourceError, SourcePosition } from "./real";
 
 const core = vi.hoisted(() => ({ invoke: vi.fn() }));
 vi.mock("@tauri-apps/api/core", () => core);

@@ -8,7 +8,7 @@ drills.
 
 - ~~`tauri-plugin-geolocation`~~ REMOVED 2026-07-10 (superseded by the
   in-repo wingover plugin; `tauriSource.ts` deleted with it).
-- Engine seam: `GeolocationRecordingEngine` takes a `PositionSource`;
+- Engine seam: `Engine` takes a `PositionSource`;
   `tauriSource.ts` adapts the plugin (permissions flow + mapping, unit-tested).
   Engine selection auto-detects Tauri (`__TAURI_INTERNALS__`) — no flags needed.
 - `bundle.iOS.minimumSystemVersion: "16.0"` (open question #7 — bump if you decide otherwise).

@@ -1,4 +1,4 @@
-import type { PositionSource, SourcePosition } from "./real";
+import type { PositionSource, SourcePosition } from "./engine";
 
 /**
  * A recording source backed by a real GPX track, replayed compressed on the
@@ -6,7 +6,7 @@ import type { PositionSource, SourcePosition } from "./real";
  * be clipped to a mid-flight moment (do that to the file, not here), so the
  * aircraft ends up sitting still with a trailing track while the instruments
  * show that moment's derived speed/course/climb (the engine derives those from
- * consecutive positions — see real.ts normalizeFix — so the GPX only supplies
+ * consecutive positions — see engine.ts toFix — so the GPX only supplies
  * lat/lon/alt/time).
  *
  * Strictly opt-in via ?mock-gpx (dev/screenshots only): deterministic framing
