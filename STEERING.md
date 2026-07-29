@@ -110,7 +110,7 @@ Stated as plainly as the invariants, because this is the boundary that keeps the
 
 What is actually being bought, and the only things worth complexity:
 
-1. **It heals from a crash, transparently.** Not "it does not crash" — no app keeps that promise, and designing as though it does is how a crash becomes a black screen (#185). A crash in flight reloads the page once and comes back exactly where it was: recording is engine-side and WAL-backed, so the reload costs nothing to recover from and the pilot ideally never learns it happened. The track is preserved because it was never the webview's to lose.
+1. **A crash on the flight surface heals itself.** It reloads once and comes back where it was, track intact, ideally unnoticed — the webview never held the recording to begin with. Anywhere else (logbook, plan, settings) a crash just shows a crash screen, and that is fine.
 2. Recording survives the phone sleeping, the app backgrounding, and the JS process being stopped — **specifically across takeoff and landing**, the two moments the pilot is not looking at the screen and the two the flight is worthless without.
 
 A race that can only be lost while the pilot is present, watching, and would be repaired by the next launch anyway is not in the same class as those two, and should not be priced like it.
