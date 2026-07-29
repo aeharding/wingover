@@ -96,10 +96,17 @@ test("a crash in flight heals itself, and the flight is still recording", async 
   await flyThenCrash(page);
 
   // The reload is the assertion: __alive was set before the crash and only a
-  // fresh document clears it.
+  // fresh document clears it. The heal IS that navigation, so an evaluate it
+  // catches mid-flight dies with "Execution context was destroyed" — and a
+  // rejection aborts expect.poll instead of retrying (flaked on CI and
+  // locally, PR #199). The dying document still counts as alive; the next
+  // tick reads the fresh one.
   await expect
     .poll(
-      () => page.evaluate(() => (window as { __alive?: boolean }).__alive),
+      () =>
+        page
+          .evaluate(() => (window as { __alive?: boolean }).__alive)
+          .catch(() => true),
       { timeout: 20_000 },
     )
     .toBeUndefined();
