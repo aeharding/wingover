@@ -11,6 +11,7 @@ import {
 } from "../../../flight/format";
 import type { FlightStats as Stats } from "../../../flight/stats";
 import { useSettings } from "../../shared/settings/SettingsContext";
+import { useIsDesktop } from "../useIsDesktop";
 import FlightFields from "./FlightFields";
 import FlightStats from "./FlightStats";
 import TrackSketch from "./TrackSketch";
@@ -49,24 +50,35 @@ import styles from "./EndedFlightSheet.module.css";
 /** The landing stop, as a fraction of the screen. CSS reads it as --detent. */
 const DETENT = 0.42;
 
+const SHEET_GESTURES = {
+  breakpoints: [0, DETENT, 1],
+  initialBreakpoint: DETENT,
+  handle: true,
+  handleBehavior: "cycle" as const,
+};
+
 export default function EndedFlightSheet() {
   const [flightId, setFlightId] = useState(consumeEndedFlight);
   // Presented-ness is its own state so the close button can play the dismiss
   // animation. Clearing the flight instead would empty the sheet mid-slide.
   const [open, setOpen] = useState(flightId !== null);
+  const isDesktop = useIsDesktop();
 
   return (
     <IonModal
       className={styles.sheet}
       isOpen={open}
       onDidDismiss={() => setFlightId(null)}
+      // A gesture sheet on a phone; on desktop a plain modal, which Ionic
+      // already centers and sizes as a card (what the sync sheet relies on
+      // too). Passing breakpoints is what opts OUT of that styling, so the
+      // desktop case is the absence of these props, not a media query
+      // re-implementing the card.
+      //
       // Two stops, not three: the landing summary, and the whole flight.
       // Anything between is a size with nothing to say. The leading 0 is what
       // makes a downward swipe dismiss rather than bottom out.
-      breakpoints={[0, DETENT, 1]}
-      initialBreakpoint={DETENT}
-      handle
-      handleBehavior="cycle"
+      {...(isDesktop ? {} : SHEET_GESTURES)}
       style={{ "--detent": DETENT } as CSSProperties}
     >
       {flightId && <EndedFlight id={flightId} onClose={() => setOpen(false)} />}

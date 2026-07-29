@@ -35,6 +35,15 @@
   }
 }
 
+/* Desktop has no detent to be one of: it is a plain centered modal, which
+   Ionic sizes itself (the same thing the sync sheet relies on). The summary
+   just takes the room it needs and the card scrolls. */
+@media (min-width: 992px) {
+  .summary {
+    height: auto;
+  }
+}
+
 /* EXACTLY one detent tall, from the same constant that configures the sheet
    (EndedFlightSheet.tsx passes DETENT as --detent). That is what makes the fold
    land on the boundary between the summary and the details on every screen:

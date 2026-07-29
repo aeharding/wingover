@@ -123,6 +123,11 @@ function AppBody() {
   return (
     <AppBoundary key="ground">
       <IonApp>
+        {/* Above BOTH shells: a flight ends the same way whichever one is
+            mounted, and the announcement is not the tab shell's to own. It
+            lived in TabShell for exactly as long as it took to notice that
+            a desktop pilot then got no word at all. */}
+        <EndedFlightSheet />
         {/* Above the shells, so a sheet can be raised from anywhere without
             each page owning a modal; inside IonApp, because IonModal
             presents against it. */}
@@ -138,11 +143,6 @@ function TabShell() {
   const canRecord = useCanRecord();
   return (
     <IonReactRouter>
-      {/* Here rather than in a page: this shell mounting IS the moment a
-          flight finished, and it outlives navigation between tabs. Phone
-          only — it is a bottom sheet, and the desktop shell has its own
-          logbook seat rather than a stack of tabs to cover. */}
-      <EndedFlightSheet />
       <IonTabs>
         <IonRouterOutlet>
           {/* Gated as a ROUTE, not just a tab: a bookmarked /fly in a plain

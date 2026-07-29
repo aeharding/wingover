@@ -1,5 +1,7 @@
 import { expect, test } from "@playwright/test";
 
+import { dismissLandingSheet } from "./landingSheet";
+
 // The suite's default viewport is a phone (playwright.config.ts), which is
 // exactly what keeps every other spec on the phone layout. This file opts
 // into a laptop-sized window to exercise the rail + split layout.
@@ -46,6 +48,7 @@ test("the logbook splits: list stays while the flight shows", async ({
   await page.waitForTimeout(500);
   await page.getByRole("button", { name: "Stop flight" }).click();
   await page.getByRole("button", { name: "Stop", exact: true }).click();
+  await dismissLandingSheet(page);
   await expect(
     page.getByRole("button", { name: "Start Flight" }),
   ).toBeVisible();
@@ -76,6 +79,7 @@ test("selection swaps the seat without remounting the list or the map", async ({
     await page.waitForTimeout(400);
     await page.getByRole("button", { name: "Stop flight" }).click();
     await page.getByRole("button", { name: "Stop", exact: true }).click();
+    await dismissLandingSheet(page);
     await expect(
       page.getByRole("button", { name: "Start Flight" }),
     ).toBeVisible();
@@ -162,6 +166,7 @@ test("sync-off local flights can be erased from the chip menu, in place", async 
   await page.waitForTimeout(400);
   await page.getByRole("button", { name: "Stop flight" }).click();
   await page.getByRole("button", { name: "Stop", exact: true }).click();
+  await dismissLandingSheet(page);
   await expect(
     page.getByRole("button", { name: "Start Flight" }),
   ).toBeVisible();
@@ -226,6 +231,7 @@ test("the seat's play button slides the replay pane open, playing; stop closes i
   await page.waitForTimeout(500);
   await page.getByRole("button", { name: "Stop flight" }).click();
   await page.getByRole("button", { name: "Stop", exact: true }).click();
+  await dismissLandingSheet(page);
   await expect(
     page.getByRole("button", { name: "Start Flight" }),
   ).toBeVisible();
@@ -312,6 +318,7 @@ test("the open replay pane survives flight switches and reloads", async ({
     await page.waitForTimeout(400);
     await page.getByRole("button", { name: "Stop flight" }).click();
     await page.getByRole("button", { name: "Stop", exact: true }).click();
+    await dismissLandingSheet(page);
     await expect(
       page.getByRole("button", { name: "Start Flight" }),
     ).toBeVisible();
@@ -385,6 +392,7 @@ test("the seat trims a flight from the options sheet", async ({ page }) => {
   await page.waitForTimeout(1500);
   await page.getByRole("button", { name: "Stop flight" }).click();
   await page.getByRole("button", { name: "Stop", exact: true }).click();
+  await dismissLandingSheet(page);
   await expect(
     page.getByRole("button", { name: "Start Flight" }),
   ).toBeVisible();
