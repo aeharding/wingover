@@ -1,5 +1,7 @@
 import { expect, test } from "@playwright/test";
 
+import { dismissLandingSheet } from "./landingSheet";
+
 type Page = import("@playwright/test").Page;
 
 async function openImportedFlight(page: Page) {
@@ -133,6 +135,7 @@ async function recordLongFlight(page: Page) {
   await page.waitForTimeout(1500);
   await page.getByRole("button", { name: "Stop flight" }).click();
   await page.getByRole("button", { name: "Stop", exact: true }).click();
+  await dismissLandingSheet(page);
   await expect(
     page.getByRole("button", { name: "Start Flight" }),
   ).toBeVisible();
@@ -249,6 +252,7 @@ test("the timeline zooms with the wheel and resets", async ({ page }) => {
   await page.waitForTimeout(1000);
   await page.getByRole("button", { name: "Stop flight" }).click();
   await page.getByRole("button", { name: "Stop", exact: true }).click();
+  await dismissLandingSheet(page);
   await expect(
     page.getByRole("button", { name: "Start Flight" }),
   ).toBeVisible();

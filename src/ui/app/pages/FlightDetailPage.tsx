@@ -5,11 +5,7 @@ import {
   IonContent,
   IonHeader,
   IonIcon,
-  IonInput,
-  IonItem,
-  IonList,
   IonPage,
-  IonTextarea,
   IonTitle,
   IonToolbar,
   useIonRouter,
@@ -20,7 +16,6 @@ import {
   expandOutline,
 } from "ionicons/icons";
 import {
-  type KeyboardEvent as ReactKeyboardEvent,
   useEffect,
   useEffectEvent,
   useLayoutEffect,
@@ -52,6 +47,7 @@ import ViewToggle from "../../shared/map/ViewToggle";
 import { useSettings } from "../../shared/settings/SettingsContext";
 import { useAppearance } from "../appTheme";
 import { endpointMarker } from "../logbook/endpointMarker";
+import FlightFields from "../logbook/FlightFields";
 import FlightStats from "../logbook/FlightStats";
 import { useFlightDoc } from "../logbook/useFlightDoc";
 import { useFlightDrafts } from "../logbook/useFlightDrafts";
@@ -191,18 +187,6 @@ export default function FlightDetailPage() {
     },
     onDeleted: () => router.push("/logbook", "back"),
   });
-
-  // Native only: the keyboard's return key reads "Done" (enterkeyhint on the
-  // inputs below) and pressing it closes the keyboard. Single-line fields have
-  // nothing else for Enter to do, and the accessory bar with its own Done is
-  // hidden globally. On the PWA, Enter keeps the browser's default behavior.
-  function blurOnEnter(event: ReactKeyboardEvent<HTMLIonInputElement>) {
-    if (!isTauri() || event.key !== "Enter") return;
-    // A CJK keyboard's Return first commits the composition — that keystroke
-    // must not steal the keyboard mid-word.
-    if (event.nativeEvent.isComposing) return;
-    (document.activeElement as HTMLElement | null)?.blur();
-  }
 
   // Native only: ease a focused field into view above the keyboard. (Ionic's
   // scroll assist is switched off under Tauri — see App.tsx — so this is the
@@ -448,57 +432,7 @@ export default function FlightDetailPage() {
         </div>
         {flight && stats && (
           <>
-            <IonList>
-              <IonItem>
-                <IonInput
-                  label="Name"
-                  clearInput
-                  autocapitalize="words"
-                  placeholder="Add name"
-                  value={drafts.name}
-                  aria-label="Flight name"
-                  onIonInput={(event) =>
-                    setDraft("name", event.detail.value ?? "")
-                  }
-                  onIonBlur={commit}
-                  enterkeyhint="done"
-                  onKeyDown={blurOnEnter}
-                />
-              </IonItem>
-              <IonItem>
-                <IonInput
-                  label="Launch"
-                  clearInput
-                  autocapitalize="words"
-                  placeholder="Add location"
-                  value={drafts.launch}
-                  aria-label="Launch location"
-                  onIonInput={(event) =>
-                    setDraft("launch", event.detail.value ?? "")
-                  }
-                  onIonBlur={commit}
-                  enterkeyhint="done"
-                  onKeyDown={blurOnEnter}
-                />
-              </IonItem>
-              <IonItem>
-                {/* rows 1: one line empty (a textarea's native default is
-                    two), growing with content. */}
-                <IonTextarea
-                  label="Notes"
-                  autocapitalize="sentences"
-                  placeholder="Wing, motor, conditions…"
-                  rows={1}
-                  autoGrow
-                  value={drafts.notes}
-                  aria-label="Flight notes"
-                  onIonInput={(event) =>
-                    setDraft("notes", event.detail.value ?? "")
-                  }
-                  onIonBlur={commit}
-                />
-              </IonItem>
-            </IonList>
+            <FlightFields drafts={drafts} setDraft={setDraft} commit={commit} />
             <FlightStats stats={stats} units={units} />
           </>
         )}

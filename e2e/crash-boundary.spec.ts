@@ -1,5 +1,7 @@
 import { expect, test } from "@playwright/test";
 
+import { dismissLandingSheet } from "./landingSheet";
+
 // #185 ended with a black screen because nothing caught the throw: MapKit's
 // camera getter died, CompassButton read it from React's RENDER phase, and the
 // root unmounted. This asserts the outcome the pilot sees now.
@@ -77,11 +79,17 @@ test("a crash on a ground page shows the crash screen, not a blank page", async 
 // through, which is a render-phase read on the flight surface — the same shape
 // as #185's camera getter, and the only injection point that does not need a
 // production seam.
+type Poisoned = Window & {
+  __alive?: boolean;
+  __toFixed?: (digits?: number) => string;
+};
+
 async function flyThenCrash(page: import("@playwright/test").Page) {
   await page.getByRole("button", { name: "Start Flight" }).click();
   await expect(page.getByTestId("recording")).toBeVisible({ timeout: 30_000 });
   await page.evaluate(() => {
-    (window as unknown as { __alive?: boolean }).__alive = true;
+    (window as Poisoned).__alive = true;
+    (window as Poisoned).__toFixed = Number.prototype.toFixed;
     Number.prototype.toFixed = () => {
       throw new Error("e2e: simulated render failure on the flight surface");
     };
@@ -93,16 +101,23 @@ test("a crash in flight heals itself, and the flight is still recording", async 
 }) => {
   await page.goto("/?mock-speed=40&map-style=blank");
   await page.evaluate(() => localStorage.removeItem("wingover.crash.healedAt"));
+  // Armed BEFORE the crash, because the heal reloads within a frame of it.
+  // Polling page.evaluate() for the same answer raced the navigation it was
+  // waiting for and died on it ("Execution context was destroyed"), which
+  // reads as a failed heal when the heal is precisely what happened — 3 of 4
+  // full-suite runs on a loaded box.
+  const healed = page.waitForEvent("framenavigated", {
+    predicate: (frame) => frame === page.mainFrame(),
+    timeout: 20_000,
+  });
   await flyThenCrash(page);
+  await healed;
 
   // The reload is the assertion: __alive was set before the crash and only a
   // fresh document clears it.
-  await expect
-    .poll(
-      () => page.evaluate(() => (window as { __alive?: boolean }).__alive),
-      { timeout: 20_000 },
-    )
-    .toBeUndefined();
+  expect(
+    await page.evaluate(() => (window as Poisoned).__alive),
+  ).toBeUndefined();
   await expect(page.getByTestId("recording")).toBeVisible({ timeout: 30_000 });
   await expect(page.getByTestId("app-crashed")).toBeHidden();
 });
@@ -124,4 +139,48 @@ test("a second crash inside the window stops reloading and surfaces", async ({
   expect(
     await page.evaluate(() => (window as { __alive?: boolean }).__alive),
   ).toBe(true);
+});
+
+// The crash screen unmounts the flight surface, and collection used to live
+// there — so a flight that finalized behind an unhealed crash screen was never
+// persisted and never discarded. discard() is the only transition to "idle",
+// so the app pinned on "ended" with the flight stranded in the WAL and the
+// shell unable to come back. Collection is engine-side now
+// (src/engine/session.ts); this is the drill that says so.
+test("a flight that ends behind the crash screen still reaches the logbook", async ({
+  page,
+}) => {
+  await page.goto("/?mock-speed=6000&map-style=blank");
+  // A heal already spent: the crash surfaces, and the flight surface stays
+  // unmounted for the rest of the flight.
+  await page.evaluate(() =>
+    localStorage.setItem("wingover.crash.healedAt", String(Date.now())),
+  );
+  await flyThenCrash(page);
+  await expect(page.getByTestId("app-crashed")).toBeVisible({
+    timeout: 20_000,
+  });
+  // Put the poisoned method back. What crashed the render is not the engine's
+  // problem, and leaving it broken would test a browser nobody ships: the
+  // pilot-visible state under test is the missing surface, which is what a
+  // poisoned map leaves behind too.
+  await page.evaluate(() => {
+    Number.prototype.toFixed = (window as Poisoned).__toFixed!;
+  });
+
+  // The simulated pilot lands after two compressed hours. Detection, the
+  // fix-time grace, finalization and collection all run with no surface
+  // mounted at all, and the outcome still reaches the pilot.
+  await expect(page.getByTestId("sheet-close")).toBeVisible({
+    timeout: 20_000,
+  });
+  // And the shell comes back by itself: the ground boundary is a different
+  // boundary, so it does not inherit the flight surface's crash.
+  await expect(page.getByTestId("app-crashed")).toBeHidden({ timeout: 20_000 });
+  await expect(page.locator("ion-tab-bar")).toBeVisible();
+
+  await dismissLandingSheet(page);
+  await page.getByText("Logbook", { exact: true }).click();
+  await expect(page.getByTestId("flight-row")).toBeVisible();
+  await expect(page.getByText(/1 flights/)).toBeVisible();
 });

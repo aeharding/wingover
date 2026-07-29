@@ -1,13 +1,18 @@
 import { useSyncExternalStore } from "react";
 
 import { engine } from "../../engine";
+import {
+  collectionFailedSync,
+  retryCollection,
+  subscribeCollection,
+} from "../../engine/session";
 import { useSettings } from "../shared/settings/SettingsContext";
 import { useLiveViewPrefs } from "../shared/useLiveViewPrefs";
 import ArmedSurface from "./ArmedSurface";
 import { useBigConfirm } from "./BigConfirm";
 import ErrorScreen from "./ErrorScreen";
 import RecordingSurface from "./RecordingSurface";
-import { useFlightCollection } from "./useFlightCollection";
+import SavingSurface from "./SavingSurface";
 
 import styles from "./FlightSurface.module.css";
 
@@ -19,11 +24,15 @@ export default function FlightSurface() {
   // a complete track — there is no per-fix mirror to fall behind.
   const snapshot = useSyncExternalStore(engine.subscribe, engine.snapshotSync);
   const { confirm: bigConfirm, element: confirmElement } = useBigConfirm();
+  // Collection is engine-side (engine/session.ts); this is the one thing it
+  // has to tell the surface, and only while "ended" is showing.
+  const collectionFailed = useSyncExternalStore(
+    subscribeCollection,
+    collectionFailedSync,
+  );
   const liveView = useLiveViewPrefs();
 
   const status = snapshot.status;
-
-  useFlightCollection(status);
 
   async function cancelArmed() {
     await engine.discard();
@@ -58,10 +67,11 @@ export default function FlightSurface() {
     engine.dismissLanding();
   }
 
-  // One surface per engine state. "ended" (collection is already running)
-  // deliberately paints nothing but the surface's own background, and "idle"
-  // never reaches here: App.tsx sheds this surface for the shell, whose Fly
-  // tab is the home screen (app/pages/FlyPage).
+  // One surface per engine state. "idle" never reaches here: App.tsx sheds
+  // this surface for the shell, whose Fly tab is the home screen
+  // (app/pages/FlyPage). "ended" DOES, and it owns a surface rather than
+  // painting nothing — the shell is shed here too, so a collection that fails
+  // used to leave the pilot on an empty screen with no way out.
   function surface() {
     switch (status) {
       case "acquiring":
@@ -86,6 +96,10 @@ export default function FlightSurface() {
             onEndNow={endFlight}
             onDismissLanding={dismissLandingPrompt}
           />
+        );
+      case "ended":
+        return (
+          <SavingSurface failed={collectionFailed} onRetry={retryCollection} />
         );
       default:
         return null;

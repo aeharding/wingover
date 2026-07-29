@@ -7,8 +7,10 @@ import "./theme.css";
 
 import { createRoot } from "react-dom/client";
 
-// Side effect: the engine-side foreground recovery wiring must run from
-// boot, not from whichever page happens to import it first.
+// Side effect: the engine-side foreground recovery AND flight collection
+// wiring must run from boot, not from whichever page happens to import it
+// first — collection has to run with no surface mounted at all, including
+// with the crash screen up in place of the flight surface.
 import "./engine/session";
 import { stripMintedFlightNames } from "./storage/db";
 import { resume } from "./sync";
