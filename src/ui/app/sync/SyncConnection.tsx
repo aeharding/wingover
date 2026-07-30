@@ -133,7 +133,7 @@ export function Connected({
   onSignIn,
   onTurnOff,
   onDelete,
-  onConnected,
+  onSelfHost,
 }: {
   status: sync.SyncStatus;
   account: sync.SyncAccount | null;
@@ -147,7 +147,7 @@ export function Connected({
   onSignIn: () => void;
   onTurnOff: () => void;
   onDelete: () => void;
-  onConnected: () => void;
+  onSelfHost: () => void;
 }) {
   // One pure resolve; everything below is a dumb render of its fields, so no
   // action can contradict the account/status (the class of bug this replaced).
@@ -183,6 +183,9 @@ export function Connected({
         ...(v.showUseOnComputer
           ? [{ text: "Use on your computer", handler: onLink }]
           : []),
+        ...(v.showSelfHost
+          ? [{ text: "Self-hosted config", handler: onSelfHost }]
+          : []),
         ...(v.showManage
           ? [{ text: "Manage Subscription", handler: manageSubscription }]
           : []),
@@ -200,7 +203,8 @@ export function Connected({
     });
   }
 
-  const showMore = v.showManage || v.showDelete || v.showUseOnComputer;
+  const showMore =
+    v.showManage || v.showDelete || v.showUseOnComputer || v.showSelfHost;
 
   return (
     <>
@@ -282,7 +286,6 @@ export function Connected({
         </IonButton>
       )}
 
-      {v.showSelfHost && <SelfHostLink onConnected={onConnected} />}
     </>
   );
 }

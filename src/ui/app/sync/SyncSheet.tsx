@@ -23,6 +23,7 @@ import {
 
 import { isTauri } from "../../../platform/index";
 import * as sync from "../../../sync/index";
+import { SelfHostPage } from "./SelfHostPage";
 import {
   AppleSignInButton,
   Connected,
@@ -177,7 +178,11 @@ function SyncHome({
                   ? void run(() => sync.disable())
                   : void logOut(onClose)
               }
-              onConnected={onClose}
+              onSelfHost={() =>
+                void nav.current?.push(() => (
+                  <SelfHostPage backText="Sync" onConnected={onClose} />
+                ))
+              }
               onDelete={() =>
                 presentAlert({
                   header: "Delete account?",

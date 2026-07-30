@@ -78,7 +78,9 @@ doesn't earn:
 - **Connected** — status headline (On, last synced) + Turn off sync (its
   what-it-does fine print rides the confirm, at the moment it matters, not
   as a resting paragraph) + **More options**, an action sheet holding "Use
-  on your computer" (the SIWA link catch-up), Manage Subscription
+  on your computer" (the SIWA link catch-up), Self-hosted config (while
+  off; the pitch keeps its own always-visible link - the free path stays
+  discoverable), Manage Subscription
   (StoreKit's native sheet — the only surface that shows sandbox subs) and
   Delete account: real doors almost nobody needs on a given visit. The
   computer page says only what it is about — no repeated sync status; a
