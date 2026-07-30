@@ -5,7 +5,6 @@ import {
   IonContent,
   IonHeader,
   IonNavLink,
-  IonSpinner,
   IonTitle,
   IonToolbar,
 } from "@ionic/react";
@@ -14,6 +13,7 @@ import { useState } from "react";
 import { isTauri } from "../../../platform/index";
 import * as sync from "../../../sync/index";
 import { openExternal } from "../../shared/externalLinks";
+import { BusyLabel } from "./BusyLabel";
 
 import styles from "./sync.module.css";
 
@@ -121,11 +121,9 @@ export function ChoosePlanPage({
               onClick={() => void buy("monthly")}
               data-testid="plan-monthly"
             >
-              {buying === "monthly" ? (
-                <IonSpinner name="crescent" />
-              ) : (
-                `Monthly · ${monthly.displayPrice}/month`
-              )}
+              <BusyLabel busy={buying === "monthly"}>
+                {`Monthly · ${monthly.displayPrice}/month`}
+              </BusyLabel>
             </IonButton>
           )}
           {yearly && (
@@ -136,11 +134,9 @@ export function ChoosePlanPage({
               onClick={() => void buy("yearly")}
               data-testid="plan-yearly"
             >
-              {buying === "yearly" ? (
-                <IonSpinner name="crescent" />
-              ) : (
-                `Yearly · ${yearly.displayPrice}/year`
-              )}
+              <BusyLabel busy={buying === "yearly"}>
+                {`Yearly · ${yearly.displayPrice}/year`}
+              </BusyLabel>
             </IonButton>
           )}
 

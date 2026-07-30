@@ -4,7 +4,6 @@ import {
   IonContent,
   IonHeader,
   IonIcon,
-  IonSpinner,
   IonTitle,
   IonToolbar,
   useIonActionSheet,
@@ -16,6 +15,7 @@ import { type RefObject, useState, useSyncExternalStore } from "react";
 import { isTauri } from "../../../platform/index";
 import * as sync from "../../../sync/index";
 import { cx } from "../../shared/cx";
+import { BusyLabel } from "./BusyLabel";
 import { describe, type SyncTone } from "./describe";
 import { resolveSyncView } from "./resolveSyncView";
 import {
@@ -69,7 +69,7 @@ export function AppleSignInButton({
         onClick={onClick}
         data-testid={testId}
       >
-        {busy ? <IonSpinner name="crescent" /> : label}
+        <BusyLabel busy={busy}>{label}</BusyLabel>
       </IonButton>
     );
   }
@@ -81,14 +81,10 @@ export function AppleSignInButton({
       onClick={onClick}
       data-testid={testId}
     >
-      {busy ? (
-        <IonSpinner name="crescent" />
-      ) : (
-        <>
-          <IonIcon slot="start" icon={logoApple} aria-hidden="true" />
-          {label}
-        </>
-      )}
+      <BusyLabel busy={busy}>
+        <IonIcon slot="start" icon={logoApple} aria-hidden="true" />
+        {label}
+      </BusyLabel>
     </IonButton>
   );
 }
@@ -219,7 +215,7 @@ export function Connected({
           onClick={onConnect}
           data-testid="sync-connect-device"
         >
-          {busy ? <IonSpinner name="crescent" /> : "Turn on sync"}
+          <BusyLabel busy={busy}>Turn on sync</BusyLabel>
         </IonButton>
       )}
 

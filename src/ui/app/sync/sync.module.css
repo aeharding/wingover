@@ -18,6 +18,9 @@
   flex: 1;
   display: flex;
   flex-direction: column;
+  /* Equal air above and below the content, between the large title and
+     the sheet's bottom edge. */
+  justify-content: center;
   text-align: center;
   padding: 1rem 1.5rem 2rem;
   box-sizing: border-box;
@@ -130,6 +133,28 @@
   --border-radius: 14px;
   margin-bottom: 0.75rem;
   font-weight: 600;
+}
+
+/* Busy state without layout shift (Ionic best practice: overlay, never
+   swap): the label keeps the button's intrinsic size and goes invisible;
+   the spinner rides on top, sized in em so it fits any button. */
+.busyLabel {
+  position: relative;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.busyLabelBusy .busyText {
+  visibility: hidden;
+}
+
+.busySpinner {
+  position: absolute;
+  inset: 0;
+  margin: auto;
+  width: 1.2em;
+  height: 1.2em;
 }
 
 /* Quiet, secondary actions (Restore Purchases, Manage subscription): present
