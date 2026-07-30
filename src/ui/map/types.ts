@@ -148,6 +148,25 @@ export interface MarkerLayer {
   clear(): void;
 }
 
+export interface RasterOverlayOptions {
+  // Tile availability range, NOT a camera constraint: below min nothing
+  // loads. Past max the layer stays visible at every deeper zoom: MapLibre
+  // GPU-overzooms natively; the MapKit adapter crops + upscales the
+  // deepest ancestor tile client-side (its TileOverlay cannot overzoom).
+  minZoom?: number;
+  maxZoom?: number;
+  opacity?: number;
+  // The source's coverage, as one or several [sw, ne] boxes: tiles outside
+  // every box are never requested (the FAA server 404s off-coverage, so
+  // asking is pure waste). MapLibre takes the hull (it only fetches
+  // visible tiles anyway); MapKit gates per tile.
+  bounds?: Bounds | Bounds[];
+}
+
+export interface RasterOverlay {
+  remove(): void;
+}
+
 export interface AircraftState {
   at: LngLat;
   heading: number; // degrees — the fix's course
@@ -213,6 +232,14 @@ export interface MapView {
   line(style: LineStyle): Line;
   markers(): MarkerLayer;
   aircraft(): Aircraft;
+  // An XYZ raster tile layer over the base map, under lines/markers (the
+  // VFR sectional chart). {z}/{x}/{y} placeholders, web-mercator 256px.
+  // Optional: a backend without it (fake) never shows the layer, and
+  // callers must tolerate that.
+  rasterOverlay?(
+    template: string,
+    opts?: RasterOverlayOptions,
+  ): RasterOverlay;
 
   on(gesture: Gesture, handler: (e: GestureEvent) => void): Unsub;
 }

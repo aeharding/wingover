@@ -236,6 +236,43 @@ export default function PlanPage() {
       opacity: 0.9,
     });
     markersRef.current = next.markers();
+    // POC, hardcoded on: self-hosted FAA VFR tiles — @3x 768px JXL
+    // (d4 e7) on R2, NATIVE decode only (iOS 17+ / Safari 17+; Chromium
+    // needs its jxl flag; Firefox stable shows no chart, by decision).
+    // 768px images on the standard XYZ grid ride the adapter's
+    // tileSize-256 sampling = retina rendering. The whole VFR product,
+    // not just CONUS: 59 scans across 8 regions (CONUS, Alaska, both
+    // Aleutian halves, Hawaii, the Marianas, Samoa, Caribbean), tiled in
+    // ONE global pass so a tile is built from every sheet touching it.
+    // Ocean tiles inside the box are blank-skipped server-side; the
+    // MapKit image callback resolves their 404s to transparent once per
+    // session, and MapLibre doesn't retry 404s.
+    next.rasterOverlay?.(
+      "https://charts.wingover.app/vfr/07-09-2026k/3x/{z}/{x}/{y}.jxl",
+      {
+        // Self-hosted pyramid goes all the way out (z0-7 are downsampled
+        // renders of the same mosaic; the FAA host's z8 floor is gone).
+        minZoom: 0,
+        maxZoom: 12,
+        // Coarse coverage box only: misses are cheap and terminal (the
+        // MapKit callback resolves a 404 to a transparent tile ONCE —
+        // MapKit caches it and never re-asks; MapLibre doesn't retry
+        // 404s either). The box just spares first-visit ocean/foreign
+        // requests and console noise. Precise per-chart coverage lives
+        // in the pipeline and will ship via the manifest when needed.
+        //
+        // Near-global now, and that is not laziness: the product runs
+        // from the Marianas (145E) east to the Virgin Islands (60W) and
+        // from Samoa (14S) to Point Barrow (72N), so it straddles the
+        // antimeridian and NO single box can be tight around it. The old
+        // CONUS-only box would simply never request an Alaska or Hawaii
+        // tile. The manifest is what replaces this properly.
+        bounds: [
+          [-180, -15.5],
+          [180, 72.5],
+        ],
+      },
+    );
     next.on("longpress", (event) => addPin(event.at));
     // A re-created map that inherited its camera (appearance flip) must
     // not re-run the initial framing — the pilot's place survives.

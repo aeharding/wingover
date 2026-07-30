@@ -1,4 +1,9 @@
-import type { Annotation, Coordinate, PolylineOverlay } from "apple-mapkit";
+import type {
+  Annotation,
+  Coordinate,
+  PolylineOverlay,
+  TileOverlayConstructorOptions,
+} from "apple-mapkit";
 import type { Feature } from "geojson";
 
 import type { MapAppearance, MapViewKind } from "../config";
@@ -17,6 +22,8 @@ import type {
   MarkerLayer,
   MarkerSpec,
   MoveOptions,
+  RasterOverlay,
+  RasterOverlayOptions,
   Unsub,
 } from "../types";
 import { ACCENT_CYAN } from "../types";
@@ -74,6 +81,23 @@ function featuresOf(
 }
 
 const toCoord = (p: LngLat) => new mapkit.Coordinate(p[1], p[0]);
+
+// Web-mercator tile bbox vs a [sw, ne] lon/lat box — the coverage gate for
+// rasterOverlay (skips requesting tiles the source cannot have).
+function tileIntersects(bounds: Bounds, x: number, y: number, z: number) {
+  const n = 2 ** z;
+  const lonWest = (x / n) * 360 - 180;
+  const lonEast = ((x + 1) / n) * 360 - 180;
+  const latOfRow = (row: number) =>
+    (Math.atan(Math.sinh(Math.PI * (1 - (2 * row) / n))) * 180) / Math.PI;
+  const [[west, south], [east, north]] = bounds;
+  return !(
+    lonWest > east ||
+    lonEast < west ||
+    latOfRow(y) < south || // tile's top edge below the box
+    latOfRow(y + 1) > north // tile's bottom edge above the box
+  );
+}
 
 // The slivers of MapKit's private implementation that moveTo's atomic camera
 // path touches (see the impl capture in createMapKitMapView). Member names
@@ -671,6 +695,136 @@ export async function createMapKitMapView(
         remove() {
           if (ann) map.removeAnnotation(ann);
           ann = null;
+        },
+      };
+    },
+
+    rasterOverlay(
+      template: string,
+      opts?: RasterOverlayOptions,
+    ): RasterOverlay {
+      // Tile overlays render with the base tiles, under shape overlays and
+      // annotations, and survive mapType changes — no registry needed.
+      // An IMAGE callback (not a URL template) because three MapKit
+      // behaviors need per-tile control (null = never requested):
+      //  1. Below minimumZ MapKit CLAMPS requests to minimumZ over the
+      //     whole visible world — a wide camera means ~1000 tiles/frame,
+      //     and 404s are never cached, so it re-asks forever. Serve
+      //     nothing until the camera is actually near the pyramid.
+      //  2. Off-coverage tiles 404 by design on chart servers; the
+      //     coverage boxes stop those requests (and their retry churn).
+      //  3. TileOverlay cannot overzoom: past maximumZ it simply stops.
+      //     So no maximumZ is declared, and past maxZoom the callback
+      //     serves the deepest ANCESTOR tile's quadrant, cropped and
+      //     upscaled on a canvas — the overzoom MapLibre does on the GPU,
+      //     done here by hand. Consequence of the callback path: tiles
+      //     are fetch()ed, so the host MUST send CORS.
+      const boxes = opts?.bounds
+        ? Array.isArray(opts.bounds[0][0])
+          ? (opts.bounds as Bounds[])
+          : [opts.bounds as Bounds]
+        : null;
+      const minZoom = opts?.minZoom;
+      const maxZoom = opts?.maxZoom;
+      const urlForTile = (x: number, y: number, z: number): string =>
+        template
+          .replace("{z}", String(z))
+          .replace("{y}", String(y))
+          .replace("{x}", String(x));
+      // Decode via <img> (the browser's native codec path — the same one
+      // MapKit's own loader uses, so anything it could show, this can),
+      // drawn to a canvas so the object URL can be revoked immediately.
+      async function loadCanvas(url: string): Promise<HTMLCanvasElement | null> {
+        try {
+          const res = await fetch(url);
+          if (!res.ok) return null;
+          const src = URL.createObjectURL(await res.blob());
+          try {
+            const img = new Image();
+            img.src = src;
+            await img.decode();
+            const canvas = document.createElement("canvas");
+            canvas.width = img.naturalWidth;
+            canvas.height = img.naturalHeight;
+            canvas.getContext("2d")?.drawImage(img, 0, 0);
+            return canvas;
+          } finally {
+            URL.revokeObjectURL(src);
+          }
+        } catch {
+          return null;
+        }
+      }
+      // The callback contract allows sync null (skip tile) but the PROMISE
+      // must resolve to an image — failures resolve to a transparent 1x1
+      // canvas, which MapKit scales into an invisible tile.
+      const blank = () => document.createElement("canvas");
+      // Ancestors are shared by sibling tiles — a small keep-latest cache
+      // spares one fetch+decode per quadrant.
+      const parents = new Map<string, Promise<HTMLCanvasElement | null>>();
+      const imageForTile = (
+        x: number,
+        y: number,
+        z: number,
+      ): Promise<HTMLCanvasElement> | null => {
+        if (minZoom !== undefined) {
+          const zoom = projectedZoom();
+          if (zoom !== null && zoom < minZoom - 0.5) return null;
+          if (z < minZoom) return null;
+        }
+        if (boxes && !boxes.some((b) => tileIntersects(b, x, y, z))) {
+          return null;
+        }
+        if (maxZoom === undefined || z <= maxZoom) {
+          return loadCanvas(urlForTile(x, y, z)).then(
+            (canvas) => canvas ?? blank(),
+          );
+        }
+        const shift = z - maxZoom;
+        const ancestorX = x >> shift;
+        const ancestorY = y >> shift;
+        const key = `${ancestorX}/${ancestorY}`;
+        let parent = parents.get(key);
+        if (!parent) {
+          parent = loadCanvas(urlForTile(ancestorX, ancestorY, maxZoom));
+          parents.set(key, parent);
+          if (parents.size > 32) {
+            const oldest = parents.keys().next().value;
+            if (oldest !== undefined) parents.delete(oldest);
+          }
+        }
+        return parent.then((source) => {
+          if (!source) return blank();
+          const span = source.width / (1 << shift);
+          const out = document.createElement("canvas");
+          out.width = source.width;
+          out.height = source.height;
+          const ctx = out.getContext("2d");
+          if (!ctx) return blank();
+          ctx.imageSmoothingEnabled = true;
+          ctx.imageSmoothingQuality = "high";
+          ctx.drawImage(
+            source,
+            (x - (ancestorX << shift)) * span,
+            (y - (ancestorY << shift)) * span,
+            span,
+            span,
+            0,
+            0,
+            out.width,
+            out.height,
+          );
+          return out;
+        });
+      };
+      const overlay = new mapkit.TileOverlay(imageForTile, {
+        ...(opts?.minZoom !== undefined ? { minimumZ: opts.minZoom } : {}),
+        ...(opts?.opacity !== undefined ? { opacity: opts.opacity } : {}),
+      } as TileOverlayConstructorOptions);
+      map.addTileOverlay(overlay);
+      return {
+        remove() {
+          map.removeTileOverlay(overlay);
         },
       };
     },
