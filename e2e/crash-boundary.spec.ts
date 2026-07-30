@@ -101,23 +101,27 @@ test("a crash in flight heals itself, and the flight is still recording", async 
 }) => {
   await page.goto("/?mock-speed=40&map-style=blank");
   await page.evaluate(() => localStorage.removeItem("wingover.crash.healedAt"));
-  // Armed BEFORE the crash, because the heal reloads within a frame of it.
-  // Polling page.evaluate() for the same answer raced the navigation it was
-  // waiting for and died on it ("Execution context was destroyed"), which
-  // reads as a failed heal when the heal is precisely what happened — 3 of 4
-  // full-suite runs on a loaded box.
-  const healed = page.waitForEvent("framenavigated", {
-    predicate: (frame) => frame === page.mainFrame(),
-    timeout: 20_000,
-  });
   await flyThenCrash(page);
-  await healed;
 
   // The reload is the assertion: __alive was set before the crash and only a
-  // fresh document clears it.
-  expect(
-    await page.evaluate(() => (window as Poisoned).__alive),
-  ).toBeUndefined();
+  // fresh document clears it. Asking through waitForFunction is what survives
+  // asking it ACROSS the reload, and the two other ways of asking do not:
+  //
+  //   page.evaluate() throws "Execution context was destroyed" when the
+  //   navigation lands mid-call, and expect.poll() runs its callback outside
+  //   its own try, so the throw ends the test instead of polling (#152). CI run
+  //   30468161325 died that way 20 ms into the first poll, 13 ms after the
+  //   crash reached the console.
+  //
+  //   A framenavigated wait armed before the crash answers to the router's
+  //   "/" -> "/fly" redirect as well, which is same-document (measured: it
+  //   fires 35 ms after load, ~50 ms before the arming point) and so latches
+  //   before the heal has happened at all.
+  await page.waitForFunction(
+    () => (window as Poisoned).__alive === undefined,
+    undefined,
+    { timeout: 20_000 },
+  );
   await expect(page.getByTestId("recording")).toBeVisible({ timeout: 30_000 });
   await expect(page.getByTestId("app-crashed")).toBeHidden();
 });
