@@ -167,7 +167,9 @@ function SyncHome({
               onPurchased={afterPurchase}
               onConnect={() => run(() => sync.connectWithSubscription())}
               onLink={() =>
-                void nav.current?.push(() => <LinkAccountPage nav={nav} />)
+                void nav.current?.push(() => (
+                  <LinkAccountPage nav={nav} context="computer" />
+                ))
               }
               onSignIn={() => run(() => sync.signIn())}
               onTurnOff={() =>

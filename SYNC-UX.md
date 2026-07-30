@@ -77,11 +77,13 @@ doesn't earn:
   the one place a purchase happens.
 - **Connected** — status headline (On, last synced) + Turn off sync (its
   what-it-does fine print rides the confirm, at the moment it matters, not
-  as a resting paragraph) + "Use on your computer" (the SIWA link catch-up;
-  once linked the same page reads "Linked" — no resting note) + **More
-  options**, an action sheet holding Manage Subscription (StoreKit's native
-  sheet — the only surface that shows sandbox subs) and Delete account:
-  real doors almost nobody needs on a given visit.
+  as a resting paragraph) + **More options**, an action sheet holding "Use
+  on your computer" (the SIWA link catch-up), Manage Subscription
+  (StoreKit's native sheet — the only surface that shows sandbox subs) and
+  Delete account: real doors almost nobody needs on a given visit. The
+  computer page says only what it is about — no repeated sync status; a
+  page titled "You're synced" over an amber "Not subscribed" is how reused
+  interstitials go wrong (found on-device, 2026-07-30).
 - **Lapsed** — reads "Not subscribed" ("read-only" was database vocabulary
   that meant nothing to a pilot): new flights stay on this device, everything
   already synced stays safe — the courtesy is the point, not a mode to learn.

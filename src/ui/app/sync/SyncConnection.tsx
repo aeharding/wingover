@@ -175,11 +175,14 @@ export function Connected({
     });
   }
 
-  // Manage Subscription and Delete account are real doors that almost nobody
-  // needs on a given visit: one quiet More button, an action sheet behind it.
+  // Real doors that almost nobody needs on a given visit: one quiet More
+  // button, an action sheet behind it.
   function moreOptions() {
     void presentSheet({
       buttons: [
+        ...(v.showUseOnComputer
+          ? [{ text: "Use on your computer", handler: onLink }]
+          : []),
         ...(v.showManage
           ? [{ text: "Manage Subscription", handler: manageSubscription }]
           : []),
@@ -197,7 +200,7 @@ export function Connected({
     });
   }
 
-  const showMore = v.showManage || v.showDelete;
+  const showMore = v.showManage || v.showDelete || v.showUseOnComputer;
 
   return (
     <>
@@ -267,22 +270,6 @@ export function Connected({
         </IonButton>
       )}
 
-      {v.showUseOnComputer && (
-        // Junction 2 catch-up for pilots who skipped the post-purchase page —
-        // opens the same page, which reads "Linked" once the link exists.
-        // Idempotent server-side.
-        <IonButton
-          fill="clear"
-          size="small"
-          className={styles.quietAction}
-          disabled={busy}
-          onClick={onLink}
-          data-testid="sync-link-apple"
-        >
-          Use on your computer
-        </IonButton>
-      )}
-
       {showMore && (
         <IonButton
           fill="clear"
@@ -301,15 +288,21 @@ export function Connected({
 }
 
 /**
- * Pushed right after a purchase connects this device (and reachable later via
- * "Use on your computer"): the thank-you, and the one optional step,
- * explained simply. Its own page because the inline version was cramped and
- * hard to read. Done or the back chevron pops to the sheet.
+ * Two doors, one link machinery, two very different moments:
+ *
+ * - "purchase": pushed right after a purchase connects this device — the
+ *   thank-you ("You're synced", the live status) and the one optional step.
+ * - "computer": opened from More options. It is ABOUT computer access, so it
+ *   says only that; the sheet behind it already shows the sync status, and
+ *   repeating it here once produced a page titled "You're synced" over an
+ *   amber "Not subscribed" (found on-device, 2026-07-30).
  */
 export function LinkAccountPage({
   nav,
+  context = "purchase",
 }: {
   nav: RefObject<HTMLIonNavElement | null>;
+  context?: "purchase" | "computer";
 }) {
   // Live, not asserted: this page once claimed "On" while the connect had
   // actually landed read-only (a stale purchase transaction) — the pilot
@@ -343,6 +336,61 @@ export function LinkAccountPage({
     }
   }
 
+  const purchase = context === "purchase";
+
+  function renderStatus() {
+    if (!purchase) return null;
+    return (
+      <div
+        className={cx(styles.state, SHEET_TONE_CLASS[describe(status).tone])}
+      >
+        <span className={styles.stateLabel}>{describe(status).label}</span>
+        <span className={styles.stateDetail}>
+          {status.state === "syncing" && !status.readOnly
+            ? "Your flights now back up automatically."
+            : describe(status).detail}
+        </span>
+      </div>
+    );
+  }
+
+  function renderLinkOffer() {
+    return (
+      <>
+        <p className={styles.loginLede}>
+          {purchase
+            ? "One optional step: link your Apple Account, and you can sign in at wingover.app to see your flights on any computer."
+            : "Link your Apple Account, and you can sign in at wingover.app to see your flights on any computer."}
+        </p>
+
+        {problem && <p className={styles.errorMessage}>{problem}</p>}
+
+        <AppleSignInButton
+          label="Link Apple Account"
+          onClick={link}
+          busy={busy}
+          testId="link-page-link"
+        />
+        {purchase && (
+          <IonButton
+            fill="clear"
+            size="small"
+            className={styles.quietAction}
+            onClick={pop}
+            data-testid="link-page-skip"
+          >
+            Skip for now
+          </IonButton>
+        )}
+        {purchase && (
+          <p className={styles.finePrint}>
+            You can always do this later from the Sync screen.
+          </p>
+        )}
+      </>
+    );
+  }
+
   return (
     <>
       <IonHeader>
@@ -352,7 +400,7 @@ export function LinkAccountPage({
               <IonIcon slot="icon-only" icon={chevronBackOutline} />
             </IonButton>
           </IonButtons>
-          <IonTitle>You&apos;re synced</IonTitle>
+          <IonTitle>{purchase ? "You're synced" : "On your computer"}</IonTitle>
           <IonButtons slot="end">
             <IonButton strong onClick={pop} data-testid="link-page-done">
               Done
@@ -362,52 +410,14 @@ export function LinkAccountPage({
       </IonHeader>
       <IonContent>
         <div className={styles.loginBody}>
-          <div
-            className={cx(
-              styles.state,
-              SHEET_TONE_CLASS[describe(status).tone],
-            )}
-          >
-            <span className={styles.stateLabel}>{describe(status).label}</span>
-            <span className={styles.stateDetail}>
-              {status.state === "syncing" && !status.readOnly
-                ? "Your flights now back up automatically."
-                : describe(status).detail}
-            </span>
-          </div>
+          {renderStatus()}
 
           {linked ? (
             <p className={styles.loginLede} data-testid="link-page-linked">
-              Linked. Sign in with Apple at wingover.app any time.
+              Linked. Sign in with Apple at wingover.app on any computer.
             </p>
           ) : (
-            <>
-              <p className={styles.loginLede}>
-                One optional step: link your Apple Account, and you can sign in
-                at wingover.app to see your flights on any computer.
-              </p>
-
-              {problem && <p className={styles.errorMessage}>{problem}</p>}
-
-              <AppleSignInButton
-                label="Link Apple Account"
-                onClick={link}
-                busy={busy}
-                testId="link-page-link"
-              />
-              <IonButton
-                fill="clear"
-                size="small"
-                className={styles.quietAction}
-                onClick={pop}
-                data-testid="link-page-skip"
-              >
-                Skip for now
-              </IonButton>
-              <p className={styles.finePrint}>
-                You can always do this later from the Sync screen.
-              </p>
-            </>
+            renderLinkOffer()
           )}
         </div>
       </IonContent>
