@@ -26,7 +26,7 @@ import type {
   RasterOverlayOptions,
   Unsub,
 } from "../types";
-import { ACCENT_CYAN } from "../types";
+import { ACCENT_CYAN, boxesOf } from "../types";
 import { loadMapKit } from "./loader";
 
 const REVEAL_FALLBACK_MS = 4000;
@@ -719,11 +719,7 @@ export async function createMapKitMapView(
       //     upscaled on a canvas — the overzoom MapLibre does on the GPU,
       //     done here by hand. Consequence of the callback path: tiles
       //     are fetch()ed, so the host MUST send CORS.
-      const boxes = opts?.bounds
-        ? Array.isArray(opts.bounds[0][0])
-          ? (opts.bounds as Bounds[])
-          : [opts.bounds as Bounds]
-        : null;
+      const boxes = opts?.bounds ? boxesOf(opts.bounds) : null;
       const minZoom = opts?.minZoom;
       const maxZoom = opts?.maxZoom;
       const urlForTile = (x: number, y: number, z: number): string =>
@@ -734,7 +730,9 @@ export async function createMapKitMapView(
       // Decode via <img> (the browser's native codec path — the same one
       // MapKit's own loader uses, so anything it could show, this can),
       // drawn to a canvas so the object URL can be revoked immediately.
-      async function loadCanvas(url: string): Promise<HTMLCanvasElement | null> {
+      async function loadCanvas(
+        url: string,
+      ): Promise<HTMLCanvasElement | null> {
         try {
           const res = await fetch(url);
           if (!res.ok) return null;

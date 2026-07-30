@@ -236,12 +236,17 @@ export interface MapView {
   // VFR sectional chart). {z}/{x}/{y} placeholders, web-mercator 256px.
   // Optional: a backend without it (fake) never shows the layer, and
   // callers must tolerate that.
-  rasterOverlay?(
-    template: string,
-    opts?: RasterOverlayOptions,
-  ): RasterOverlay;
+  rasterOverlay?(template: string, opts?: RasterOverlayOptions): RasterOverlay;
 
   on(gesture: Gesture, handler: (e: GestureEvent) => void): Unsub;
+}
+
+// One box or several, as a list. RasterOverlayOptions.bounds accepts both
+// (most sources are one box), and each adapter needs the list form.
+export function boxesOf(bounds: Bounds | Bounds[]): Bounds[] {
+  const [first] = bounds;
+  if (Array.isArray(first[0])) return bounds as Bounds[];
+  return [bounds as Bounds];
 }
 
 // The smallest [sw, ne] box covering the points, or null if there are none.

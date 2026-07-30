@@ -27,6 +27,7 @@ import type {
   RasterOverlayOptions,
   Unsub,
 } from "../types";
+import { boxesOf } from "../types";
 import { createAircraftLayer } from "./aircraft";
 
 const LONG_PRESS_MS = 500;
@@ -59,12 +60,11 @@ interface RasterRecord {
 // One [w, s, e, n] hull over the coverage box(es) — maplibre's raster
 // source takes a single bounds and only fetches visible tiles, so the
 // hull is enough there.
-function boundsHull(bounds: Bounds | Bounds[]): [number, number, number, number] {
-  const boxes = Array.isArray(bounds[0][0])
-    ? (bounds as Bounds[])
-    : [bounds as Bounds];
+function boundsHull(
+  bounds: Bounds | Bounds[],
+): [number, number, number, number] {
   let [w, s, e, n] = [Infinity, Infinity, -Infinity, -Infinity];
-  for (const [[west, south], [east, north]] of boxes) {
+  for (const [[west, south], [east, north]] of boxesOf(bounds)) {
     if (west < w) w = west;
     if (south < s) s = south;
     if (east > e) e = east;
@@ -180,9 +180,7 @@ export async function createMapLibreMapView(
           ...(rec.opts.maxZoom !== undefined
             ? { maxzoom: rec.opts.maxZoom }
             : {}),
-          ...(rec.opts.bounds
-            ? { bounds: boundsHull(rec.opts.bounds) }
-            : {}),
+          ...(rec.opts.bounds ? { bounds: boundsHull(rec.opts.bounds) } : {}),
         });
       }
       if (!map.getLayer(rec.layerId)) {
