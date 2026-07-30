@@ -4,7 +4,6 @@ import {
   IonContent,
   IonHeader,
   IonIcon,
-  IonNavLink,
   IonSpinner,
   IonTitle,
   IonToolbar,
@@ -19,7 +18,6 @@ import * as sync from "../../../sync/index";
 import { cx } from "../../shared/cx";
 import { describe, type SyncTone } from "./describe";
 import { resolveSyncView } from "./resolveSyncView";
-import { SelfHostPage } from "./SelfHostPage";
 import {
   DormantSubscribe,
   manageSubscription,
@@ -271,7 +269,6 @@ export function Connected({
           More options
         </IonButton>
       )}
-
     </>
   );
 }

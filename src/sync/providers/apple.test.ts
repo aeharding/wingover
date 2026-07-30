@@ -1,8 +1,7 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
 
-import { jwsExpiresAt } from "./apple";
-
 import type { Credentials } from "../types";
+import { jwsExpiresAt } from "./apple";
 import { isEnvMismatch, isUnlinked, siwaProvider } from "./apple";
 
 /**
