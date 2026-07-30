@@ -31,11 +31,9 @@ import {
   type MarkerLayer,
   type MarkerSpec,
   PLANNED_COLOR,
-  type RasterOverlay,
 } from "../map/types";
+import useChartOverlay from "../map/useChartOverlay";
 import useMapView from "../map/useMapView";
-import useVfrChart from "../map/useVfrChart";
-import { VFR_COVERAGE } from "../map/vfrCharts";
 import ViewToggle from "../map/ViewToggle";
 import { useSettings } from "../settings/SettingsContext";
 import { useIsDesktop } from "../useIsDesktop";
@@ -80,13 +78,12 @@ export default function PlanPage() {
   const appearance = useAppearance();
   const [presentRouteSheet] = useIonActionSheet();
   const [view, changeView] = useMapView();
-  const chart = useVfrChart();
   const [pins, setPins] = useState<Pin[]>([]);
   const [map, setMap] = useState<MapView | null>(null);
   const lineRef = useRef<Line | null>(null);
   const markersRef = useRef<MarkerLayer | null>(null);
-  const chartRef = useRef<RasterOverlay | null>(null);
   const skipArrivalFrameRef = useRef(false);
+  useChartOverlay(map, view === "chart");
 
   // Total route length = sum of the legs between consecutive pins, for
   // planning (matches the idle Fly screen's "Planned route").
@@ -231,7 +228,6 @@ export default function PlanPage() {
       // Provider re-create destroyed the view; drop it and every handle.
       lineRef.current = null;
       markersRef.current = null;
-      chartRef.current = null;
       setMap(null);
       return;
     }
@@ -242,9 +238,6 @@ export default function PlanPage() {
       opacity: 0.9,
     });
     markersRef.current = next.markers();
-    // Handles minted from the dead map are landmines; the chart re-attaches
-    // to the new one through the effect below.
-    chartRef.current = null;
     next.on("longpress", (event) => addPin(event.at));
     // A re-created map that inherited its camera (appearance flip) must
     // not re-run the initial framing — the pilot's place survives.
@@ -273,22 +266,6 @@ export default function PlanPage() {
     }
     frameInitial(map);
   }, [map]);
-
-  // The FAA sectionals, once the manifest has said where this cycle's tiles
-  // live. Attached here rather than in handleReady because that answer
-  // arrives over the network, long after the map is ready. Silent when the
-  // manifest is unreachable or the backend has no raster support (the fake
-  // one): charts are an enhancement, and an enhancement never explains
-  // itself to a pilot.
-  useEffect(() => {
-    if (!map || !chart || chartRef.current) return;
-    chartRef.current =
-      map.rasterOverlay?.(chart.tiles, {
-        minZoom: chart.minZoom,
-        maxZoom: chart.maxZoom,
-        bounds: VFR_COVERAGE,
-      }) ?? null;
-  }, [map, chart]);
 
   useEffect(() => {
     if (!map) return;
@@ -434,7 +411,7 @@ export default function PlanPage() {
                   <IonIcon icon={locateOutline} />
                 </button>
                 {map?.supportsSatellite && (
-                  <ViewToggle view={view} onChange={changeView} />
+                  <ViewToggle view={view} charts onChange={changeView} />
                 )}
               </div>
               {/* No aria-label on the pill: the native WaypointUITests probe

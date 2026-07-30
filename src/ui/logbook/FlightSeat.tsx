@@ -24,6 +24,7 @@ import {
   type MarkerLayer,
   PLAN_LINE_COLOR,
 } from "../map/types";
+import useChartOverlay from "../map/useChartOverlay";
 import useMapView from "../map/useMapView";
 import ViewToggle from "../map/ViewToggle";
 import { useReplayDrawer } from "../replay/useReplayDrawer";
@@ -73,6 +74,7 @@ export default function FlightSeat({
   const planLineRef = useRef<Line | null>(null);
   const markersRef = useRef<MarkerLayer | null>(null);
   const skipArrivalFrameRef = useRef(false);
+  useChartOverlay(map, view === "chart");
   // The replay pane slides open under the seat map; closes with a
   // selection swap or when the section is URL-hidden.
   const replay = useReplayDrawer(map, track, flight, active, true);
@@ -281,7 +283,7 @@ export default function FlightSeat({
               }
               br={
                 map?.supportsSatellite ? (
-                  <ViewToggle view={view} onChange={changeView} />
+                  <ViewToggle view={view} charts onChange={changeView} />
                 ) : undefined
               }
             />

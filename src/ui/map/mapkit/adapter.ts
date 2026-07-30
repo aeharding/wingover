@@ -62,6 +62,8 @@ interface EventTargetLike {
   removeEventListener(type: string, listener: (e: MapKitEvent) => void): void;
 }
 
+// Chart shares street's muted basemap: the sectional covers it wherever
+// the FAA has drawn anything, and what shows through is water and border.
 function baseToMapType(base: MapViewKind) {
   return base === "satellite"
     ? mapkit.MapType.Hybrid

@@ -56,6 +56,7 @@ import {
   type MarkerLayer,
   PLAN_LINE_COLOR,
 } from "../map/types";
+import useChartOverlay from "../map/useChartOverlay";
 import useMapView from "../map/useMapView";
 import ViewToggle from "../map/ViewToggle";
 import { useReplayDrawer } from "../replay/useReplayDrawer";
@@ -124,6 +125,7 @@ export default function FlightDetailPage() {
   // callback must see the CURRENT intent, not the one it closed over.
   const mapFullRef = useRef(false);
   const contentRef = useRef<HTMLIonContentElement>(null);
+  useChartOverlay(map, view === "chart");
   // The map surface lives in this portal so full screen can REPARENT it (same
   // React and DOM instance — no map re-init) between the inline frame and a
   // fixed overlay on document.body. Lazy useState = create-once (this is
@@ -567,7 +569,7 @@ export default function FlightDetailPage() {
                   tr={(replay.followButton ?? replay.playButton) || undefined}
                   bl={
                     map?.supportsSatellite ? (
-                      <ViewToggle view={view} onChange={changeView} />
+                      <ViewToggle view={view} charts onChange={changeView} />
                     ) : undefined
                   }
                   br={
@@ -583,7 +585,7 @@ export default function FlightDetailPage() {
                 />
               ) : (
                 map?.supportsSatellite && (
-                  <ViewToggle view={view} onChange={changeView} />
+                  <ViewToggle view={view} charts onChange={changeView} />
                 )
               )}
             </div>

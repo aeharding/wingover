@@ -135,7 +135,38 @@ function templateOverride(): string | null {
   }
 }
 
+// A 1x1 JXL in the SAME ISOBMFF container the tiles ship in (signature
+// box, ftyp, jxlc), 60 bytes. Decoding is NATIVE or not at all by
+// decision: no WASM decoder, no AVIF twin, no fallback host. So a browser
+// that cannot decode this cannot show a chart, and asking it to fetch
+// half a megabyte of tiles per screen would be pure waste.
+//
+// Measured 2026-07-30 through Playwright: WebKit decodes it (1x1),
+// Chromium and Firefox reject it, and a corrupted twin is rejected by all
+// three — so a pass is a decode, not a decoder shrugging.
+const JXL_PROBE =
+  "data:image/jxl;base64,AAAADEpYTCANCocKAAAAFGZ0eXBqeGwgAAAAAGp4bCAAAAAcanhsY/8KABAQCQgCAQAgAEsSpUKFJBwA";
+
+let decodable: Promise<boolean> | null = null;
+
+function canDecodeJxl(): Promise<boolean> {
+  decodable ??= (async () => {
+    try {
+      const probe = new Image();
+      probe.src = JXL_PROBE;
+      await probe.decode();
+      return probe.naturalWidth > 0;
+    } catch {
+      return false;
+    }
+  })();
+  return decodable;
+}
+
 async function load(): Promise<VfrChart | null> {
+  // Codec first: a browser that cannot decode JXL has no use for the
+  // manifest, and this costs no network.
+  if (!(await canDecodeJxl())) return null;
   const override = templateOverride();
   // Every bake to date is z0-12; an override states only the template, so
   // it takes that range on faith.

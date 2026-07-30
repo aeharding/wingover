@@ -5,7 +5,10 @@ import type {
 
 import { getSetting } from "../../storage/local";
 
-export type MapViewKind = "street" | "satellite";
+// "chart" is street + the FAA sectionals on top (useChartOverlay): the
+// basemap still shows through open water and outside US coverage, which
+// is exactly where the sectional has nothing to say.
+export type MapViewKind = "street" | "satellite" | "chart";
 
 // Which world the basemap lives in. Ground screens (logbook, plan, detail,
 // desktop PWA) follow the system scheme like the rest of the app
@@ -150,7 +153,7 @@ export async function resolveMapStyle(
   const key = await resolveMaptilerKey();
   // No key, no satellite (a stored "satellite" preference degrades to
   // street rather than erroring) — the toggle is hidden in that state via
-  // MapView.supportsSatellite.
-  if (view === "street" || !key) return streetStyleUrl(key, appearance);
+  // MapView.supportsSatellite. Chart rides the street basemap.
+  if (view !== "satellite" || !key) return streetStyleUrl(key, appearance);
   return satelliteStyle(key, appearance);
 }
