@@ -5,11 +5,11 @@ import { LANDING_SUSTAIN_FIXES } from "../flight/landing";
 import { IMPRECISE_SUSTAIN_MS } from "../flight/takeoff";
 import { createWaypointTracker, WAYPOINT_RADIUS_M } from "../flight/waypoints";
 import {
-  GeolocationRecordingEngine,
+  Engine,
   type PositionSource,
   type SourceError,
   type SourcePosition,
-} from "./real";
+} from "./engine";
 import { readWal, writeWalSession } from "./wal";
 import { createNavigatorSource } from "./webSource";
 
@@ -59,13 +59,13 @@ class FakeGeolocation {
 
 let geolocation: FakeGeolocation;
 let timestamp: number;
-const engines: GeolocationRecordingEngine[] = [];
+const engines: Engine[] = [];
 
 // The real browser source, one instance per engine (its latch and report
 // channel are per-source state). The engine no longer defaults to one, so
 // the wiring the app does in index.ts is the wiring these tests do.
-function createEngine(): GeolocationRecordingEngine {
-  const engine = new GeolocationRecordingEngine({
+function createEngine(): Engine {
+  const engine = new Engine({
     source: createNavigatorSource(),
     setWaypoints: () => {},
   });
@@ -155,8 +155,8 @@ afterEach(async () => {
 });
 
 async function armAndTakeOff(
-  engine: GeolocationRecordingEngine,
-  options?: Parameters<GeolocationRecordingEngine["start"]>[0],
+  engine: Engine,
+  options?: Parameters<Engine["start"]>[0],
 ) {
   await engine.start(options);
   for (let i = 0; i < 3; i++) geolocation.emit(position({ speed: 0 }));
@@ -165,7 +165,7 @@ async function armAndTakeOff(
   for (let i = 0; i < 5; i++) geolocation.emit(position({ speed: 6 }));
 }
 
-describe("GeolocationRecordingEngine", () => {
+describe("Engine", () => {
   it("walks acquiring → armed → recording with backdated takeoff", async () => {
     const engine = createEngine();
     await engine.start();
@@ -341,8 +341,8 @@ describe("GeolocationRecordingEngine", () => {
     return { source, state };
   }
 
-  function engineOn(source: PositionSource): GeolocationRecordingEngine {
-    const engine = new GeolocationRecordingEngine({
+  function engineOn(source: PositionSource): Engine {
+    const engine = new Engine({
       source,
       setWaypoints: () => {},
     });
@@ -1020,7 +1020,7 @@ describe("GeolocationRecordingEngine", () => {
 
     // Live cadence: one batch per fix.
     const liveSource = manualSource();
-    const live = new GeolocationRecordingEngine({
+    const live = new Engine({
       source: liveSource.source,
       setWaypoints: () => {},
     });
@@ -1038,7 +1038,7 @@ describe("GeolocationRecordingEngine", () => {
 
     // Replay: everything in one batch, with one coalesced notification.
     const burstSource = manualSource();
-    const burst = new GeolocationRecordingEngine({
+    const burst = new Engine({
       source: burstSource.source,
       setWaypoints: () => {},
     });
@@ -1069,7 +1069,7 @@ describe("GeolocationRecordingEngine", () => {
   // 100k fixes behind a 7k flight, and every later WAL read paid 3.4 s.
   it("stops consuming a batch once the flight is final", async () => {
     let deliver: ((batch: SourcePosition[]) => void) | null = null;
-    const engine = new GeolocationRecordingEngine({
+    const engine = new Engine({
       source: {
         watch(onPositions) {
           deliver = onPositions;
@@ -1117,7 +1117,7 @@ describe("GeolocationRecordingEngine", () => {
   // drain in full, exactly as it did before the break existed.
   it("drains the whole batch when the pilot opted out of auto-finalize", async () => {
     let deliver: ((batch: SourcePosition[]) => void) | null = null;
-    const engine = new GeolocationRecordingEngine({
+    const engine = new Engine({
       source: {
         watch(onPositions) {
           deliver = onPositions;
@@ -1515,7 +1515,7 @@ describe("session waypoints", () => {
 describe("waypoint config pushes", () => {
   it("feeds the active remaining set on start, add, reach, and remove", async () => {
     const pushes: number[] = [];
-    const engine = new GeolocationRecordingEngine({
+    const engine = new Engine({
       source: createNavigatorSource(),
       setWaypoints: (waypoints) => pushes.push(waypoints.length),
     });
@@ -1708,7 +1708,7 @@ describe("waypoint navigation", () => {
   // N11 — a no-op for an id that is not currently active.
   it("removeWaypoint is a no-op for an unknown or already-removed id", async () => {
     const pushes: number[] = [];
-    const engine = new GeolocationRecordingEngine({
+    const engine = new Engine({
       source: createNavigatorSource(),
       setWaypoints: () => pushes.push(1),
     });
@@ -1741,7 +1741,7 @@ describe("waypoint navigation", () => {
   // N12 — multi-hit in one batch (defects 4/9).
   it("one replayed batch flying through several waypoints advances multiply", async () => {
     const src = manualSource();
-    const engine = new GeolocationRecordingEngine({
+    const engine = new Engine({
       source: src.source,
       setWaypoints: () => {},
     });
@@ -1804,7 +1804,7 @@ describe("waypoint navigation", () => {
     await first.getSnapshot();
 
     const pushes: string[][] = [];
-    const reborn = new GeolocationRecordingEngine({
+    const reborn = new Engine({
       source: createNavigatorSource(),
       setWaypoints: (w) => pushes.push(w.map((x) => x.id)),
     });
@@ -1869,7 +1869,7 @@ describe("waypoint navigation", () => {
   // (both armed outside first) reaches both, with a single coalesced push.
   it("one fix reaches an overlapping planned + ad-hoc together, pushing once", async () => {
     const pushes: string[][] = [];
-    const engine = new GeolocationRecordingEngine({
+    const engine = new Engine({
       source: createNavigatorSource(),
       setWaypoints: (w) => pushes.push(w.map((x) => x.id)),
     });
@@ -1958,7 +1958,7 @@ describe("waypoint navigation", () => {
   it("a reach then a stale gap in one batch ends the flight, cursor kept, no re-feed", async () => {
     const pushes: number[] = [];
     const src = manualSource();
-    const engine = new GeolocationRecordingEngine({
+    const engine = new Engine({
       source: src.source,
       setWaypoints: () => pushes.push(1),
     });
@@ -1987,7 +1987,7 @@ describe("waypoint navigation", () => {
   // (ensureWatch early-returns on a live watch): no extra setWaypoints push.
   it("dismissLanding while landed pushes no waypoints and returns to recording", async () => {
     const pushes: number[] = [];
-    const engine = new GeolocationRecordingEngine({
+    const engine = new Engine({
       source: createNavigatorSource(),
       setWaypoints: () => pushes.push(1),
     });
@@ -2030,7 +2030,7 @@ describe("waypoint navigation", () => {
   // is final: no cursor/queue change, no push, no session write.
   it("mutations after end() are inert", async () => {
     const pushes: number[] = [];
-    const engine = new GeolocationRecordingEngine({
+    const engine = new Engine({
       source: createNavigatorSource(),
       setWaypoints: () => pushes.push(1),
     });

@@ -6,7 +6,7 @@ import type {
   PositionSource,
   SourceError,
   SourcePosition,
-} from "./real";
+} from "./engine";
 import type { Waypoint } from "./types";
 
 // Pull-based source over the wingover plugin. The native side
@@ -194,7 +194,7 @@ export const nativePositionSource: PositionSource = {
           // Drop the held refusal on exactly the evidence the ENGINE
           // accepts, or the two disagree about whether a takeover is
           // still up: a non-reduced fix disproves reduced accuracy
-          // (real.ts handlePositions), and nothing disproves a permission
+          // (engine.ts handlePositions), and nothing disproves a permission
           // refusal — that takeover absorbs its own fixes, so only a
           // fresh watch retires it and revive is what asks for one.
           if (

@@ -1,13 +1,13 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 import { IMPRECISE_SUSTAIN_MS } from "../flight/takeoff";
-import type { SourceError, SourcePosition } from "./real";
+import type { SourceError, SourcePosition } from "./engine";
 import { createNavigatorSource } from "./webSource";
 
 // The wall-clock behaviour the browser needs and no other platform does,
 // tested where it now lives (#160). The engine-level versions of the latch
 // cases moved here with it; what the engine still owns — a good fix
-// lifting the takeover, storage not masking it — stays in real.test.ts.
+// lifting the takeover, storage not masking it — stays in engine.test.ts.
 
 class FakeGeolocation {
   private watchers = new Map<

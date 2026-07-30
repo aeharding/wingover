@@ -1,5 +1,5 @@
 import { coordsLookReduced, IMPRECISE_SUSTAIN_MS } from "../flight/takeoff";
-import type { PositionSource, SourceError } from "./real";
+import type { PositionSource, SourceError } from "./engine";
 
 // A DIAGNOSIS, not a platform answer: the browser Geolocation API exposes
 // no accuracy authorization to ask about, so the only evidence is the

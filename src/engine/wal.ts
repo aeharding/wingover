@@ -14,7 +14,7 @@ export interface WalSession {
   autoEnd?: boolean;
   waypoints?: Waypoint[];
   // Mid-flight ad-hoc nav targets. Append-only membership + an insertion
-  // anchor. "Passed" ad-hoc is DERIVED from the buffer (reachedIds in real.ts),
+  // anchor. "Passed" ad-hoc is DERIVED from the buffer (reachedIds in engine.ts),
   // never shifted here, so a lost write can never resurrect a passed point.
   // addedAtIndex = buffer length at add time; the reach scan arms an ad-hoc
   // only from fixes at/after it (so a point long-pressed after it was already

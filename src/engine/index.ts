@@ -1,8 +1,8 @@
 import { isTauri } from "../platform";
 import { withWebCore } from "./core";
+import { Engine } from "./engine";
 import { createGpxSource } from "./gpxSource";
 import { nativeCore } from "./nativeSource";
-import { GeolocationRecordingEngine } from "./real";
 import { createSimulatorSource } from "./simulatorSource";
 import type { RecordingEngine } from "./types";
 import { createNavigatorSource } from "./webSource";
@@ -28,14 +28,14 @@ function chooseEngine(): RecordingEngine {
     if (params.has("mock-gpx")) {
       const parsed = Number(params.get("mock-speed"));
       const compression = Number.isFinite(parsed) && parsed > 0 ? parsed : 60;
-      return new GeolocationRecordingEngine(
+      return new Engine(
         withWebCore(createGpxSource(params.get("mock-gpx")!, compression)),
       );
     }
     if (params.has("mock-speed")) {
       const parsed = Number(params.get("mock-speed"));
       const compression = Number.isFinite(parsed) && parsed > 0 ? parsed : 60;
-      return new GeolocationRecordingEngine(
+      return new Engine(
         withWebCore(
           createSimulatorSource(
             compression,
@@ -45,7 +45,7 @@ function chooseEngine(): RecordingEngine {
       );
     }
   }
-  return new GeolocationRecordingEngine(
+  return new Engine(
     isTauri() ? nativeCore : withWebCore(createNavigatorSource()),
   );
 }

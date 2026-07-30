@@ -65,7 +65,7 @@ const NO_UI = {
 const ENGINE_PUBLIC_ONLY = {
   regex: "(^|/)engine/(?!index$|types$|session$)",
   message:
-    "src/engine's public surface is index, types, session. real/wal/core/*Source are internals: the engine is reached through one injected CoreClient (ARCHITECTURE.md). isTauri and getCurrentPosition live in src/platform.",
+    "src/engine's public surface is index, types, session. engine/wal/core/*Source are internals: the engine is reached through one injected CoreClient (ARCHITECTURE.md). isTauri and getCurrentPosition live in src/platform.",
 };
 
 // src/platform is the engine's second reader of the native permission rule:
@@ -287,7 +287,7 @@ export default defineConfig(
       "wingover/ui-bucket-isolation": "error",
       // The base layer: the manual-memoization ban plus the seams that are
       // inert inside the directory they protect (a relative import within
-      // src/engine reads "./real", not "engine/real"), so they cost nothing
+      // src/engine reads "./engine", not "engine/engine"), so they cost nothing
       // here and cover main.tsx, sw.ts, tauri-ionic, e2e and scripts too.
       "no-restricted-imports": restrict(
         NO_MANUAL_MEMO,
@@ -616,7 +616,7 @@ export default defineConfig(
     // 226-line component) and traceRenderer.ts (complexity 22).
     //
     // Tests exempt, like the two blocks above: a table-driven spec's
-    // branches are its cases, and src/engine/real.test.ts is 2000 lines by
+    // branches are its cases, and src/engine/engine.test.ts is 2000 lines by
     // design. There is no flight test file yet; without this the first one
     // written would be the only spec in the repo held to a 25 complexity.
     files: ["src/ui/flight/**"],

@@ -1,7 +1,7 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
+import type { SourceError, SourcePosition } from "./engine";
 import { nativeLocationRefusal, nativePositionSource } from "./nativeSource";
-import type { SourceError, SourcePosition } from "./real";
 
 const core = vi.hoisted(() => ({
   invoke: vi.fn(),
@@ -644,7 +644,7 @@ describe("nativePositionSource.revive", () => {
     expect(reports).toHaveLength(1);
   });
   // AUDIT (#160). A permission takeover absorbs its own fixes at the
-  // engine (real.ts handlePositions returns early for every blocking code
+  // engine (engine.ts handlePositions returns early for every blocking code
   // but imprecise), so fixes flowing are NOT evidence that the takeover is
   // over. If they retired the held refusal, revive would go silent and the
   // red screen would have no exit but Cancel — and this is the ordinary

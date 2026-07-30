@@ -14,12 +14,12 @@ import {
 import { WAYPOINT_RADIUS_M } from "../flight/waypoints";
 import type {
   EngineError,
+  RecordingEngine as EngineImpl,
   EngineSnapshot,
   EngineStatus,
   Fix,
   HydrationState,
   LngLat,
-  RecordingEngine,
   StartOptions,
   Waypoint,
 } from "./types";
@@ -145,7 +145,7 @@ export interface CoreClient {
   setWaypoints(waypoints: Waypoint[]): void;
 }
 
-export class GeolocationRecordingEngine implements RecordingEngine {
+export class Engine implements EngineImpl {
   private buffer: Fix[] = [];
   private session: WalSession | null = null;
   private stopWatch: (() => void) | null = null;

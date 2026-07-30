@@ -8,20 +8,21 @@ drills.
 
 - ~~`tauri-plugin-geolocation`~~ REMOVED 2026-07-10 (superseded by the
   in-repo wingover plugin; `tauriSource.ts` deleted with it).
-- Engine seam: `GeolocationRecordingEngine` takes a `PositionSource`;
-  `tauriSource.ts` adapts the plugin (permissions flow + mapping, unit-tested).
+- Engine seam: `Engine` takes a `CoreClient` (`{ source, setWaypoints }`).
   Engine selection auto-detects Tauri (`__TAURI_INTERNALS__`) — no flags needed.
 - `bundle.iOS.minimumSystemVersion: "16.0"` (open question #7 — bump if you decide otherwise).
-- `src-tauri/Info.ios.plist` holds the required keys (location usage strings +
-  `UIBackgroundModes: location`). **`tauri ios init` will NOT merge these** —
-  copy them into the generated `src-tauri/gen/apple/*_iOS/Info.plist`.
+- iOS plist keys live in `src-tauri/gen/apple/project.yml` `info.properties`
+  (location usage strings, `UIBackgroundModes: location`,
+  `ITSAppUsesNonExemptEncryption`). **Do not edit the generated
+  `src-tauri/gen/apple/*_iOS/Info.plist` directly** — xcodegen rewrites it
+  from project.yml on every build (learned the hard way; PLAN.md records it).
 
 ## Steps
 
 1. Prereqs: Xcode + iOS SDK, `rustup target add aarch64-apple-ios aarch64-apple-ios-sim`.
 2. `git pull && pnpm install`
 3. `pnpm exec tauri ios init` — generates `src-tauri/gen/apple`. Commit it.
-4. Merge `Info.ios.plist` keys into the generated Info.plist (see above). Commit.
+4. Confirm the plist keys landed via `project.yml` `info.properties` (see above). Commit.
 5. Open `src-tauri/gen/apple` project in Xcode once: set the signing team
    (same account as Voyager).
 6. Simulator first: `pnpm exec tauri ios dev`. In the simulator,

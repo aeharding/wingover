@@ -1,5 +1,5 @@
 import { createWaypointTracker } from "../flight/waypoints";
-import type { CoreClient, PositionSource } from "./real";
+import type { CoreClient, PositionSource } from "./engine";
 import type { Fix, Waypoint } from "./types";
 
 // TS twin of the plugin's core.rs: the SAME surface, function for
