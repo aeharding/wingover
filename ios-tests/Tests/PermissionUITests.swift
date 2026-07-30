@@ -29,26 +29,6 @@ final class PermissionUITests: XCTestCase {
       .firstMatch
   }
 
-  // Walks any leftover state (recording, acquiring, blocked takeover)
-  // back to idle. The cancel branch needs a real wait — a cold launch
-  // renders the webview seconds after launch() returns — and pre-takeoff
-  // Cancel is guarded by the same BigConfirm as Stop (gloves-first); the
-  // takeover's Cancel discards directly, so a missing confirm is fine.
-  private func recoverToIdle(_ app: XCUIApplication) {
-    let stop = app.buttons["Stop flight"].firstMatch
-    let cancel = app.buttons["Cancel"].firstMatch
-    if stop.waitForExistence(timeout: 3) {
-      stop.tap()
-      let confirm = app.buttons["Stop"].firstMatch
-      if confirm.waitForExistence(timeout: 5) { confirm.tap() }
-    } else if cancel.waitForExistence(timeout: 10) {
-      cancel.tap()
-      let confirm = app.buttons["Stop"].firstMatch
-      if confirm.waitForExistence(timeout: 5) { confirm.tap() }
-    }
-    _ = app.buttons["Start Flight"].firstMatch.waitForExistence(timeout: 20)
-  }
-
   // SwiftUI Settings virtualizes its lists: off-screen rows are absent
   // from the AX snapshot entirely, so finding one MEANS scrolling.
   private func scrollTo(
@@ -169,9 +149,13 @@ final class PermissionUITests: XCTestCase {
       app.launch()
       recoverToIdle(app)
       let start = app.buttons["Start Flight"].firstMatch
-      XCTAssertTrue(start.waitForExistence(timeout: 30))
+      XCTAssertTrue(
+        start.waitForExistence(timeout: 30),
+        "app is not idle on the relaunch that re-creates the blocked state")
       start.tap()
-      XCTAssertTrue(openSettings.waitForExistence(timeout: 15))
+      XCTAssertTrue(
+        openSettings.waitForExistence(timeout: 15),
+        "Start Flight did not surface the blocking takeover")
     }
     openSettings.tap()
 
@@ -224,7 +208,9 @@ final class PermissionUITests: XCTestCase {
     recoverToIdle(app)
 
     let start = app.buttons["Start Flight"].firstMatch
-    XCTAssertTrue(start.waitForExistence(timeout: 30))
+    XCTAssertTrue(
+      start.waitForExistence(timeout: 30),
+      "app is not idle before the Precise Location flip")
     start.tap()
     // Self-heal if test2's grant never landed: permission may still be
     // revoked, in which case Start lands on the takeover, not acquiring.
