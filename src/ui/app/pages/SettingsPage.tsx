@@ -21,8 +21,10 @@ import { useHistory } from "react-router-dom";
 import { isTauri } from "../../../platform/index";
 import {
   getBooleanSetting,
+  getDetectLanding,
   getSetting,
   setBooleanSetting,
+  setDetectLanding,
 } from "../../../storage/local";
 import * as sync from "../../../sync/index";
 import { cx } from "../../shared/cx";
@@ -102,7 +104,7 @@ export default function SettingsPage() {
     syncStatus.state === "connecting" ||
     (syncStatus.state === "syncing" && syncStatus.active);
   const [mapBackend, setMapBackend] = useState("mapkit");
-  const [autoEnd, setAutoEnd] = useState(true);
+  const [detectLanding, setDetectLandingState] = useState(true);
   const [recordHere, setRecordHere] = useState(false);
   const [confirmRecordHere, setConfirmRecordHere] = useState(false);
   // Bumped when the warning alert is dismissed: ion-toggle keeps its own
@@ -115,7 +117,7 @@ export default function SettingsPage() {
     getSetting("mapBackend").then((value) => {
       if (value === "mapkit" || value === "maplibre") setMapBackend(value);
     });
-    getBooleanSetting("autoEndFlight", true).then(setAutoEnd);
+    getDetectLanding().then(setDetectLandingState);
     getBooleanSetting("recordInBrowser", false).then(setRecordHere);
   }
 
@@ -132,9 +134,9 @@ export default function SettingsPage() {
     // Loads are idempotent gets; double-firing on phone entry is free.
   }, []);
 
-  function saveAutoEnd(value: boolean) {
-    setAutoEnd(value);
-    void setBooleanSetting("autoEndFlight", value);
+  function saveDetectLanding(value: boolean) {
+    setDetectLandingState(value);
+    void setDetectLanding(value);
   }
 
   function saveRecordHere(value: boolean) {
@@ -208,10 +210,12 @@ export default function SettingsPage() {
             <IonList inset>
               <IonItem>
                 <IonToggle
-                  checked={autoEnd}
-                  onIonChange={(event) => saveAutoEnd(event.detail.checked)}
+                  checked={detectLanding}
+                  onIonChange={(event) =>
+                    saveDetectLanding(event.detail.checked)
+                  }
                 >
-                  Auto-end flight after landing
+                  Detect landing
                 </IonToggle>
               </IonItem>
             </IonList>

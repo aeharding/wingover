@@ -31,9 +31,10 @@ export type LngLat = readonly [longitude: number, latitude: number];
 
 export interface StartOptions {
   waypoints?: Waypoint[];
-  // Grace expiry auto-finalizes the landed flight (default true). Copied
-  // into the session: the active flight keeps the choice it started with.
-  autoEnd?: boolean;
+  // Landing detection: grace expiry auto-finalizes the landed flight
+  // (default true). Copied into the session: the active flight keeps the
+  // choice it started with.
+  detectLanding?: boolean;
 }
 
 export type EngineStatus =
@@ -98,8 +99,9 @@ interface EngineSnapshotBase {
   // The active nav sequence in steer-to order (active ad-hoc, then active
   // planned) — the numbered map markers, where index 0 is nextWaypoint.
   activeWaypoints: Waypoint[];
-  // Whether grace expiry will auto-finalize this flight (session-scoped).
-  autoEnd: boolean;
+  // Whether landing detection will auto-finalize this flight
+  // (session-scoped).
+  detectLanding: boolean;
 }
 
 export type EngineErrorCode =
