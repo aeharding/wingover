@@ -243,7 +243,7 @@ export function SyncSheet({ onClose }: { onClose: () => void }) {
         >
           <IonIcon icon={close} aria-hidden="true" />
         </button>
-        {renderView()}
+        <div className={styles.cardBody}>{renderView()}</div>
       </div>
       <IonModal
         isOpen={selfHostOpen}
