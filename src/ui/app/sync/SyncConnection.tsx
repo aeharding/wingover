@@ -95,26 +95,6 @@ export function AppleSignInButton({
   );
 }
 
-export function SelfHostLink({ onConnected }: { onConnected: () => void }) {
-  return (
-    <IonNavLink
-      routerDirection="forward"
-      component={() => (
-        <SelfHostPage backText="Sync" onConnected={onConnected} />
-      )}
-    >
-      <IonButton
-        fill="clear"
-        size="small"
-        className={styles.quietAction}
-        data-testid="sync-goto-login"
-      >
-        Self-hosted config
-      </IonButton>
-    </IonNavLink>
-  );
-}
-
 /**
  * Anything but nothing: connected, dormant (signed in, no sub), lapsed,
  * subscribed-but-off, supporter. One status block, then only the actions the
@@ -184,7 +164,13 @@ export function Connected({
           ? [{ text: "Use on your computer", handler: onLink }]
           : []),
         ...(v.showSelfHost
-          ? [{ text: "Self-hosted config", handler: onSelfHost }]
+          ? [
+              {
+                text: "Self-hosted config",
+                handler: onSelfHost,
+                htmlAttributes: { "data-testid": "sync-goto-login" },
+              },
+            ]
           : []),
         ...(v.showManage
           ? [{ text: "Manage Subscription", handler: manageSubscription }]

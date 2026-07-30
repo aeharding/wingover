@@ -6,6 +6,7 @@ import {
   IonNav,
   IonTitle,
   IonToolbar,
+  useIonActionSheet,
   useIonAlert,
 } from "@ionic/react";
 import {
@@ -28,7 +29,6 @@ import {
   AppleSignInButton,
   Connected,
   LinkAccountPage,
-  SelfHostLink,
 } from "./SyncConnection";
 import {
   FinePrint,
@@ -155,7 +155,11 @@ function SyncHome({
                   await sync.connectWithSubscription(jws);
                 })
               }
-              onConnected={onClose}
+              onSelfHost={() =>
+                void nav.current?.push(() => (
+                  <SelfHostPage backText="Sync" onConnected={onClose} />
+                ))
+              }
             />
           ) : (
             <Connected
@@ -234,7 +238,7 @@ function Pitch({
   onPurchased,
   onSignIn,
   onRestore,
-  onConnected,
+  onSelfHost,
 }: {
   products: sync.StoreProduct[];
   busy: boolean;
@@ -242,9 +246,10 @@ function Pitch({
   onPurchased: () => void;
   onSignIn: () => void;
   onRestore: () => void;
-  onConnected: () => void;
+  onSelfHost: () => void;
 }) {
   const native = isTauri();
+  const [presentSheet] = useIonActionSheet();
   return (
     <>
       <h2 className={styles.headline} data-testid="sync-headline">
@@ -296,10 +301,29 @@ function Pitch({
         </IonButton>
       )}
 
-      {/* Self-host is a LOGIN and must always be discoverable from the pitch:
-          hiding the free path is where honest FOSS monetization stops being
-          honest. Pushed in place; back returns right here. */}
-      <SelfHostLink onConnected={onConnected} />
+      {/* Self-host is a LOGIN and stays reachable from the pitch, one tap
+          in: More options holds it (Alex, 2026-07-30). Pushed in place;
+          back returns right here. */}
+      <IonButton
+        fill="clear"
+        size="small"
+        className={styles.quietAction}
+        data-testid="sync-more"
+        onClick={() =>
+          void presentSheet({
+            buttons: [
+              {
+                text: "Self-hosted config",
+                handler: onSelfHost,
+                htmlAttributes: { "data-testid": "sync-goto-login" },
+              },
+              { text: "Cancel", role: "cancel" },
+            ],
+          })
+        }
+      >
+        More options
+      </IonButton>
     </>
   );
 }

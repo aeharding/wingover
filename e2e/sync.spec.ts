@@ -56,6 +56,7 @@ async function enableSync(
 /** Settings → Sync → Self-hosted config: the door every self-host test walks. */
 async function openOwnServerForm(page: import("@playwright/test").Page) {
   await page.getByTestId("settings-sync").click();
+  await page.getByTestId("sync-more").click();
   await page.getByTestId("sync-goto-login").click();
 }
 
@@ -248,7 +249,8 @@ test("one sheet: pitch when nothing, self-host connects, status when on", async 
   await expect(page.getByTestId("sync-signin")).toBeVisible();
 
   // Self-hosted config pushes the form IN PLACE — a nav push inside the one
-  // sheet, never a second modal.
+  // sheet, never a second modal. It lives one tap in, under More options.
+  await page.getByTestId("sync-more").click();
   await page.getByTestId("sync-goto-login").click();
   await page.getByLabel("Server").fill(credentials.url);
   await page.getByLabel("Database").fill(credentials.dbName);
