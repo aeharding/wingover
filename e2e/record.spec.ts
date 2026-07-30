@@ -1,6 +1,36 @@
-import { expect, test } from "@playwright/test";
+import { expect, type Page, test } from "@playwright/test";
 
 import { dismissLandingSheet } from "./landingSheet";
+
+/**
+ * Wait until the live map's backend is really there before touching it.
+ *
+ * MapCanvas imports its adapter lazily, so "recording" is visible and the
+ * overlay buttons are already clickable while the map container is still an
+ * empty div. page.mouse.* dispatches at coordinates without hit testing, so a
+ * drag in that window lands on the bare container: MapLibre never sees a
+ * mousedown, no dragstart fires, and follow stays pinned. Measured on a loaded
+ * box, the mousedown target was `div[data-testid=map-container]` with the
+ * loading veil still on and no `__map` on it yet.
+ *
+ * The handle is the gate because the adapter sets it on the statement after
+ * `new Map(...)`, which is where MapLibre attaches its gesture listeners — so
+ * its presence is exactly "a drag will be heard". Every test here pins
+ * ?map-style=blank, which forces the MapLibre backend (config.resolveBackend).
+ * maplibre.spec.ts gates the same seam the same way, for #152.
+ */
+async function liveMapReady(page: Page) {
+  await page.waitForFunction(
+    () =>
+      !!(
+        document.querySelector(
+          '[data-testid="live-map"] [data-testid="map-container"]',
+        ) as (HTMLElement & { __map?: unknown }) | null
+      )?.__map,
+    undefined,
+    { timeout: 15_000 },
+  );
+}
 
 test("arm, auto-takeoff, reload kill drill, stop, logbook", async ({
   page,
@@ -273,6 +303,7 @@ test("follow and track-up: two modes, deliberate resumes", async ({ page }) => {
 
   // Dragging the map unsnaps BOTH modes: the camera is neither following
   // nor rotating, whatever it was doing before.
+  await liveMapReady(page);
   const map = (await page.getByTestId("live-map").boundingBox())!;
   await page.mouse.move(map.x + map.width / 2, map.y + map.height / 2);
   await page.mouse.down();
@@ -307,6 +338,9 @@ test("edge guards stop an edge swipe from panning, inland drag still pans", asyn
 
   const follow = page.getByRole("button", { name: "Follow aircraft" });
   await expect(follow).toHaveAttribute("data-active", "true");
+  // Without this the first phase passes for the wrong reason: an absent map
+  // cannot pan either, so "follow stays pinned" says nothing about the guard.
+  await liveMapReady(page);
 
   // The guard is sized to the OS gesture area itself — env(safe-area-inset-bottom)
   // — so it covers the home-indicator swipe strip exactly and steals no more
