@@ -98,6 +98,7 @@ export default function RecordingSurface({
         navWaypoints={snapshot.activeWaypoints}
         onMapReady={setLiveMap}
         onAddWaypoint={waypoints.propose}
+        onWithdrawWaypoint={waypoints.dismissPending}
         onSelectWaypoint={waypoints.select}
         onFollowChange={changeFollow}
       />

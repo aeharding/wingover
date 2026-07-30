@@ -70,6 +70,11 @@ interface LiveTrackMapProps {
   navWaypoints: Waypoint[];
   // Long-press on the map to drop an ad-hoc waypoint. at = [longitude, latitude].
   onAddWaypoint?: (at: LngLat) => void;
+  // One gesture, one meaning: a press that turns into a pan withdraws the
+  // checkpoint it proposed. Only ever fires mid-gesture — the confirm scrim
+  // is position:fixed/inset:0 (BigConfirm.module.css), so a pending proposal
+  // covers the map and no fresh drag can start under it.
+  onWithdrawWaypoint?: () => void;
   // Tap a waypoint pin to select it (id), or deselect (null) — drives the
   // "clear this checkpoint" control.
   onSelectWaypoint?: (id: string | null) => void;
@@ -92,6 +97,7 @@ export default function LiveTrackMap({
   plannedWaypoints,
   navWaypoints,
   onAddWaypoint,
+  onWithdrawWaypoint,
   onSelectWaypoint,
   onFollowChange,
   onMapReady,
@@ -157,6 +163,7 @@ export default function LiveTrackMap({
 
   const handleDragStart = useEffectEvent(() => {
     onFollowChange(false);
+    onWithdrawWaypoint?.();
   });
 
   // While following, intercept the wheel and apply the zoom directly (see
