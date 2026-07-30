@@ -157,8 +157,15 @@ async function collectEndedFlight(): Promise<void> {
     // it. A reload landing in that gap costs the pilot a toast, never a
     // flight — the logbook already has it.
     if (flight) endedFlightId = flight.id;
-    // Persisted — the engine's durable copy can go; idle follows.
-    await engine.discard();
+    // Persisted — the engine's durable copy can go; idle follows. A
+    // rejection here is post-persistence cleanup (the flight is already
+    // in the logbook), so it must NOT light the collection failure
+    // signal: that screen would claim an unsaved flight, and the flag is
+    // sticky until the NEXT successful persist. The leftover WAL
+    // re-collects on the next boot as a no-op save.
+    await engine.discard().catch((error: unknown) => {
+      console.error("wal clear failed:", error);
+    });
   } finally {
     collecting = false;
   }
