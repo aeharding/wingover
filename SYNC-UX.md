@@ -65,21 +65,29 @@ One modal, every view derived from state, nothing to operate that the state
 doesn't earn:
 
 - **Nothing yet** — the pitch. iOS: **Subscribe** is primary (no login exists
-  or is needed — the transaction is the identity), **Sign in with Apple**
-  beneath it for an account born elsewhere (the web/Stripe future), Restore
-  Purchases and **Self-hosted config** as quiet links. Web: Sign in with
-  Apple is primary — it is the account door, and step one of web checkout
-  once that exists — over the Self-hosted config link. Paywall fine print
-  (price, period, terms, privacy) lives here.
-- **Connected** — status headline (On, last synced) + Turn off sync +
-  Manage Subscription (StoreKit's native sheet — the only surface that shows
-  sandbox subs) + "Use on your computer" (the SIWA link catch-up) + Delete
-  account.
+  or is needed — the transaction is the identity); it pushes the plan page
+  IN PLACE, where the choice lives with full context — two priced buttons
+  resting on the sheet made the pilot price-compare before deciding to buy
+  at all. **Sign in with Apple** sits beneath it for an account born
+  elsewhere (the web/Stripe future), Restore Purchases and **Self-hosted
+  config** as quiet links. Web: Sign in with Apple is primary — it is the
+  account door, and step one of web checkout once that exists — over the
+  Self-hosted config link. The pitch keeps the terms/privacy links; the
+  paywall fine print (price, period, auto-renew) lives on the plan page,
+  the one place a purchase happens.
+- **Connected** — status headline (On, last synced) + Turn off sync (its
+  what-it-does fine print rides the confirm, at the moment it matters, not
+  as a resting paragraph) + "Use on your computer" (the SIWA link catch-up;
+  once linked the same page reads "Linked" — no resting note) + **More
+  options**, an action sheet holding Manage Subscription (StoreKit's native
+  sheet — the only surface that shows sandbox subs) and Delete account:
+  real doors almost nobody needs on a given visit.
 - **Lapsed** — reads "Not subscribed" ("read-only" was database vocabulary
   that meant nothing to a pilot): new flights stay on this device, everything
   already synced stays safe — the courtesy is the point, not a mode to learn.
-  Resubscribe sits on the same screen. Under the hood it is still pull-only,
-  so a new phone can fetch the logbook.
+  Resubscribe sits on the same screen (the plan choice it opens pushes in
+  place). Under the hood it is still pull-only, so a new phone can fetch
+  the logbook.
 - **Signed in, unsubscribed** — "Not subscribed" + Subscribe (the web says
   "subscribe on your iPhone" until checkout exists) + Sign out.
 - **Subscribed but off** — Off + "Turn on sync". Rare by construction: the
@@ -199,9 +207,9 @@ deletion, the one way an account ends.)
 ## Logout, one verb per platform
 
 **Turn off sync** (iOS) = forget this device's credential. Nothing is
-deleted, on the device or the server, and **billing is unchanged** — the fine
-print says both, and Manage Subscription sits adjacent so the pilot who came
-to cancel finds the real door.
+deleted, on the device or the server, and **billing is unchanged** — the
+confirm says both at the moment of the tap, and Manage Subscription sits in
+More options so the pilot who came to cancel finds the real door.
 
 **Log out** (web) = leave this computer entirely: forget the connection AND
 remove the local copy — shared-computer semantics a phone doesn't have.
@@ -236,7 +244,7 @@ destructive act — required in-app once linking exists (guideline 5.1.1(v)).
 | 4.8 — login services                          | SIWA is the only social login; trivially satisfied                                                                                                                                                                                                                                                              |
 | 5.1.1 — no forced account creation            | Purchase works with zero identity; linking is skippable                                                                                                                                                                                                                                                         |
 | 5.1.1(v) — account deletion                   | In-app, on the Sync sheet, same milestone as linking                                                                                                                                                                                                                                                            |
-| Paywall metadata                              | Price, period, terms, privacy on the pitch                                                                                                                                                                                                                                                                      |
+| Paywall metadata                              | Price, period, terms, privacy on the plan page (the paywall every buy door pushes)                                                                                                                                                                                                                              |
 | Family Sharing                                | **Off, deliberately** — identity is the transaction; sharing it is undesigned. Enforced only by an App Store Connect toggle; the store code tolerates a shared originalTransactionId defensively                                                                                                                |
 | The login gate                                | **Our invention; no guideline blesses it.** Refusing a login until a sub stops renewing could read to a reviewer as holding access hostage. Accepted risk: the refusal must offer the refund and manage doors in the same breath, never bare — and the copy gets review-eyes before it ships (Stripe milestone) |
 

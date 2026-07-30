@@ -8,6 +8,8 @@ import {
   IonSpinner,
   IonTitle,
   IonToolbar,
+  useIonActionSheet,
+  useIonAlert,
 } from "@ionic/react";
 import { chevronBackOutline, logoApple } from "ionicons/icons";
 import { type RefObject, useState, useSyncExternalStore } from "react";
@@ -125,7 +127,7 @@ export function Connected({
   products,
   busy,
   problem,
-  onBuy,
+  onPurchased,
   onConnect,
   onLink,
   onSignIn,
@@ -139,7 +141,7 @@ export function Connected({
   products: sync.StoreProduct[];
   busy: boolean;
   problem: string | null;
-  onBuy: (term: sync.SubscriptionTerm) => void;
+  onPurchased: () => void;
   onConnect: () => void;
   onLink: () => void;
   onSignIn: () => void;
@@ -150,6 +152,52 @@ export function Connected({
   // One pure resolve; everything below is a dumb render of its fields, so no
   // action can contradict the account/status (the class of bug this replaced).
   const v = resolveSyncView(status, account, appleSub, isTauri());
+  const [presentAlert] = useIonAlert();
+  const [presentSheet] = useIonActionSheet();
+
+  // The what-it-does fine print rides the confirm, at the moment it matters,
+  // instead of resting on screen as a paragraph among buttons. Native only:
+  // the web's Log out has its own flush-then-decide machinery (useLogOut)
+  // and an extra always-on confirm would train click-through (SYNC-UX.md).
+  function confirmTurnOff() {
+    if (!isTauri()) {
+      onTurnOff();
+      return;
+    }
+    void presentAlert({
+      header: `${v.turnOffLabel}?`,
+      message:
+        "Sync stays off until you turn it back on. Nothing is deleted: every flight stays on this device and on the server. If you subscribe, billing is unchanged.",
+      buttons: [
+        { text: "Cancel", role: "cancel" },
+        { text: v.turnOffLabel, role: "destructive", handler: onTurnOff },
+      ],
+    });
+  }
+
+  // Manage Subscription and Delete account are real doors that almost nobody
+  // needs on a given visit: one quiet More button, an action sheet behind it.
+  function moreOptions() {
+    void presentSheet({
+      buttons: [
+        ...(v.showManage
+          ? [{ text: "Manage Subscription", handler: manageSubscription }]
+          : []),
+        ...(v.showDelete
+          ? [
+              {
+                text: "Delete account…",
+                role: "destructive",
+                handler: onDelete,
+              },
+            ]
+          : []),
+        { text: "Cancel", role: "cancel" },
+      ],
+    });
+  }
+
+  const showMore = v.showManage || v.showDelete;
 
   return (
     <>
@@ -185,15 +233,15 @@ export function Connected({
       )}
 
       {/* Resubscribe: the lapse is discovered here, the remedy is a purchase.
-          Both plans, matching the pitch, so a lapse never buries the year. */}
+          The door pushes the plan page, same as the pitch. */}
       {v.showResubscribe && (
-        <ResubscribeArea products={products} busy={busy} onBuy={onBuy} />
+        <ResubscribeArea products={products} onPurchased={onPurchased} />
       )}
 
       {/* Dormant: signed in, never subscribed — prompted to subscribe
           (SYNC-UX.md). Web checkout replaces the sentence when it exists. */}
       {v.showDormantSubscribe && (
-        <DormantSubscribe products={products} busy={busy} onBuy={onBuy} />
+        <DormantSubscribe products={products} onPurchased={onPurchased} />
       )}
 
       {/* Off + a lapsed or absent sub still deserves a way in. */}
@@ -212,32 +260,17 @@ export function Connected({
           fill="outline"
           color="medium"
           disabled={busy}
-          onClick={onTurnOff}
+          onClick={confirmTurnOff}
           data-testid="sync-off"
         >
           {v.turnOffLabel}
         </IonButton>
       )}
 
-      {/* A subscription to manage means one exists: never for a dormant
-          (signed-in, never-subscribed) account, whose Manage link opened an
-          empty App Store page. */}
-      {v.showManage && (
-        <IonButton
-          fill="clear"
-          size="small"
-          className={styles.quietAction}
-          onClick={manageSubscription}
-          data-testid="sync-manage"
-        >
-          Manage Subscription
-        </IonButton>
-      )}
-
       {v.showUseOnComputer && (
         // Junction 2 catch-up for pilots who skipped the post-purchase page —
-        // opens the same page. Idempotent server-side. Once the server says
-        // the Apple Account is linked, the door becomes the note below.
+        // opens the same page, which reads "Linked" once the link exists.
+        // Idempotent server-side.
         <IonButton
           fill="clear"
           size="small"
@@ -250,35 +283,19 @@ export function Connected({
         </IonButton>
       )}
 
-      {v.showLinkedNote && (
-        <p className={styles.finePrint} data-testid="sync-linked-note">
-          Linked. Sign in with Apple at wingover.app any time.
-        </p>
-      )}
-
-      {v.showDelete && (
+      {showMore && (
         <IonButton
           fill="clear"
           size="small"
-          color="danger"
           className={styles.quietAction}
-          disabled={busy}
-          onClick={onDelete}
-          data-testid="sync-delete-account"
+          onClick={moreOptions}
+          data-testid="sync-more"
         >
-          Delete account…
+          More options
         </IonButton>
       )}
 
       {v.showSelfHost && <SelfHostLink onConnected={onConnected} />}
-
-      {v.showTurnOffNote && (
-        <p className={styles.finePrint}>
-          {isTauri()
-            ? "Turning sync off forgets this device's connection, and it stays off until you turn it back on. Nothing is deleted: every flight stays on this device and on the server. If you subscribe, billing is unchanged."
-            : "Logging out removes your flights from this computer. They stay on the server and your other devices. If you subscribe, billing is unchanged."}
-        </p>
-      )}
     </>
   );
 }

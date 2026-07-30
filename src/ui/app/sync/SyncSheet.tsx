@@ -95,36 +95,26 @@ function SyncHome({
     }
   }
 
-  async function buy(term: sync.SubscriptionTerm) {
-    setBusy(true);
-    setProblem(null);
-    try {
-      await sync.purchase(term);
-      // StoreKit's entitlement just changed; re-derive the local copy so a
-      // resubscribe's fresh "active" replaces the stale mount-time "expired"
-      // (this appleSub cache is otherwise stamped once — see its declaration).
-      void sync.appleSubscriptionState().then(setAppleSub);
-      // The thank-you/link page gets its own screen (SYNC-UX.md junction 2):
-      // the inline offer was cramped and hard to read. Only when the purchase
-      // actually connected this device (the supporter guard means a self-
-      // hoster's purchase doesn't), and only when NOT already linked: pushing
-      // the link offer to a pilot who linked long ago (a resubscribe)
+  // The purchase itself lives on ChoosePlanPage (its problems surface there);
+  // this is the after: refresh the StoreKit-derived cache, come home, and
+  // offer the link page when the purchase actually connected this device.
+  function afterPurchase() {
+    // StoreKit's entitlement just changed; re-derive the local copy so a
+    // resubscribe's fresh "active" replaces the stale mount-time "expired"
+    // (this appleSub cache is otherwise stamped once — see its declaration).
+    void sync.appleSubscriptionState().then(setAppleSub);
+    void (async () => {
+      await nav.current?.popToRoot();
+      // The thank-you/link page (SYNC-UX.md junction 2). Only when the
+      // purchase actually connected this device (the supporter guard means a
+      // self-hoster's purchase doesn't), and only when NOT already linked:
+      // pushing the link offer to a pilot who linked long ago (a resubscribe)
       // contradicts the "Linked" view right behind it.
       const acct = sync.currentAccount();
       if (isTauri() && acct?.kind === "apple" && acct.login !== "apple") {
         void nav.current?.push(() => <LinkAccountPage nav={nav} />);
       }
-    } catch (error) {
-      const text = error instanceof Error ? error.message : String(error);
-      if (/cancelled/i.test(text)) return;
-      setProblem(
-        /pending/i.test(text)
-          ? "This purchase is waiting for approval (Ask to Buy). Once it's approved, tap Subscribe again."
-          : text,
-      );
-    } finally {
-      setBusy(false);
-    }
+    })();
   }
 
   const connected = status.state !== "off";
@@ -151,7 +141,7 @@ function SyncHome({
               products={products}
               busy={busy}
               problem={problem}
-              onBuy={buy}
+              onPurchased={afterPurchase}
               onSignIn={() => run(() => sync.signIn())}
               onRestore={() =>
                 run(async () => {
@@ -174,7 +164,7 @@ function SyncHome({
               products={products}
               busy={busy || loggingOut}
               problem={problem}
-              onBuy={buy}
+              onPurchased={afterPurchase}
               onConnect={() => run(() => sync.connectWithSubscription())}
               onLink={() =>
                 void nav.current?.push(() => <LinkAccountPage nav={nav} />)
@@ -223,7 +213,7 @@ function SyncHome({
             />
           )}
 
-          <FinePrint products={products} showTerms={nothing} />
+          <FinePrint showTerms={nothing} />
         </div>
       </IonContent>
     </>
@@ -234,7 +224,7 @@ function Pitch({
   products,
   busy,
   problem,
-  onBuy,
+  onPurchased,
   onSignIn,
   onRestore,
   onConnected,
@@ -242,7 +232,7 @@ function Pitch({
   products: sync.StoreProduct[];
   busy: boolean;
   problem: string | null;
-  onBuy: (term: sync.SubscriptionTerm) => void;
+  onPurchased: () => void;
   onSignIn: () => void;
   onRestore: () => void;
   onConnected: () => void;
@@ -271,7 +261,7 @@ function Pitch({
 
       {problem && <p className={styles.errorMessage}>{problem}</p>}
 
-      <SubscribeArea products={products} busy={busy} onBuy={onBuy} />
+      <SubscribeArea products={products} onPurchased={onPurchased} />
 
       {/* Sign in is a door, not a place: quiet on iOS (a web-born account
           arriving on a phone), the prominent way back for a subscriber on the

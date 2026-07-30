@@ -1,4 +1,15 @@
-import { IonButton, IonSpinner } from "@ionic/react";
+import {
+  IonBackButton,
+  IonButton,
+  IonButtons,
+  IonContent,
+  IonHeader,
+  IonNavLink,
+  IonSpinner,
+  IonTitle,
+  IonToolbar,
+} from "@ionic/react";
+import { useState } from "react";
 
 import { isTauri } from "../../../platform/index";
 import * as sync from "../../../sync/index";
@@ -7,19 +18,11 @@ import { openExternal } from "../../shared/externalLinks";
 import styles from "./sync.module.css";
 
 /**
- * The Subscription rail (SYNC-UX.md): payments only. The presentational buy
- * CTAs (pitch, lapse, dormant), the plan-button pair they share, Manage
- * Subscription, and the paywall fine print. Pure and stateless — the sheet
- * owns the buy action and passes it down; nothing here touches connection.
+ * The Subscription rail (SYNC-UX.md): payments only. The single buy doors
+ * (pitch, lapse, dormant), the plan-choice page they all push, Manage
+ * Subscription, and the paywall fine print. Nothing here touches connection.
  */
 
-/**
- * Nothing yet. On iOS the primary is Subscribe (no login exists or is
- * needed); Sign in with Apple sits beneath for the pilot whose account was
- * born elsewhere — the web/Stripe future. On the web those roles flip:
- * sign-in IS the door, and (until web checkout) subscribing lives on the
- * iPhone.
- */
 function byTerm(
   products: sync.StoreProduct[],
   term: sync.SubscriptionTerm,
@@ -29,72 +32,147 @@ function byTerm(
   );
 }
 
-// The month-primary + year-companion pair, shared by the pitch and a lapse.
-export function PlanButtons({
-  monthly,
-  yearly,
+/**
+ * The one buy door every surface shares: a single verb, no prices. Two
+ * priced buttons stacked on the sheet made the pilot price-compare before
+ * they had decided to buy at all; the choice now lives on its own page,
+ * where each plan carries its full context (Alex, 2026-07-30).
+ */
+export function PlanGate({
   verb,
+  products,
   testId,
-  busy,
-  onBuy,
+  onPurchased,
 }: {
-  monthly: sync.StoreProduct;
-  yearly: sync.StoreProduct | undefined;
   verb: string;
+  products: sync.StoreProduct[];
   testId: string;
-  busy: boolean;
-  onBuy: (term: sync.SubscriptionTerm) => void;
+  onPurchased: () => void;
 }) {
   return (
-    <>
-      <IonButton
-        expand="block"
-        disabled={busy}
-        onClick={() => onBuy("monthly")}
-        data-testid={testId}
-      >
-        {busy ? (
-          <IonSpinner name="crescent" />
-        ) : (
-          `${verb} · ${monthly.displayPrice}/month`
-        )}
-      </IonButton>
-      {yearly && (
-        <IonButton
-          expand="block"
-          fill="outline"
-          disabled={busy}
-          onClick={() => onBuy("yearly")}
-          data-testid={`${testId}-yearly`}
-        >
-          {`${yearly.displayPrice}/year`}
-        </IonButton>
+    <IonNavLink
+      routerDirection="forward"
+      component={() => (
+        <ChoosePlanPage products={products} onPurchased={onPurchased} />
       )}
+    >
+      <IonButton expand="block" data-testid={testId}>
+        {verb}
+      </IonButton>
+    </IonNavLink>
+  );
+}
+
+/**
+ * The paywall: both plans, each self-described, and the required disclosure.
+ * Owns its own purchase state so a StoreKit problem surfaces HERE, on the
+ * screen the pilot is looking at, never on the view beneath.
+ */
+export function ChoosePlanPage({
+  products,
+  onPurchased,
+}: {
+  products: sync.StoreProduct[];
+  onPurchased: () => void;
+}) {
+  const [buying, setBuying] = useState<sync.SubscriptionTerm | null>(null);
+  const [problem, setProblem] = useState<string | null>(null);
+  const monthly = byTerm(products, "monthly");
+  const yearly = byTerm(products, "yearly");
+
+  async function buy(term: sync.SubscriptionTerm) {
+    setBuying(term);
+    setProblem(null);
+    try {
+      await sync.purchase(term);
+      onPurchased();
+    } catch (error) {
+      const text = error instanceof Error ? error.message : String(error);
+      // A closed Apple sheet is a non-event, not a problem to display.
+      if (/cancelled/i.test(text)) return;
+      setProblem(
+        /pending/i.test(text)
+          ? "This purchase is waiting for approval (Ask to Buy). Once it's approved, tap your plan again."
+          : text,
+      );
+    } finally {
+      setBuying(null);
+    }
+  }
+
+  return (
+    <>
+      <IonHeader>
+        <IonToolbar>
+          <IonButtons slot="start">
+            <IonBackButton text="Sync" />
+          </IonButtons>
+          <IonTitle>Choose a plan</IonTitle>
+        </IonToolbar>
+      </IonHeader>
+      <IonContent>
+        <div className={styles.loginBody}>
+          {problem && <p className={styles.errorMessage}>{problem}</p>}
+
+          {monthly && (
+            <IonButton
+              expand="block"
+              disabled={buying !== null}
+              onClick={() => void buy("monthly")}
+              data-testid="plan-monthly"
+            >
+              {buying === "monthly" ? (
+                <IonSpinner name="crescent" />
+              ) : (
+                `Monthly · ${monthly.displayPrice}/month`
+              )}
+            </IonButton>
+          )}
+          {yearly && (
+            <IonButton
+              expand="block"
+              fill="outline"
+              disabled={buying !== null}
+              onClick={() => void buy("yearly")}
+              data-testid="plan-yearly"
+            >
+              {buying === "yearly" ? (
+                <IonSpinner name="crescent" />
+              ) : (
+                `Yearly · ${yearly.displayPrice}/year`
+              )}
+            </IonButton>
+          )}
+
+          <p className={styles.finePrint}>
+            {/* The auto-renew disclosure is App Review's required paywall
+                copy, and this page is the paywall: the one place a purchase
+                happens. */}
+            Auto-renews until cancelled in your App Store settings.{" "}
+            <TermsLinks />
+          </p>
+        </div>
+      </IonContent>
     </>
   );
 }
 
-// Pitch buy CTA: the plans on iOS, a placeholder before products load, or a
-// plain line on the web (no StoreKit, so no button and no price to quote).
+// Pitch buy CTA: the plan door on iOS, a placeholder before products load,
+// or a plain line on the web (no StoreKit, so nothing to sell).
 export function SubscribeArea({
   products,
-  busy,
-  onBuy,
+  onPurchased,
 }: {
   products: sync.StoreProduct[];
-  busy: boolean;
-  onBuy: (term: sync.SubscriptionTerm) => void;
+  onPurchased: () => void;
 }) {
-  const monthly = byTerm(products, "monthly");
-  if (monthly)
+  if (byTerm(products, "monthly"))
     return (
-      <PlanButtons
-        monthly={monthly}
-        yearly={byTerm(products, "yearly")}
+      <PlanGate
         verb="Subscribe"
+        products={products}
         testId="sync-subscribe"
-        busy={busy}
-        onBuy={onBuy}
+        onPurchased={onPurchased}
       />
     );
   if (isTauri())
@@ -110,26 +188,21 @@ export function SubscribeArea({
   );
 }
 
-// A lapse's remedy: the plans, or where to buy when StoreKit can't serve them.
+// A lapse's remedy: the plan door, or where to buy when StoreKit can't serve.
 export function ResubscribeArea({
   products,
-  busy,
-  onBuy,
+  onPurchased,
 }: {
   products: sync.StoreProduct[];
-  busy: boolean;
-  onBuy: (term: sync.SubscriptionTerm) => void;
+  onPurchased: () => void;
 }) {
-  const monthly = byTerm(products, "monthly");
-  if (monthly)
+  if (byTerm(products, "monthly"))
     return (
-      <PlanButtons
-        monthly={monthly}
-        yearly={byTerm(products, "yearly")}
+      <PlanGate
         verb="Resubscribe"
+        products={products}
         testId="sync-resubscribe"
-        busy={busy}
-        onBuy={onBuy}
+        onPurchased={onPurchased}
       />
     );
   if (isTauri())
@@ -145,26 +218,21 @@ export function ResubscribeArea({
   return <p className={styles.finePrint}>Resubscribe on your iPhone.</p>;
 }
 
-// Signed in, never subscribed: the plans on iOS, sign-in-on-iPhone on the web.
+// Signed in, never subscribed: the plan door on iOS, sign-in-on-iPhone on web.
 export function DormantSubscribe({
   products,
-  busy,
-  onBuy,
+  onPurchased,
 }: {
   products: sync.StoreProduct[];
-  busy: boolean;
-  onBuy: (term: sync.SubscriptionTerm) => void;
+  onPurchased: () => void;
 }) {
-  const monthly = byTerm(products, "monthly");
-  if (monthly)
+  if (byTerm(products, "monthly"))
     return (
-      <PlanButtons
-        monthly={monthly}
-        yearly={byTerm(products, "yearly")}
+      <PlanGate
         verb="Subscribe"
+        products={products}
         testId="sync-subscribe"
-        busy={busy}
-        onBuy={onBuy}
+        onPurchased={onPurchased}
       />
     );
   return (
@@ -186,32 +254,10 @@ export function manageSubscription() {
   }
 }
 
-/** Paywall metadata App Review checks for: price, period, terms, privacy. */
-export function FinePrint({
-  products,
-  showTerms,
-}: {
-  products: sync.StoreProduct[];
-  showTerms: boolean;
-}) {
-  if (!showTerms) return null;
-  const monthly = byTerm(products, "monthly");
-  const yearly = byTerm(products, "yearly");
+/** The two legal links. Shared by the pitch and the plan page. */
+export function TermsLinks() {
   return (
-    <p className={styles.finePrint}>
-      {/* The auto-renew disclosure is App Review's required paywall copy, and it
-          belongs only where a purchase happens: with StoreKit products on iOS,
-          never on the web, which has no buy button and nothing to renew. */}
-      {monthly && (
-        <>
-          {[
-            `${monthly.displayPrice}/month`,
-            ...(yearly ? [`or ${yearly.displayPrice}/year`] : []),
-            "auto-renews",
-          ].join(", ")}{" "}
-          until cancelled in your App Store settings.{" "}
-        </>
-      )}
+    <>
       <a href="https://www.apple.com/legal/internet-services/itunes/dev/stdeula/">
         Terms of Use
       </a>{" "}
@@ -222,6 +268,20 @@ export function FinePrint({
       <a href="https://wingover.app/privacy" target="_blank" rel="noopener">
         Privacy Policy
       </a>
+    </>
+  );
+}
+
+/**
+ * The pitch's legal footer: links only. The purchase disclosure (prices,
+ * period, auto-renew) moved to ChoosePlanPage, the one place a purchase
+ * happens — App Review's paywall metadata rides with the paywall.
+ */
+export function FinePrint({ showTerms }: { showTerms: boolean }) {
+  if (!showTerms) return null;
+  return (
+    <p className={styles.finePrint}>
+      <TermsLinks />
     </p>
   );
 }
