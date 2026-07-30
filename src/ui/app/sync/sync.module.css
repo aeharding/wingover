@@ -216,20 +216,12 @@
   font-size: 0.875rem;
 }
 
-/* "On" is the Settings row's green, checkmark included: the card is that
-   row expanded, and the two must never disagree on what good looks like. */
+/* "On" is the Settings row's green: the card is that row expanded, and
+   the two must never disagree on what good looks like. The checkmark
+   lives on the badge. */
 .stateOn {
   .stateLabel {
     color: var(--status-good);
-    display: inline-flex;
-    align-items: center;
-    justify-content: center;
-    gap: 0.375rem;
-  }
-
-  ion-icon {
-    font-size: 0.9em;
-    flex-shrink: 0;
   }
 }
 

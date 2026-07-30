@@ -4,7 +4,7 @@ import {
   useIonActionSheet,
   useIonAlert,
 } from "@ionic/react";
-import { checkmarkOutline, desktopOutline, logoApple } from "ionicons/icons";
+import { desktopOutline, logoApple } from "ionicons/icons";
 import { useState, useSyncExternalStore } from "react";
 
 import { isTauri } from "../../../platform/index";
@@ -43,7 +43,8 @@ export const SHEET_TONE_CLASS: Record<SyncTone, string> = {
 };
 
 // The card's status block, shared by the home view and the post-purchase
-// page. The checkmark rides "on" exactly like the Settings row's note.
+// page. "On" paints the Settings row's green; the checkmark itself lives
+// on the card's badge, once.
 export function StatusBlock({
   label,
   detail,
@@ -55,11 +56,9 @@ export function StatusBlock({
   tone: SyncTone;
   testId?: string;
 }) {
-  const on = tone === "on";
   return (
     <div className={cx(styles.state, SHEET_TONE_CLASS[tone])}>
       <span className={styles.stateLabel} data-testid={testId}>
-        {on && <IonIcon icon={checkmarkOutline} aria-hidden="true" />}
         {label}
       </span>
       <span className={styles.stateDetail}>{detail}</span>
