@@ -141,7 +141,7 @@ function SyncHome({
       </IonHeader>
       <IonContent fullscreen className={styles.homeContent}>
         <IonHeader collapse="condense">
-          <IonToolbar color=" ">
+          <IonToolbar>
             <IonTitle size="large">Sync</IonTitle>
           </IonToolbar>
         </IonHeader>

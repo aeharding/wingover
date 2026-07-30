@@ -1,52 +1,10 @@
 /* The sync sheet family's shared vocabulary: SyncSheet (shell/pitch),
    SyncSubscription, SyncConnection, the SelfHostPage form, and the logbook
-   ConnectFunnel (the SIWA button). One modal, one visual language. */
-/* Drop a photo at public/sync-hero.jpg. Layered under a scrim, not raw: a
-   photograph behind text is unreadable in the exact conditions this app is
-   built for (STEERING: sunlight-readable, high contrast, leg-mounted phone).
-   The gradient carries the contrast so ANY photo works, and if the file is
-   missing the scrim alone still renders — no broken build, no broken screen.
-
-   The photo lives on the MODAL's --background, i.e. .modal-wrapper: the one
-   element that spans the whole sheet, behind the header AND the content. It
-   used to sit on the fullscreen content's --background and rely on Ionic's
-   collapsible-header bleed (a negative top tied to --offset-top) to reach up
-   under the header. That bleed is measured at runtime and sometimes didn't
-   apply, so the transparent fade header revealed the black modal background
-   as a bar at the top. On the wrapper there is no offset math to miss: the
-   hero always underlays everything. Everything above it (content, both
-   headers) is made transparent so it shows through. */
-.modal {
-  /* Scrim stops and text glows, per scheme: the scrim must fade the photo
-     toward the sheet background (white in light, black in dark) and the
-     glow behind the text must match it — a black halo under dark text
-     reads as a smudge. */
-  --hero-scrim-mid: rgba(255, 255, 255, 0.28);
-  --hero-scrim-strong: rgba(255, 255, 255, 0.8);
-  --hero-glow: 0 1px 12px rgba(255, 255, 255, 0.85);
-  --hero-glow-tight: 0 1px 8px rgba(255, 255, 255, 0.85);
-  --background:
-    linear-gradient(
-      to bottom,
-      transparent 0%,
-      var(--hero-scrim-mid) 44%,
-      var(--hero-scrim-strong) 72%,
-      var(--ion-background-color) 97%
-    ),
-    url("/sync-hero.jpg") center / cover no-repeat, var(--ion-background-color);
-
-  :root:global(.ion-palette-dark) & {
-    --hero-scrim-mid: rgba(0, 0, 0, 0.08);
-    --hero-scrim-strong: rgba(0, 0, 0, 0.72);
-    --hero-glow: 0 1px 12px rgba(0, 0, 0, 0.8);
-    --hero-glow-tight: 0 1px 8px rgba(0, 0, 0, 0.8);
-  }
-}
-
-/* Transparent so the modal-wrapper hero shows through the whole sheet. */
+   ConnectFunnel (the SIWA button). One modal, one visual language: the plain
+   sheet background, stock Ionic surfaces, nothing decorative. (A hero photo
+   with scrim/glow machinery lived here once and was removed as a
+   distraction; if art ever returns, it must re-earn the contrast math.) */
 .homeContent {
-  --background: transparent;
-
   /* Flex the scroll container so the condensed header takes its natural height
      and the body fills exactly what's left. min-height:100% on the body instead
      would stack with the header and push the last control off-screen. */
@@ -54,45 +12,15 @@
     display: flex;
     flex-direction: column;
   }
-
-  /* theme.css sets `ion-toolbar { --background: var(--ion-background-color) }`
-     globally for the native-iOS nav bar. That document-scope rule outranks the
-     color=" " transparency hack (a normal declaration in the outer tree beats
-     the component's shadow-DOM :host(.ion-color) rule), so the condensed toolbar
-     renders opaque and hides the hero. Re-clear it here so the photo reads
-     behind the large title. The pinned fade header keeps its background: at rest
-     it fades to transparent (hero shows through), and it fades back in as a
-     solid bar as the title scrolls away, the native iOS behavior. */
-  ion-header[collapse="condense"] ion-toolbar {
-    --background: transparent;
-  }
 }
 
 .homeBody {
   flex: 1;
   display: flex;
   flex-direction: column;
-  /* Content sits low so the photo reads above it. */
-  justify-content: flex-end;
   text-align: center;
-  padding: 2rem 1.5rem;
+  padding: 1rem 1.5rem 2rem;
   box-sizing: border-box;
-
-  /* Shadows only over the photo — on the Subscription sheet the scrim can't be
-     trusted everywhere (a bright cloud), and on the plain Log In page the same
-     shadow reads as a smudge. */
-  .stateLabel {
-    text-shadow: var(--hero-glow);
-  }
-
-  .stateDetail {
-    text-shadow: var(--hero-glow-tight);
-  }
-
-  /* Over the hero photo — same shadow deal as every other word there. */
-  .errorMessage {
-    text-shadow: var(--hero-glow-tight);
-  }
 }
 
 /* --ion-text-color, NOT --ion-color-light: the dark palette redefines the
@@ -106,18 +34,15 @@
   letter-spacing: -0.02em;
   text-wrap: balance;
   color: var(--ion-text-color);
-  text-shadow: var(--hero-glow);
 }
 
 /* Web pitch: the sentence that stands in for the StoreKit-only buy button —
-   what sync is and where to get it. Sits where the buttons would, readable
-   over the hero photo (STEERING: sunlight-readable). */
+   what sync is and where to get it. Sits where the buttons would. */
 .pitchNote {
   margin: 0 0 1rem;
   font-size: 1rem;
   line-height: 1.5;
   color: var(--ion-text-color);
-  text-shadow: var(--hero-glow-tight);
 }
 
 /* Centred as a block, left-aligned inside: centred bullets are unreadable,
@@ -135,7 +60,6 @@
     gap: 0.75rem;
     margin-bottom: 0.75rem;
     color: var(--ion-text-color);
-    text-shadow: var(--hero-glow-tight);
   }
 
   ion-icon {
@@ -145,8 +69,8 @@
   }
 }
 
-/* The Log In sheet is a plain page — no photo, no scrim. It shares the state
-   block and fine print with the Subscription sheet, minus the shadows. */
+/* Sub-pages pushed inside the sheet (Link Account, SelfHost) share the state
+   block and fine print with the home view, on the same plain background. */
 .loginBody {
   padding: 1.5rem 1.25rem;
   text-align: center;
