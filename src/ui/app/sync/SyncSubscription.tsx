@@ -1,19 +1,11 @@
-import {
-  IonBackButton,
-  IonButton,
-  IonButtons,
-  IonContent,
-  IonHeader,
-  IonNavLink,
-  IonTitle,
-  IonToolbar,
-} from "@ionic/react";
+import { IonButton } from "@ionic/react";
 import { useState } from "react";
 
 import { isTauri } from "../../../platform/index";
 import * as sync from "../../../sync/index";
 import { openExternal } from "../../shared/externalLinks";
 import { BusyLabel } from "./BusyLabel";
+import { SheetHeader } from "./SheetHeader";
 
 import styles from "./sync.module.css";
 
@@ -35,31 +27,22 @@ function byTerm(
 /**
  * The one buy door every surface shares: a single verb, no prices. Two
  * priced buttons stacked on the sheet made the pilot price-compare before
- * they had decided to buy at all; the choice now lives on its own page,
- * where each plan carries its full context (Alex, 2026-07-30).
+ * they had decided to buy at all; the choice lives on its own view, where
+ * each plan carries its full context.
  */
 export function PlanGate({
   verb,
-  products,
   testId,
-  onPurchased,
+  onOpenPlans,
 }: {
   verb: string;
-  products: sync.StoreProduct[];
   testId: string;
-  onPurchased: () => void;
+  onOpenPlans: () => void;
 }) {
   return (
-    <IonNavLink
-      routerDirection="forward"
-      component={() => (
-        <ChoosePlanPage products={products} onPurchased={onPurchased} />
-      )}
-    >
-      <IonButton expand="block" data-testid={testId}>
-        {verb}
-      </IonButton>
-    </IonNavLink>
+    <IonButton expand="block" data-testid={testId} onClick={onOpenPlans}>
+      {verb}
+    </IonButton>
   );
 }
 
@@ -68,7 +51,13 @@ export function PlanGate({
  * Owns its own purchase state so a StoreKit problem surfaces HERE, on the
  * screen the pilot is looking at, never on the view beneath.
  */
-export function ChoosePlanPage({
+/**
+ * The plans themselves, with their purchase state: a StoreKit problem
+ * surfaces HERE, on the screen the pilot is looking at. Embedded directly
+ * on the pitch (fresh pilot: tap Sync, tap a price, done) and framed by
+ * ChoosePlanPage for the lapsed gate.
+ */
+export function PlanChoices({
   products,
   onPurchased,
 }: {
@@ -101,54 +90,61 @@ export function ChoosePlanPage({
   }
 
   return (
+    <div className={styles.plans}>
+      {problem && <p className={styles.errorMessage}>{problem}</p>}
+
+      {monthly && (
+        <IonButton
+          expand="block"
+          disabled={buying !== null}
+          onClick={() => void buy("monthly")}
+          data-testid="plan-monthly"
+        >
+          <BusyLabel busy={buying === "monthly"}>
+            {`Monthly · ${monthly.displayPrice}/month`}
+          </BusyLabel>
+        </IonButton>
+      )}
+      {yearly && (
+        <IonButton
+          expand="block"
+          fill="outline"
+          disabled={buying !== null}
+          onClick={() => void buy("yearly")}
+          data-testid="plan-yearly"
+        >
+          <BusyLabel busy={buying === "yearly"}>
+            {`Yearly · ${yearly.displayPrice}/year`}
+          </BusyLabel>
+        </IonButton>
+      )}
+
+      <p className={styles.finePrint}>
+        {/* The auto-renew disclosure is App Review's required paywall
+            copy, and this view is the paywall: the one place a purchase
+            happens. */}
+        Auto-renews until cancelled in your App Store settings. <TermsLinks />
+      </p>
+    </div>
+  );
+}
+
+/** The lapsed gate's frame around the plans. */
+export function ChoosePlanPage({
+  products,
+  onBack,
+  onPurchased,
+}: {
+  products: sync.StoreProduct[];
+  onBack: () => void;
+  onPurchased: () => void;
+}) {
+  return (
     <>
-      <IonHeader>
-        <IonToolbar>
-          <IonButtons slot="start">
-            <IonBackButton text="Sync" />
-          </IonButtons>
-          <IonTitle>Choose a plan</IonTitle>
-        </IonToolbar>
-      </IonHeader>
-      <IonContent>
-        <div className={styles.loginBody}>
-          {problem && <p className={styles.errorMessage}>{problem}</p>}
-
-          {monthly && (
-            <IonButton
-              expand="block"
-              disabled={buying !== null}
-              onClick={() => void buy("monthly")}
-              data-testid="plan-monthly"
-            >
-              <BusyLabel busy={buying === "monthly"}>
-                {`Monthly · ${monthly.displayPrice}/month`}
-              </BusyLabel>
-            </IonButton>
-          )}
-          {yearly && (
-            <IonButton
-              expand="block"
-              fill="outline"
-              disabled={buying !== null}
-              onClick={() => void buy("yearly")}
-              data-testid="plan-yearly"
-            >
-              <BusyLabel busy={buying === "yearly"}>
-                {`Yearly · ${yearly.displayPrice}/year`}
-              </BusyLabel>
-            </IonButton>
-          )}
-
-          <p className={styles.finePrint}>
-            {/* The auto-renew disclosure is App Review's required paywall
-                copy, and this page is the paywall: the one place a purchase
-                happens. */}
-            Auto-renews until cancelled in your App Store settings.{" "}
-            <TermsLinks />
-          </p>
-        </div>
-      </IonContent>
+      <SheetHeader title="Choose a plan" onBack={onBack} />
+      <div className={styles.loginBody}>
+        <PlanChoices products={products} onPurchased={onPurchased} />
+      </div>
     </>
   );
 }
@@ -163,14 +159,7 @@ export function SubscribeArea({
   onPurchased: () => void;
 }) {
   if (byTerm(products, "monthly"))
-    return (
-      <PlanGate
-        verb="Subscribe"
-        products={products}
-        testId="sync-subscribe"
-        onPurchased={onPurchased}
-      />
-    );
+    return <PlanChoices products={products} onPurchased={onPurchased} />;
   if (isTauri())
     return (
       <IonButton expand="block" disabled data-testid="sync-subscribe">
@@ -187,18 +176,17 @@ export function SubscribeArea({
 // A lapse's remedy: the plan door, or where to buy when StoreKit can't serve.
 export function ResubscribeArea({
   products,
-  onPurchased,
+  onOpenPlans,
 }: {
   products: sync.StoreProduct[];
-  onPurchased: () => void;
+  onOpenPlans: () => void;
 }) {
   if (byTerm(products, "monthly"))
     return (
       <PlanGate
         verb="Resubscribe"
-        products={products}
         testId="sync-resubscribe"
-        onPurchased={onPurchased}
+        onOpenPlans={onOpenPlans}
       />
     );
   if (isTauri())
@@ -217,18 +205,17 @@ export function ResubscribeArea({
 // Signed in, never subscribed: the plan door on iOS, sign-in-on-iPhone on web.
 export function DormantSubscribe({
   products,
-  onPurchased,
+  onOpenPlans,
 }: {
   products: sync.StoreProduct[];
-  onPurchased: () => void;
+  onOpenPlans: () => void;
 }) {
   if (byTerm(products, "monthly"))
     return (
       <PlanGate
         verb="Subscribe"
-        products={products}
         testId="sync-subscribe"
-        onPurchased={onPurchased}
+        onOpenPlans={onOpenPlans}
       />
     );
   return (

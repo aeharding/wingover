@@ -1,29 +1,16 @@
 import {
   IonButton,
-  IonContent,
-  IonHeader,
   IonIcon,
-  IonNav,
-  IonTitle,
-  IonToolbar,
   useIonActionSheet,
   useIonAlert,
 } from "@ionic/react";
-import {
-  bookOutline,
-  cloudUploadOutline,
-  desktopOutline,
-} from "ionicons/icons";
-import {
-  type RefObject,
-  useEffect,
-  useRef,
-  useState,
-  useSyncExternalStore,
-} from "react";
+import { checkmarkOutline, close, cloudUploadOutline } from "ionicons/icons";
+import { useEffect, useState, useSyncExternalStore } from "react";
 
 import { isTauri } from "../../../platform/index";
 import * as sync from "../../../sync/index";
+import { cx } from "../../shared/cx";
+import { describe } from "./describe";
 import { SelfHostPage } from "./SelfHostPage";
 import {
   AppleSignInButton,
@@ -31,7 +18,7 @@ import {
   LinkAccountPage,
 } from "./SyncConnection";
 import {
-  FinePrint,
+  ChoosePlanPage,
   manageSubscription,
   SubscribeArea,
 } from "./SyncSubscription";
@@ -40,32 +27,23 @@ import { useLogOut } from "./useLogOut";
 import styles from "./sync.module.css";
 
 /**
- * THE sync surface — one sheet, one question ("are my flights backed up?"),
- * every view derived from state (SYNC-UX.md). The payments/connection split
- * stays real in the architecture — and in the file layout (SyncSubscription /
- * SyncConnection) — but it stopped being user-facing geography the day it took
- * two Settings rows and a login vocabulary to explain.
+ * THE sync surface — one auto-height dialog, one question ("are my flights
+ * backed up?"), every view derived from state (SYNC-UX.md). The
+ * payments/connection split stays real in the architecture — and in the file
+ * layout (SyncSubscription / SyncConnection) — but it stopped being
+ * user-facing geography the day it took two Settings rows and a login
+ * vocabulary to explain.
  *
- * Sign-in is a door, not a place: quiet on iOS (a web-born account arriving
- * on a phone — the Stripe future), primary on the web (where it is step one
- * of subscribing once web checkout exists).
+ * Sub-views swap in place (no ion-nav: its absolutely positioned pages have
+ * no natural height for a fit-content dialog to measure), and the keyed
+ * remount in SyncSheets returns a reopened dialog to home.
  */
-export function SyncSheet({ onClose }: { onClose: () => void }) {
-  const nav = useRef<HTMLIonNavElement>(null);
-  return (
-    <IonNav ref={nav} root={() => <SyncHome onClose={onClose} nav={nav} />} />
-  );
-}
+type SheetView = "home" | "plan" | "selfhost" | "computer" | "thanks";
 
-function SyncHome({
-  onClose,
-  nav,
-}: {
-  onClose: () => void;
-  nav: RefObject<HTMLIonNavElement | null>;
-}) {
+export function SyncSheet({ onClose }: { onClose: () => void }) {
   const status = useSyncExternalStore(sync.subscribe, sync.currentStatus);
   const account = useSyncExternalStore(sync.subscribe, sync.currentAccount);
+  const [view, setView] = useState<SheetView>("home");
   const [busy, setBusy] = useState(false);
   const [problem, setProblem] = useState<string | null>(null);
   // Empty = StoreKit didn't hand us products — a browser, the desktop dev
@@ -96,138 +74,166 @@ function SyncHome({
     }
   }
 
-  // The purchase itself lives on ChoosePlanPage (its problems surface there);
-  // this is the after: refresh the StoreKit-derived cache, come home, and
-  // offer the link page when the purchase actually connected this device.
+  // The purchase itself lives on ChoosePlanPage (its problems surface
+  // there); this is the after: refresh the StoreKit-derived cache, then the
+  // thank-you/link view (SYNC-UX.md junction 2) — only when the purchase
+  // actually connected this device (the supporter guard means a
+  // self-hoster's purchase doesn't), and only when NOT already linked:
+  // offering to link what is linked contradicts the view right behind it.
   function afterPurchase() {
-    // StoreKit's entitlement just changed; re-derive the local copy so a
-    // resubscribe's fresh "active" replaces the stale mount-time "expired"
-    // (this appleSub cache is otherwise stamped once — see its declaration).
     void sync.appleSubscriptionState().then(setAppleSub);
-    void (async () => {
-      await nav.current?.popToRoot();
-      // The thank-you/link page (SYNC-UX.md junction 2). Only when the
-      // purchase actually connected this device (the supporter guard means a
-      // self-hoster's purchase doesn't), and only when NOT already linked:
-      // pushing the link offer to a pilot who linked long ago (a resubscribe)
-      // contradicts the "Linked" view right behind it.
-      const acct = sync.currentAccount();
-      if (isTauri() && acct?.kind === "apple" && acct.login !== "apple") {
-        void nav.current?.push(() => <LinkAccountPage nav={nav} />);
-      }
-    })();
+    const acct = sync.currentAccount();
+    if (isTauri() && acct?.kind === "apple" && acct.login !== "apple") {
+      setView("thanks");
+      return;
+    }
+    setView("home");
   }
+
+  const home = () => setView("home");
 
   const connected = status.state !== "off";
   // The pitch shows only when there is truly nothing: no connection, no
   // account, no subscription on this device.
   const nothing = !connected && !account && appleSub === null;
 
-  return (
-    <>
-      <IonHeader collapse="fade">
-        <IonToolbar>
-          <IonTitle>Sync</IonTitle>
-        </IonToolbar>
-      </IonHeader>
-      <IonContent fullscreen className={styles.homeContent}>
-        <IonHeader collapse="condense">
-          <IonToolbar>
-            <IonTitle size="large">Sync</IonTitle>
-          </IonToolbar>
-        </IonHeader>
-        <div className={styles.homeBody}>
-          {nothing ? (
-            <Pitch
-              products={products}
-              busy={busy}
-              problem={problem}
-              onPurchased={afterPurchase}
-              onSignIn={() => run(() => sync.signIn())}
-              onRestore={() =>
-                run(async () => {
-                  const jws = await sync.probeEntitlementJWS();
-                  if (!jws) {
-                    throw new Error(
-                      "No subscription found for this Apple Account.",
-                    );
-                  }
-                  await sync.connectWithSubscription(jws);
-                })
-              }
-              onSelfHost={() =>
-                void nav.current?.push(() => (
-                  <SelfHostPage backText="Sync" onConnected={onClose} />
-                ))
-              }
-            />
-          ) : (
-            <Connected
-              status={status}
-              account={account}
-              appleSub={appleSub}
-              products={products}
-              busy={busy || loggingOut}
-              problem={problem}
-              onPurchased={afterPurchase}
-              onConnect={() => run(() => sync.connectWithSubscription())}
-              onLink={() =>
-                void nav.current?.push(() => (
-                  <LinkAccountPage nav={nav} context="computer" />
-                ))
-              }
-              onSignIn={() => run(() => sync.signIn())}
-              onTurnOff={() =>
-                isTauri()
-                  ? void run(() => sync.disable())
-                  : void logOut(onClose)
-              }
-              onSelfHost={() =>
-                void nav.current?.push(() => (
-                  <SelfHostPage backText="Sync" onConnected={onClose} />
-                ))
-              }
-              onDelete={() =>
-                presentAlert({
-                  header: "Delete account?",
-                  // Three facts, shortest true sentences: what dies, what
-                  // survives, what keeps billing. (Deleting also turns sync
-                  // off, and off persists, so the account cannot resurrect at
-                  // launch; a deliberate reconnect minting a fresh empty
-                  // account is self-evident when it happens and doesn't earn
-                  // alert space.)
-                  message:
-                    account?.kind === "apple" && account.entitled
-                      ? "This deletes your flights from the server, permanently. The copies on this phone stay. Your subscription keeps billing until you cancel it with Apple."
-                      : "This deletes your flights from the server, permanently. The copies on this device stay.",
-                  buttons: [
-                    { text: "Cancel", role: "cancel" },
-                    {
-                      text: "Manage Subscription",
-                      handler: () => {
-                        manageSubscription();
-                        // Keep the alert open: cancelling out there and
-                        // deleting here are both still on the table.
-                        return false;
-                      },
-                    },
-                    {
-                      text: "Delete",
-                      role: "destructive",
-                      handler: () => {
-                        void run(() => sync.deleteAccount());
-                      },
-                    },
-                  ],
-                })
-              }
-            />
-          )}
+  function confirmDelete() {
+    void presentAlert({
+      header: "Delete account?",
+      // Three facts, shortest true sentences: what dies, what survives,
+      // what keeps billing. (Deleting also turns sync off, and off
+      // persists, so the account cannot resurrect at launch; a deliberate
+      // reconnect minting a fresh empty account is self-evident when it
+      // happens and doesn't earn alert space.)
+      message:
+        account?.kind === "apple" && account.entitled
+          ? "This deletes your flights from the server, permanently. The copies on this phone stay. Your subscription keeps billing until you cancel it with Apple."
+          : "This deletes your flights from the server, permanently. The copies on this device stay.",
+      buttons: [
+        { text: "Cancel", role: "cancel" },
+        {
+          text: "Manage Subscription",
+          handler: () => {
+            manageSubscription();
+            // Keep the alert open: cancelling out there and deleting here
+            // are both still on the table.
+            return false;
+          },
+        },
+        {
+          text: "Delete",
+          role: "destructive",
+          handler: () => {
+            void run(() => sync.deleteAccount());
+          },
+        },
+      ],
+    });
+  }
 
-          <FinePrint showTerms={nothing} />
-        </div>
-      </IonContent>
-    </>
+  function renderHome() {
+    return (
+      <div className={styles.homeBody}>
+        {nothing ? (
+          <Pitch
+            products={products}
+            busy={busy}
+            problem={problem}
+            onPurchased={afterPurchase}
+            onSignIn={() => run(() => sync.signIn())}
+            onRestore={() =>
+              run(async () => {
+                const jws = await sync.probeEntitlementJWS();
+                if (!jws) {
+                  throw new Error(
+                    "No subscription found for this Apple Account.",
+                  );
+                }
+                await sync.connectWithSubscription(jws);
+              })
+            }
+            onSelfHost={() => setView("selfhost")}
+          />
+        ) : (
+          <Connected
+            status={status}
+            account={account}
+            appleSub={appleSub}
+            products={products}
+            busy={busy || loggingOut}
+            problem={problem}
+            onOpenPlans={() => setView("plan")}
+            onConnect={() => run(() => sync.connectWithSubscription())}
+            onLink={() => setView("computer")}
+            onSignIn={() => run(() => sync.signIn())}
+            onTurnOff={() =>
+              isTauri() ? void run(() => sync.disable()) : void logOut(onClose)
+            }
+            onSelfHost={() => setView("selfhost")}
+            onDelete={confirmDelete}
+          />
+        )}
+      </div>
+    );
+  }
+
+  // The badge is the sync status speaking from the card's crown: the same
+  // tones the Settings row paints, a checkmark when all is well.
+  function renderBadge() {
+    const tone = nothing ? "neutral" : describe(status).tone;
+    const badgeClass = {
+      on: styles.badge,
+      neutral: styles.badge,
+      off: cx(styles.badge, styles.badgeOff),
+      warn: cx(styles.badge, styles.badgeWarn),
+      error: cx(styles.badge, styles.badgeError),
+    }[tone];
+    return (
+      <div className={badgeClass}>
+        <IonIcon
+          icon={tone === "on" ? checkmarkOutline : cloudUploadOutline}
+          aria-hidden="true"
+        />
+      </div>
+    );
+  }
+
+  function renderView() {
+    switch (view) {
+      case "home":
+        return renderHome();
+      case "plan":
+        return (
+          <ChoosePlanPage
+            products={products}
+            onBack={home}
+            onPurchased={afterPurchase}
+          />
+        );
+      case "selfhost":
+        return <SelfHostPage onBack={home} onConnected={onClose} />;
+      case "computer":
+        return <LinkAccountPage context="computer" onDone={home} />;
+      case "thanks":
+        return <LinkAccountPage context="purchase" onDone={home} />;
+    }
+  }
+
+  return (
+    <div className={styles.sheetScroll}>
+      <div className={styles.card}>
+        {renderBadge()}
+        <button
+          className={styles.cardClose}
+          onClick={onClose}
+          aria-label="Close"
+          data-testid="sync-close"
+        >
+          <IonIcon icon={close} aria-hidden="true" />
+        </button>
+        {renderView()}
+      </div>
+    </div>
   );
 }
 
@@ -252,27 +258,19 @@ function Pitch({
   const [presentSheet] = useIonActionSheet();
   return (
     <>
-      <h2 className={styles.headline} data-testid="sync-headline">
-        Your flights, on all your devices.
-      </h2>
-
-      <ul className={styles.reasons}>
-        <li>
-          <IonIcon icon={cloudUploadOutline} aria-hidden="true" />
-          Backed up off your phone
-        </li>
-        <li>
-          <IonIcon icon={desktopOutline} aria-hidden="true" />
-          Plan flights on desktop
-        </li>
-        <li>
-          <IonIcon icon={bookOutline} aria-hidden="true" />
-          Your logbook on any device
-        </li>
-      </ul>
+      <div className={styles.cardTitle} data-testid="sync-headline">
+        Sync
+      </div>
+      <p className={styles.cardDescription}>
+        Your flights on all your devices,
+        <br />
+        backed up automatically.
+      </p>
 
       {problem && <p className={styles.errorMessage}>{problem}</p>}
 
+      {/* The plans live right here: a fresh pilot taps Sync, taps a
+          price, done. */}
       <SubscribeArea products={products} onPurchased={onPurchased} />
 
       {/* Sign in is a door, not a place: quiet on iOS (a web-born account
@@ -301,9 +299,7 @@ function Pitch({
         </IonButton>
       )}
 
-      {/* Self-host is a LOGIN and stays reachable from the pitch, one tap
-          in: More options holds it (Alex, 2026-07-30). Pushed in place;
-          back returns right here. */}
+      {/* Self-host is a LOGIN, reachable from the pitch one tap in. */}
       <IonButton
         fill="clear"
         size="small"

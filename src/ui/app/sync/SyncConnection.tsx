@@ -1,21 +1,11 @@
 import {
   IonButton,
-  IonButtons,
-  IonContent,
-  IonHeader,
   IonIcon,
-  IonTitle,
-  IonToolbar,
   useIonActionSheet,
   useIonAlert,
 } from "@ionic/react";
-import {
-  checkmarkOutline,
-  chevronBackOutline,
-  desktopOutline,
-  logoApple,
-} from "ionicons/icons";
-import { type RefObject, useState, useSyncExternalStore } from "react";
+import { checkmarkOutline, desktopOutline, logoApple } from "ionicons/icons";
+import { useState, useSyncExternalStore } from "react";
 
 import { isTauri } from "../../../platform/index";
 import * as sync from "../../../sync/index";
@@ -23,6 +13,7 @@ import { cx } from "../../shared/cx";
 import { BusyLabel } from "./BusyLabel";
 import { describe, type SyncTone } from "./describe";
 import { resolveSyncView } from "./resolveSyncView";
+import { SheetHeader } from "./SheetHeader";
 import {
   DormantSubscribe,
   manageSubscription,
@@ -40,7 +31,7 @@ import styles from "./sync.module.css";
  * Resubscribe/Manage pieces (one-way; the payments rail never reaches back).
  */
 
-// A semantic tone → the sheet's status-label modifier class. The sheet is
+// A semantic tone → the card's status-label modifier class. The card is
 // the Settings row expanded (one tap), so "on" paints the SAME green the
 // row uses; a lapse amber, an error red; off/neutral ride the default.
 export const SHEET_TONE_CLASS: Record<SyncTone, string> = {
@@ -51,7 +42,7 @@ export const SHEET_TONE_CLASS: Record<SyncTone, string> = {
   neutral: "",
 };
 
-// The sheet's status block, shared by the home view and the post-purchase
+// The card's status block, shared by the home view and the post-purchase
 // page. The checkmark rides "on" exactly like the Settings row's note.
 export function StatusBlock({
   label,
@@ -132,7 +123,7 @@ export function Connected({
   products,
   busy,
   problem,
-  onPurchased,
+  onOpenPlans,
   onConnect,
   onLink,
   onSignIn,
@@ -146,7 +137,7 @@ export function Connected({
   products: sync.StoreProduct[];
   busy: boolean;
   problem: string | null;
-  onPurchased: () => void;
+  onOpenPlans: () => void;
   onConnect: () => void;
   onLink: () => void;
   onSignIn: () => void;
@@ -253,13 +244,13 @@ export function Connected({
       {/* Resubscribe: the lapse is discovered here, the remedy is a purchase.
           The door pushes the plan page, same as the pitch. */}
       {v.showResubscribe && (
-        <ResubscribeArea products={products} onPurchased={onPurchased} />
+        <ResubscribeArea products={products} onOpenPlans={onOpenPlans} />
       )}
 
       {/* Dormant: signed in, never subscribed — prompted to subscribe
           (SYNC-UX.md). Web checkout replaces the sentence when it exists. */}
       {v.showDormantSubscribe && (
-        <DormantSubscribe products={products} onPurchased={onPurchased} />
+        <DormantSubscribe products={products} onOpenPlans={onOpenPlans} />
       )}
 
       {/* Off + a lapsed or absent sub still deserves a way in. */}
@@ -311,10 +302,10 @@ export function Connected({
  *   amber "Not subscribed" (found on-device, 2026-07-30).
  */
 export function LinkAccountPage({
-  nav,
+  onDone,
   context = "purchase",
 }: {
-  nav: RefObject<HTMLIonNavElement | null>;
+  onDone: () => void;
   context?: "purchase" | "computer";
 }) {
   // Live, not asserted: this page once claimed "On" while the connect had
@@ -331,7 +322,7 @@ export function LinkAccountPage({
   const linked = account?.login === "apple";
 
   function pop() {
-    void nav.current?.pop();
+    onDone();
   }
 
   async function link() {
@@ -406,42 +397,39 @@ export function LinkAccountPage({
 
   return (
     <>
-      <IonHeader>
-        <IonToolbar>
-          <IonButtons slot="start">
-            <IonButton onClick={pop} data-testid="link-page-back">
-              <IonIcon slot="icon-only" icon={chevronBackOutline} />
-            </IonButton>
-          </IonButtons>
-          <IonTitle>{purchase ? "You're synced" : "On your computer"}</IonTitle>
-          <IonButtons slot="end">
-            <IonButton strong onClick={pop} data-testid="link-page-done">
-              Done
-            </IonButton>
-          </IonButtons>
-        </IonToolbar>
-      </IonHeader>
-      <IonContent>
-        <div className={styles.loginBody}>
-          {renderStatus()}
+      <SheetHeader
+        title={purchase ? "You're synced" : "On your computer"}
+        onBack={pop}
+        action={
+          <IonButton
+            fill="clear"
+            strong
+            onClick={pop}
+            data-testid="link-page-done"
+          >
+            Done
+          </IonButton>
+        }
+      />
+      <div className={styles.loginBody}>
+        {renderStatus()}
 
-          {computer && (
-            <IonIcon
-              icon={desktopOutline}
-              className={styles.computerGlyph}
-              aria-hidden="true"
-            />
-          )}
+        {computer && (
+          <IonIcon
+            icon={desktopOutline}
+            className={styles.computerGlyph}
+            aria-hidden="true"
+          />
+        )}
 
-          {linked ? (
-            <p className={styles.loginLede} data-testid="link-page-linked">
-              Linked. Sign in with Apple at wingover.app on any computer.
-            </p>
-          ) : (
-            renderLinkOffer()
-          )}
-        </div>
-      </IonContent>
+        {linked ? (
+          <p className={styles.loginLede} data-testid="link-page-linked">
+            Linked. Sign in with Apple at wingover.app on any computer.
+          </p>
+        ) : (
+          renderLinkOffer()
+        )}
+      </div>
     </>
   );
 }

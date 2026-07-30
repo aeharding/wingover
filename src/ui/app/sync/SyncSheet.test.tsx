@@ -30,9 +30,8 @@ describe("PlanGate", () => {
     const html = renderToStaticMarkup(
       <PlanGate
         verb="Resubscribe"
-        products={both}
         testId="sync-resubscribe"
-        onPurchased={noop}
+        onOpenPlans={noop}
       />,
     );
     expect(html).toContain("Resubscribe");
@@ -45,7 +44,7 @@ describe("PlanGate", () => {
 describe("ChoosePlanPage", () => {
   test("each plan self-described, and the paywall disclosure beneath", () => {
     const html = renderToStaticMarkup(
-      <ChoosePlanPage products={both} onPurchased={noop} />,
+      <ChoosePlanPage products={both} onBack={noop} onPurchased={noop} />,
     );
     expect(html).toContain("Monthly · $2.99/month");
     expect(html).toContain("Yearly · $29.99/year");
@@ -57,7 +56,7 @@ describe("ChoosePlanPage", () => {
 
   test("no year button when there is no yearly product", () => {
     const html = renderToStaticMarkup(
-      <ChoosePlanPage products={[monthly]} onPurchased={noop} />,
+      <ChoosePlanPage products={[monthly]} onBack={noop} onPurchased={noop} />,
     );
     expect(html).toContain("Monthly · $2.99/month");
     expect(html).not.toContain("/year");
@@ -99,13 +98,13 @@ describe("AppleSignInButton", () => {
 // isTauri() is false in the node test env (no Tauri global), so the no-product
 // cases exercise the WEB branch; the product branch is platform-independent.
 describe("buy areas route by products", () => {
-  test("SubscribeArea: the plan door when products exist", () => {
+  test("SubscribeArea: the plans inline when products exist (two taps)", () => {
     const html = renderToStaticMarkup(
       <SubscribeArea products={both} onPurchased={noop} />,
     );
-    expect(html).toContain("Subscribe");
-    expect(html).toContain('data-testid="sync-subscribe"');
-    expect(html).not.toContain("$2.99");
+    expect(html).toContain("Monthly · $2.99/month");
+    expect(html).toContain("Yearly · $29.99/year");
+    expect(html).toContain('data-testid="plan-monthly"');
   });
 
   test("SubscribeArea: the web note when there are no products", () => {
@@ -114,12 +113,12 @@ describe("buy areas route by products", () => {
     );
     expect(html).toContain('data-testid="sync-web-note"');
     expect(html).toContain("from the Wingover app on your iPhone");
-    expect(html).not.toContain("sync-subscribe");
+    expect(html).not.toContain("plan-monthly");
   });
 
   test("ResubscribeArea: the Resubscribe door when products exist", () => {
     const html = renderToStaticMarkup(
-      <ResubscribeArea products={both} onPurchased={noop} />,
+      <ResubscribeArea products={both} onOpenPlans={noop} />,
     );
     expect(html).toContain("Resubscribe");
     expect(html).toContain('data-testid="sync-resubscribe"');
@@ -128,22 +127,23 @@ describe("buy areas route by products", () => {
 
   test("ResubscribeArea: points to the iPhone on the web", () => {
     const html = renderToStaticMarkup(
-      <ResubscribeArea products={[]} onPurchased={noop} />,
+      <ResubscribeArea products={[]} onOpenPlans={noop} />,
     );
     expect(html).toContain("Resubscribe on your iPhone");
   });
 
   test("DormantSubscribe: the Subscribe door when products exist", () => {
     const html = renderToStaticMarkup(
-      <DormantSubscribe products={both} onPurchased={noop} />,
+      <DormantSubscribe products={both} onOpenPlans={noop} />,
     );
     expect(html).toContain("Subscribe");
     expect(html).toContain('data-testid="sync-subscribe"');
+    expect(html).not.toContain("$2.99");
   });
 
   test("DormantSubscribe: the signed-in web line with no products", () => {
     const html = renderToStaticMarkup(
-      <DormantSubscribe products={[]} onPurchased={noop} />,
+      <DormantSubscribe products={[]} onOpenPlans={noop} />,
     );
     expect(html).toContain('data-testid="sync-signedin-web"');
   });

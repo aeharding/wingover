@@ -3,6 +3,8 @@ import { createContext, type ReactNode, useContext, useState } from "react";
 
 import { SyncSheet } from "./SyncSheet";
 
+import styles from "./sync.module.css";
+
 /**
  * One sheet for everything sync (SYNC-UX.md): a modal, not a page, so it can
  * be raised from anywhere — the Settings row today, a post-flight nudge or an
@@ -18,32 +20,20 @@ export function useSyncSheet(): () => void {
 
 export function SyncSheetsProvider({ children }: { children: ReactNode }) {
   const [open, setOpen] = useState(false);
-  const [presenting, setPresenting] = useState<HTMLElement | null>(null);
 
-  // Full-screen card modal: `presentingElement` is what makes the page behind
-  // scale back, the platform-native "this is a detour, not a new place" cue.
-  // Resolved at present time, not at mount: a live flight sheds the whole nav
-  // shell — router outlet included — and a stale ref would present against a
-  // detached element. Null just means a plain full-screen modal.
   // Plain functions: the React Compiler stabilizes them, context value
   // included.
-  const present = () => {
-    setPresenting(document.querySelector<HTMLElement>("ion-router-outlet"));
-    setOpen(true);
-  };
-
+  const present = () => setOpen(true);
   const close = () => setOpen(false);
 
   return (
     <SyncSheetContext.Provider value={present}>
       {children}
-      <IonModal
-        isOpen={open}
-        onDidDismiss={close}
-        presentingElement={presenting ?? undefined}
-      >
-        {/* Keyed on open so a dismissed sheet reopens at its root instead of
-            wherever its inner nav was left. */}
+      {/* Voyager's floating-card grammar: the modal is invisible and
+          auto-height; the card inside is the visible dialog. */}
+      <IonModal isOpen={open} onDidDismiss={close} className={styles.floating}>
+        {/* Keyed on open so a dismissed sheet reopens at its root instead
+            of whichever sub-view it was left on. */}
         <SyncSheet key={String(open)} onClose={close} />
       </IonModal>
     </SyncSheetContext.Provider>

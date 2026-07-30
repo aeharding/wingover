@@ -4,25 +4,138 @@
    sheet background, stock Ionic surfaces, nothing decorative. (A hero photo
    with scrim/glow machinery lived here once and was removed as a
    distraction; if art ever returns, it must re-earn the contrast math.) */
-.homeContent {
-  /* Flex the scroll container so the condensed header takes its natural height
-     and the body fills exactly what's left. min-height:100% on the body instead
-     would stack with the header and push the last control off-screen. */
-  &::part(scroll) {
-    display: flex;
-    flex-direction: column;
+/* The floating card (Voyager's donate-dialog grammar): the modal itself is
+   invisible and auto-height; the card div is the visible thing. No
+   ion-content and no ion-nav inside — auto height cannot measure
+   absolutely positioned pages, so sub-views swap in place. */
+.floating {
+  --background: transparent;
+  --height: auto;
+  --box-shadow: none;
+}
+
+.card {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 0.75rem;
+  width: min(21.5rem, calc(100vw - 2rem));
+  margin: 2.25rem auto;
+  padding: 1rem;
+  border-radius: 16px;
+  background: var(--ion-background-color);
+  box-sizing: border-box;
+}
+
+/* The state badge overhangs the card's top edge; its color is the sync
+   status speaking (the same tones the Settings row uses). */
+.badge {
+  display: flex;
+  margin-top: -46px;
+  padding: 8px;
+  border-radius: 50%;
+  font-size: 3em;
+  color: #fff;
+  background: var(--status-good);
+}
+
+.badgeWarn {
+  background: var(--ion-color-warning);
+}
+
+.badgeError {
+  background: var(--ion-color-danger);
+}
+
+.badgeOff {
+  background: var(--ion-color-medium);
+}
+
+.cardClose {
+  position: absolute;
+  top: 8px;
+  right: 8px;
+  display: flex;
+  padding: 5px;
+  border-radius: 50%;
+  appearance: none;
+  background: rgba(180, 180, 180, 0.2);
+  color: var(--ion-color-medium);
+  font-size: 1.3em;
+}
+
+.cardTitle {
+  font-size: 1.4em;
+  font-weight: 700;
+}
+
+.cardDescription {
+  margin: 0;
+  line-height: 1.5;
+  text-align: center;
+  color: var(--ion-text-color);
+}
+
+/* The plan buttons breathe like Voyager's tips: an evenly spaced column
+   that keeps its presence even while products load. */
+.plans {
+  display: flex;
+  flex-direction: column;
+  justify-content: space-evenly;
+  gap: 0.5rem;
+  width: 100%;
+  min-height: 7rem;
+}
+
+/* The one scroller: the dialog hugs content until the viewport runs out,
+   then this scrolls (docs/INSETS.md for the safe-area read). */
+.sheetScroll {
+  overflow-y: auto;
+  max-height: min(
+    85vh,
+    calc(
+      100vh - var(--ion-safe-area-top, 0px) - var(--ion-safe-area-bottom, 0px) -
+        2rem
+    )
+  );
+  width: 100%;
+  box-sizing: border-box;
+}
+
+/* Slim header row for the auto-height sheet: back / title / action. The
+   side slots share a min-width so the title centres for real. */
+.sheetHeader {
+  display: flex;
+  align-items: center;
+  padding: 0.5rem 0.5rem 0;
+
+  h2 {
+    flex: 1;
+    margin: 0;
+    text-align: center;
+    font-size: 1.0625rem;
+    font-weight: 600;
   }
 }
 
+.sheetHeaderSide,
+.sheetHeaderSideEnd {
+  min-width: 4.5rem;
+  display: flex;
+}
+
+.sheetHeaderSideEnd {
+  justify-content: flex-end;
+}
+
 .homeBody {
-  flex: 1;
   display: flex;
   flex-direction: column;
-  /* Equal air above and below the content, between the large title and
-     the sheet's bottom edge. */
-  justify-content: center;
+  align-items: center;
+  gap: 0.25rem;
   text-align: center;
-  padding: 1rem 1.5rem 2rem;
+  width: 100%;
   box-sizing: border-box;
 }
 
@@ -30,8 +143,8 @@
    "light" step to a dark shade, so it vanishes on exactly the background it
    sounds like it belongs on. */
 .headline {
-  margin: 0 0 1.5rem;
-  font-size: 2rem;
+  margin: 0 0 0.5rem;
+  font-size: 1.4em;
   font-weight: 700;
   line-height: 1.14;
   letter-spacing: -0.02em;
@@ -84,22 +197,6 @@
   color: var(--ion-color-medium);
 }
 
-/* The computer page's empty-state glyph: a big quiet landmark so the page
-   reads designed rather than bare. Success green: linking is the good
-   path. The lede drops below it. */
-.computerGlyph {
-  display: block;
-  margin: 2.5rem auto 0.5rem;
-  font-size: 5.5rem;
-  color: var(--status-good);
-  opacity: 0.85;
-}
-
-.computerGlyph + .loginLede,
-.computerGlyph + p {
-  margin-top: 1.25rem;
-}
-
 .state {
   display: flex;
   flex-direction: column;
@@ -119,7 +216,7 @@
   font-size: 0.875rem;
 }
 
-/* "On" is the Settings row's green, checkmark included: the sheet is that
+/* "On" is the Settings row's green, checkmark included: the card is that
    row expanded, and the two must never disagree on what good looks like. */
 .stateOn {
   .stateLabel {
@@ -134,6 +231,17 @@
     font-size: 0.9em;
     flex-shrink: 0;
   }
+}
+
+/* The computer page's empty-state glyph: a big quiet landmark so the page
+   reads designed rather than bare. Success green: linking is the good
+   path. */
+.computerGlyph {
+  display: block;
+  margin: 1rem auto 0.25rem;
+  font-size: 4.5rem;
+  color: var(--status-good);
+  opacity: 0.85;
 }
 
 /* Read-only / Expired is not an error and must not look like one: the pilot's
@@ -213,6 +321,26 @@
     --background-focused: #e6e6e6;
     --background-hover: #e6e6e6;
     --color: #000;
+  }
+}
+
+/* The self-host form's grouped-card backdrop: the same values the
+   Settings pages resolve to (settings.module.css), inlined because this
+   is a plain div, not an ion-content that could read --background. */
+.formBody {
+  background: #f2f2f7;
+  padding-bottom: 0.25rem;
+
+  ion-list:global(.list-inset) {
+    --ion-item-background: #ffffff;
+  }
+
+  :root:global(.ion-palette-dark) & {
+    background: var(--ion-background-color);
+
+    ion-list:global(.list-inset) {
+      --ion-item-background: var(--ion-color-step-100, #1c1c1e);
+    }
   }
 }
 
