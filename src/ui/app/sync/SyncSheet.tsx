@@ -313,7 +313,7 @@ function Pitch({
           void presentSheet({
             buttons: [
               {
-                text: "Self-hosted config",
+                text: "Self Hosted",
                 handler: onSelfHost,
                 htmlAttributes: { "data-testid": "sync-goto-login" },
               },

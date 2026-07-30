@@ -84,6 +84,22 @@
   color: var(--ion-color-medium);
 }
 
+/* The computer page's empty-state glyph: a big quiet landmark so the page
+   reads designed rather than bare. Success green: linking is the good
+   path. The lede drops below it. */
+.computerGlyph {
+  display: block;
+  margin: 2.5rem auto 0.5rem;
+  font-size: 5.5rem;
+  color: var(--status-good);
+  opacity: 0.85;
+}
+
+.computerGlyph + .loginLede,
+.computerGlyph + p {
+  margin-top: 1.25rem;
+}
+
 .state {
   display: flex;
   flex-direction: column;
@@ -101,6 +117,23 @@
 .stateDetail {
   color: var(--ion-color-medium);
   font-size: 0.875rem;
+}
+
+/* "On" is the Settings row's green, checkmark included: the sheet is that
+   row expanded, and the two must never disagree on what good looks like. */
+.stateOn {
+  .stateLabel {
+    color: var(--status-good);
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    gap: 0.375rem;
+  }
+
+  ion-icon {
+    font-size: 0.9em;
+    flex-shrink: 0;
+  }
 }
 
 /* Read-only / Expired is not an error and must not look like one: the pilot's

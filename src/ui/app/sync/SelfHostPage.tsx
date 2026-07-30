@@ -83,7 +83,7 @@ export function SelfHostPage({
           <IonButtons slot="start">
             <IonBackButton text={backText} />
           </IonButtons>
-          <IonTitle>Self-hosted</IonTitle>
+          <IonTitle>Self Hosted</IonTitle>
           {/* The action belongs in the navbar, next to the way out — the iOS
               form idiom. A block button below the fields reads like a landing
               page and pushes the fine print off-screen. */}

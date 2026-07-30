@@ -69,16 +69,15 @@ doesn't earn:
   IN PLACE, where the choice lives with full context — two priced buttons
   resting on the sheet made the pilot price-compare before deciding to buy
   at all. **Sign in with Apple** sits beneath it for an account born
-  elsewhere (the web/Stripe future), Restore Purchases and **Self-hosted
-  config** as quiet links. Web: Sign in with Apple is primary — it is the
+  elsewhere (the web/Stripe future), Restore Purchases and **Self Hosted** as quiet links. Web: Sign in with Apple is primary — it is the
   account door, and step one of web checkout once that exists — over the
-  Self-hosted config link. The pitch keeps the terms/privacy links; the
+  Self Hosted link. The pitch keeps the terms/privacy links; the
   paywall fine print (price, period, auto-renew) lives on the plan page,
   the one place a purchase happens.
 - **Connected** — status headline (On, last synced) + Turn off sync (its
   what-it-does fine print rides the confirm, at the moment it matters, not
   as a resting paragraph) + **More options**, an action sheet holding "Use
-  on your computer" (the SIWA link catch-up), Self-hosted config (while
+  on your computer" (the SIWA link catch-up), Self Hosted (while
   off), Manage Subscription
   (StoreKit's native sheet — the only surface that shows sandbox subs) and
   Delete account: real doors almost nobody needs on a given visit. The
@@ -97,7 +96,7 @@ doesn't earn:
   standing opt-in reconnects at launch, so only an explicit Turn off lands
   here.
 
-Self-hosted config pushes the CouchDB form IN PLACE — a nav push inside the
+Self Hosted pushes the CouchDB form IN PLACE — a nav push inside the
 one sheet with a back chevron, never a second modal. It lives under More
 options on every view, the pitch included (Alex, 2026-07-30): one tap in is
 still discoverable, and the free path stays real — removing it from reach

@@ -9,7 +9,12 @@ import {
   useIonActionSheet,
   useIonAlert,
 } from "@ionic/react";
-import { chevronBackOutline, logoApple } from "ionicons/icons";
+import {
+  checkmarkOutline,
+  chevronBackOutline,
+  desktopOutline,
+  logoApple,
+} from "ionicons/icons";
 import { type RefObject, useState, useSyncExternalStore } from "react";
 
 import { isTauri } from "../../../platform/index";
@@ -35,15 +40,41 @@ import styles from "./sync.module.css";
  * Resubscribe/Manage pieces (one-way; the payments rail never reaches back).
  */
 
-// A semantic tone → the sheet's status-label modifier class. On/off/neutral
-// ride the default label color; only a lapse (amber) and an error (red) paint.
+// A semantic tone → the sheet's status-label modifier class. The sheet is
+// the Settings row expanded (one tap), so "on" paints the SAME green the
+// row uses; a lapse amber, an error red; off/neutral ride the default.
 export const SHEET_TONE_CLASS: Record<SyncTone, string> = {
-  on: "",
+  on: styles.stateOn,
   off: "",
   warn: styles.stateReadonly,
   error: styles.stateError,
   neutral: "",
 };
+
+// The sheet's status block, shared by the home view and the post-purchase
+// page. The checkmark rides "on" exactly like the Settings row's note.
+export function StatusBlock({
+  label,
+  detail,
+  tone,
+  testId,
+}: {
+  label: string;
+  detail: string;
+  tone: SyncTone;
+  testId?: string;
+}) {
+  const on = tone === "on";
+  return (
+    <div className={cx(styles.state, SHEET_TONE_CLASS[tone])}>
+      <span className={styles.stateLabel} data-testid={testId}>
+        {on && <IonIcon icon={checkmarkOutline} aria-hidden="true" />}
+        {label}
+      </span>
+      <span className={styles.stateDetail}>{detail}</span>
+    </div>
+  );
+}
 
 // Sign in with Apple: a quiet text link (the iOS pitch) or the white HIG button.
 export function AppleSignInButton({
@@ -160,7 +191,7 @@ export function Connected({
         ...(v.showSelfHost
           ? [
               {
-                text: "Self-hosted config",
+                text: "Self Hosted",
                 handler: onSelfHost,
                 htmlAttributes: { "data-testid": "sync-goto-login" },
               },
@@ -188,12 +219,12 @@ export function Connected({
 
   return (
     <>
-      <div className={cx(styles.state, SHEET_TONE_CLASS[v.statusTone])}>
-        <span className={styles.stateLabel} data-testid="sync-state">
-          {v.statusLabel}
-        </span>
-        <span className={styles.stateDetail}>{v.statusDetail}</span>
-      </div>
+      <StatusBlock
+        label={v.statusLabel}
+        detail={v.statusDetail}
+        tone={v.statusTone}
+        testId="sync-state"
+      />
 
       {v.supporterNote && (
         <p className={styles.finePrint} data-testid="sync-supporting">
@@ -319,20 +350,20 @@ export function LinkAccountPage({
   }
 
   const purchase = context === "purchase";
+  const computer = !purchase;
 
   function renderStatus() {
     if (!purchase) return null;
     return (
-      <div
-        className={cx(styles.state, SHEET_TONE_CLASS[describe(status).tone])}
-      >
-        <span className={styles.stateLabel}>{describe(status).label}</span>
-        <span className={styles.stateDetail}>
-          {status.state === "syncing" && !status.readOnly
+      <StatusBlock
+        label={describe(status).label}
+        detail={
+          status.state === "syncing" && !status.readOnly
             ? "Your flights now back up automatically."
-            : describe(status).detail}
-        </span>
-      </div>
+            : describe(status).detail
+        }
+        tone={describe(status).tone}
+      />
     );
   }
 
@@ -393,6 +424,14 @@ export function LinkAccountPage({
       <IonContent>
         <div className={styles.loginBody}>
           {renderStatus()}
+
+          {computer && (
+            <IonIcon
+              icon={desktopOutline}
+              className={styles.computerGlyph}
+              aria-hidden="true"
+            />
+          )}
 
           {linked ? (
             <p className={styles.loginLede} data-testid="link-page-linked">
