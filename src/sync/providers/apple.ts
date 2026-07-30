@@ -120,15 +120,25 @@ export async function appleSubscriptionState(): Promise<
 > {
   const jws = await probeEntitlementJWS();
   if (!jws) return null;
+  const expiresAt = jwsExpiresAt(jws);
+  if (expiresAt === null) return null;
+  return expiresAt > Date.now() ? "active" : "expired";
+}
+
+/**
+ * The transaction's expiry, decoded locally, for DISPLAY and plausibility
+ * checks only — entitlement remains the server's verdict, verified against
+ * Apple's roots. The JWS payload is plain base64url JSON; reading a field is
+ * not trusting it. null = undecodable or no expiry field.
+ */
+export function jwsExpiresAt(jws: string): number | null {
   try {
     const part = jws.split(".")[1] ?? "";
     const base64 = part.replace(/-/g, "+").replace(/_/g, "/");
     const payload = JSON.parse(
       atob(base64 + "=".repeat((4 - (base64.length % 4)) % 4)),
     ) as { expiresDate?: number };
-    return payload.expiresDate !== undefined && payload.expiresDate > Date.now()
-      ? "active"
-      : "expired";
+    return payload.expiresDate ?? null;
   } catch {
     return null;
   }

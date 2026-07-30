@@ -12,6 +12,7 @@ import {
   appleProvider,
   isEnvMismatch,
   probeEntitlementJWS,
+  jwsExpiresAt,
   purchaseJWS,
   siwaProvider,
   SUBSCRIPTION_PRODUCT_IDS,
@@ -185,7 +186,18 @@ export async function resume(override?: CredentialProvider): Promise<void> {
 export async function purchase(
   term: SubscriptionTerm = "monthly",
 ): Promise<void> {
-  const purchased = await purchaseJWS(SUBSCRIPTION_PRODUCT_IDS[term]);
+  let purchased = await purchaseJWS(SUBSCRIPTION_PRODUCT_IDS[term]);
+  // Sandbox can answer .success with the STALE expired transaction, without
+  // ever presenting a sheet, when an unfinished copy of it sits on the
+  // queue (observed on-device 2026-07-30: Resubscribe spun, "succeeded",
+  // popped home still lapsed, no Apple UI). Resolving finished that stale
+  // copy, so ONE retry presents the real sheet. A genuine purchase can
+  // never return an already-expired transaction, so this cannot double-
+  // charge; a second stale answer falls through to the probe as before.
+  const staleExpiry = jwsExpiresAt(purchased);
+  if (staleExpiry !== null && staleExpiry <= Date.now()) {
+    purchased = await purchaseJWS(SUBSCRIPTION_PRODUCT_IDS[term]);
+  }
   // The supporter guard (SYNC-UX.md, junction 2): a pilot already synced to
   // their own server bought support, not a migration — their login is theirs.
   if (replicate.currentAccount()?.kind === "manual") return;
