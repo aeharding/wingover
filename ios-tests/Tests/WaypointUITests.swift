@@ -66,20 +66,18 @@ final class WaypointUITests: XCTestCase {
     // The steps build on each other; a cascade of follow-on failures after
     // the first only buries the signal.
     continueAfterFailure = false
-  }
-
-  // A previous aborted run can leave a live or armed flight (the engine
-  // self-heals across relaunches by design). Walk back to idle first.
-  private func recoverToIdle(_ app: XCUIApplication) {
-    let stop = app.buttons["Stop flight"].firstMatch
-    let cancel = app.buttons["Cancel"].firstMatch
-    if stop.waitForExistence(timeout: 3) {
-      stop.tap()
-      let confirm = app.buttons["Stop"].firstMatch
-      if confirm.waitForExistence(timeout: 5) { confirm.tap() }
-      _ = app.buttons["Fly"].firstMatch.waitForExistence(timeout: 20)
-    } else if cancel.exists {
-      cancel.tap()
+    // An abort therefore leaves this drill's flight RECORDING, and the next
+    // invocation inherits it: run.sh resets the simulator's location and
+    // permissions between invocations but never the app's flight, and the
+    // engine resumes a live one on the next launch by design. Run 30456461261
+    // is that cascade seen from the receiving end — a flight left live by
+    // RecordingUITests surfaced here as "no Plan tab".
+    addTeardownBlock {
+      let app = XCUIApplication(bundleIdentifier: "app.wingover.wingover")
+      // The crossing is watched with the app backgrounded, and a
+      // backgrounded app has an empty accessibility tree.
+      app.activate()
+      recoverToIdle(app)
     }
   }
 
@@ -113,6 +111,23 @@ final class WaypointUITests: XCTestCase {
       index + 1 < texts.count
     else { return nil }
     return texts[index + 1].label
+  }
+
+  // Waits for the pill to read something other than `previous` — nil waits
+  // for it to appear at all. This is how the drill knows a press reached the
+  // STORE and not just the screen: PlanPage.addPin awaits savePin before
+  // setPins (src/ui/app/pages/PlanPage.tsx), and a flight copies the plan
+  // with its own listPins at start (src/engine/session.ts, startFlight), so a
+  // pill that has changed is a pin the next flight will see.
+  private func waitForRouteChange(
+    _ app: XCUIApplication, from previous: String?, timeout: TimeInterval
+  ) -> String? {
+    let deadline = Date().addingTimeInterval(timeout)
+    while Date() < deadline {
+      if let value = routeValue(app), value != previous { return value }
+      Thread.sleep(forTimeInterval: 0.5)
+    }
+    return nil
   }
 
   // Reruns on one install would otherwise leave the previous run's pins in
@@ -249,9 +264,8 @@ final class WaypointUITests: XCTestCase {
     let before = routeValue(app)
     longPress(map, dy: calibrationTopDy)
     longPress(map, dy: calibrationBottomDy)
-    let after = routeValue(app)
-    XCTAssertTrue(
-      after != nil && after != before,
+    XCTAssertNotNil(
+      waitForRouteChange(app, from: before, timeout: 20),
       "route pill did not appear/change — long-presses created no pins")
 
     // Starting the flight is what publishes the pins' real coordinates to a
@@ -320,7 +334,27 @@ final class WaypointUITests: XCTestCase {
     XCTAssertTrue(locate.waitForExistence(timeout: 15), "no Center on me after the flight")
     locate.tap()
     Thread.sleep(forTimeInterval: 3)
+    // Read the two-pin route back BEFORE pressing: a pill that has not
+    // re-rendered yet would make any later value look like a change.
+    let twoPinRoute = waitForRouteChange(app, from: nil, timeout: 20)
+    XCTAssertNotNil(
+      twoPinRoute,
+      "the rebuilt plan map shows no route for the calibration pins")
     longPress(map, dy: targetDy)
+    // The flight publishes the plan to waypoints.json by READING THE STORE, so
+    // the third pin has to have landed there before startFlight below — being
+    // pressed is not enough. Runs 30236173264, 30475384601 and 30477891080 all
+    // lost that race, and activeWaypoints(count: 3) then polled 30 s against a
+    // file that stayed at two pins for the whole flight. In 30477891080 the
+    // press finished at t=41.7s and Start Flight was tapped at t=44.6s, while
+    // that job's end-of-job screenshot shows the idle screen reading "Planned
+    // route: 11.51 mi" — the three-pin route, landed too late to be flown.
+    XCTAssertNotNil(
+      waitForRouteChange(app, from: twoPinRoute, timeout: 30),
+      """
+      the third pin never reached the plan: route still \
+      \(twoPinRoute ?? "<none>") after a long-press at dy \(targetDy)
+      """)
 
     // A stale speak.log — or anything the calibration flight might have said
     // — must not satisfy the assertion.
