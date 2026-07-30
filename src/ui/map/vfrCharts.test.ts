@@ -1,6 +1,11 @@
+// Set before the module under test runs any date math: Hawaii is far
+// enough west that 0901Z is the previous evening, which is the whole
+// reason chartLabel formats in UTC.
+process.env.TZ = "Pacific/Honolulu";
+
 import { describe, expect, it } from "vitest";
 
-import { selectChart } from "./vfrCharts";
+import { chartLabel, selectChart } from "./vfrCharts";
 
 const EFFECTIVE = "2026-09-03T09:01:00Z";
 const EFFECTIVE_MS = Date.parse(EFFECTIVE);
@@ -100,5 +105,33 @@ describe("selectChart", () => {
     expect(selectChart(null, 0)).toBeNull();
     expect(selectChart("nope", 0)).toBeNull();
     expect(selectChart({}, 0)).toBeNull();
+  });
+});
+
+describe("chartLabel", () => {
+  it("names the edition by its UTC date, west of the dateline included", () => {
+    const chart = selectChart(
+      { current: release({ effective: "2026-07-09T09:01:00Z" }) },
+      0,
+    );
+    // Local time in Honolulu is the 8th at 2301; the chart is the 9th.
+    // Asserted on the day alone, since the label's shape follows the
+    // runner's locale and only the day can differ between the readings.
+    const label = chartLabel(chart!);
+    expect(label).toMatch(/\b9\b/);
+    expect(label).not.toMatch(/\b8\b/);
+  });
+
+  it("falls back to the cycle the manifest states, then to nothing", () => {
+    const noEffective = selectChart(
+      { current: release({ effective: undefined, cycle: "07-09-2026" }) },
+      0,
+    );
+    expect(chartLabel(noEffective!)).toBe("07-09-2026");
+    const anonymous = selectChart(
+      { current: release({ effective: undefined, cycle: undefined }) },
+      0,
+    );
+    expect(chartLabel(anonymous!)).toBeNull();
   });
 });

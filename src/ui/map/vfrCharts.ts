@@ -119,6 +119,24 @@ export function selectChart(manifest: unknown, nowMs: number): VfrChart | null {
   return toChart(current);
 }
 
+/**
+ * How this chart is labelled to a pilot: its edition date, which is the
+ * date it took force. In UTC, because that is the reckoning the FAA
+ * publishes in (0901Z) and a local rendering shows the day BEFORE for
+ * anyone west of about UTC-9, which includes Hawaii, where these charts
+ * are flown. Falls back to whatever the manifest called the cycle when it
+ * states no effective time, and to nothing when it states neither.
+ */
+export function chartLabel(chart: VfrChart): string | null {
+  if (chart.effective === null) return chart.cycle;
+  return new Date(chart.effective).toLocaleDateString(undefined, {
+    timeZone: "UTC",
+    month: "short",
+    day: "numeric",
+    year: "numeric",
+  });
+}
+
 // A pinned tile template, for pointing a build at one specific bake:
 // ?vfr=<template> at launch, or a "wingover.vfr" localStorage key. Off
 // unless set, and it is the only way to reach a prefix the manifest does

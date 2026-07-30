@@ -21,6 +21,7 @@ import {
   updatePin,
 } from "../../storage/db";
 import { useAppearance } from "../appTheme";
+import ChartCurrency from "../map/ChartCurrency";
 import CompassButton from "../map/CompassButton";
 import MapCanvas from "../map/MapCanvas";
 import {
@@ -402,6 +403,7 @@ export default function PlanPage() {
               onReady={handleReady}
             >
               <div className={mapCss.overlay} data-testid="map-overlay">
+                <ChartCurrency view={view} />
                 {map && <CompassButton map={map} />}
                 <button
                   className={mapCss.button}

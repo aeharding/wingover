@@ -36,6 +36,9 @@
     right: auto;
     left: calc(0.9rem + var(--ion-safe-area-left));
     bottom: calc(2.6rem + var(--ion-safe-area-bottom));
+    /* Anchored left, so its children hug left too (see the contract's
+       align-items). */
+    align-items: flex-start;
   }
 }
 
