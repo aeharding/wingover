@@ -1428,6 +1428,10 @@ describe("recorder lock", () => {
         _options: unknown,
         callback: (lock: unknown) => unknown,
       ) => {
+        // The real API resolves grants through a browser-process round
+        // trip, never synchronously; a synchronous fake hides the window
+        // in which two concurrent requests race each other.
+        await Promise.resolve();
         if (held) return callback(null);
         held = true;
         try {
@@ -1463,6 +1467,127 @@ describe("recorder lock", () => {
     await second.start();
     expect(second.snapshotSync().status).toBe("acquiring");
     expect(second.snapshotSync().error).toBeNull();
+  });
+
+  // The cancel-then-immediately-start tap: discard() flips the UI to idle
+  // before its destructive tail has drained, so Start Flight is under the
+  // thumb while the old teardown is still running. That tail must not
+  // clear the fresh session's WAL or release the fresh session's lock.
+  it("a start inside the discard tail keeps the new session's lock and WAL", async () => {
+    installFakeLocks();
+    const engine = createEngine();
+    await armAndTakeOff(engine);
+    await engine.getSnapshot(); // drain
+
+    const discarding = engine.discard();
+    await engine.start();
+    await discarding;
+    await settle();
+
+    // The fresh session survived the old teardown...
+    expect(engine.snapshotSync().status).toBe("acquiring");
+    expect((await readWal()).session).not.toBeNull();
+
+    // ...its lock is still held (another tab is refused)...
+    const intruder = createEngine();
+    await intruder.start();
+    expect(intruder.snapshotSync().error?.code).toBe("busy");
+
+    // ...and it still owns the WAL: a discard that leaves the session
+    // standing would prove the old tail stripped walOwner.
+    await engine.discard();
+    expect(await readWal()).toEqual({ session: null, fixes: [] });
+  });
+
+  // A WAL clear lost to a storage outage must not also leak the recorder
+  // lock: an idle tab would tell every other tab "recording somewhere
+  // else" for the rest of its page life.
+  it("a failing WAL clear still releases the recorder lock", async () => {
+    installFakeLocks();
+    const first = createEngine();
+    await armAndTakeOff(first);
+    await first.getSnapshot(); // drain
+
+    const workingIndexedDB = globalThis.indexedDB;
+    try {
+      globalThis.indexedDB = {
+        open() {
+          throw new Error("quota exceeded");
+        },
+      } as unknown as IDBFactory;
+      await expect(first.discard()).rejects.toThrow();
+    } finally {
+      globalThis.indexedDB = workingIndexedDB;
+    }
+
+    // The lock came back with the failure: a second tab records.
+    const second = createEngine();
+    await second.start();
+    expect(second.snapshotSync().status).toBe("acquiring");
+    expect(second.snapshotSync().error).toBeNull();
+    await second.discard();
+
+    // And the failed clear did not poison this engine's future starts
+    // with a rejected teardown gate.
+    await first.start();
+    expect(first.snapshotSync().status).toBe("acquiring");
+  });
+
+  // A double-tapped Start aligned by the teardown gate must join one lock
+  // grant: racing two ifAvailable requests would have the second refusal
+  // publish a false "recording somewhere else" takeover from the tab that
+  // IS the recorder.
+  it("two concurrent starts join one lock grant instead of racing two", async () => {
+    installFakeLocks();
+    const engine = createEngine();
+    const publishedErrors: string[] = [];
+    engine.subscribe(() => {
+      const error = engine.snapshotSync().error;
+      if (error) publishedErrors.push(error.code);
+    });
+
+    // Single-flight: the second tap joins the start already in progress
+    // rather than running its own clear-and-rewrite of the WAL.
+    const first = engine.start();
+    const second = engine.start();
+    expect(second).toBe(first);
+    await Promise.all([first, second]);
+    await settle();
+
+    expect(engine.snapshotSync().status).toBe("acquiring");
+    expect(publishedErrors).toEqual([]);
+  });
+
+  // A start that fails over a LIVE session may only give back what it
+  // took: releasing the session's existing grant would strip a recording
+  // flight's only WAL protection, and walOwner=false would leave the
+  // finalized flight uncleared, to be resurrected on every later boot.
+  it("a start that fails over a live session leaves the session's lock alone", async () => {
+    installFakeLocks();
+    const first = createEngine();
+    await armAndTakeOff(first);
+    await first.getSnapshot(); // drain
+
+    const workingIndexedDB = globalThis.indexedDB;
+    try {
+      globalThis.indexedDB = {
+        open() {
+          throw new Error("quota exceeded");
+        },
+      } as unknown as IDBFactory;
+      await expect(first.start()).rejects.toThrow();
+    } finally {
+      globalThis.indexedDB = workingIndexedDB;
+    }
+
+    // The live session still owns the recorder...
+    const intruder = createEngine();
+    await intruder.start();
+    expect(intruder.snapshotSync().error?.code).toBe("busy");
+
+    // ...and still owns the WAL: its own discard clears it.
+    await first.discard();
+    expect(await readWal()).toEqual({ session: null, fixes: [] });
   });
 });
 

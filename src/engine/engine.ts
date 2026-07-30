@@ -171,6 +171,13 @@ export class Engine implements EngineImpl {
   // Doubles as the "this engine owns the recorder" flag.
   private releaseRecorderLock: (() => void) | null = null;
   private walOwner = false;
+  // The last discard()'s destructive tail. start() gates on it: the UI
+  // shows idle (Start tappable) while the tail is still draining, and a
+  // start entering under it would have its fresh WAL cleared and its
+  // fresh lock released by the old session's teardown.
+  private teardown: Promise<void> = Promise.resolve();
+  private lockRequest: Promise<boolean> | null = null;
+  private startInFlight: Promise<void> | null = null;
 
   constructor(private readonly core: CoreClient) {}
 
@@ -178,40 +185,61 @@ export class Engine implements EngineImpl {
   // into the same store — an unexplainable corrupt flight later. A Web
   // Lock makes the recorder exclusive per origin; where the API is absent
   // (tests, ancient webviews) recording proceeds unguarded, as before.
-  private async acquireRecorderLock(): Promise<boolean> {
-    const acquired = await this.acquireRecorderLockInner();
-    // Ownership is what licenses WAL destruction (discard): a tab that
-    // was refused the lock must never clear the owning tab's flight.
-    // Lock-less environments (tests, ancient webviews) proceed as owner,
-    // exactly as they record unguarded.
-    if (acquired) this.walOwner = true;
-    return acquired;
-  }
-
-  private acquireRecorderLockInner(): Promise<boolean> {
-    if (this.releaseRecorderLock) return Promise.resolve(true);
+  // Ownership (walOwner) is what licenses WAL destruction (discard): a
+  // tab that was refused the lock must never clear the owning tab's
+  // flight. Lock-less environments (tests, ancient webviews) proceed as
+  // owner, exactly as they record unguarded. Every grant sets walOwner in
+  // the same task it installs the release — a discard capturing between
+  // the two would otherwise release a lock whose ownership it never saw.
+  private acquireRecorderLock(): Promise<boolean> {
+    if (this.releaseRecorderLock) {
+      this.walOwner = true;
+      return Promise.resolve(true);
+    }
     const locks =
       typeof navigator === "undefined" ? undefined : navigator.locks;
-    if (!locks) return Promise.resolve(true);
-    return new Promise((resolve) => {
+    if (!locks) {
+      this.walOwner = true;
+      return Promise.resolve(true);
+    }
+    // One request at a time: the API never grants synchronously, so two
+    // concurrent starts (a double tap aligned by the teardown gate) would
+    // otherwise race two ifAvailable requests — and the second refusal
+    // would publish a false "recording somewhere else" takeover from the
+    // tab that IS the recorder.
+    this.lockRequest ??= new Promise<boolean>((resolve) => {
       locks
         .request("wingover-recorder", { ifAvailable: true }, (lock) => {
           if (!lock) {
             resolve(false);
             return;
           }
-          resolve(true);
           // Held until released: the lock lives as long as this promise.
-          return new Promise<void>((release) => {
-            this.releaseRecorderLock = () => {
-              this.releaseRecorderLock = null;
+          // The self-null is guarded because a discard captures this
+          // closure and may invoke it after a fresh session has installed
+          // its own — the old release must not strip the new field.
+          const held = new Promise<void>((release) => {
+            const releaseLock = () => {
+              if (this.releaseRecorderLock === releaseLock) {
+                this.releaseRecorderLock = null;
+              }
               release();
             };
+            this.releaseRecorderLock = releaseLock;
           });
+          this.walOwner = true;
+          resolve(true);
+          return held;
         })
         // A locks API failure must not block recording.
-        .catch(() => resolve(true));
+        .catch(() => {
+          this.walOwner = true;
+          resolve(true);
+        });
+    }).finally(() => {
+      this.lockRequest = null;
     });
+    return this.lockRequest;
   }
 
   // The boot gate reads this like any other engine fact. "failed" means
@@ -452,15 +480,46 @@ export class Engine implements EngineImpl {
     return index != null ? (this.buffer[index]?.timestamp ?? null) : null;
   }
 
-  async start(options?: StartOptions): Promise<void> {
+  // Single-flight: taps aligned by the teardown gate join the start
+  // already in progress instead of each clearing and re-writing the WAL.
+  // N racing starts are N chances for one transient storage failure to
+  // strip a session another start just established, and same-frame taps
+  // carry identical options, so joining loses nothing.
+  start(options?: StartOptions): Promise<void> {
+    this.startInFlight ??= this.startInner(options).finally(() => {
+      this.startInFlight = null;
+    });
+    return this.startInFlight;
+  }
+
+  private async startInner(options?: StartOptions): Promise<void> {
+    // A prior discard's tail may still be draining (see this.teardown).
+    await this.teardown;
     // The lock comes first: without it this tab must not touch the WAL
     // (clearing it would destroy the owning tab's flight).
+    const heldBefore = this.releaseRecorderLock !== null;
     if (!(await this.acquireRecorderLock())) {
       this.error = BUSY_ERROR;
       this.invalidate();
       return;
     }
-    await clearWal();
+    try {
+      await clearWal();
+    } catch (error) {
+      // A tab that failed to start must not keep the recorder — an idle
+      // tab holding the lock tells every other tab "recording somewhere
+      // else" for the rest of its page life. But it may only give back
+      // the grant THIS start took: releasing one a live session already
+      // held would strip that session's only WAL protection. Surfaced
+      // like any failed WAL write (see enqueueWal), not swallowed.
+      this.error = STORAGE_ERROR;
+      this.invalidate();
+      if (!heldBefore && this.releaseRecorderLock) {
+        this.releaseRecorderLock();
+        this.walOwner = false;
+      }
+      throw error;
+    }
     // The fresh session IS the state now; a hydration read still in
     // flight must not apply over it.
     this.hydrated = true;
@@ -684,16 +743,47 @@ export class Engine implements EngineImpl {
     this.reachedIds.clear();
     this.error = null;
     this.invalidate();
-    await this.walQueue;
-    // Only the WAL's owner may destroy it: a passive tab (busy) clearing
-    // it would wipe the owning tab's flight and skew the indices its
-    // later session writes journal.
-    if (this.walOwner) await clearWal();
-    // Orphans from a storage outage must not leak into the next session.
+    // Orphans from a storage outage must not leak into the next session —
+    // cleared here, synchronously, because by the time the tail drains a
+    // fresh session may be buffering fixes of its own.
     this.pendingWalFixes = [];
-    if (this.releaseRecorderLock) {
-      this.releaseRecorderLock();
-      this.walOwner = false;
+    // The tail may only destroy what this discard took from it: captured
+    // here and handed over, because by the time the tail drains, the live
+    // fields may belong to a fresh session the tail must not touch.
+    const release = this.releaseRecorderLock;
+    const owned = this.walOwner;
+    this.releaseRecorderLock = null;
+    this.walOwner = false;
+    const teardown = this.teardownSession(release, owned);
+    // The gate stores completion, not success (a clear lost to a storage
+    // outage must not poison every future start() with a rejected gate),
+    // and chains, so an overlapping discard cannot drop an earlier tail
+    // out of the gate while it is still destructive.
+    this.teardown = Promise.allSettled([this.teardown, teardown]).then(
+      () => {},
+    );
+    await teardown;
+  }
+
+  // The destructive tail of discard(). The finally is load-bearing: a WAL
+  // clear lost to a storage outage must not also leak the recorder lock,
+  // or an idle tab tells every other tab "recording somewhere else" for
+  // the rest of its page life. On the collection path the WAL itself is
+  // safe to leave behind — the next boot re-collects it, and the
+  // deterministic flight id makes that save a no-op. A cancelled armed
+  // session left behind rehydrates instead; nothing is lost either way.
+  private async teardownSession(
+    release: (() => void) | null,
+    owned: boolean,
+  ): Promise<void> {
+    try {
+      await this.walQueue;
+      // Only the WAL's owner may destroy it: a passive tab (busy) clearing
+      // it would wipe the owning tab's flight and skew the indices its
+      // later session writes journal.
+      if (owned) await clearWal();
+    } finally {
+      release?.();
     }
   }
 
