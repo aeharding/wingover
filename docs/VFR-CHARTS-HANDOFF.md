@@ -15,20 +15,18 @@ not modify the pipeline repo from this workstream.
   immutable-cached; every bake ships to a NEW prefix, never in place.
 - Tiles are @3x only: 768px images on the standard XYZ grid, JXL d4/e7,
   z0-12. No @2x set exists by decision; lower-dpr devices supersample.
-- This worktree (`feat/vfr-sectional-poc`, UNCOMMITTED) has the working
-  overlay: `src/ui/pages/PlanPage.tsx` calls `rasterOverlay(...)` with a
-  hardcoded prefix URL and a near-global coverage box.
+- The app side is built and committed on `feat/vfr-sectional-poc` (local
+  only, under Alex's no-push hold): raster overlays on both map backends,
+  manifest resolution, a third "chart" view mode, a JXL feature gate, and
+  the edition chip. See "App work" below for what each commit did.
 
-## The interface: latest.json (being built pipeline-side NOW)
+## The interface: latest.json
 
-The prefix naming is being reworked (away from letter suffixes) and a
-manifest will become the one source of truth at:
+The one pointer that moves, and the only thing the app trusts:
 
     https://charts.wingover.app/vfr/latest.json
 
-Treat its `tiles` template fields as authoritative rather than building
-URLs from parts. Expected shape (confirm against the live file; the
-pipeline workstream may extend it):
+Expected shape (what the app parses):
 
 ```json
 {
@@ -44,6 +42,13 @@ pipeline workstream may extend it):
 }
 ```
 
+`tiles` may be relative to the manifest; the app resolves it (and repairs
+the braces, which WHATWG URL percent-encodes). `minZoom`/`maxZoom` are
+required: past maxZoom the adapters crop and upscale the deepest ancestor
+rather than requesting tiles that were never baked, so a release without
+them is rejected. `cycle` and `effective` are optional to the parser but
+`effective` is what the pre-effective rule and the edition chip run on.
+
 **Pre-effective cycles:** the FAA publishes each new cycle's files ~20
 days before they take force, and the pipeline bakes them as soon as they
 appear. A not-yet-effective bake arrives as `next` (same shape,
@@ -54,33 +59,67 @@ server-side at the effective moment, so clients that only read `current`
 degrade to at-most-stale, never to premature. Charts go effective at
 0901Z on the effective date.
 
-latest.json is NOT immutable-cached (short TTL). Until it ships, the
-hardcoded prefix in PlanPage.tsx is the temporary pointer; the pipeline
-side keeps it working but WILL eventually expire old prefixes (bucket
-lifecycle deletes vfr objects after 180 days), so manifest resolution is
-the first integration task, not an optional polish.
+latest.json is NOT immutable-cached (short TTL).
 
-## App work, in priority order
+### Open questions for the pipeline workstream (as of 2026-07-30)
 
-1. **Manifest resolution.** Fetch latest.json (once per app session is
-   fine; it changes at most every few days), feed the `tiles` template
-   into `rasterOverlay`. Handle fetch failure by not showing the layer
-   (no error banner; charts are an enhancement). Kill the hardcoded URL.
-2. **Chart toggle.** A third map view mode (decided direction; see
-   `settings-ui-voyager-pattern` and STEERING.md before building any
-   UI). Online charts are free/public-data by stance; offline packs are
-   the future paid feature (SYNC-UX: Subscription = services).
-3. **JXL feature-detect.** Native decode only, by decision: iOS/Safari
-   17+ yes, Chromium only behind its flag, Firefox stable no. Detect
-   (decode a 1px JXL data URL) and hide the toggle/layer cleanly where
-   unsupported. No WASM fallback, no AVIF, no FAA-host fallback.
-4. **Currency line.** Show cycle/effective date from latest.json where
-   the toggle lives. FAA republishes every 56 days.
-5. **Land the branch.** This worktree is uncommitted by prior
-   convention. When integration is real: branch + PR (NEVER push main;
-   every main merge burns a limited TestFlight build), full local gates
-   first (`tsc --noEmit`, `eslint . --max-warnings 0`, `format:check`,
-   `check:css`, `vitest`, `playwright`).
+1. **The published manifest does not match this contract yet.** The live
+   file is still the pre-rework shape — a bare release, no
+   `current`/`next` wrapper — and it advertises
+   `/vfr/07-09-2026/2x/{z}/{x}/{y}.jxl`, which 404s. The set that
+   actually serves is `07-09-2026k/3x` (verified with direct GETs at
+   z6/z8/z10/z12 including Alaska). The app therefore shows no chart from
+   the manifest today; it deliberately does NOT fall back to a compiled-in
+   prefix. Until the rework ships, point a build at a bake by hand with
+   `?vfr=<template>` or a `wingover.vfr` localStorage key.
+2. **CORS is an exact-origin allowlist, and the app fetches tiles with
+   `fetch()`.** Measured header matrix, tiles and manifest alike:
+   `http://localhost:5173` allowed, `http://localhost:5219` 200 but NO
+   `access-control-allow-origin` (so the browser blocks the read),
+   `https://wingover.app` allowed, `tauri://localhost` allowed,
+   `capacitor://localhost` 403 at the WAF. The WAF's referer rule is
+   prefix-based (any `http://localhost:` port passes it) but CORS is not,
+   so a dev server on any port other than 5173 cannot load tiles. Worth
+   deciding whether the allowlist should cover `http://localhost:*` the
+   way the WAF does.
+3. **Coverage.** The app still uses one near-global box (see below).
+   Precise coverage in the manifest would let it stop asking for ocean.
+4. `tilePixels` appeared in the old manifest and nothing reads it: the
+   MapKit path takes the size off the decoded image and the MapLibre
+   source is declared at 256 so the 768px tiles land as retina.
+
+## App work
+
+1. **Manifest resolution.** DONE (`src/ui/map/vfrCharts.ts`). Fetches
+   latest.json once per session, caching only success so a launch with no
+   signal does not cost charts until relaunch. Implements the
+   pre-effective rule, validates the template and zoom range, and shows
+   nothing (no banner, one console warning) on any failure. The hardcoded
+   URL is gone.
+2. **Chart toggle.** DONE. `MapViewKind` gained `"chart"`; it rides the
+   street basemap with the sectionals over it. The mode is the existing
+   app-wide `mapView` setting, so all four ground maps honor it
+   (`useChartOverlay`); the flight surface keeps its own two-view state
+   and its toggle does not offer a third.
+3. **JXL feature-detect.** DONE, inside vfrCharts.ts: a 60-byte 1x1 probe
+   in the same ISOBMFF container the tiles ship in. No decoder means no
+   mode, no layer and no fetch. Measured through Playwright on
+   2026-07-30: WebKit decodes it, Chromium and Firefox reject it, a
+   corrupted twin is rejected by all three, and the same three engines
+   give the same verdicts on REAL tiles pulled off the host.
+4. **Currency line.** DONE (`ChartCurrency`): "Sectional Jul 9, 2026" in
+   the plan map's control column while chart view is up, formatted in UTC
+   (0901Z reads as the previous day west of about UTC-9, Hawaii
+   included). Only the plan map shows it so far; the other three ground
+   maps have the mode but not the chip.
+5. **Land the branch.** NOT DONE, and blocked: the branch is under Alex's
+   hold, so it is committed locally and never pushed. When it opens:
+   branch + PR (NEVER push main; every main merge burns a limited
+   TestFlight build), full local gates first (`tsc --noEmit`,
+   `eslint . --max-warnings 0`, `format:check`, `check:css`, `vitest`,
+   `playwright`). Note the branch is ~60 PRs behind main and predates the
+   `src/ui/{app,flight,shared}` split, so it needs a rebase that moves
+   `src/ui/pages/PlanPage.tsx` into the `app/` bucket.
 
 ## Load-bearing constraints (violating these reopens settled decisions)
 
@@ -88,35 +127,40 @@ the first integration task, not an optional polish.
   the mapkit adapter uses the async image-callback form (fetch + <img>
   decode + canvas), and past z12 it crops+upscales the z12 ancestor
   client-side. Consequence: the tile host must send CORS headers even
-  for MapKit — already configured, GET only.
+  for MapKit — already configured, GET only, but see open question 2.
 - MapKit resolves a tile 404 to a transparent tile ONCE and caches it;
   MapLibre doesn't retry 404s. Ocean tiles inside the coverage box 404
   by design (blank-skipped server-side). Don't "fix" this.
-- The coverage box in PlanPage.tsx is deliberately near-global: the
-  product spans the antimeridian (Marianas 145E to Virgin Islands 60W,
-  Samoa 14S to Point Barrow 72N), so no single tight box exists.
-  Precise coverage arrives via the manifest when the pipeline adds it.
+- The coverage box (`VFR_COVERAGE` in vfrCharts.ts) is deliberately
+  near-global: the product spans the antimeridian (Marianas 145E to
+  Virgin Islands 60W, Samoa 14S to Point Barrow 72N), so no single tight
+  box exists. Precise coverage arrives via the manifest.
 - Pilot-facing strings: no em dashes. Colors: display-p3, no sRGB
   fallbacks. Settings UI: stock Ionic idiom.
 - `src/ui/` buckets: PlanPage is `app/`-side. Nothing here may import
-  from `flight/` (`wingover/ui-bucket-isolation`).
+  from `flight/` (`wingover/ui-bucket-isolation` on main).
 
 ## Verification (this is the part that bites)
 
-- Desktop browsers cannot decode JXL. Chart rendering is verified on an
-  iPhone (Safari/WKWebView, iOS 17+) pointed at the dev server, or in
-  desktop Safari 17+. Playwright uses the fake map backend and never
-  exercises tiles.
+- Desktop Chrome and Firefox cannot decode JXL; desktop Safari 17+ and
+  iOS can. Playwright's bundled WebKit CAN, which makes a Linux box
+  enough to prove decode end to end (fetch → blob → `img.decode()` →
+  canvas, the MapKit adapter's exact path). What it is NOT enough for:
+  that same WebKit build dies on the WebGL map in headless Linux, so
+  full-app chart RENDERING still has to be seen on a phone or in Safari.
 - Port 5173 must serve THIS worktree — check the listener's cwd via
   /proc before trusting phone feedback; a stale vite from another
-  worktree has burned hours before.
-- Cloudflare WAF allows referers starting with `http://localhost:` (any
-  port). A LAN address like `http://192.168.x.x:5173` is NOT allowlisted;
-  test via localhost or expect 403s.
+  worktree has burned hours before. If 5173 belongs to someone else, run
+  on 5219+ with `--strictPort` and remember open question 2: tiles will
+  NOT load cross-origin from that port.
 - Stale Safari bundles survive dev-server swaps; retest in a private tab
   before believing a failure.
 - First loads on a fresh prefix are cache-cold at the edge; slow first
   pans are normal.
+- The chart chrome can be photographed on Chromium by stubbing the
+  resolver (Chromium never reaches chart view otherwise). The layout bug
+  that found — a wide chip stranding the map buttons off the right edge —
+  is exactly what a screenshot catches and a unit test does not.
 
 ## Pointers
 
