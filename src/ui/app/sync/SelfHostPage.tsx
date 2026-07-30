@@ -1,10 +1,21 @@
-import { IonButton, IonInput, IonItem, IonList, IonNote } from "@ionic/react";
+import {
+  IonButton,
+  IonButtons,
+  IonContent,
+  IonHeader,
+  IonInput,
+  IonItem,
+  IonList,
+  IonNote,
+  IonTitle,
+  IonToolbar,
+} from "@ionic/react";
 import { useEffect, useRef, useState } from "react";
 
 import * as sync from "../../../sync/index";
 import { cx } from "../../shared/cx";
-import { SheetHeader } from "./SheetHeader";
 
+import settings from "../pages/settings.module.css";
 import styles from "./sync.module.css";
 
 /**
@@ -14,10 +25,10 @@ import styles from "./sync.module.css";
  * than bouncing the pilot through a second modal.
  */
 export function SelfHostPage({
-  onBack,
+  onDismiss,
   onConnected,
 }: {
-  onBack: () => void;
+  onDismiss: () => void;
   onConnected: () => void;
 }) {
   const serverInput = useRef<HTMLIonInputElement>(null);
@@ -65,28 +76,32 @@ export function SelfHostPage({
 
   return (
     <>
-      <SheetHeader
-        title="Self Hosted"
-        onBack={onBack}
-        action={
-          /* The action belongs in the header, next to the way out — the iOS
-             form idiom. A block button below the fields reads like a landing
-             page and pushes the fine print off-screen. */
-          <IonButton
-            fill="clear"
-            strong
-            disabled={!ready}
-            onClick={connect}
-            data-testid="sync-connect"
-          >
-            Connect
-          </IonButton>
-        }
-      />
-      {/* The grouped-card (inset list) treatment the Settings pages use —
-          in light mode the cells vanish without the grouped gray behind
-          them (white on white). */}
-      <div className={styles.formBody}>
+      <IonHeader>
+        <IonToolbar>
+          <IonButtons slot="start">
+            <IonButton onClick={onDismiss} data-testid="selfhost-cancel">
+              Cancel
+            </IonButton>
+          </IonButtons>
+          <IonTitle>Self Hosted</IonTitle>
+          {/* The action belongs in the navbar, next to the way out — the iOS
+              form idiom. A block button below the fields reads like a landing
+              page and pushes the fine print off-screen. */}
+          <IonButtons slot="end">
+            <IonButton
+              strong
+              disabled={!ready}
+              onClick={connect}
+              data-testid="sync-connect"
+            >
+              Connect
+            </IonButton>
+          </IonButtons>
+        </IonToolbar>
+      </IonHeader>
+      {/* settings-content: the grouped-card (inset list) treatment, same as
+          the Settings pages. */}
+      <IonContent className={settings.content}>
         {problem && (
           <p className={cx(styles.errorMessage, styles.formProblem)}>
             {problem}
@@ -159,7 +174,7 @@ export function SelfHostPage({
         <IonNote className={cx(styles.finePrint, styles.formNote)}>
           Any CouchDB. Wingover will only communicate with this backend.
         </IonNote>
-      </div>
+      </IonContent>
     </>
   );
 }

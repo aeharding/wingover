@@ -15,6 +15,20 @@ export type SyncTone = "on" | "off" | "warn" | "error" | "neutral";
  * the version that fell back to `status.state` put "paused", an internal
  * identifier, in the row for the length of every flight.
  */
+// "just now", then locale-correct minutes/hours/days. Read at render time;
+// a surface that sits open shows the moment it last derived, same as the
+// Settings row.
+function relativeTime(then: number, now = Date.now()): string {
+  const seconds = Math.max(0, Math.round((now - then) / 1000));
+  if (seconds < 60) return "just now";
+  const rtf = new Intl.RelativeTimeFormat(undefined, { numeric: "auto" });
+  const minutes = Math.round(seconds / 60);
+  if (minutes < 60) return rtf.format(-minutes, "minute");
+  const hours = Math.round(minutes / 60);
+  if (hours < 24) return rtf.format(-hours, "hour");
+  return rtf.format(-Math.round(hours / 24), "day");
+}
+
 export function describe(status: sync.SyncStatus): {
   label: string;
   detail: string;
@@ -71,7 +85,7 @@ export function describe(status: sync.SyncStatus): {
         : {
             label: "On",
             detail: status.lastSyncedAt
-              ? `Last synced ${new Date(status.lastSyncedAt).toLocaleTimeString()}`
+              ? `Last synced ${relativeTime(status.lastSyncedAt)}`
               : "Waiting for changes",
             tone: "on",
           };

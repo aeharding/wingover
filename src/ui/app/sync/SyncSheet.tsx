@@ -1,6 +1,7 @@
 import {
   IonButton,
   IonIcon,
+  IonModal,
   useIonActionSheet,
   useIonAlert,
 } from "@ionic/react";
@@ -38,27 +39,40 @@ import styles from "./sync.module.css";
  * no natural height for a fit-content dialog to measure), and the keyed
  * remount in SyncSheets returns a reopened dialog to home.
  */
-type SheetView = "home" | "plan" | "selfhost" | "computer" | "thanks";
+type SheetView = "home" | "plan" | "computer" | "thanks";
 
-export function SyncSheet({ onClose }: { onClose: () => void }) {
-  const status = useSyncExternalStore(sync.subscribe, sync.currentStatus);
-  const account = useSyncExternalStore(sync.subscribe, sync.currentAccount);
-  const [view, setView] = useState<SheetView>("home");
-  const [busy, setBusy] = useState(false);
-  const [problem, setProblem] = useState<string | null>(null);
-  // Empty = StoreKit didn't hand us products — a browser, the desktop dev
-  // ring, or App Store Connect not serving them yet.
+// StoreKit's answers, loaded once per mount. Empty products = a browser,
+// the desktop dev ring, or App Store Connect not serving them yet; the
+// appleSub cache is what makes a supporter or a signed-out subscriber see
+// the truth, and the purchase flow re-derives it when StoreKit's
+// entitlement changes.
+function useStoreFacts() {
   const [products, setProducts] = useState<sync.StoreProduct[]>([]);
-  // The subscription rail's own state, straight from StoreKit: what makes a
-  // supporter or a signed-out subscriber see the truth here.
   const [appleSub, setAppleSub] = useState<"active" | "expired" | null>(null);
-  const [presentAlert] = useIonAlert();
-  const { logOut, busy: loggingOut } = useLogOut();
 
   useEffect(() => {
     void sync.subscriptionProducts().then(setProducts);
     void sync.appleSubscriptionState().then(setAppleSub);
   }, []);
+
+  const refreshAppleSub = () =>
+    void sync.appleSubscriptionState().then(setAppleSub);
+
+  return { products, appleSub, refreshAppleSub };
+}
+
+export function SyncSheet({ onClose }: { onClose: () => void }) {
+  const status = useSyncExternalStore(sync.subscribe, sync.currentStatus);
+  const account = useSyncExternalStore(sync.subscribe, sync.currentAccount);
+  const [view, setView] = useState<SheetView>("home");
+  // Self Hosted is a real form: it gets a normal bottom sheet of its own,
+  // not a squeeze into the floating card.
+  const [selfHostOpen, setSelfHostOpen] = useState(false);
+  const [busy, setBusy] = useState(false);
+  const [problem, setProblem] = useState<string | null>(null);
+  const { products, appleSub, refreshAppleSub } = useStoreFacts();
+  const [presentAlert] = useIonAlert();
+  const { logOut, busy: loggingOut } = useLogOut();
 
   async function run(action: () => Promise<void>) {
     setBusy(true);
@@ -81,7 +95,7 @@ export function SyncSheet({ onClose }: { onClose: () => void }) {
   // self-hoster's purchase doesn't), and only when NOT already linked:
   // offering to link what is linked contradicts the view right behind it.
   function afterPurchase() {
-    void sync.appleSubscriptionState().then(setAppleSub);
+    refreshAppleSub();
     const acct = sync.currentAccount();
     if (isTauri() && acct?.kind === "apple" && acct.login !== "apple") {
       setView("thanks");
@@ -152,7 +166,7 @@ export function SyncSheet({ onClose }: { onClose: () => void }) {
                 await sync.connectWithSubscription(jws);
               })
             }
-            onSelfHost={() => setView("selfhost")}
+            onSelfHost={() => setSelfHostOpen(true)}
           />
         ) : (
           <Connected
@@ -169,7 +183,7 @@ export function SyncSheet({ onClose }: { onClose: () => void }) {
             onTurnOff={() =>
               isTauri() ? void run(() => sync.disable()) : void logOut(onClose)
             }
-            onSelfHost={() => setView("selfhost")}
+            onSelfHost={() => setSelfHostOpen(true)}
             onDelete={confirmDelete}
           />
         )}
@@ -210,8 +224,6 @@ export function SyncSheet({ onClose }: { onClose: () => void }) {
             onPurchased={afterPurchase}
           />
         );
-      case "selfhost":
-        return <SelfHostPage onBack={home} onConnected={onClose} />;
       case "computer":
         return <LinkAccountPage context="computer" onDone={home} />;
       case "thanks":
@@ -233,6 +245,17 @@ export function SyncSheet({ onClose }: { onClose: () => void }) {
         </button>
         {renderView()}
       </div>
+      <IonModal
+        isOpen={selfHostOpen}
+        onDidDismiss={() => setSelfHostOpen(false)}
+        breakpoints={[0, 1]}
+        initialBreakpoint={1}
+      >
+        <SelfHostPage
+          onDismiss={() => setSelfHostOpen(false)}
+          onConnected={onClose}
+        />
+      </IonModal>
     </div>
   );
 }
