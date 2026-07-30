@@ -274,8 +274,8 @@ export default function SettingsPage() {
         </IonList>
         {!isTauri() && (
           <div className={settings.helperText}>
-            Browsers can stop background recording at any time. Your phone
-            running the Wingover app is the recorder to trust.
+            Browsers can stop background recording at any time. We strongly
+            recommend using the Wingover App to record your flights.
           </div>
         )}
         <IonAlert
