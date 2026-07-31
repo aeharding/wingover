@@ -91,7 +91,11 @@ export default function PlanPage() {
   );
 
   function loadPlan() {
-    listPins().then(setPins);
+    // A logout destroys the instance mid-read; the swap notifier
+    // re-renders with the fresh one, so a rejection here is expected.
+    void listPins()
+      .then(setPins)
+      .catch(() => {});
   }
 
   // Will-enter for the phone shell; a mount effect for the desktop shell

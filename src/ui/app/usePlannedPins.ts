@@ -14,8 +14,18 @@ export function usePlannedPins(): Pin[] {
   const [pins, setPins] = useState<Pin[]>([]);
 
   useEffect(() => {
-    void listPins().then(setPins);
-    return onDocsChanged("pin", () => void listPins().then(setPins));
+    // A logout destroys the instance mid-read; the swap notifier
+    // re-renders with the fresh one, so a rejection here is expected.
+    void listPins()
+      .then(setPins)
+      .catch(() => {});
+    return onDocsChanged(
+      "pin",
+      () =>
+        void listPins()
+          .then(setPins)
+          .catch(() => {}),
+    );
   }, []);
 
   return pins;

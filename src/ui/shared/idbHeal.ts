@@ -1,73 +1,151 @@
+import { engine } from "../../engine/index";
 import { isTauri } from "../../platform/index";
 import { takeHeal } from "./healBudget";
 
 /**
- * The severed-IndexedDB heal (Voyager's pattern, observed 2026-07-30 on
- * device): replacing the app bundle under a RUNNING webview severs every
- * IndexedDB connection. Reads then fail with "the database connection is
- * closing" or "Connection to Indexed Database server lost", the logbook
- * reads as empty, the WAL cannot hydrate, and sync cannot connect — while
- * every byte on disk is fine. Only a fresh page fixes it, so this is a
- * SANCTIONED location.reload (eslint.config.js ignore list): the page is
- * already broken in a way no instance swap can reach, because the broken
- * thing is the process's connection to storage itself.
+ * The severed-IndexedDB heal (Voyager's pattern, observed 2026-07-30 on a
+ * dev install replacing the bundle under a running webview): every
+ * IndexedDB connection severs. Reads fail with "the database connection
+ * is closing" or "Connection to Indexed Database server lost", the
+ * logbook reads as empty, the WAL cannot hydrate, and sync cannot
+ * connect — while every byte on disk is fine. Only a fresh page fixes
+ * it, so this is a SANCTIONED location.reload (eslint.config.js ignore
+ * list): the broken thing is the process's connection to storage itself.
  *
- * One reload per window, drawn from the shared heal budget (healBudget,
- * with AppBoundary's crash heal) so the stamp survives the reload and a
- * full disk cannot loop it. If storage is still dead on the reloaded boot, the
- * WAL read rejects, hydration lands on "failed", and the boot-failed
- * screen takes over — that is the escalation, and it already exists.
+ * Native only, and the gate is load-bearing SAFETY, not scoping: on the
+ * PWA the WAL is the only copy of an in-progress flight, and a wrong
+ * reload there is priced entirely differently. On iOS the Rust store
+ * replays fixes from its durable queue after any reload.
+ *
+ * Loop bounds, in order of independence: a minimum page uptime before
+ * any heal (caps every conceivable loop, even with localStorage dead), a
+ * once-per-window stamp (healBudget, shared mechanism with AppBoundary's
+ * crash heal, separate key), and a terminal count (two heals in ten
+ * minutes and this module stops healing for the session; if the WAL is
+ * dead too, the boot-failed screen is already up).
  */
 const HEALED_AT_KEY = "wingover.idbHealedAt";
+const COUNT_KEY = "wingover.idbHealCount";
+const TERMINAL_WINDOW_MS = 10 * 60_000;
+const TERMINAL_COUNT = 2;
+const MIN_UPTIME_MS = 15_000;
+const PROBE_TIMEOUT_MS = 5_000;
 
-// Both spellings WebKit uses for a severed session, either name or message.
+const bootedAt = Date.now();
+
+// Both spellings WebKit uses for a severed session. A quota error is a
+// different problem with a different owner and must never match: healing
+// on any probe failure would reload a full phone on every foreground.
 export const SEVERED_IDB =
   /database connection is closing|Indexed Database server lost/i;
 
+/**
+ * PouchDB wraps IDB errors as {name: "indexed_db_went_bad", message:
+ * "unknown", reason: <the real text>} — the severed signature hides in
+ * .reason, so read it too.
+ */
+export function describeRejection(reason: unknown): string {
+  if (reason instanceof Error) {
+    const nested = (reason as { reason?: unknown }).reason;
+    const tail = typeof nested === "string" ? ` ${nested}` : "";
+    return `${reason.name}: ${reason.message}${tail}`;
+  }
+  return String(reason);
+}
+
+/** Pure, for the drills: the terminal count over a persisted "start:count". */
+export function nextCount(
+  raw: string | null,
+  now: number,
+): { allowed: boolean; next: string } {
+  const [startRaw, countRaw] = (raw ?? "").split(":");
+  const start = Number(startRaw);
+  const count = Number(countRaw);
+  const inWindow =
+    Number.isFinite(start) &&
+    Number.isFinite(count) &&
+    now - start < TERMINAL_WINDOW_MS;
+  if (!inWindow) return { allowed: true, next: `${now}:1` };
+  if (count >= TERMINAL_COUNT) return { allowed: false, next: raw ?? "" };
+  return { allowed: true, next: `${start}:${count + 1}` };
+}
+
 function probeIdb(): Promise<void> {
   return new Promise((resolve, reject) => {
+    // A hung open (the WebKit no-event class) is NO VERDICT, never a heal:
+    // resolve on timeout so a silent instrument cannot read as healthy
+    // failure.
+    const timer = setTimeout(resolve, PROBE_TIMEOUT_MS);
     const request = indexedDB.open("wingover-idb-probe");
     request.onsuccess = () => {
+      clearTimeout(timer);
       request.result.close();
       resolve();
     };
     request.onerror = () => {
+      clearTimeout(timer);
       reject(request.error ?? new Error("idb probe failed"));
     };
   });
 }
 
 function heal(reason: unknown) {
-  // The shared budget (healBudget) enforces once-per-window across the
-  // reload, and refuses on an unusable store — a full disk must not
-  // become a reload loop.
+  // Uptime first: this bound holds even when localStorage is as dead as
+  // the storage it fronts (WebKit serves both from one connection).
+  if (Date.now() - bootedAt < MIN_UPTIME_MS) return;
+  try {
+    const verdict = nextCount(localStorage.getItem(COUNT_KEY), Date.now());
+    if (!verdict.allowed) return;
+    localStorage.setItem(COUNT_KEY, verdict.next);
+  } catch {
+    return;
+  }
   if (!takeHeal(HEALED_AT_KEY)) return;
   console.error("IndexedDB severed; healing with one reload:", reason);
   window.location.reload();
 }
 
-function describeRejection(reason: unknown): string {
-  if (reason instanceof Error) return `${reason.name}: ${reason.message}`;
-  return String(reason);
+function healIfSevered(reason: unknown) {
+  const text = describeRejection(reason);
+  const severed =
+    SEVERED_IDB.test(text) ||
+    (reason instanceof Error && reason.name === "UnknownError");
+  if (severed) heal(reason);
+}
+
+let probing = false;
+
+function probeAndHeal() {
+  if (probing) return;
+  probing = true;
+  probeIdb()
+    .catch(healIfSevered)
+    .finally(() => {
+      probing = false;
+    });
 }
 
 /**
- * Called once at app entry. Native only: the severed state comes from the
- * bundle being swapped under a live process (dev installs, App Store
- * updates), which the plain web build has no equivalent of.
+ * Called once at app entry, native only (see the header).
  */
 export function initIdbHeal() {
   if (!isTauri()) return;
-  // Proactive: the common sequence is install-while-backgrounded, so the
-  // first foreground probes the storage server and heals before the pilot
-  // finds an empty logbook.
+  // Proactive: the observed sequence is install-while-backgrounded, so
+  // the first foreground probes the storage server.
   document.addEventListener("visibilitychange", () => {
     if (document.visibilityState !== "visible") return;
-    probeIdb().catch(heal);
+    probeAndHeal();
   });
-  // Reactive: a severed connection discovered mid-session by any consumer
-  // (PouchDB, the WAL, sync) surfaces as an unhandled rejection.
+  // In flight the shell is shed and the engine absorbs every WAL
+  // rejection into STORAGE_ERROR (enqueueWal) — nothing ever goes
+  // unhandled there. The engine's public error surface is therefore the
+  // only in-flight signal; a storage error triggers a probe, and the
+  // probe's discrimination decides.
+  engine.subscribe(() => {
+    if (engine.snapshotSync().error?.code === "storage") probeAndHeal();
+  });
+  // Reactive, for the ground app's direct consumers (PouchDB reads).
   window.addEventListener("unhandledrejection", (event) => {
-    if (SEVERED_IDB.test(describeRejection(event.reason))) heal(event.reason);
+    healIfSevered(event.reason);
   });
 }

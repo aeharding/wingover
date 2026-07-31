@@ -45,6 +45,8 @@ void resume();
 // Strip the datetime names old builds minted into recorded flights; see
 // stripMintedFlightNames. Fire-and-forget, like resume: first paint never
 // waits on a data pass.
-void stripMintedFlightNames();
+// A logout destroying the instance mid-sweep is the expected rejection;
+// the sweep re-runs next launch.
+void stripMintedFlightNames().catch(() => {});
 
 createRoot(document.getElementById("root")!).render(<App />);

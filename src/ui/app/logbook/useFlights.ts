@@ -23,7 +23,11 @@ export function useFlights(): {
   });
 
   const refresh = () => {
-    void listFlights().then((flights) => setState({ flights, loaded: true }));
+    // A logout destroys the instance mid-read; the swap notifier
+    // re-renders with the fresh one, so a rejection here is expected.
+    void listFlights()
+      .then((flights) => setState({ flights, loaded: true }))
+      .catch(() => {});
   };
 
   useIonViewWillEnter(() => {
