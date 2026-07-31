@@ -130,8 +130,14 @@ export function initIdbHeal() {
   engine.subscribe(() => {
     if (engine.snapshotSync().error?.code === "storage") probeAndHeal();
   });
-  // Reactive, for the ground app's direct consumers (PouchDB reads).
+  // Reactive, for the ground app's direct consumers (PouchDB reads): a
+  // severed-looking rejection is a SUSPICION, not a verdict — a logout
+  // destroying the instance mid-read produces the same text. The probe
+  // is the verdict: during a logout it succeeds (the storage server is
+  // fine) and nothing heals; in a severed session it fails too, and its
+  // own failure is what heals. Every trigger converges on the one
+  // instrument.
   window.addEventListener("unhandledrejection", (event) => {
-    healIfSevered(event.reason);
+    if (SEVERED_IDB.test(describeRejection(event.reason))) probeAndHeal();
   });
 }

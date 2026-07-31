@@ -12,7 +12,7 @@ import { createRoot } from "react-dom/client";
 // first — collection has to run with no surface mounted at all, including
 // with the crash screen up in place of the flight surface.
 import "./engine/session";
-import { isExpectedSwapRejection, stripMintedFlightNames } from "./storage/db";
+import { stripMintedFlightNames } from "./storage/db";
 import { resume } from "./sync";
 import { installCapacitorShim, installKeyboardLayout } from "./tauri-ionic";
 import App from "./ui/App";
@@ -45,13 +45,6 @@ void resume();
 // Strip the datetime names old builds minted into recorded flights; see
 // stripMintedFlightNames. Fire-and-forget, like resume: first paint never
 // waits on a data pass.
-// Caught and LOGGED, never unhandled: a logout destroying the instance
-// mid-sweep is expected (the sweep re-runs next launch), and an unhandled
-// rejection would read to idbHeal as a severed session.
-void stripMintedFlightNames().catch((error) => {
-  if (isExpectedSwapRejection(error)) return;
-  console.error("minted-name sweep failed:", error);
-  throw error;
-});
+void stripMintedFlightNames();
 
 createRoot(document.getElementById("root")!).render(<App />);

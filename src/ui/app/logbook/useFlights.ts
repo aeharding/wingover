@@ -1,12 +1,7 @@
 import { useIonViewWillEnter } from "@ionic/react";
 import { useEffect, useState } from "react";
 
-import {
-  type Flight,
-  isExpectedSwapRejection,
-  listFlights,
-  onDocsChanged,
-} from "../../../storage/db";
+import { type Flight, listFlights, onDocsChanged } from "../../../storage/db";
 
 /**
  * The logbook, live: loaded on view entry and again whenever a flight doc
@@ -28,17 +23,7 @@ export function useFlights(): {
   });
 
   const refresh = () => {
-    // Caught and LOGGED, never unhandled: a logout destroys the instance
-    // mid-read (expected; the swap notifier re-renders with the fresh
-    // one), and an unhandled rejection here would read to idbHeal as a
-    // severed session during the one flow that must never reload.
-    void listFlights()
-      .then((flights) => setState({ flights, loaded: true }))
-      .catch((error) => {
-        if (isExpectedSwapRejection(error)) return;
-        console.error("flight list read failed:", error);
-        throw error;
-      });
+    void listFlights().then((flights) => setState({ flights, loaded: true }));
   };
 
   useIonViewWillEnter(() => {

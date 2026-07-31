@@ -14,7 +14,6 @@ import { getCurrentPosition } from "../../../platform/currentPosition";
 import {
   deleteAllPins,
   deletePin,
-  isExpectedSwapRejection,
   listPins,
   onDocsChanged,
   type Pin,
@@ -92,17 +91,7 @@ export default function PlanPage() {
   );
 
   function loadPlan() {
-    // Caught and LOGGED, never unhandled: a logout destroys the instance
-    // mid-read (expected; the swap notifier re-renders with the fresh
-    // one), and an unhandled rejection here would read to idbHeal as a
-    // severed session during the one flow that must never reload.
-    void listPins()
-      .then(setPins)
-      .catch((error) => {
-        if (isExpectedSwapRejection(error)) return;
-        console.error("pin list read failed:", error);
-        throw error;
-      });
+    listPins().then(setPins);
   }
 
   // Will-enter for the phone shell; a mount effect for the desktop shell

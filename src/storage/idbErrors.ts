@@ -1,7 +1,6 @@
 /**
- * Classifying IndexedDB-layer failures, headless so both the storage
- * layer (db.ts's swap classifier) and the UI shell (idbHeal) share one
- * vocabulary.
+ * The severed-IndexedDB signatures, headless (idbHeal consumes them;
+ * nothing here imports React or the platform).
  */
 
 // Both spellings WebKit uses for a severed storage session. A quota

@@ -1,11 +1,6 @@
 import { useEffect, useState } from "react";
 
-import {
-  isExpectedSwapRejection,
-  listPins,
-  onDocsChanged,
-  type Pin,
-} from "../../storage/db";
+import { listPins, onDocsChanged, type Pin } from "../../storage/db";
 
 /**
  * The planned route, for the idle-screen distance. Reloaded on every entry
@@ -19,28 +14,8 @@ export function usePlannedPins(): Pin[] {
   const [pins, setPins] = useState<Pin[]>([]);
 
   useEffect(() => {
-    // Caught and LOGGED, never unhandled: a logout destroys the instance
-    // mid-read (expected; the swap notifier re-renders with the fresh
-    // one), and an unhandled rejection here would read to idbHeal as a
-    // severed session during the one flow that must never reload.
-    void listPins()
-      .then(setPins)
-      .catch((error) => {
-        if (isExpectedSwapRejection(error)) return;
-        console.error("pin list read failed:", error);
-        throw error;
-      });
-    return onDocsChanged(
-      "pin",
-      () =>
-        void listPins()
-          .then(setPins)
-          .catch((error) => {
-            if (isExpectedSwapRejection(error)) return;
-            console.error("pin list read failed:", error);
-            throw error;
-          }),
-    );
+    void listPins().then(setPins);
+    return onDocsChanged("pin", () => void listPins().then(setPins));
   }, []);
 
   return pins;

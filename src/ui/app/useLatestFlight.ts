@@ -1,11 +1,6 @@
 import { useSyncExternalStore } from "react";
 
-import {
-  type Flight,
-  isExpectedSwapRejection,
-  listFlights,
-  onDocsChanged,
-} from "../../storage/db";
+import { type Flight, listFlights, onDocsChanged } from "../../storage/db";
 
 // A module-level store, not per-hook state: the idle screen has TWO
 // consumers of the newest flight (the surface's facts and the frame's
@@ -23,11 +18,7 @@ function reload() {
       latest = flights[0] ?? null;
       listeners.forEach((notify) => notify());
     })
-    .catch((error) => {
-      if (isExpectedSwapRejection(error)) return;
-      console.error("flight list read failed:", error);
-      throw error;
-    });
+    .catch(() => {});
 }
 
 function subscribe(listener: () => void): () => void {

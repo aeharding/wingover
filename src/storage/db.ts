@@ -6,11 +6,6 @@ import {
   type FlightStats,
   haversineMeters,
 } from "../flight/stats";
-import {
-  describeRejection,
-  isDestroyedInstance,
-  SEVERED_IDB,
-} from "./idbErrors";
 
 export interface Flight {
   id: string;
@@ -254,37 +249,14 @@ export function onDocsChanged(
  * end, so lists re-read (empty) in place — logout never reloads the page.
  */
 export async function resetSyncedData(): Promise<void> {
-  swapEndedAt = Number.MAX_SAFE_INTEGER;
   changesFeed?.cancel();
   changesFeed = null;
   await db.destroy();
   db = open();
-  swapEndedAt = Date.now();
   if (changeListeners.size > 0) ensureChangesFeed();
   for (const listeners of changeListeners.values()) {
     for (const listener of listeners) listener();
   }
-}
-
-// MAX_SAFE_INTEGER while a swap is in progress; a timestamp after it
-// completes (reads dispatched pre-swap can reject a beat later).
-let swapEndedAt = 0;
-const SWAP_GRACE_MS = 5_000;
-
-/**
- * Whether a read rejection is the instance swap speaking, not the
- * storage layer failing. Two shapes: PouchDB's own post-destroy guard
- * (distinguishable by type), and the narrow race where a read already
- * inside IndexedDB when destroy() lands surfaces the raw
- * connection-closing error — the same TEXT a severed session produces,
- * so only the swap-window context can tell them apart.
- */
-export function isExpectedSwapRejection(reason: unknown): boolean {
-  if (isDestroyedInstance(reason)) return true;
-  const inWindow =
-    swapEndedAt === Number.MAX_SAFE_INTEGER ||
-    Date.now() - swapEndedAt < SWAP_GRACE_MS;
-  return inWindow && SEVERED_IDB.test(describeRejection(reason));
 }
 
 /**
