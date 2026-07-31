@@ -120,9 +120,14 @@ export async function appleSubscriptionState(): Promise<
 > {
   const jws = await probeEntitlementJWS();
   if (!jws) return null;
-  const expiresAt = jwsExpiresAt(jws);
-  if (expiresAt === null) return null;
-  return expiresAt > Date.now() ? "active" : "expired";
+  const payload = decodeJwsPayload(jws);
+  // Undecodable = no verdict; decodable without an expiry = a
+  // transaction that is not an active sub, which reads "expired" (the
+  // pre-rename behavior — null here would show such a pilot the pitch).
+  if (payload === null) return null;
+  return payload.expiresDate !== undefined && payload.expiresDate > Date.now()
+    ? "active"
+    : "expired";
 }
 
 /**
@@ -132,13 +137,16 @@ export async function appleSubscriptionState(): Promise<
  * not trusting it. null = undecodable or no expiry field.
  */
 export function jwsExpiresAt(jws: string): number | null {
+  return decodeJwsPayload(jws)?.expiresDate ?? null;
+}
+
+function decodeJwsPayload(jws: string): { expiresDate?: number } | null {
   try {
     const part = jws.split(".")[1] ?? "";
     const base64 = part.replace(/-/g, "+").replace(/_/g, "/");
-    const payload = JSON.parse(
+    return JSON.parse(
       atob(base64 + "=".repeat((4 - (base64.length % 4)) % 4)),
     ) as { expiresDate?: number };
-    return payload.expiresDate ?? null;
   } catch {
     return null;
   }

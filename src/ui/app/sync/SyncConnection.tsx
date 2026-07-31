@@ -5,7 +5,7 @@ import {
   useIonAlert,
 } from "@ionic/react";
 import { desktopOutline, logoApple } from "ionicons/icons";
-import { useState, useSyncExternalStore } from "react";
+import { useEffect, useState, useSyncExternalStore } from "react";
 
 import { isTauri } from "../../../platform/index";
 import * as sync from "../../../sync/index";
@@ -13,7 +13,6 @@ import { cx } from "../../shared/cx";
 import { BusyLabel } from "./BusyLabel";
 import { describe, type SyncTone } from "./describe";
 import { resolveSyncView } from "./resolveSyncView";
-import { SheetHeader } from "./SheetHeader";
 import {
   DormantSubscribe,
   manageSubscription,
@@ -34,7 +33,7 @@ import styles from "./sync.module.css";
 // A semantic tone → the card's status-label modifier class. The card is
 // the Settings row expanded (one tap), so "on" paints the SAME green the
 // row uses; a lapse amber, an error red; off/neutral ride the default.
-export const SHEET_TONE_CLASS: Record<SyncTone, string> = {
+const SHEET_TONE_CLASS: Record<SyncTone, string> = {
   on: styles.stateOn,
   off: "",
   warn: styles.stateReadonly,
@@ -56,6 +55,14 @@ export function StatusBlock({
   tone: SyncTone;
   testId?: string;
 }) {
+  // A minute tick: the detail can be a relative time ("just now"), and a
+  // card held open must not freeze it into a lie. UI-local timer; the
+  // engine holds none.
+  const [, setTick] = useState(0);
+  useEffect(() => {
+    const timer = setInterval(() => setTick((n) => n + 1), 60_000);
+    return () => clearInterval(timer);
+  }, []);
   return (
     <div className={cx(styles.state, SHEET_TONE_CLASS[tone])}>
       <span className={styles.stateLabel} data-testid={testId}>
@@ -102,10 +109,17 @@ export function AppleSignInButton({
       onClick={onClick}
       data-testid={testId}
     >
-      <BusyLabel busy={busy}>
-        <IonIcon slot="start" icon={logoApple} aria-hidden="true" />
-        {label}
-      </BusyLabel>
+      {/* The icon must be a DIRECT child to reach the button's start
+          slot; nested in a span it lands unslotted, mis-sized and
+          un-spaced. Hidden (not removed) while busy so the layout
+          holds. */}
+      <IonIcon
+        slot="start"
+        icon={logoApple}
+        aria-hidden="true"
+        className={cx(busy && styles.busyHiddenIcon)}
+      />
+      <BusyLabel busy={busy}>{label}</BusyLabel>
     </IonButton>
   );
 }
@@ -155,7 +169,10 @@ export function Connected({
   // the web's Log out has its own flush-then-decide machinery (useLogOut)
   // and an extra always-on confirm would train click-through (SYNC-UX.md).
   function confirmTurnOff() {
-    if (!isTauri()) {
+    // Web Log out has flush-then-decide (useLogOut); a dormant native
+    // account has no storage for the copy below to be true about, and
+    // its Sign out was never confirmed before the confirm landed.
+    if (!isTauri() || v.showDormantSubscribe) {
       onTurnOff();
       return;
     }
@@ -342,6 +359,19 @@ export function LinkAccountPage({
   const purchase = context === "purchase";
   const computer = !purchase;
 
+  function renderBack() {
+    return (
+      <IonButton
+        expand="block"
+        fill="clear"
+        onClick={pop}
+        data-testid="link-page-back"
+      >
+        Back
+      </IonButton>
+    );
+  }
+
   function renderStatus() {
     if (!purchase) return null;
     return (
@@ -374,17 +404,7 @@ export function LinkAccountPage({
           busy={busy}
           testId="link-page-link"
         />
-        {purchase && (
-          <IonButton
-            fill="clear"
-            size="small"
-            className={styles.quietAction}
-            onClick={pop}
-            data-testid="link-page-skip"
-          >
-            Skip for now
-          </IonButton>
-        )}
+        {renderBack()}
         {purchase && (
           <p className={styles.finePrint}>
             You can always do this later from the Sync screen.
@@ -396,20 +416,6 @@ export function LinkAccountPage({
 
   return (
     <>
-      <SheetHeader
-        title={purchase ? "You're synced" : "On your computer"}
-        onBack={pop}
-        action={
-          <IonButton
-            fill="clear"
-            strong
-            onClick={pop}
-            data-testid="link-page-done"
-          >
-            Done
-          </IonButton>
-        }
-      />
       <div className={styles.loginBody}>
         {renderStatus()}
 
@@ -422,9 +428,12 @@ export function LinkAccountPage({
         )}
 
         {linked ? (
-          <p className={styles.loginLede} data-testid="link-page-linked">
-            Linked. Sign in with Apple at wingover.app on any computer.
-          </p>
+          <>
+            <p className={styles.loginLede} data-testid="link-page-linked">
+              Linked. Sign in with Apple at wingover.app on any computer.
+            </p>
+            {renderBack()}
+          </>
         ) : (
           renderLinkOffer()
         )}

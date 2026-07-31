@@ -19,10 +19,9 @@ import settings from "../pages/settings.module.css";
 import styles from "./sync.module.css";
 
 /**
- * The own-server form — the Log In rail's page (SYNC-UX.md: self-host is a
- * login), but pushable from either sheet: the Log In doors own it, and the
- * Subscription pitch's "Prefer to self-host?" link pushes it in place rather
- * than bouncing the pilot through a second modal.
+ * The own-server form — the Log In rail's page (SYNC-UX.md: self-host is
+ * a login). A real four-field form gets a real bottom sheet of its own,
+ * presented over the floating card from More options on any view.
  */
 export function SelfHostPage({
   onDismiss,
@@ -52,8 +51,9 @@ export function SelfHostPage({
   }
 
   // Ionic's own docs: the autofocus attribute "may not be sufficient", and
-  // inside a modal you should setFocus after the presentation settles. This is
-  // a nav push inside a modal, so wait out the transition rather than race it.
+  // inside a modal you should setFocus after the presentation settles. This
+  // sheet presents over the card, so wait out the transition rather than
+  // race it.
   useEffect(() => {
     const timer = setTimeout(() => void serverInput.current?.setFocus(), 400);
     return () => clearTimeout(timer);

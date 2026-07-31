@@ -60,9 +60,11 @@ export function PlanGate({
 export function PlanChoices({
   products,
   onPurchased,
+  onBusyChange,
 }: {
   products: sync.StoreProduct[];
   onPurchased: () => void;
+  onBusyChange?: (busy: boolean) => void;
 }) {
   const [buying, setBuying] = useState<sync.SubscriptionTerm | null>(null);
   const [problem, setProblem] = useState<string | null>(null);
@@ -71,6 +73,7 @@ export function PlanChoices({
 
   async function buy(term: sync.SubscriptionTerm) {
     setBuying(term);
+    onBusyChange?.(true);
     setProblem(null);
     try {
       await sync.purchase(term);
@@ -86,6 +89,7 @@ export function PlanChoices({
       );
     } finally {
       setBuying(null);
+      onBusyChange?.(false);
     }
   }
 
@@ -154,12 +158,20 @@ export function ChoosePlanPage({
 export function SubscribeArea({
   products,
   onPurchased,
+  onBusyChange,
 }: {
   products: sync.StoreProduct[];
   onPurchased: () => void;
+  onBusyChange?: (busy: boolean) => void;
 }) {
   if (byTerm(products, "monthly"))
-    return <PlanChoices products={products} onPurchased={onPurchased} />;
+    return (
+      <PlanChoices
+        products={products}
+        onPurchased={onPurchased}
+        onBusyChange={onBusyChange}
+      />
+    );
   if (isTauri())
     return (
       <IonButton expand="block" disabled data-testid="sync-subscribe">
@@ -256,9 +268,10 @@ export function TermsLinks() {
 }
 
 /**
- * The pitch's legal footer: links only. The purchase disclosure (prices,
- * period, auto-renew) moved to ChoosePlanPage, the one place a purchase
- * happens — App Review's paywall metadata rides with the paywall.
+ * The pitch's legal footer when NO plans render there (the web, or iOS
+ * before products load): the plan area carries the full disclosure when
+ * it exists, but the terms and privacy links must never vanish from the
+ * pitch entirely (SYNC-UX.md).
  */
 export function FinePrint({ showTerms }: { showTerms: boolean }) {
   if (!showTerms) return null;
@@ -267,4 +280,9 @@ export function FinePrint({ showTerms }: { showTerms: boolean }) {
       <TermsLinks />
     </p>
   );
+}
+
+/** Whether the pitch will render inline plans (and their disclosure). */
+export function hasPlans(products: sync.StoreProduct[]): boolean {
+  return byTerm(products, "monthly") !== undefined;
 }

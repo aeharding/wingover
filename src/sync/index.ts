@@ -187,20 +187,30 @@ export async function purchase(
   term: SubscriptionTerm = "monthly",
 ): Promise<void> {
   let purchased = await purchaseJWS(SUBSCRIPTION_PRODUCT_IDS[term]);
-  // Sandbox can answer .success with the STALE expired transaction, without
-  // ever presenting a sheet, when an unfinished copy of it sits on the
-  // queue (observed on-device 2026-07-30: Resubscribe spun, "succeeded",
-  // popped home still lapsed, no Apple UI). Resolving finished that stale
-  // copy, so ONE retry presents the real sheet. A genuine purchase can
-  // never return an already-expired transaction, so this cannot double-
-  // charge; a second stale answer falls through to the probe as before.
+  // The supporter guard (SYNC-UX.md, junction 2): a pilot already synced to
+  // their own server bought support, not a migration — their login is
+  // theirs, and no retry sheet should be shown for a transaction the
+  // guard is about to park.
+  if (replicate.currentAccount()?.kind === "manual") return;
+  // Sandbox can answer .success with the STALE expired transaction and no
+  // sheet when an unfinished copy sits on the queue (observed on-device
+  // 2026-07-30: Resubscribe spun, "succeeded", still lapsed, no Apple
+  // UI). Resolving finished that copy, so one retry presents the real
+  // sheet. The retry is best-effort ONLY: by this point a real purchase
+  // may already exist, so a dismissed or pending retry must fall through
+  // to the probe below, never throw a paid pilot back to the pitch. The
+  // expiry read compares Apple's stamp to the device clock; skew can
+  // re-present the sheet on a good purchase, and the fall-through is
+  // what makes that harmless.
   const staleExpiry = jwsExpiresAt(purchased);
   if (staleExpiry !== null && staleExpiry <= Date.now()) {
-    purchased = await purchaseJWS(SUBSCRIPTION_PRODUCT_IDS[term]);
+    try {
+      purchased = await purchaseJWS(SUBSCRIPTION_PRODUCT_IDS[term]);
+    } catch {
+      // Dismissed/pending retry: the probe decides from what StoreKit
+      // actually holds.
+    }
   }
-  // The supporter guard (SYNC-UX.md, junction 2): a pilot already synced to
-  // their own server bought support, not a migration — their login is theirs.
-  if (replicate.currentAccount()?.kind === "manual") return;
   // The purchase sheet can hand back a STALE transaction when Apple decides
   // the sub is already owned (observed: Resubscribe on a lapsed sandbox sub
   // returned the original purchase while currentEntitlements held the fresh

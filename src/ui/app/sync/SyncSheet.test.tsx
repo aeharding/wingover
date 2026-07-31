@@ -76,7 +76,9 @@ describe("AppleSignInButton", () => {
     );
     expect(html).toContain('expand="block"'); // the full-width white button
     expect(html).toContain("Sign in with Apple");
-    expect(html).toContain("ion-icon"); // the Apple glyph
+    // The glyph must be a DIRECT slotted child of the button: nested in a
+    // span it lands unslotted, mis-sized and un-spaced (measured).
+    expect(html).toMatch(/<ion-button[^>]*>\s*<ion-icon[^>]*slot="start"/);
   });
 
   test("quiet variant: a plain text link, no glyph", () => {

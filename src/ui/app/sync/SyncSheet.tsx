@@ -20,6 +20,8 @@ import {
 } from "./SyncConnection";
 import {
   ChoosePlanPage,
+  FinePrint,
+  hasPlans,
   manageSubscription,
   SubscribeArea,
 } from "./SyncSubscription";
@@ -66,8 +68,11 @@ export function SyncSheet({ onClose }: { onClose: () => void }) {
   const account = useSyncExternalStore(sync.subscribe, sync.currentAccount);
   const [view, setView] = useState<SheetView>("home");
   // Self Hosted is a real form: it gets a normal bottom sheet of its own,
-  // not a squeeze into the floating card.
+  // not a squeeze into the floating card. purchaseBusy lifts PlanChoices'
+  // in-flight state so Sign in and Restore go quiet during a purchase —
+  // two concurrent enables must not race the credential store.
   const [selfHostOpen, setSelfHostOpen] = useState(false);
+  const [purchaseBusy, setPurchaseBusy] = useState(false);
   const [busy, setBusy] = useState(false);
   const [problem, setProblem] = useState<string | null>(null);
   const { products, appleSub, refreshAppleSub } = useStoreFacts();
@@ -151,9 +156,10 @@ export function SyncSheet({ onClose }: { onClose: () => void }) {
         {nothing ? (
           <Pitch
             products={products}
-            busy={busy}
+            busy={busy || purchaseBusy}
             problem={problem}
             onPurchased={afterPurchase}
+            onPurchaseBusy={setPurchaseBusy}
             onSignIn={() => run(() => sync.signIn())}
             onRestore={() =>
               run(async () => {
@@ -191,13 +197,16 @@ export function SyncSheet({ onClose }: { onClose: () => void }) {
     );
   }
 
-  // The badge is the sync status speaking from the card's crown: the same
-  // tones the Settings row paints, a checkmark when all is well.
+  // The badge is the sync status speaking from the card's crown, in the
+  // SAME tones the Settings row paints two pixels behind it: green only
+  // when things are actually good. Neutral and off are quiet gray — a
+  // green crown over a red "Off" row was the exact disagreement the
+  // shared tone derivation exists to prevent.
   function renderBadge() {
     const tone = nothing ? "neutral" : describe(status).tone;
     const badgeClass = {
       on: styles.badge,
-      neutral: styles.badge,
+      neutral: cx(styles.badge, styles.badgeOff),
       off: cx(styles.badge, styles.badgeOff),
       warn: cx(styles.badge, styles.badgeWarn),
       error: cx(styles.badge, styles.badgeError),
@@ -265,6 +274,7 @@ function Pitch({
   busy,
   problem,
   onPurchased,
+  onPurchaseBusy,
   onSignIn,
   onRestore,
   onSelfHost,
@@ -273,6 +283,7 @@ function Pitch({
   busy: boolean;
   problem: string | null;
   onPurchased: () => void;
+  onPurchaseBusy: (busy: boolean) => void;
   onSignIn: () => void;
   onRestore: () => void;
   onSelfHost: () => void;
@@ -293,8 +304,14 @@ function Pitch({
       {problem && <p className={styles.errorMessage}>{problem}</p>}
 
       {/* The plans live right here: a fresh pilot taps Sync, taps a
-          price, done. */}
-      <SubscribeArea products={products} onPurchased={onPurchased} />
+          price, done. When no plans render (the web; products not yet
+          served), the legal links must still exist on the pitch. */}
+      <SubscribeArea
+        products={products}
+        onPurchased={onPurchased}
+        onBusyChange={onPurchaseBusy}
+      />
+      <FinePrint showTerms={!hasPlans(products)} />
 
       {/* Sign in is a door, not a place: quiet on iOS (a web-born account
           arriving on a phone), the prominent way back for a subscriber on the

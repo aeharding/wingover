@@ -64,16 +64,20 @@ Delete local data (always confirmed: nothing backs it up).
 One modal, every view derived from state, nothing to operate that the state
 doesn't earn:
 
-- **Nothing yet** — the pitch. iOS: **Subscribe** is primary (no login exists
-  or is needed — the transaction is the identity); it pushes the plan page
-  IN PLACE, where the choice lives with full context — two priced buttons
-  resting on the sheet made the pilot price-compare before deciding to buy
-  at all. **Sign in with Apple** sits beneath it for an account born
-  elsewhere (the web/Stripe future), Restore Purchases and **Self Hosted** as quiet links. Web: Sign in with Apple is primary — it is the
-  account door, and step one of web checkout once that exists — over the
-  Self Hosted link. The pitch keeps the terms/privacy links; the
-  paywall fine print (price, period, auto-renew) lives on the plan page,
-  the one place a purchase happens.
+- **Nothing yet** — the pitch, on the floating card. iOS: the PLANS are
+  primary, inline — a fresh pilot taps Sync, taps a price, and is in
+  StoreKit (two taps was the point; the card's badge, title, and
+  description give the prices the context bare buttons lacked). **Sign
+  in with Apple** sits beneath for an account born elsewhere (the
+  web/Stripe future), Restore Purchases and More options (holding Self
+  Hosted) as quiet links. Web: Sign in with Apple is primary — it is the
+  account door, and step one of web checkout once that exists. The
+  inline plan area carries the paywall fine print (price, period,
+  auto-renew, terms, privacy); when no plans render (the web, or iOS
+  before products load) the terms and privacy links still render on the
+  pitch. The lapse and dormant states instead offer a single verb that
+  opens the plan view with framing — those pilots are mid-context, not
+  shopping.
 - **Connected** — status headline (On, last synced) + Turn off sync (its
   what-it-does fine print rides the confirm, at the moment it matters, not
   as a resting paragraph) + **More options**, an action sheet holding "Use
@@ -96,11 +100,12 @@ doesn't earn:
   standing opt-in reconnects at launch, so only an explicit Turn off lands
   here.
 
-Self Hosted pushes the CouchDB form IN PLACE — a nav push inside the
-one sheet with a back chevron, never a second modal. It lives under More
-options on every view, the pitch included (Alex, 2026-07-30): one tap in is
-still discoverable, and the free path stays real — removing it from reach
-entirely is the moment honest FOSS monetization stops being honest.
+Self Hosted opens a normal bottom sheet of its own over the card (a real
+four-field form deserves a real sheet; Cancel and Connect live in its
+header). It lives under More options on every view, the pitch included
+(Alex, 2026-07-30): one tap in is still discoverable, and the free path
+stays real — removing it from reach entirely is the moment honest FOSS
+monetization stops being honest.
 
 ## Junctions — the only four places the rails touch
 

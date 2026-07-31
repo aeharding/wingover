@@ -52,7 +52,7 @@
   padding: 8px;
   border-radius: 50%;
   font-size: 3em;
-  color: #fff;
+  color: color(display-p3 1 1 1);
   background: var(--status-good);
 }
 
@@ -68,17 +68,30 @@
   background: var(--ion-color-medium);
 }
 
+/* Clears the 44pt platform minimum (gloves-first, STEERING) via
+   padding; the visible circle stays small. */
 .cardClose {
   position: absolute;
-  top: 8px;
-  right: 8px;
+  top: 4px;
   display: flex;
-  padding: 5px;
-  border-radius: 50%;
+  align-items: center;
+  justify-content: center;
+  min-width: 44px;
+  min-height: 44px;
   appearance: none;
-  background: rgba(180, 180, 180, 0.2);
+  background: none;
   color: var(--ion-color-medium);
   font-size: 1.3em;
+}
+
+.cardClose {
+  right: 4px;
+}
+
+.cardClose ion-icon {
+  padding: 5px;
+  border-radius: 50%;
+  background: color(display-p3 0.7 0.7 0.7 / 0.2);
 }
 
 .cardTitle {
@@ -155,19 +168,6 @@
   box-sizing: border-box;
 }
 
-/* --ion-text-color, NOT --ion-color-light: the dark palette redefines the
-   "light" step to a dark shade, so it vanishes on exactly the background it
-   sounds like it belongs on. */
-.headline {
-  margin: 0 0 0.5rem;
-  font-size: 1.4em;
-  font-weight: 700;
-  line-height: 1.14;
-  letter-spacing: -0.02em;
-  text-wrap: balance;
-  color: var(--ion-text-color);
-}
-
 /* Web pitch: the sentence that stands in for the StoreKit-only buy button —
    what sync is and where to get it. Sits where the buttons would. */
 .pitchNote {
@@ -175,30 +175,6 @@
   font-size: 1rem;
   line-height: 1.5;
   color: var(--ion-text-color);
-}
-
-/* Centred as a block, left-aligned inside: centred bullets are unreadable,
-   and a ragged left edge is what makes a list stop scanning as a list. */
-.reasons {
-  list-style: none;
-  margin: 0 auto 1.75rem;
-  padding: 0;
-  display: inline-block;
-  text-align: left;
-
-  li {
-    display: flex;
-    align-items: center;
-    gap: 0.75rem;
-    margin-bottom: 0.75rem;
-    color: var(--ion-text-color);
-  }
-
-  ion-icon {
-    font-size: 1.375rem;
-    color: var(--ion-color-primary);
-    flex-shrink: 0;
-  }
 }
 
 /* Sub-pages pushed inside the sheet (Link Account, SelfHost) share the state
@@ -306,6 +282,12 @@
   height: 1.2em;
 }
 
+/* A slotted icon sits outside busyLabel's overlay; hide it while busy,
+   keeping its box so the button holds size. */
+.busyHiddenIcon {
+  visibility: hidden;
+}
+
 /* Quiet, secondary actions (Restore Purchases, Manage subscription): present
    for the pilot who is looking for them, silent for everyone else. */
 .quietAction {
@@ -329,26 +311,6 @@
     --background-focused: #e6e6e6;
     --background-hover: #e6e6e6;
     --color: #000;
-  }
-}
-
-/* The self-host form's grouped-card backdrop: the same values the
-   Settings pages resolve to (settings.module.css), inlined because this
-   is a plain div, not an ion-content that could read --background. */
-.formBody {
-  background: #f2f2f7;
-  padding-bottom: 0.25rem;
-
-  ion-list:global(.list-inset) {
-    --ion-item-background: #ffffff;
-  }
-
-  :root:global(.ion-palette-dark) & {
-    background: var(--ion-background-color);
-
-    ion-list:global(.list-inset) {
-      --ion-item-background: var(--ion-color-step-100, #1c1c1e);
-    }
   }
 }
 
