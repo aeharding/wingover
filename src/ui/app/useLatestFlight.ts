@@ -18,7 +18,7 @@ function reload() {
       latest = flights[0] ?? null;
       listeners.forEach((notify) => notify());
     })
-    .catch(() => {});
+    .catch((error) => console.error("flight list read failed:", error));
 }
 
 function subscribe(listener: () => void): () => void {

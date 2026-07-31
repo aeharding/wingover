@@ -23,11 +23,13 @@ export function useFlights(): {
   });
 
   const refresh = () => {
-    // A logout destroys the instance mid-read; the swap notifier
-    // re-renders with the fresh one, so a rejection here is expected.
+    // Caught and LOGGED, never unhandled: a logout destroys the instance
+    // mid-read (expected; the swap notifier re-renders with the fresh
+    // one), and an unhandled rejection here would read to idbHeal as a
+    // severed session during the one flow that must never reload.
     void listFlights()
       .then((flights) => setState({ flights, loaded: true }))
-      .catch(() => {});
+      .catch((error) => console.error("flight list read failed:", error));
   };
 
   useIonViewWillEnter(() => {

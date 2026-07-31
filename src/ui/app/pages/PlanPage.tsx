@@ -91,11 +91,13 @@ export default function PlanPage() {
   );
 
   function loadPlan() {
-    // A logout destroys the instance mid-read; the swap notifier
-    // re-renders with the fresh one, so a rejection here is expected.
+    // Caught and LOGGED, never unhandled: a logout destroys the instance
+    // mid-read (expected; the swap notifier re-renders with the fresh
+    // one), and an unhandled rejection here would read to idbHeal as a
+    // severed session during the one flow that must never reload.
     void listPins()
       .then(setPins)
-      .catch(() => {});
+      .catch((error) => console.error("pin list read failed:", error));
   }
 
   // Will-enter for the phone shell; a mount effect for the desktop shell
