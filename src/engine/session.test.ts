@@ -14,7 +14,7 @@ const dbMock = vi.hoisted(() => ({
   saveFlight: vi.fn(),
   inheritedLaunchName: vi.fn(),
 }));
-const localMock = vi.hoisted(() => ({ getBooleanSetting: vi.fn() }));
+const localMock = vi.hoisted(() => ({ getDetectLanding: vi.fn() }));
 
 // A driveable engine, not a bag of spies: collection is wired to the change
 // signal, so the test has to be able to fire one. getSnapshot always resolves
@@ -76,13 +76,13 @@ function pin(over: Partial<Pin> = {}): Pin {
 const startArg = () =>
   engineMock.engine.start.mock.calls[0]?.[0] as {
     waypoints: unknown[];
-    autoEnd: boolean;
+    detectLanding: boolean;
   };
 
 describe("startFlight", () => {
   beforeEach(() => {
     vi.clearAllMocks();
-    localMock.getBooleanSetting.mockResolvedValue(true);
+    localMock.getDetectLanding.mockResolvedValue(true);
     engineMock.engine.start.mockResolvedValue(undefined);
   });
 
@@ -127,17 +127,13 @@ describe("startFlight", () => {
     expect(startArg().waypoints).toEqual([]);
   });
 
-  it("copies the autoEnd setting the flight takes off with (default on)", async () => {
+  it("copies the detect-landing setting the flight takes off with (default on)", async () => {
     dbMock.listPins.mockResolvedValue([]);
-    localMock.getBooleanSetting.mockResolvedValue(false);
+    localMock.getDetectLanding.mockResolvedValue(false);
 
     await startFlight();
 
-    expect(localMock.getBooleanSetting).toHaveBeenCalledWith(
-      "autoEndFlight",
-      true,
-    );
-    expect(startArg().autoEnd).toBe(false);
+    expect(startArg().detectLanding).toBe(false);
   });
 });
 

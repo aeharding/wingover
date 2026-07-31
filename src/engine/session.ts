@@ -7,7 +7,7 @@ import {
   type Pin,
   saveFlight,
 } from "../storage/db";
-import { getBooleanSetting } from "../storage/local";
+import { getDetectLanding } from "../storage/local";
 import { engine } from "./index";
 import type { Fix, LngLat, Waypoint } from "./types";
 
@@ -232,14 +232,14 @@ function toWaypoint(pin: Pin): Waypoint {
 // reusable template for the NEXT flight; an active flight owns its
 // waypoints and never re-reads the plan (STEERING.md).
 export async function startFlight(): Promise<void> {
-  const [pins, autoEnd] = await Promise.all([
+  const [pins, detectLanding] = await Promise.all([
     listPins(),
-    getBooleanSetting("autoEndFlight", true),
+    getDetectLanding(),
   ]);
   await engine.start({
     waypoints: pins.map(toWaypoint),
     // The session copies the setting at start, like the waypoint plan:
     // an active flight keeps the behavior it took off with.
-    autoEnd,
+    detectLanding,
   });
 }

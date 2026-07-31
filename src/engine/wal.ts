@@ -9,8 +9,14 @@ export interface WalSession {
   // flight exactly like an expired landing grace — derived, durable,
   // collected by the same persist-first path.
   stoppedAt?: number | null;
-  // Flight-scoped, copied from settings at start (like waypoints): grace
-  // expiry auto-finalizes only when true. Absent means true.
+  // Flight-scoped, copied from settings at start (like waypoints): landing
+  // detection auto-finalizes only when true. Absent means true.
+  detectLanding?: boolean;
+  // The same fact under its pre-rename name: a live flight's WAL crosses
+  // app updates in BOTH directions (Watchtower can roll the beta back).
+  // readWal() folds it into detectLanding; rehydrated sessions keep it and
+  // re-journal it, inert, so a rolled-back build still reads the opt-out.
+  // Remove once a rollback target without this shim is unthinkable.
   autoEnd?: boolean;
   waypoints?: Waypoint[];
   // Mid-flight ad-hoc nav targets. Append-only membership + an insertion
@@ -82,7 +88,9 @@ export async function readWal(): Promise<{
     tx.oncomplete = () => {
       db.close();
       resolve({
-        session: (sessionRequest.result as WalSession | undefined) ?? null,
+        session: adoptLegacyFields(
+          (sessionRequest.result as WalSession | undefined) ?? null,
+        ),
         fixes: (fixesRequest.result as Fix[]) ?? [],
       });
     };
@@ -100,6 +108,17 @@ export async function readWal(): Promise<{
       reject(tx.error ?? new Error("wal read aborted"));
     };
   });
+}
+
+// Journals written before the detectLanding rename carry the fact as
+// autoEnd; fold it in at the read boundary so the engine speaks one name.
+// The legacy field rides along untouched (see its declaration).
+function adoptLegacyFields(session: WalSession | null): WalSession | null {
+  if (!session) return null;
+  if (session.detectLanding !== undefined || session.autoEnd === undefined) {
+    return session;
+  }
+  return { ...session, detectLanding: session.autoEnd };
 }
 
 export function writeWalSession(session: WalSession): Promise<void> {

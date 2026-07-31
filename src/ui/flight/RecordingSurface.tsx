@@ -72,7 +72,7 @@ export default function RecordingSurface({
   }
 
   function landingAction() {
-    if (!snapshot.autoEnd) return "Stop";
+    if (!snapshot.detectLanding) return "Stop";
     return `Stop (${landingCountdown()})`;
   }
 

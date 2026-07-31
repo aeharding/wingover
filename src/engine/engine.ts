@@ -156,7 +156,7 @@ export class Engine implements EngineImpl {
   // ad-hoc), rebuilt from the buffer on hydration (rebuildReachState) and
   // never journaled, so no session write can lose it. takeoffIndex has the
   // same twin (rebuildTakeoff). landingIndex does NOT yet: it is journaled
-  // only, so a lost write leaves detectLanding to re-anchor it from the
+  // only, so a lost write leaves markLanding to re-anchor it from the
   // trailing window. reachInside = per-waypoint arm state (outside/inside);
   // reachedIds = the set that has crossed inside.
   private reachInside = new Map<string, boolean>();
@@ -400,7 +400,7 @@ export class Engine implements EngineImpl {
         // BE nextWaypoint (types.ts contract), so both go empty together.
         nextWaypoint: null,
         activeWaypoints: [],
-        autoEnd: session?.autoEnd !== false,
+        detectLanding: session?.detectLanding !== false,
       };
     }
     if (!session) {
@@ -415,14 +415,14 @@ export class Engine implements EngineImpl {
         waypointsCursor: 0,
         nextWaypoint: null,
         activeWaypoints: [],
-        autoEnd: true,
+        detectLanding: true,
         error,
       };
     }
     const status = this.activityStatus();
     const latest = this.buffer[this.buffer.length - 1] ?? null;
     const waypoints = session.waypoints ?? [];
-    const autoEnd = session.autoEnd !== false;
+    const detectLanding = session.detectLanding !== false;
     const nav = this.navState();
     if (status === "ended") {
       const track = this.finalizedTrack();
@@ -438,7 +438,7 @@ export class Engine implements EngineImpl {
         // A finalized flight surfaces no live nav target.
         nextWaypoint: null,
         activeWaypoints: [],
-        autoEnd,
+        detectLanding,
         error,
       };
     }
@@ -454,7 +454,7 @@ export class Engine implements EngineImpl {
         waypointsCursor: nav.waypointsCursor,
         nextWaypoint: nav.nextWaypoint,
         activeWaypoints: nav.active,
-        autoEnd,
+        detectLanding,
         error,
       };
     }
@@ -470,7 +470,7 @@ export class Engine implements EngineImpl {
       waypointsCursor: nav.waypointsCursor,
       nextWaypoint: nav.nextWaypoint,
       activeWaypoints: nav.active,
-      autoEnd,
+      detectLanding,
       error,
     };
   }
@@ -528,7 +528,7 @@ export class Engine implements EngineImpl {
       armedAt: Date.now(),
       takeoffIndex: null,
       waypoints: options?.waypoints ?? [],
-      autoEnd: options?.autoEnd ?? true,
+      detectLanding: options?.detectLanding ?? true,
     };
     this.buffer = [];
     this.reachInside.clear();
@@ -862,9 +862,9 @@ export class Engine implements EngineImpl {
       touchdown &&
       latest &&
       latest.timestamp - touchdown.timestamp >= LANDING_GRACE_MS &&
-      // The pilot opted out of auto-finalization: the flight stays
+      // The pilot opted out of landing detection: the flight stays
       // "landed" (prompting) until they decide.
-      this.session.autoEnd !== false
+      this.session.detectLanding !== false
     ) {
       return "ended";
     }
@@ -996,7 +996,7 @@ export class Engine implements EngineImpl {
           this.enqueueWal(() => writeWalSession(session));
         }
       } else {
-        this.detectLanding();
+        this.markLanding();
         // Same rule as the stale-gap break above, reached the ordinary
         // way: the flight of record is over, so nothing after it belongs
         // to this session. Draining the rest of a backlog anyway costs
@@ -1042,7 +1042,7 @@ export class Engine implements EngineImpl {
   // backlog detects and finalizes exactly as it would have live. The
   // resulting state is fully derived (deriveStatus), so this only maintains
   // the landing marker in the session.
-  private detectLanding() {
+  private markLanding() {
     const session = this.session;
     if (!session || session.takeoffIndex === null) return;
 
