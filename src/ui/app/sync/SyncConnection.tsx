@@ -1,23 +1,18 @@
 import {
   IonButton,
-  IonButtons,
-  IonContent,
-  IonHeader,
   IonIcon,
-  IonNavLink,
-  IonSpinner,
-  IonTitle,
-  IonToolbar,
+  useIonActionSheet,
+  useIonAlert,
 } from "@ionic/react";
-import { chevronBackOutline, logoApple } from "ionicons/icons";
-import { type RefObject, useState, useSyncExternalStore } from "react";
+import { desktopOutline, logoApple } from "ionicons/icons";
+import { useEffect, useState, useSyncExternalStore } from "react";
 
 import { isTauri } from "../../../platform/index";
 import * as sync from "../../../sync/index";
 import { cx } from "../../shared/cx";
+import { BusyLabel } from "./BusyLabel";
 import { describe, type SyncTone } from "./describe";
 import { resolveSyncView } from "./resolveSyncView";
-import { SelfHostPage } from "./SelfHostPage";
 import {
   DormantSubscribe,
   manageSubscription,
@@ -35,15 +30,51 @@ import styles from "./sync.module.css";
  * Resubscribe/Manage pieces (one-way; the payments rail never reaches back).
  */
 
-// A semantic tone → the sheet's status-label modifier class. On/off/neutral
-// ride the default label color; only a lapse (amber) and an error (red) paint.
-export const SHEET_TONE_CLASS: Record<SyncTone, string> = {
-  on: "",
+// A semantic tone → the card's status-label modifier class. The card is
+// the Settings row expanded (one tap), so "on" paints the SAME green the
+// row uses; a lapse amber, an error red; off/neutral ride the default.
+const SHEET_TONE_CLASS: Record<SyncTone, string> = {
+  on: styles.stateOn,
   off: "",
   warn: styles.stateReadonly,
   error: styles.stateError,
   neutral: "",
 };
+
+// The card's status block, shared by the home view and the post-purchase
+// page. "On" paints the Settings row's green; the checkmark itself lives
+// on the card's badge, once.
+export function StatusBlock({
+  label,
+  detail,
+  tone,
+  testId,
+}: {
+  label: string;
+  detail: string;
+  tone: SyncTone;
+  testId?: string;
+}) {
+  // A minute tick: the detail can be a relative time ("just now"), and a
+  // card held open must not freeze it into a lie. UI-local timer; the
+  // engine holds none.
+  const [, setTick] = useState(0);
+  useEffect(() => {
+    const timer = setInterval(() => setTick((n) => n + 1), 60_000);
+    return () => clearInterval(timer);
+  }, []);
+  // The card says "Sync on"; the Settings row, already labeled Sync,
+  // keeps the shared derivation's bare "On".
+  const cardLabel = label === "On" ? "Sync on" : label;
+  return (
+    <div className={cx(styles.state, SHEET_TONE_CLASS[tone])}>
+      <span className={styles.stateLabel} data-testid={testId}>
+        {cardLabel}
+      </span>
+      <span className={styles.stateDetail}>{detail}</span>
+    </div>
+  );
+}
 
 // Sign in with Apple: a quiet text link (the iOS pitch) or the white HIG button.
 export function AppleSignInButton({
@@ -63,13 +94,12 @@ export function AppleSignInButton({
     return (
       <IonButton
         fill="clear"
-        size="small"
         className={styles.quietAction}
         disabled={busy}
         onClick={onClick}
         data-testid={testId}
       >
-        {busy ? <IonSpinner name="crescent" /> : label}
+        <BusyLabel busy={busy}>{label}</BusyLabel>
       </IonButton>
     );
   }
@@ -81,35 +111,18 @@ export function AppleSignInButton({
       onClick={onClick}
       data-testid={testId}
     >
-      {busy ? (
-        <IonSpinner name="crescent" />
-      ) : (
-        <>
-          <IonIcon slot="start" icon={logoApple} aria-hidden="true" />
-          {label}
-        </>
-      )}
+      {/* The icon must be a DIRECT child to reach the button's start
+          slot; nested in a span it lands unslotted, mis-sized and
+          un-spaced. Hidden (not removed) while busy so the layout
+          holds. */}
+      <IonIcon
+        slot="start"
+        icon={logoApple}
+        aria-hidden="true"
+        className={cx(busy && styles.busyHiddenIcon)}
+      />
+      <BusyLabel busy={busy}>{label}</BusyLabel>
     </IonButton>
-  );
-}
-
-export function SelfHostLink({ onConnected }: { onConnected: () => void }) {
-  return (
-    <IonNavLink
-      routerDirection="forward"
-      component={() => (
-        <SelfHostPage backText="Sync" onConnected={onConnected} />
-      )}
-    >
-      <IonButton
-        fill="clear"
-        size="small"
-        className={styles.quietAction}
-        data-testid="sync-goto-login"
-      >
-        Self-hosted config
-      </IonButton>
-    </IonNavLink>
   );
 }
 
@@ -125,13 +138,13 @@ export function Connected({
   products,
   busy,
   problem,
-  onBuy,
+  onOpenPlans,
   onConnect,
   onLink,
   onSignIn,
   onTurnOff,
   onDelete,
-  onConnected,
+  onSelfHost,
 }: {
   status: sync.SyncStatus;
   account: sync.SyncAccount | null;
@@ -139,26 +152,88 @@ export function Connected({
   products: sync.StoreProduct[];
   busy: boolean;
   problem: string | null;
-  onBuy: (term: sync.SubscriptionTerm) => void;
+  onOpenPlans: () => void;
   onConnect: () => void;
   onLink: () => void;
   onSignIn: () => void;
   onTurnOff: () => void;
   onDelete: () => void;
-  onConnected: () => void;
+  onSelfHost: () => void;
 }) {
   // One pure resolve; everything below is a dumb render of its fields, so no
   // action can contradict the account/status (the class of bug this replaced).
   const v = resolveSyncView(status, account, appleSub, isTauri());
+  const [presentAlert] = useIonAlert();
+  const [presentSheet] = useIonActionSheet();
+
+  // The what-it-does fine print rides the confirm, at the moment it matters,
+  // instead of resting on screen as a paragraph among buttons. Native only:
+  // the web's Log out has its own flush-then-decide machinery (useLogOut)
+  // and an extra always-on confirm would train click-through (SYNC-UX.md).
+  function confirmTurnOff() {
+    // Web Log out has flush-then-decide (useLogOut); a dormant native
+    // account has no storage for the copy below to be true about, and
+    // its Sign out was never confirmed before the confirm landed.
+    if (!isTauri() || v.showDormantSubscribe) {
+      onTurnOff();
+      return;
+    }
+    void presentAlert({
+      header: `${v.turnOffLabel}?`,
+      message:
+        "Sync stays off until you turn it back on. Nothing is deleted: every flight stays on this device and on the server. If you subscribe, billing is unchanged.",
+      buttons: [
+        { text: "Cancel", role: "cancel" },
+        { text: v.turnOffLabel, role: "destructive", handler: onTurnOff },
+      ],
+    });
+  }
+
+  // Real doors that almost nobody needs on a given visit: one quiet More
+  // button, an action sheet behind it.
+  function moreOptions() {
+    void presentSheet({
+      buttons: [
+        ...(v.showUseOnComputer
+          ? [{ text: "Use on your computer", handler: onLink }]
+          : []),
+        ...(v.showSelfHost
+          ? [
+              {
+                text: "Self Hosted",
+                handler: onSelfHost,
+                htmlAttributes: { "data-testid": "sync-goto-login" },
+              },
+            ]
+          : []),
+        ...(v.showManage
+          ? [{ text: "Manage Subscription", handler: manageSubscription }]
+          : []),
+        ...(v.showDelete
+          ? [
+              {
+                text: "Delete account…",
+                role: "destructive",
+                handler: onDelete,
+              },
+            ]
+          : []),
+        { text: "Cancel", role: "cancel" },
+      ],
+    });
+  }
+
+  const showMore =
+    v.showManage || v.showDelete || v.showUseOnComputer || v.showSelfHost;
 
   return (
     <>
-      <div className={cx(styles.state, SHEET_TONE_CLASS[v.statusTone])}>
-        <span className={styles.stateLabel} data-testid="sync-state">
-          {v.statusLabel}
-        </span>
-        <span className={styles.stateDetail}>{v.statusDetail}</span>
-      </div>
+      <StatusBlock
+        label={v.statusLabel}
+        detail={v.statusDetail}
+        tone={v.statusTone}
+        testId="sync-state"
+      />
 
       {v.supporterNote && (
         <p className={styles.finePrint} data-testid="sync-supporting">
@@ -180,20 +255,20 @@ export function Connected({
           onClick={onConnect}
           data-testid="sync-connect-device"
         >
-          {busy ? <IonSpinner name="crescent" /> : "Turn on sync"}
+          <BusyLabel busy={busy}>Turn on sync</BusyLabel>
         </IonButton>
       )}
 
       {/* Resubscribe: the lapse is discovered here, the remedy is a purchase.
-          Both plans, matching the pitch, so a lapse never buries the year. */}
+          The door pushes the plan page, same as the pitch. */}
       {v.showResubscribe && (
-        <ResubscribeArea products={products} busy={busy} onBuy={onBuy} />
+        <ResubscribeArea products={products} onOpenPlans={onOpenPlans} />
       )}
 
       {/* Dormant: signed in, never subscribed — prompted to subscribe
           (SYNC-UX.md). Web checkout replaces the sentence when it exists. */}
       {v.showDormantSubscribe && (
-        <DormantSubscribe products={products} busy={busy} onBuy={onBuy} />
+        <DormantSubscribe products={products} onOpenPlans={onOpenPlans} />
       )}
 
       {/* Off + a lapsed or absent sub still deserves a way in. */}
@@ -212,87 +287,43 @@ export function Connected({
           fill="outline"
           color="medium"
           disabled={busy}
-          onClick={onTurnOff}
+          onClick={confirmTurnOff}
           data-testid="sync-off"
         >
           {v.turnOffLabel}
         </IonButton>
       )}
 
-      {/* A subscription to manage means one exists: never for a dormant
-          (signed-in, never-subscribed) account, whose Manage link opened an
-          empty App Store page. */}
-      {v.showManage && (
+      {showMore && (
         <IonButton
           fill="clear"
-          size="small"
           className={styles.quietAction}
-          onClick={manageSubscription}
-          data-testid="sync-manage"
+          onClick={moreOptions}
+          data-testid="sync-more"
         >
-          Manage Subscription
+          More options
         </IonButton>
-      )}
-
-      {v.showUseOnComputer && (
-        // Junction 2 catch-up for pilots who skipped the post-purchase page —
-        // opens the same page. Idempotent server-side. Once the server says
-        // the Apple Account is linked, the door becomes the note below.
-        <IonButton
-          fill="clear"
-          size="small"
-          className={styles.quietAction}
-          disabled={busy}
-          onClick={onLink}
-          data-testid="sync-link-apple"
-        >
-          Use on your computer
-        </IonButton>
-      )}
-
-      {v.showLinkedNote && (
-        <p className={styles.finePrint} data-testid="sync-linked-note">
-          Linked. Sign in with Apple at wingover.app any time.
-        </p>
-      )}
-
-      {v.showDelete && (
-        <IonButton
-          fill="clear"
-          size="small"
-          color="danger"
-          className={styles.quietAction}
-          disabled={busy}
-          onClick={onDelete}
-          data-testid="sync-delete-account"
-        >
-          Delete account…
-        </IonButton>
-      )}
-
-      {v.showSelfHost && <SelfHostLink onConnected={onConnected} />}
-
-      {v.showTurnOffNote && (
-        <p className={styles.finePrint}>
-          {isTauri()
-            ? "Turning sync off forgets this device's connection, and it stays off until you turn it back on. Nothing is deleted: every flight stays on this device and on the server. If you subscribe, billing is unchanged."
-            : "Logging out removes your flights from this computer. They stay on the server and your other devices. If you subscribe, billing is unchanged."}
-        </p>
       )}
     </>
   );
 }
 
 /**
- * Pushed right after a purchase connects this device (and reachable later via
- * "Use on your computer"): the thank-you, and the one optional step,
- * explained simply. Its own page because the inline version was cramped and
- * hard to read. Done or the back chevron pops to the sheet.
+ * Two doors, one link machinery, two very different moments:
+ *
+ * - "purchase": pushed right after a purchase connects this device — the
+ *   thank-you ("You're synced", the live status) and the one optional step.
+ * - "computer": opened from More options. It is ABOUT computer access, so it
+ *   says only that; the sheet behind it already shows the sync status, and
+ *   repeating it here once produced a page titled "You're synced" over an
+ *   amber "Not subscribed" (found on-device, 2026-07-30).
  */
 export function LinkAccountPage({
-  nav,
+  onDone,
+  context = "purchase",
 }: {
-  nav: RefObject<HTMLIonNavElement | null>;
+  onDone: () => void;
+  context?: "purchase" | "computer";
 }) {
   // Live, not asserted: this page once claimed "On" while the connect had
   // actually landed read-only (a stale purchase transaction) — the pilot
@@ -308,7 +339,7 @@ export function LinkAccountPage({
   const linked = account?.login === "apple";
 
   function pop() {
-    void nav.current?.pop();
+    onDone();
   }
 
   async function link() {
@@ -326,74 +357,88 @@ export function LinkAccountPage({
     }
   }
 
+  const purchase = context === "purchase";
+  const computer = !purchase;
+
+  function renderBack() {
+    return (
+      <IonButton
+        expand="block"
+        fill="clear"
+        onClick={pop}
+        data-testid="link-page-back"
+      >
+        Back
+      </IonButton>
+    );
+  }
+
+  function renderStatus() {
+    if (!purchase) return null;
+    return (
+      <StatusBlock
+        label={describe(status).label}
+        detail={
+          status.state === "syncing" && !status.readOnly
+            ? "Your flights now back up automatically."
+            : describe(status).detail
+        }
+        tone={describe(status).tone}
+      />
+    );
+  }
+
+  function renderLinkOffer() {
+    return (
+      <>
+        <p className={styles.loginLede}>
+          {purchase
+            ? "One optional step: link your Apple Account, and you can sign in at wingover.app to see your flights on any computer."
+            : "Link your Apple Account, and you can sign in at wingover.app to see your flights on any computer."}
+        </p>
+
+        {problem && <p className={styles.errorMessage}>{problem}</p>}
+
+        <AppleSignInButton
+          label="Link Apple Account"
+          onClick={link}
+          busy={busy}
+          testId="link-page-link"
+        />
+        {renderBack()}
+        {purchase && (
+          <p className={styles.finePrint}>
+            You can always do this later from the Sync screen.
+          </p>
+        )}
+      </>
+    );
+  }
+
   return (
     <>
-      <IonHeader>
-        <IonToolbar>
-          <IonButtons slot="start">
-            <IonButton onClick={pop} data-testid="link-page-back">
-              <IonIcon slot="icon-only" icon={chevronBackOutline} />
-            </IonButton>
-          </IonButtons>
-          <IonTitle>You&apos;re synced</IonTitle>
-          <IonButtons slot="end">
-            <IonButton strong onClick={pop} data-testid="link-page-done">
-              Done
-            </IonButton>
-          </IonButtons>
-        </IonToolbar>
-      </IonHeader>
-      <IonContent>
-        <div className={styles.loginBody}>
-          <div
-            className={cx(
-              styles.state,
-              SHEET_TONE_CLASS[describe(status).tone],
-            )}
-          >
-            <span className={styles.stateLabel}>{describe(status).label}</span>
-            <span className={styles.stateDetail}>
-              {status.state === "syncing" && !status.readOnly
-                ? "Your flights now back up automatically."
-                : describe(status).detail}
-            </span>
-          </div>
+      <div className={styles.loginBody}>
+        {renderStatus()}
 
-          {linked ? (
+        {computer && (
+          <IonIcon
+            icon={desktopOutline}
+            className={styles.computerGlyph}
+            aria-hidden="true"
+          />
+        )}
+
+        {linked ? (
+          <>
             <p className={styles.loginLede} data-testid="link-page-linked">
-              Linked. Sign in with Apple at wingover.app any time.
+              Linked. Sign in with Apple at wingover.app on any computer.
             </p>
-          ) : (
-            <>
-              <p className={styles.loginLede}>
-                One optional step: link your Apple Account, and you can sign in
-                at wingover.app to see your flights on any computer.
-              </p>
-
-              {problem && <p className={styles.errorMessage}>{problem}</p>}
-
-              <AppleSignInButton
-                label="Link Apple Account"
-                onClick={link}
-                busy={busy}
-                testId="link-page-link"
-              />
-              <IonButton
-                fill="clear"
-                size="small"
-                className={styles.quietAction}
-                onClick={pop}
-                data-testid="link-page-skip"
-              >
-                Skip for now
-              </IonButton>
-              <p className={styles.finePrint}>
-                You can always do this later from the Sync screen.
-              </p>
-            </>
-          )}
-        </div>
-      </IonContent>
+            {renderBack()}
+          </>
+        ) : (
+          renderLinkOffer()
+        )}
+      </div>
     </>
   );
 }

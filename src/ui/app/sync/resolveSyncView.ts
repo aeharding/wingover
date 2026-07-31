@@ -26,11 +26,11 @@ export interface SyncView {
   showTurnOff: boolean;
   turnOffLabel: string;
   showManage: boolean;
-  showUseOnComputer: boolean; // the link-your-Apple-account door
-  showLinkedNote: boolean;
+  // The link-your-Apple-account door; once linked, the same page reads
+  // "Linked" with the sign-in-anywhere instructions (no resting note).
+  showUseOnComputer: boolean;
   showDelete: boolean;
   showSelfHost: boolean;
-  showTurnOffNote: boolean;
 }
 
 export function resolveSyncView(
@@ -44,7 +44,6 @@ export function resolveSyncView(
   const dormant = status.state === "unsubscribed";
   const hosted = account?.kind === "apple";
   const supporter = account?.kind === "manual" && appleSub !== null;
-  const linked = account?.login === "apple";
   const syncingLive = status.state === "syncing" && !status.readOnly;
   // A lapse: pull-only on the server (read-only) for a non-self-hoster, or a
   // turned-off device whose StoreKit sub has expired.
@@ -95,10 +94,8 @@ export function resolveSyncView(
     showTurnOff: !off,
     turnOffLabel: turnOffLabel(),
     showManage: !dormant && (hosted || supporter || appleSub !== null),
-    showUseOnComputer: hosted && native && !dormant && !linked,
-    showLinkedNote: hosted && native && !dormant && linked,
+    showUseOnComputer: hosted && native && !dormant,
     showDelete: hosted && !dormant,
     showSelfHost: off,
-    showTurnOffNote: !off && !dormant,
   };
 }

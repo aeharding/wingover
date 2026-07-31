@@ -1,8 +1,10 @@
-import { IonButton, IonIcon, IonSpinner } from "@ionic/react";
+import { IonButton, IonIcon } from "@ionic/react";
 import { logoApple } from "ionicons/icons";
 import { useState, useSyncExternalStore } from "react";
 
 import * as sync from "../../../sync/index";
+import { cx } from "../../shared/cx";
+import { BusyLabel } from "../sync/BusyLabel";
 import { describe } from "../sync/describe";
 import { useSyncSheet } from "../sync/SyncSheets";
 
@@ -55,17 +57,16 @@ export default function ConnectFunnel({ onImport }: { onImport: () => void }) {
             onClick={() => void signIn()}
             data-testid="funnel-signin"
           >
-            {busy ? (
-              <IonSpinner name="crescent" />
-            ) : (
-              <>
-                <IonIcon slot="start" icon={logoApple} aria-hidden="true" />
-                Sign in with Apple
-              </>
-            )}
+            <IonIcon
+              slot="start"
+              icon={logoApple}
+              aria-hidden="true"
+              className={cx(busy && styles.busyHiddenIcon)}
+            />
+            <BusyLabel busy={busy}>Sign in with Apple</BusyLabel>
           </IonButton>
           <IonButton fill="clear" onClick={openSync}>
-            Self-hosted config
+            Self Hosted
           </IonButton>
         </>
       )}

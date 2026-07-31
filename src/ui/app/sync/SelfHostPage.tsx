@@ -1,5 +1,4 @@
 import {
-  IonBackButton,
   IonButton,
   IonButtons,
   IonContent,
@@ -20,17 +19,15 @@ import settings from "../pages/settings.module.css";
 import styles from "./sync.module.css";
 
 /**
- * The own-server form — the Log In rail's page (SYNC-UX.md: self-host is a
- * login), but pushable from either sheet: the Log In doors own it, and the
- * Subscription pitch's "Prefer to self-host?" link pushes it in place rather
- * than bouncing the pilot through a second modal.
+ * The own-server form — the Log In rail's page (SYNC-UX.md: self-host is
+ * a login). A real four-field form gets a real bottom sheet of its own,
+ * presented over the floating card from More options on any view.
  */
 export function SelfHostPage({
-  backText,
+  onDismiss,
   onConnected,
 }: {
-  /** Title of the page beneath — "Log In" or "Subscription". */
-  backText: string;
+  onDismiss: () => void;
   onConnected: () => void;
 }) {
   const serverInput = useRef<HTMLIonInputElement>(null);
@@ -54,8 +51,9 @@ export function SelfHostPage({
   }
 
   // Ionic's own docs: the autofocus attribute "may not be sufficient", and
-  // inside a modal you should setFocus after the presentation settles. This is
-  // a nav push inside a modal, so wait out the transition rather than race it.
+  // inside a modal you should setFocus after the presentation settles. This
+  // sheet presents over the card, so wait out the transition rather than
+  // race it.
   useEffect(() => {
     const timer = setTimeout(() => void serverInput.current?.setFocus(), 400);
     return () => clearTimeout(timer);
@@ -81,9 +79,11 @@ export function SelfHostPage({
       <IonHeader>
         <IonToolbar>
           <IonButtons slot="start">
-            <IonBackButton text={backText} />
+            <IonButton onClick={onDismiss} data-testid="selfhost-cancel">
+              Cancel
+            </IonButton>
           </IonButtons>
-          <IonTitle>Self-hosted</IonTitle>
+          <IonTitle>Self Hosted</IonTitle>
           {/* The action belongs in the navbar, next to the way out — the iOS
               form idiom. A block button below the fields reads like a landing
               page and pushes the fine print off-screen. */}
@@ -100,10 +100,7 @@ export function SelfHostPage({
         </IonToolbar>
       </IonHeader>
       {/* settings-content: the grouped-card (inset list) treatment, same as
-          the Settings pages — in light mode the cells vanish without it
-          (white on white). Content-level only: the page var (.settings-page)
-          would also repaint this sheet's DARK background, which must keep
-          the modal's step-gray. */}
+          the Settings pages. */}
       <IonContent className={settings.content}>
         {problem && (
           <p className={cx(styles.errorMessage, styles.formProblem)}>

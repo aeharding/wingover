@@ -33,27 +33,26 @@ const NATIVE = true;
 const WEB = false;
 
 describe("resolveSyncView", () => {
-  test("On, linked apple: green; Manage + Linked note + Delete; no offers", () => {
+  test("On, linked apple: green; Manage + computer door + Delete; no offers", () => {
     const v = resolveSyncView(syncing(false), apple("apple"), "active", NATIVE);
     expect(v.statusLabel).toBe("On");
     expect(v.statusTone).toBe("on");
     expect(v.showManage).toBe(true);
-    expect(v.showLinkedNote).toBe(true);
-    expect(v.showUseOnComputer).toBe(false);
+    // Linked or not, the same door: the page it opens reads "Linked" once
+    // the link exists. No resting note.
+    expect(v.showUseOnComputer).toBe(true);
     expect(v.showDelete).toBe(true);
     expect(v.showTurnOff).toBe(true);
     expect(v.turnOffLabel).toBe("Turn off sync");
     expect(v.showResubscribe).toBe(false);
     expect(v.showDormantSubscribe).toBe(false);
     expect(v.showSignIn).toBe(false);
-    expect(v.showTurnOffNote).toBe(true);
     expect(v.statusDetail).toContain("Last synced");
   });
 
-  test("On, NOT linked: offers Use on your computer instead of the Linked note", () => {
+  test("On, NOT linked: the computer door shows the same way", () => {
     const v = resolveSyncView(syncing(false), apple(null), "active", NATIVE);
     expect(v.showUseOnComputer).toBe(true);
-    expect(v.showLinkedNote).toBe(false);
   });
 
   test("Lapsed (read-only apple): amber, Resubscribe, still Manage", () => {
@@ -75,7 +74,6 @@ describe("resolveSyncView", () => {
     expect(v.statusTone).toBe("neutral");
     expect(v.showManage).toBe(false); // never Manage for a never-subscribed account
     expect(v.showDormantSubscribe).toBe(true);
-    expect(v.showLinkedNote).toBe(false);
     expect(v.showUseOnComputer).toBe(false);
     expect(v.showDelete).toBe(false);
     expect(v.turnOffLabel).toBe("Sign out");
@@ -106,7 +104,6 @@ describe("resolveSyncView", () => {
     expect(v.showManage).toBe(false);
     expect(v.showTurnOn).toBe(false);
     expect(v.statusDetail).toBe("Flights are not being backed up.");
-    expect(v.showTurnOffNote).toBe(false);
   });
 
   test("Supporter (self-host + a StoreKit sub): reads On, thanks note, Manage, no Delete, never lapsed", () => {
