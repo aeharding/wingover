@@ -1,12 +1,12 @@
 import { describe, expect, it } from "vitest";
 
-import { mayHeal } from "./AppBoundary";
+import { mayHeal } from "./healBudget";
 
 // The heal window is the one piece of this that can loop forever if it is
 // wrong, and it is the piece a reload erases: the marker lives in storage
 // precisely because every variable in the page dies before the next crash
 // can read it. Pure, so it is testable without a DOM or a reload.
-describe("AppBoundary: one heal per 60 s", () => {
+describe("healBudget: one heal per 60 s", () => {
   it("heals when nothing has healed before", () => {
     expect(mayHeal(1_000_000, null)).toBe(true);
   });
