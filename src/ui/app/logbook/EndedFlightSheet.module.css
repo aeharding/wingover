@@ -1,0 +1,111 @@
+/* ONE radius, not the `16px 16px 0 0` shorthand this started as. Ionic feeds
+   --border-radius to logical LONGHANDS for a sheet
+   (border-start-start-radius: var(--border-radius), and the bottom pair
+   hard-zeroed), so a shorthand is invalid there and every corner fell back to
+   0 — the sheet had no rounded top at all. A single value also does the right
+   thing for the desktop card, where the wrapper takes it as a shorthand and
+   rounds all four. */
+.sheet {
+  --border-radius: 16px;
+}
+
+/* The iOS close affordance: a small grey circle over the content, not a
+   button in a bar. systemFill and secondaryLabel, which are the two greys
+   Apple uses for it — quiet enough to sit above the track, solid enough to
+   hit with gloves on. */
+.close {
+  position: absolute;
+  top: 0.75rem;
+  right: 0.75rem;
+  z-index: 10;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 30px;
+  height: 30px;
+  font-size: 1.05rem;
+  color: color(display-p3 0.24 0.24 0.26 / 0.6);
+  background: color(display-p3 0.47 0.47 0.5 / 0.12);
+  border-radius: 999px;
+
+  &:active {
+    background: color(display-p3 0.47 0.47 0.5 / 0.2);
+  }
+
+  :root:global(.ion-palette-dark) & {
+    color: color(display-p3 0.92 0.92 0.96 / 0.6);
+    background: color(display-p3 0.47 0.47 0.5 / 0.36);
+
+    &:active {
+      background: color(display-p3 0.47 0.47 0.5 / 0.5);
+    }
+  }
+}
+
+/* Desktop has no detent to be one of: it is a plain centered modal, which
+   Ionic sizes itself (the same thing the sync sheet relies on). The summary
+   just takes the room it needs and the card scrolls. */
+@media (min-width: 992px) {
+  .summary {
+    height: auto;
+  }
+}
+
+/* EXACTLY one detent tall, from the same constant that configures the sheet
+   (EndedFlightSheet.tsx passes DETENT as --detent). That is what makes the fold
+   land on the boundary between the summary and the details on every screen:
+   nothing below can peek, and the summary can never be the thing that gets
+   cut. Percentage of the scroll host, not svh — the host is the modal, whose
+   height is the one this is a fraction of, and it does not move when a URL
+   bar does. The bottom inset is inside the detent because at this stop the
+   sheet's bottom edge IS the screen's. */
+.summary {
+  display: flex;
+  flex-direction: column;
+  height: calc(var(--detent) * 100%);
+  min-height: calc(175px + var(--ion-safe-area-bottom, 0px));
+  padding: 2rem 1rem calc(1.25rem + var(--ion-safe-area-bottom, 0px));
+  text-align: center;
+}
+
+/* The track takes whatever the type does not, so the type is never squeezed
+   and the picture is as big as the phone allows. */
+.sketch {
+  flex: 1;
+  min-height: 0;
+  margin-bottom: 1rem;
+}
+
+.type {
+  flex: none;
+}
+
+.saved {
+  margin: 0;
+  font-size: 0.8125rem;
+  font-weight: 600;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: var(--ion-color-success);
+}
+
+/* The number pilots actually quote, sized to be read at arm's length while
+   packing a wing. */
+.airtime {
+  margin: 0.2rem 0 0;
+  font-size: 2.75rem;
+  font-weight: 700;
+  line-height: 1.05;
+  letter-spacing: -0.02em;
+}
+
+.line {
+  margin: 0.25rem 0 0;
+  font-size: 1rem;
+  color: var(--ion-color-medium);
+}
+
+/* Below the fold. Only reachable by dragging, which is the point. */
+.details {
+  padding-bottom: var(--ion-safe-area-bottom, 0px);
+}

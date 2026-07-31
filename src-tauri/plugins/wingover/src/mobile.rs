@@ -1,11 +1,14 @@
 use serde::de::DeserializeOwned;
-use serde::Deserialize;
 use tauri::{
     plugin::{PluginApi, PluginHandle},
     AppHandle, Runtime,
 };
 
 use crate::fix::Fix;
+use crate::wire::{
+    AvailableResponse, DrainResponse, EnvironmentResponse, IdentityTokenResponse, JwsResponse,
+    ValueResponse,
+};
 
 tauri::ios_plugin_binding!(init_plugin_wingover);
 
@@ -15,31 +18,6 @@ pub fn init<R: Runtime, C: DeserializeOwned>(
 ) -> crate::Result<Wingover<R>> {
     let handle = api.register_ios_plugin(init_plugin_wingover)?;
     Ok(Wingover(handle))
-}
-
-#[derive(Deserialize)]
-struct DrainResponse {
-    fixes: Vec<Fix>,
-}
-
-#[derive(Deserialize)]
-struct AvailableResponse {
-    available: bool,
-}
-
-#[derive(Deserialize)]
-struct ValueResponse {
-    value: Option<String>,
-}
-
-#[derive(Deserialize)]
-struct JwsResponse {
-    jws: Option<String>,
-}
-
-#[derive(Deserialize)]
-struct EnvironmentResponse {
-    environment: String,
 }
 
 // Sensor/actuator shim: five dumb primitives, all logic lives in Rust.
@@ -58,9 +36,9 @@ impl<R: Runtime> Wingover<R> {
             .map_err(Into::into)
     }
 
-    pub fn drain(&self) -> crate::Result<Vec<Fix>> {
+    pub fn drain(&self) -> crate::Result<(Vec<Fix>, Option<String>)> {
         let response: DrainResponse = self.0.run_mobile_plugin("drain", ())?;
-        Ok(response.fixes)
+        Ok((response.fixes, response.error))
     }
 
     pub fn keychain_available(&self) -> crate::Result<bool> {
@@ -131,13 +109,7 @@ impl<R: Runtime> Wingover<R> {
     }
 
     pub fn sign_in_with_apple(&self) -> crate::Result<String> {
-        #[derive(Deserialize)]
-        #[serde(rename_all = "camelCase")]
-        struct IdentityTokenResponse {
-            identity_token: String,
-        }
-        let response: IdentityTokenResponse =
-            self.0.run_mobile_plugin("signInWithApple", ())?;
+        let response: IdentityTokenResponse = self.0.run_mobile_plugin("signInWithApple", ())?;
         Ok(response.identity_token)
     }
 

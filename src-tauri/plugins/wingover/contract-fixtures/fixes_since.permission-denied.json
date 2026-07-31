@@ -1,0 +1,29 @@
+{
+  "surface": "fixes_since",
+  "hop": "rust->js",
+  "description": "Permission lost mid-watch with the stream dead. Classifies as denied so the pilot gets the Settings screen, not GPS unavailable.",
+  "produces": "src-tauri/plugins/wingover/src/lib.rs (fixes_since)",
+  "consumes": "src/engine/nativeSource.ts (classifyDrainError)",
+  "codes": [],
+  "request": {
+    "ts": 1721815199000
+  },
+  "response": {
+    "fixes": [],
+    "error": "permission-denied"
+  },
+  "expect": {
+    "rust": {
+      "fixes": 0,
+      "error": "permission-denied"
+    },
+    "js": {
+      "sourceError": {
+        "permissionDenied": true,
+        "imprecise": false,
+        "message": "permission-denied"
+      },
+      "positions": []
+    }
+  }
+}

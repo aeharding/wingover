@@ -341,7 +341,10 @@ const SHOTS = [
     async prep(page) {
       await page.getByRole("button", { name: "Start Flight" }).click();
       await page.getByTestId("recording").waitFor({ timeout: 15000 });
-      await page.locator(".map-container").first().waitFor({ timeout: 15000 });
+      await page
+        .locator('[data-testid="map-container"]')
+        .first()
+        .waitFor({ timeout: 15000 });
       // Let the whole clipped track replay and the aircraft settle at its
       // final point (compression 300: a ~30min track replays in ~6s).
       await page.waitForTimeout(9000);
@@ -387,11 +390,13 @@ const SHOTS = [
         url: `/logbook/${SEED_FLIGHTS[0].id}?mock-speed=1`,
         async prep(page) {
           await page
-            .locator(".map-container")
+            .locator('[data-testid="map-container"]')
             .first()
             .waitFor({ timeout: 8000 });
           await page
-            .locator('[data-testid="track"], .map-container canvas')
+            .locator(
+              '[data-testid="track"], [data-testid="map-container"] canvas',
+            )
             .first()
             .waitFor({ timeout: 8000 });
           // The back panel reads in MAP mode (dark streets) so the two
@@ -408,11 +413,13 @@ const SHOTS = [
         url: `/logbook/${REPLAY_FLIGHT.id}?mock-speed=1`,
         async prep(page) {
           await page
-            .locator(".map-container")
+            .locator('[data-testid="map-container"]')
             .first()
             .waitFor({ timeout: 8000 });
           await page
-            .locator('[data-testid="track"], .map-container canvas')
+            .locator(
+              '[data-testid="track"], [data-testid="map-container"] canvas',
+            )
             .first()
             .waitFor({ timeout: 8000 });
           // The back panel flipped the persisted view to street; take
@@ -444,7 +451,9 @@ const SHOTS = [
           await page.getByTestId("replay-follow").click();
           await page.getByTestId("replay-trackup").click();
           const region = await page
-            .locator(".flight-detail-map-fullroot .map-container")
+            .locator(
+              '[data-testid="flight-detail-map-fullroot"] [data-testid="map-container"]',
+            )
             .boundingBox();
           await page.mouse.move(
             region.x + region.width / 2,
@@ -468,7 +477,7 @@ const SHOTS = [
     url: "/plan?mock-speed=1",
     async prep(page) {
       await page
-        .locator(".plan-map .map-container")
+        .locator('[data-testid="plan-map"] [data-testid="map-container"]')
         .first()
         .waitFor({ timeout: 8000 });
       await page.getByTestId("plan-distance").waitFor({ timeout: 8000 });
@@ -489,7 +498,10 @@ const SHOTS = [
     async prep(page) {
       await page.getByRole("button", { name: "Start Flight" }).click();
       await page.getByTestId("recording").waitFor({ timeout: 15000 });
-      await page.locator(".map-container").first().waitFor({ timeout: 15000 });
+      await page
+        .locator('[data-testid="map-container"]')
+        .first()
+        .waitFor({ timeout: 15000 });
       await page.waitForTimeout(9000);
       await page.getByRole("button", { name: "Follow aircraft" }).click();
       await waitForMapIdle(page);
@@ -574,19 +586,24 @@ function saveRaw(dev, id, buf) {
 // And render the app UI in real SF Pro (Apple's system font) instead of
 // Chromium-on-Linux's default sans. Map labels come from Apple already.
 // 54/34 logical px ≈ the Dynamic-Island device insets.
+/* Selected by data-* hooks, never by class: CSS Modules hash every app class
+   (.instruments is emitted as _instruments_12zf7), so a bare class selector
+   matches nothing and fails SILENTLY — the capture just renders unstyled. Two
+   rounds of store screenshots shipped with these selectors dead, so the flight
+   deck was captured in Chromium's default sans. */
 const CAPTURE_CSS_FLIGHT = `
-  .instruments { margin-top: 54px !important; padding-top: 0 !important; }
-  .flight-controls { bottom: calc(0.9rem + 34px) !important; }
-  .zoom-strip { bottom: calc(9.5rem + 34px) !important; }
+  [data-testid="instruments"] { margin-top: 54px !important; padding-top: 0 !important; }
+  [data-testid="map-controls"] { bottom: calc(0.9rem + 34px) !important; }
+  [data-testid="zoom-strip"] { bottom: calc(9.5rem + 34px) !important; }
   div[style*="safe-area-inset-bottom"][style*="visibility"] { height: 34px !important; }
-  .fly-content, .fly-content * {
+  [data-testid="fly-content"], [data-testid="fly-content"] * {
     font-family: 'SF Pro Text', system-ui, -apple-system, sans-serif !important;
   }
   /* iOS optical sizing: small UI (labels) uses SF Pro Text, but the large
      stat numerals cross into SF Pro Display territory (~20pt+), whose strokes
      are lighter than Text at the same weight. Forcing Text everywhere made
      the values read heavier than a real device — use Display for them. */
-  .fly-content .tile .value {
+  [data-testid="fly-content"] [data-tile-value] {
     font-family: 'SF Pro Display', system-ui, -apple-system, sans-serif !important;
   }
 `;
@@ -604,17 +621,20 @@ const CAPTURE_CSS_GROUND = `
 `;
 
 async function waitForMapIdle(page) {
-  // maplibre exposes __map; MapKit doesn't, so fall back to a tile-canvas
-  // heuristic (a settled MapKit surface stops mutating).
+  // BOTH backends set __map, but MapKit's is a {getBearing} shim, not a
+  // maplibre Map — calling loaded() on it throws inside the predicate, and a
+  // throwing predicate never settles. Feature-detect instead of assuming, and
+  // fall back to the canvas for MapKit (a settled surface stops mutating).
   await page
     .waitForFunction(
       () => {
-        const c = document.querySelector(".map-container");
+        const c = document.querySelector('[data-testid="map-container"]');
         const m = c && c.__map;
-        if (m) return m.loaded() && m.areTilesLoaded();
-        // MapKit: consider it ready once the map canvas/tiles exist.
+        if (m && typeof m.loaded === "function") {
+          return m.loaded() && m.areTilesLoaded();
+        }
         return !!document.querySelector(
-          ".map-container canvas, .map-container .mk-tile-loaded, .mk-map-view",
+          '[data-testid="map-container"] canvas, .mk-map-view',
         );
       },
       { timeout: 12000 },

@@ -18,9 +18,12 @@ cd "$(dirname "$0")"
 #    burn minutes before the movement test even starts). The scenario runs
 #    on the HOST, so it keeps feeding
 #    CoreLocation while the app is backgrounded — which is the point. Laps,
-#    not a one-way line, because the waypoint test drops a pin at "wherever
-#    the sim is right now" and relies on the path re-crossing that spot
-#    within one lap (~60 s).
+#    not a one-way line, because the waypoint test drops a pin on the
+#    corridor and relies on the path re-crossing it within one lap (~60 s).
+#    The path is a CONSTANT-LATITUDE out-and-back and WaypointUITests
+#    depends on that: it averages the app's logged fixes to get the one
+#    latitude its pin has to sit on. A path that wandered in latitude would
+#    need that drill's calibration reworked, not just this file.
 xcrun simctl privacy "$UDID" grant location app.wingover.wingover
 xcrun simctl location "$UDID" clear
 xcrun simctl location "$UDID" start --speed=40 --interval=1 - <flight-path.txt
@@ -41,10 +44,39 @@ DATA_DIR=$(xcrun simctl get_app_container "$UDID" app.wingover.wingover data)
 # -collect-test-diagnostics never is load-bearing: a failing run otherwise
 # embeds the sim's full logarchive in the xcresult (multi-GB; it has filled
 # a disk).
+# Both invocations always run — one suite's failure must not silently
+# skip the other's signal — and the job fails if either did.
+suite_failed=0
+
 TEST_RUNNER_WINGOVER_DATA="$DATA_DIR" xcodebuild test \
   -project WingoverUITests.xcodeproj \
   -scheme WingoverUITests \
   -destination "id=$UDID" \
-  -collect-test-diagnostics never
+  -skip-testing:WingoverUITests/PermissionUITests \
+  -collect-test-diagnostics never || suite_failed=1
 
+# The blocked-state drills run in their own invocation with the OPPOSITE
+# preconditions: no motion scenario (acquiring must persist so
+# pre-takeoff blocking is observable) and location REVOKED host-side
+# (test1 asserts the takeover; test2 re-grants through the real Settings
+# app; test3 flips Precise Location there and back).
 xcrun simctl location "$UDID" clear
+xcrun simctl terminate "$UDID" app.wingover.wingover 2>/dev/null || true
+# Accuracy is NOT part of what this resets: the app's reduced-accuracy
+# flag survives both `privacy revoke` and `privacy reset` (verified on
+# iOS 26.5), and only the Settings UI can put it back. test3 restores it
+# in a teardown for that reason; if a run ever dies harder than that, the
+# fix is Settings > Apps > Wingover > Location, or a fresh simulator.
+xcrun simctl privacy "$UDID" revoke location app.wingover.wingover
+
+xcodebuild test \
+  -project WingoverUITests.xcodeproj \
+  -scheme WingoverUITests \
+  -destination "id=$UDID" \
+  -only-testing:WingoverUITests/PermissionUITests \
+  -collect-test-diagnostics never || suite_failed=1
+
+# Leave the sim as the main suite expects, for local re-runs.
+xcrun simctl privacy "$UDID" grant location app.wingover.wingover
+
+exit "$suite_failed"

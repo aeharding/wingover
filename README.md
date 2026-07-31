@@ -20,7 +20,9 @@ Paramotor flight recorder
 
 Most development happens in a plain browser against a mock recording engine (append `?mock-speed=120` to time-compress simulated flights).
 
-Maps: street view (OpenFreeMap) works with zero configuration. The satellite layer uses MapTiler — the built-in key is restricted to official builds (origin `wingover.app` / app user agent), so for your own satellite builds get a free key at maptiler.com and set `VITE_MAPTILER_KEY` (or paste it under Settings → MapTiler key).
+Maps work with zero configuration, on either backend. Apple MapKit JS is the default and gives both street and satellite; MapLibre is the fallback, with street view from OpenFreeMap. Both are switchable under Settings → Map Provider.
+
+Satellite on the MapLibre backend is the one thing that needs a key, because it comes from MapTiler: get a free one at maptiler.com and paste it under Settings → Map Provider → MapTiler key. There is deliberately no built-in key and no build-time environment variable — first-party map costs are zero by construction, so a key is always the pilot's own.
 
 ```sh
 pnpm install

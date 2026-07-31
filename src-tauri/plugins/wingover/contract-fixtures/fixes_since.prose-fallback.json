@@ -1,0 +1,29 @@
+{
+  "surface": "fixes_since",
+  "hop": "rust->js",
+  "description": "The accepted degradation: uncoded CoreLocation prose matches neither regex, so it lands on the generic unavailable screen. Non-English prose would do the same to a denial, which is why the two actionable cases ship codes.",
+  "produces": "src-tauri/plugins/wingover/src/lib.rs (fixes_since)",
+  "consumes": "src/engine/nativeSource.ts (classifyDrainError)",
+  "codes": [],
+  "request": {
+    "ts": 1721815199000
+  },
+  "response": {
+    "fixes": [],
+    "error": "The operation couldn't be completed. (kCLErrorDomain error 2.)"
+  },
+  "expect": {
+    "rust": {
+      "fixes": 0,
+      "error": "The operation couldn't be completed. (kCLErrorDomain error 2.)"
+    },
+    "js": {
+      "sourceError": {
+        "permissionDenied": false,
+        "imprecise": false,
+        "message": "The operation couldn't be completed. (kCLErrorDomain error 2.)"
+      },
+      "positions": []
+    }
+  }
+}

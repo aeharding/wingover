@@ -8,15 +8,21 @@
 
 /* Begin PBXBuildFile section */
 		449215DFA3CDA1C5A3B0B2A2 /* KeyboardUITests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 22DB13B9C175E57F653AB12F /* KeyboardUITests.swift */; };
+		65BE7A7D69992988AB7FA37F /* Recovery.swift in Sources */ = {isa = PBXBuildFile; fileRef = 325AF6F7DDE1E89508F92415 /* Recovery.swift */; };
 		B3386D01478AA888D8F6AB96 /* WaypointUITests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 99769A119DB8D370DA210A4D /* WaypointUITests.swift */; };
 		BFD8186EE03846F55F744AA6 /* RecordingUITests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 06DCB8F2BE3B5BAD54CF6ABE /* RecordingUITests.swift */; };
+		E4B08A7C048D47A806D4563C /* LandingSheet.swift in Sources */ = {isa = PBXBuildFile; fileRef = 63E8917EFA09AFE88EA968E4 /* LandingSheet.swift */; };
+		FCCBDD814378487CB4996145 /* PermissionUITests.swift in Sources */ = {isa = PBXBuildFile; fileRef = D77D7961899DBB4CF65C596D /* PermissionUITests.swift */; };
 /* End PBXBuildFile section */
 
 /* Begin PBXFileReference section */
 		06DCB8F2BE3B5BAD54CF6ABE /* RecordingUITests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = RecordingUITests.swift; sourceTree = "<group>"; };
 		22DB13B9C175E57F653AB12F /* KeyboardUITests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = KeyboardUITests.swift; sourceTree = "<group>"; };
+		325AF6F7DDE1E89508F92415 /* Recovery.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Recovery.swift; sourceTree = "<group>"; };
 		5CA7473121684A571DD2E2FF /* WingoverUITests.xctest */ = {isa = PBXFileReference; includeInIndex = 0; lastKnownFileType = wrapper.cfbundle; path = WingoverUITests.xctest; sourceTree = BUILT_PRODUCTS_DIR; };
+		63E8917EFA09AFE88EA968E4 /* LandingSheet.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = LandingSheet.swift; sourceTree = "<group>"; };
 		99769A119DB8D370DA210A4D /* WaypointUITests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = WaypointUITests.swift; sourceTree = "<group>"; };
+		D77D7961899DBB4CF65C596D /* PermissionUITests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PermissionUITests.swift; sourceTree = "<group>"; };
 /* End PBXFileReference section */
 
 /* Begin PBXGroup section */
@@ -24,7 +30,10 @@
 			isa = PBXGroup;
 			children = (
 				22DB13B9C175E57F653AB12F /* KeyboardUITests.swift */,
+				63E8917EFA09AFE88EA968E4 /* LandingSheet.swift */,
+				D77D7961899DBB4CF65C596D /* PermissionUITests.swift */,
 				06DCB8F2BE3B5BAD54CF6ABE /* RecordingUITests.swift */,
+				325AF6F7DDE1E89508F92415 /* Recovery.swift */,
 				99769A119DB8D370DA210A4D /* WaypointUITests.swift */,
 			);
 			path = Tests;
@@ -102,7 +111,10 @@
 			buildActionMask = 2147483647;
 			files = (
 				449215DFA3CDA1C5A3B0B2A2 /* KeyboardUITests.swift in Sources */,
+				E4B08A7C048D47A806D4563C /* LandingSheet.swift in Sources */,
+				FCCBDD814378487CB4996145 /* PermissionUITests.swift in Sources */,
 				BFD8186EE03846F55F744AA6 /* RecordingUITests.swift in Sources */,
+				65BE7A7D69992988AB7FA37F /* Recovery.swift in Sources */,
 				B3386D01478AA888D8F6AB96 /* WaypointUITests.swift in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;

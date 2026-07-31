@@ -66,11 +66,16 @@ const CAPTURE_CSS = `
 `;
 // Live flight deck: same optical-size split as the phone (Text for labels,
 // Display for the big stat numerals); no iPhone safe-area pushes on iPad.
+/* Selected by data-* hooks, never by class: CSS Modules hash every app class
+   (.instruments is emitted as _instruments_12zf7), so a bare class selector
+   matches nothing and fails SILENTLY — the capture just renders unstyled. Two
+   rounds of store screenshots shipped with these selectors dead, so the flight
+   deck was captured in Chromium's default sans. */
 const CAPTURE_CSS_FLIGHT = `
-  .fly-content, .fly-content * {
+  [data-testid="fly-content"], [data-testid="fly-content"] * {
     font-family: 'SF Pro Text', system-ui, -apple-system, sans-serif !important;
   }
-  .fly-content .tile .value {
+  [data-testid="fly-content"] [data-tile-value] {
     font-family: 'SF Pro Display', system-ui, -apple-system, sans-serif !important;
   }
 `;
@@ -291,14 +296,19 @@ async function seedPins(page) {
 }
 
 async function waitForMapIdle(page) {
+  // BOTH backends set __map, but MapKit's is a {getBearing} shim, not a
+  // maplibre Map — calling loaded() on it throws inside the predicate, and a
+  // throwing predicate never settles. Feature-detect instead of assuming.
   await page
     .waitForFunction(
       () => {
-        const c = document.querySelector(".map-container");
+        const c = document.querySelector('[data-testid="map-container"]');
         const m = c && c.__map;
-        if (m) return m.loaded() && m.areTilesLoaded();
+        if (m && typeof m.loaded === "function") {
+          return m.loaded() && m.areTilesLoaded();
+        }
         return !!document.querySelector(
-          ".map-container canvas, .map-container .mk-tile-loaded, .mk-map-view",
+          '[data-testid="map-container"] canvas, .mk-map-view',
         );
       },
       { timeout: 12000 },
@@ -322,7 +332,10 @@ const SHOTS = [
     async prep(page) {
       await page.getByRole("button", { name: "Start Flight" }).click();
       await page.getByTestId("recording").waitFor({ timeout: 15000 });
-      await page.locator(".map-container").first().waitFor({ timeout: 15000 });
+      await page
+        .locator('[data-testid="map-container"]')
+        .first()
+        .waitFor({ timeout: 15000 });
       await page.waitForTimeout(9000);
       await page
         .getByRole("button", { name: "Follow aircraft" })
@@ -340,7 +353,10 @@ const SHOTS = [
     needsFlights: true,
     url: `/logbook/${FLIGHTS[0].id}?mock-speed=1`,
     async prep(page) {
-      await page.locator(".map-container").first().waitFor({ timeout: 10000 });
+      await page
+        .locator('[data-testid="map-container"]')
+        .first()
+        .waitFor({ timeout: 10000 });
       // Open the replay pane: the split shows list, map with the aircraft,
       // the altitude graph, and the stats card in one frame.
       await page.getByTestId("replay-start").click();
@@ -377,7 +393,10 @@ const SHOTS = [
     needsPins: true,
     url: "/plan?mock-speed=1",
     async prep(page) {
-      await page.locator(".map-container").first().waitFor({ timeout: 10000 });
+      await page
+        .locator('[data-testid="map-container"]')
+        .first()
+        .waitFor({ timeout: 10000 });
       await page.waitForTimeout(7000);
     },
   },

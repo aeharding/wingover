@@ -1,4 +1,36 @@
-import { expect, test } from "@playwright/test";
+import { expect, type Page, test } from "@playwright/test";
+
+import { dismissLandingSheet } from "./landingSheet";
+
+/**
+ * Wait until the live map's backend is really there before touching it.
+ *
+ * MapCanvas imports its adapter lazily, so "recording" is visible and the
+ * overlay buttons are already clickable while the map container is still an
+ * empty div. page.mouse.* dispatches at coordinates without hit testing, so a
+ * drag in that window lands on the bare container: MapLibre never sees a
+ * mousedown, no dragstart fires, and follow stays pinned. Measured on a loaded
+ * box, the mousedown target was `div[data-testid=map-container]` with the
+ * loading veil still on and no `__map` on it yet.
+ *
+ * The handle is the gate because the adapter sets it on the statement after
+ * `new Map(...)`, which is where MapLibre attaches its gesture listeners — so
+ * its presence is exactly "a drag will be heard". Every test here pins
+ * ?map-style=blank, which forces the MapLibre backend (config.resolveBackend).
+ * maplibre.spec.ts gates the same seam the same way, for #152.
+ */
+async function liveMapReady(page: Page) {
+  await page.waitForFunction(
+    () =>
+      !!(
+        document.querySelector(
+          '[data-testid="live-map"] [data-testid="map-container"]',
+        ) as (HTMLElement & { __map?: unknown }) | null
+      )?.__map,
+    undefined,
+    { timeout: 15_000 },
+  );
+}
 
 test("arm, auto-takeoff, reload kill drill, stop, logbook", async ({
   page,
@@ -81,6 +113,12 @@ test("arm, auto-takeoff, reload kill drill, stop, logbook", async ({
 
   await page.getByRole("button", { name: "Stop flight" }).click();
   await page.getByRole("button", { name: "Stop", exact: true }).click();
+  // The saved flight presents itself over the returning shell; dismissing it
+  // is what puts the pilot back on the tabs. It comes FIRST because a
+  // presented ion-modal marks the app root aria-hidden, and getByRole reads
+  // the accessibility tree — Start Flight is not merely covered, it stops
+  // matching. (CI caught this; locally the assertion won the race.)
+  await dismissLandingSheet(page);
   await expect(page.getByRole("button", { name: "Start Flight" })).toBeVisible({
     timeout: 15_000,
   });
@@ -172,9 +210,8 @@ test("a two-hour flight lands itself and reaches the logbook hands-free", async 
   // The simulated pilot stops in place after two hours of flight; landing
   // detection, the fix-time grace, finalization, and collection all run
   // with zero interaction.
-  await expect(page.getByText("Flight saved to logbook")).toBeVisible({
-    timeout: 20_000,
-  });
+  // The saved flight presents itself as a sheet over the returning shell.
+  await dismissLandingSheet(page);
   await expect(page.getByRole("button", { name: "Start Flight" })).toBeVisible({
     timeout: 15_000,
   });
@@ -266,6 +303,7 @@ test("follow and track-up: two modes, deliberate resumes", async ({ page }) => {
 
   // Dragging the map unsnaps BOTH modes: the camera is neither following
   // nor rotating, whatever it was doing before.
+  await liveMapReady(page);
   const map = (await page.getByTestId("live-map").boundingBox())!;
   await page.mouse.move(map.x + map.width / 2, map.y + map.height / 2);
   await page.mouse.down();
@@ -300,6 +338,9 @@ test("edge guards stop an edge swipe from panning, inland drag still pans", asyn
 
   const follow = page.getByRole("button", { name: "Follow aircraft" });
   await expect(follow).toHaveAttribute("data-active", "true");
+  // Without this the first phase passes for the wrong reason: an absent map
+  // cannot pan either, so "follow stays pinned" says nothing about the guard.
+  await liveMapReady(page);
 
   // The guard is sized to the OS gesture area itself — env(safe-area-inset-bottom)
   // — so it covers the home-indicator swipe strip exactly and steals no more

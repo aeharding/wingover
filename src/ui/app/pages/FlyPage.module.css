@@ -1,0 +1,146 @@
+.frame {
+  /* Pinned black in the DARK scheme only: the idle page now themes with
+     the app (FlyTrace's backdrop has a light-mode ink design), so light
+     keeps the app's own tokens. The in-flight surface stays exempt from
+     theming (STEERING: one sunlight-tuned design) — armed and recording
+     paint their own black over either frame. */
+  :root:global(.ion-palette-dark) & {
+    --ion-background-color: #000000;
+    --ion-background-color-rgb: 0, 0, 0;
+    --ion-text-color: #ffffff;
+    --ion-text-color-rgb: 255, 255, 255;
+  }
+
+  /* The page title: the Settings page's large-title idiom, rendered by the
+     FRAME (this file's IonPage — the flight surface is Ionic-free). Either
+     scheme's background would paint the toolbars as bands over the comet —
+     go transparent and let the backdrop through. BOTH
+     headers (the outer main one AND the condense one nested in the content)
+     float over the surface — Ionic gives ion-header z-index 10, above the
+     surface — so a descendant selector, not a direct child: either must never
+     eat a tap on the sky or a control beneath the title band. */
+  ion-header {
+    pointer-events: none;
+  }
+
+  ion-toolbar {
+    --background: transparent;
+    --border-width: 0;
+  }
+
+  /* The iOS large-title (collapse=condense) toolbar needs its OWN transparency
+     rule. theme.css's document-scope `ion-toolbar { --background: var(
+     --ion-background-color) }` (the native nav-bar look) outranks the condense
+     toolbar's shadow-DOM transparency, and for the condense toolbar specifically
+     the plain `.frame ion-toolbar` above does not clear it — so the big
+     greeting title renders on a scheme-colored band over the backdrop. Same
+     condense-scoped fix the sync hero needs (sync.module.css). Both shells render this page whole, so it applies to each. */
+  ion-header[collapse="condense"] ion-toolbar {
+    --background: transparent;
+  }
+
+  ion-title {
+    color: #fff;
+  }
+
+  :root:not(:global(.ion-palette-dark)) & ion-title {
+    color: #23262b;
+  }
+}
+
+/* While the Fly tab is the active page, its backdrop paints under the bar
+   (fullscreen content + translucent bar; ionic-framework#28246), so thin the
+   frost to let the comet read through and drop the hairline. The rgb var
+   resolves at the BAR (outside .frame), so the frost matches the app scheme:
+   white over the light page, black over the night sky. Other tabs never match
+   the :has() — they keep the stock bar. */
+ion-tabs:has(.frame:not(:global(.ion-page-hidden))) ion-tab-bar {
+  --background: rgba(var(--ion-background-color-rgb), 0.35);
+  --border: none;
+}
+
+.content {
+  /* The home screen's box. Deliberately NOT the flight surface's .content:
+     that one pins --stat-cyan and the --map-chip-* family for the frozen
+     sunlight design, none of which this screen draws. Transparent throughout,
+     so the FlyTrace backdrop behind it reads through. */
+  position: absolute;
+  inset: 0;
+  overflow: hidden;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  /* Bottom-anchored, in the thumb's reach: the trace backdrop owns the sky
+     above, the action sits above the tab bar. --offset-bottom is the host
+     content's published under-bar distance (see FlyTrace's box notes); where
+     the host does not publish one the fallback padding is the whole
+     clearance. */
+  justify-content: flex-end;
+  gap: 1.25rem;
+  /* env() rather than --ion-safe-area-* (INSETS.md): this box is a plain div
+     inside a scrollY=false fullscreen IonContent, which does not pad it, so
+     the notch margin has to come from the platform directly. Zero in portrait,
+     the notch margin in landscape, so the button and facts clear the rounded
+     corners. */
+  padding: 0 calc(20px + env(safe-area-inset-right))
+    calc(var(--offset-bottom, 0px) + 20px)
+    calc(20px + env(safe-area-inset-left));
+
+  /* The home screen themes with the app (keyed on the palette CLASS,
+     appTheme.ts). The in-flight surfaces do not theme at all — one
+     sunlight-tuned design, in their own stylesheet. */
+  color: #fff;
+
+  :root:not(:global(.ion-palette-dark)) & {
+    color: #23262b;
+  }
+}
+.facts {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 0.4rem;
+  color: rgba(235, 238, 242, 0.75);
+  font-size: 1rem;
+  text-shadow: 0 1px 6px rgba(0, 0, 0, 0.6);
+
+  :root:not(:global(.ion-palette-dark)) & {
+    color: rgba(43, 48, 55, 0.78);
+    text-shadow: none;
+  }
+}
+/* The Clock-app Start idiom (per Alex): a true pill, tinted glass green
+   with the label carrying the color, not a solid web-green slab. Tuned
+   for sun, where glare lifts the black level and dark-on-dark melts
+   together: the tint runs stronger than Apple's, a hairline edge keeps
+   the pill's boundary when the fill washes out, and the label is a
+   LUMINOUS green (the systemGreen family), because sunlight readability
+   is a luminance game before it is a hue game. */
+
+.start {
+  width: min(100%, 420px);
+  padding: 1.5rem;
+  font-size: 1.75rem;
+  font-weight: 600;
+  color: color(display-p3 0.5 0.97 0.62);
+  background: color(display-p3 0.15 0.8 0.35 / 0.22);
+  border: 1px solid color(display-p3 0.3 0.85 0.45 / 0.4);
+  border-radius: 999px;
+  /* Real glass (per Alex): the comet passing beneath frosts through. */
+  backdrop-filter: saturate(210%) blur(20px);
+
+  &:active {
+    background: color(display-p3 0.15 0.8 0.35 / 0.34);
+  }
+
+  /* Light: the Clock app's light-scheme tint — deeper label, same glass. */
+  :root:not(:global(.ion-palette-dark)) & {
+    color: color(display-p3 0.02 0.55 0.26);
+    background: color(display-p3 0.2 0.75 0.4 / 0.16);
+    border-color: color(display-p3 0.1 0.6 0.3 / 0.35);
+
+    &:active {
+      background: color(display-p3 0.2 0.75 0.4 / 0.28);
+    }
+  }
+}

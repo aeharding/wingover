@@ -1,0 +1,12 @@
+{
+  "surface": "keychain_set",
+  "hop": "js->rust->swift",
+  "description": "The write half of the credential store, the one keychain_get.hit can never prove: read fixtures pin what JS understands, not what JS wrote. Both argument names travel verbatim through three languages, and `value` is the serialized Credentials blob — a rename on either end silently stops persisting the credential, and the pilot is signed out on the next launch with no error anywhere.",
+  "produces": "src/sync/store/keychain.ts (keychainStore.save)",
+  "consumes": "src-tauri/plugins/wingover/ios/Sources/WingoverPlugin.swift (KeychainSetArgs)",
+  "codes": [],
+  "request": {
+    "key": "sync.credentials",
+    "value": "{\"kind\":\"apple\",\"url\":\"https://db.wingover.app\",\"dbName\":\"u_9f3\",\"username\":\"u_9f3\",\"password\":\"s3cr3t\",\"entitled\":true,\"environment\":\"Sandbox\"}"
+  }
+}

@@ -10,14 +10,21 @@
  *                     classes imported into this file with @value. Owned
  *                     classes from another module are IMPORTED, never
  *                     hard-coded.
- *  3. value-imports — every `@value x from "./m.module.css"` resolves, and
+ *  3. cross-imports — every `@value x from "./m.module.css"` and every
+ *                     `composes: x from "./m.module.css"` resolves, and
  *                     m actually declares .x.
  *  4. dts-pairing   — every module has a GENERATED .d.ts (gitignored;
  *                     postinstall/prebuild run tcm) and every .d.ts a
  *                     module — catches generation not running, and
  *                     orphans from renames/deletes.
- *  5. module-used   — every module is imported by some ts/tsx or @value'd
- *                     by another module (dead file detection).
+ *  5. module-used   — every module is imported by some ts/tsx, or @value'd
+ *                     or composed from by another module (dead file
+ *                     detection).
+ *  6. ui-buckets    — a module in src/ui/app or src/ui/flight never reaches
+ *                     into the other, and src/ui/shared reaches into neither.
+ *                     Same doctrine as wingover/ui-bucket-isolation, which
+ *                     only sees ts/tsx: @value and composes are the other two
+ *                     doors into a stylesheet.
  *
  * Exit 0 clean; exit 1 with a per-violation report otherwise.
  */
@@ -97,17 +104,30 @@ const valueImportsOf = (text) => {
   return map;
 };
 
+// `composes: x from "./m.module.css"` — the OTHER cross-file mechanism, and
+// the one that fails silently: a typo'd class name builds with no error or
+// warning and drops every declaration it should have brought in (tcm still
+// emits the locally-declared key, so tsc says nothing either).
+const composesOf = (text) => {
+  const map = new Map();
+  for (const m of text.matchAll(
+    /composes:\s*([\w-]+(?:\s+[\w-]+)*)\s+from\s+["']([^"']+)["']/g,
+  )) {
+    for (const name of m[1].split(/\s+/))
+      map.set(name, { original: name, from: m[2] });
+  }
+  return map;
+};
+
 for (const f of modules) {
   const text = stripComments(readFileSync(f, "utf8"));
   const values = valueImportsOf(text);
 
-  // ── 3. value-imports resolve and declare the class ──
-  for (const [local, { original, from }] of values) {
+  // ── 3. cross-imports resolve and declare the class ──
+  for (const [local, { original, from }] of [...values, ...composesOf(text)]) {
     const target = resolve(dirname(f), from);
     if (!existsSync(target)) {
-      violations.push(
-        `${rel(f)}: @value ${local} from "${from}" — file not found`,
-      );
+      violations.push(`${rel(f)}: ${local} from "${from}" — file not found`);
       continue;
     }
     const targetText = stripComments(readFileSync(target, "utf8"));
@@ -115,7 +135,7 @@ for (const f of modules) {
     // wrongly match a lone .foo-bar declaration.
     if (!new RegExp(`\\.${original}(?![\\w-])`).test(targetText)) {
       violations.push(
-        `${rel(f)}: @value ${original} from "${from}" — ${rel(target)} declares no .${original}`,
+        `${rel(f)}: ${original} from "${from}" — ${rel(target)} declares no .${original}`,
       );
     }
   }
@@ -175,11 +195,44 @@ for (const f of modules) {
   for (const m of text.matchAll(/@value[^"']+["']([^"']+)["']/g)) {
     imported.add(resolve(dirname(f), m[1]));
   }
+  // `composes: x from "./m.module.css"` is the other cross-file mechanism, and
+  // a module reachable ONLY that way is not dead.
+  for (const m of text.matchAll(/composes:[^"';]+from\s+["']([^"']+)["']/g)) {
+    imported.add(resolve(dirname(f), m[1]));
+  }
 }
 for (const f of modules) {
   if (!imported.has(f)) {
     violations.push(
-      `${rel(f)}: imported by nothing (no ts/tsx import, no @value) — dead file?`,
+      `${rel(f)}: imported by nothing (no ts/tsx import, no @value, no composes) — dead file?`,
+    );
+  }
+}
+
+// ── 6. ui-buckets ──
+// Mirrors eslint-rules/ui-bucket-isolation.js for the two CSS-only edges.
+const UI = join(SRC, "ui");
+const bucketOf = (f) => {
+  const r = relative(UI, f);
+  if (!r || r.startsWith("..")) return null;
+  const head = r.split("/")[0];
+  return ["app", "flight", "shared"].includes(head) ? head : "root";
+};
+for (const f of modules) {
+  const from = bucketOf(f);
+  if (from !== "app" && from !== "flight" && from !== "shared") continue;
+  const text = stripComments(readFileSync(f, "utf8"));
+  const refs = [
+    ...text.matchAll(/@value[^"']+["']([^"']+)["']/g),
+    ...text.matchAll(/composes:[^"';]+from\s+["']([^"']+)["']/g),
+  ];
+  for (const m of refs) {
+    const to = bucketOf(resolve(dirname(f), m[1]));
+    if (!to || to === from || to === "shared") continue;
+    violations.push(
+      `${rel(f)}: reaches into src/ui/${to} ("${m[1]}") — ` +
+        `src/ui/app and src/ui/flight never meet, and shared reaches into ` +
+        `neither. Move the shared rule into src/ui/shared.`,
     );
   }
 }

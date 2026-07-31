@@ -15,26 +15,29 @@ import {
   navigateOutline,
   settingsOutline,
 } from "ionicons/icons";
-import { useEffect, useSyncExternalStore } from "react";
+import { useSyncExternalStore } from "react";
 import { Redirect, Route } from "react-router-dom";
 
 import { engine } from "../engine";
-import { isTauri } from "../engine/platform";
-import DesktopShell from "./desktop/DesktopShell";
-import FlightSurface from "./flight/FlyPage";
-import AllFlightsMapPage from "./pages/AllFlightsMapPage";
-import AppearancePage from "./pages/AppearancePage";
-import FlightDetailPage from "./pages/FlightDetailPage";
-import FlyFrame from "./pages/FlyFrame";
-import LogbookPage from "./pages/LogbookPage";
-import MapProviderPage from "./pages/MapProviderPage";
-import PlanPage from "./pages/PlanPage";
-import SettingsPage from "./pages/SettingsPage";
-import UnitsPage from "./pages/UnitsPage";
-import { SettingsProvider } from "./settings/SettingsContext";
-import { SyncSheetsProvider } from "./sync/SyncSheets";
-import { useCanRecord } from "./useCanRecord";
-import { useIsDesktop } from "./useIsDesktop";
+import { isTauri } from "../platform";
+import DesktopShell from "./app/desktop/DesktopShell";
+import EndedFlightSheet from "./app/logbook/EndedFlightSheet";
+import AllFlightsMapPage from "./app/pages/AllFlightsMapPage";
+import AppearancePage from "./app/pages/AppearancePage";
+import FlightDetailPage from "./app/pages/FlightDetailPage";
+import FlyPage from "./app/pages/FlyPage";
+import LogbookPage from "./app/pages/LogbookPage";
+import MapProviderPage from "./app/pages/MapProviderPage";
+import PlanPage from "./app/pages/PlanPage";
+import SettingsPage from "./app/pages/SettingsPage";
+import UnitsPage from "./app/pages/UnitsPage";
+import { SyncSheetsProvider } from "./app/sync/SyncSheets";
+import { useCanRecord } from "./app/useCanRecord";
+import { useIsDesktop } from "./app/useIsDesktop";
+import FlightSurface from "./flight/FlightSurface";
+import AppBoundary from "./shared/AppBoundary";
+import { BootFailedScreen } from "./shared/AppCrash";
+import { SettingsProvider } from "./shared/settings/SettingsContext";
 
 setupIonicReact({
   mode: "ios",
@@ -59,11 +62,6 @@ setupIonicReact({
 });
 
 export default function App() {
-  useEffect(() => {
-    // Kick the one-time WAL hydration (idempotent; FlyPage kicks it too).
-    void engine.getSnapshot();
-  }, []);
-
   return (
     <SettingsProvider>
       <AppBody />
@@ -79,31 +77,65 @@ export default function App() {
 // Rendering only the flight surface in flight makes the footprint the single
 // live map and nothing else. The tab bar is unreachable during a flight
 // anyway, so this is invisible to the pilot, and the full shell returns the
-// instant the flight ends. "idle" is the only non-flight state;
-// pre-hydration the engine reports it, so the shell shows during load.
+// instant the flight ends. "idle" is the only non-flight state; the boot
+// gate below keeps everything unrendered until the engine has read the WAL
+// and actually knows it.
 //
 // Shed means SHED: ion-app itself goes too. The flight surface is a plain
 // div tree (src/ui/flight, Ionic-free by lint), so while recording, Ionic
 // simply does not exist in the DOM. IonApp and the sheets remount with the
 // shell when the flight ends.
 function AppBody() {
+  const hydration = useSyncExternalStore(
+    engine.subscribe,
+    engine.hydrationSync,
+  );
   const inFlight = useSyncExternalStore(
     engine.subscribe,
     () => engine.snapshotSync().status !== "idle",
   );
   const isDesktop = useIsDesktop();
-  if (inFlight) return <FlightSurface />;
+  // Boot gate. Until the WAL is read the engine would report "idle", and
+  // rendering on that guess flashes the wrong surface during a mid-flight
+  // relaunch — so render nothing (the body paints the palette color). A
+  // read that FAILED gets a visible way out, never the idle screen: Start
+  // Flight clears the WAL a live flight may be sitting in, unread.
+  if (hydration === "pending") return null;
+  if (hydration === "failed") return <BootFailedScreen />;
+  // The two boundaries, and the only place either is mounted. Which one is
+  // live decides whether a crash reloads or surfaces: in flight a reload is
+  // near-invisible and the recording survives it, on the ground there is
+  // nothing to save and the pilot deserves to be told.
+  //
+  // The keys are load-bearing, not decoration. Same component, same position,
+  // so without them React reconciles these two elements into ONE fiber and the
+  // caught error survives the swap: an unhealable flight crash would hand the
+  // ground shell a boundary that is already tripped, and the pilot lands on the
+  // crash screen with no way off it.
+  if (inFlight)
+    return (
+      <AppBoundary key="flight" attemptHeal>
+        <FlightSurface />
+      </AppBoundary>
+    );
   // Desktop gets its own shell: plain react-router, no Ionic outlet (see
   // DesktopShell). Phones keep the Ionic tab shell untouched.
   return (
-    <IonApp>
-      {/* Above the shells, so a sheet can be raised from anywhere without
-          each page owning a modal; inside IonApp, because IonModal
-          presents against it. */}
-      <SyncSheetsProvider>
-        {isDesktop ? <DesktopShell /> : <TabShell />}
-      </SyncSheetsProvider>
-    </IonApp>
+    <AppBoundary key="ground">
+      <IonApp>
+        {/* Above BOTH shells: a flight ends the same way whichever one is
+            mounted, and the announcement is not the tab shell's to own. It
+            lived in TabShell for exactly as long as it took to notice that
+            a desktop pilot then got no word at all. */}
+        <EndedFlightSheet />
+        {/* Above the shells, so a sheet can be raised from anywhere without
+            each page owning a modal; inside IonApp, because IonModal
+            presents against it. */}
+        <SyncSheetsProvider>
+          {isDesktop ? <DesktopShell /> : <TabShell />}
+        </SyncSheetsProvider>
+      </IonApp>
+    </AppBoundary>
   );
 }
 
@@ -118,7 +150,7 @@ function TabShell() {
               gate because the opt-in is mirrored to localStorage, so
               canRecord is correct synchronously at first render. */}
           {canRecord ? (
-            <Route exact path="/fly" component={FlyFrame} />
+            <Route exact path="/fly" component={FlyPage} />
           ) : (
             <Route exact path="/fly">
               <Redirect to="/logbook" />

@@ -22,6 +22,10 @@
     "wingover:allow-storekit-environment",
     "wingover:allow-sign-in-with-apple",
     "opener:default",
+    {
+      "identifier": "opener:allow-open-url",
+      "allow": [{ "url": "app-settings:" }]
+    },
     "haptics:allow-impact-feedback",
     "haptics:allow-notification-feedback",
     "haptics:allow-selection-feedback",

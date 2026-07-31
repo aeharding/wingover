@@ -1,5 +1,5 @@
-import type { PositionSource, SourcePosition } from "./real";
-import { FlightSimulator } from "./simulator";
+import { FlightSimulator } from "../flight/simulator";
+import type { PositionSource, SourcePosition } from "./engine";
 import type { Fix } from "./types";
 
 const SESSION_KEY = "wingover.sim-session";
@@ -38,8 +38,8 @@ export function createSimulatorSource(
   home?: { latitude: number; longitude: number },
 ): PositionSource {
   return {
-    watch(onPositions, onError, options) {
-      void onError;
+    watch(onPositions, onRefusal, options) {
+      void onRefusal;
       const since = options?.since;
       let session: SimSession | null = null;
       if (since != null) {

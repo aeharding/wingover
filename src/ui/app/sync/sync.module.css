@@ -1,0 +1,348 @@
+/* The sync sheet family's shared vocabulary: SyncSheet (shell/pitch),
+   SyncSubscription, SyncConnection, the SelfHostPage form, and the logbook
+   ConnectFunnel (the SIWA button). One modal, one visual language: the plain
+   sheet background, stock Ionic surfaces, nothing decorative. (A hero photo
+   with scrim/glow machinery lived here once and was removed as a
+   distraction; if art ever returns, it must re-earn the contrast math.) */
+/* The floating card (Voyager's donate-dialog grammar): the modal itself is
+   invisible and auto-height; the card div is the visible thing. No
+   ion-content and no ion-nav inside — auto height cannot measure
+   absolutely positioned pages, so sub-views swap in place. */
+.floating {
+  --background: transparent;
+  --height: auto;
+  --box-shadow: none;
+}
+
+.card {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  width: min(21.5rem, calc(100vw - 2rem));
+  /* A floor, so transient states (Connecting) don't collapse the card
+     and snap it back a beat later; short content centers via cardBody. */
+  min-height: 20rem;
+  /* Top margin exceeds the badge's overhang, or the scroller clips it. */
+  margin: 3.25rem auto 2.25rem;
+  padding: 1rem;
+  border-radius: 16px;
+  background: var(--ion-background-color);
+  box-sizing: border-box;
+}
+
+/* The badge overhangs in normal flow (Voyager's grammar: half out, half
+   in); the body beneath takes the leftover height and centers within it,
+   so a short view floats mid-card while the badge keeps its perch. */
+.cardBody {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 0.75rem;
+  width: 100%;
+}
+
+/* The state badge overhangs the card's top edge; its color is the sync
+   status speaking (the same tones the Settings row uses). */
+.badge {
+  display: flex;
+  margin-top: -46px;
+  padding: 8px;
+  border-radius: 50%;
+  font-size: 3em;
+  color: color(display-p3 1 1 1);
+  background: var(--status-good);
+}
+
+.badgeWarn {
+  background: var(--ion-color-warning);
+}
+
+.badgeError {
+  background: var(--ion-color-danger);
+}
+
+.badgeOff {
+  background: var(--ion-color-medium);
+}
+
+/* Clears the 44pt platform minimum (gloves-first, STEERING) via
+   padding; the visible circle stays small. */
+.cardClose {
+  position: absolute;
+  top: 4px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 44px;
+  min-height: 44px;
+  appearance: none;
+  background: none;
+  color: var(--ion-color-medium);
+  font-size: 1.3em;
+}
+
+.cardClose {
+  right: 4px;
+}
+
+.cardClose ion-icon {
+  padding: 5px;
+  border-radius: 50%;
+  background: color(display-p3 0.7 0.7 0.7 / 0.2);
+}
+
+.cardTitle {
+  font-size: 1.4em;
+  font-weight: 700;
+}
+
+.cardDescription {
+  margin: 0;
+  line-height: 1.5;
+  text-align: center;
+  color: var(--ion-text-color);
+}
+
+/* The plan buttons breathe like Voyager's tips: an evenly spaced column
+   that keeps its presence even while products load. */
+.plans {
+  display: flex;
+  flex-direction: column;
+  justify-content: space-evenly;
+  gap: 0.5rem;
+  width: 100%;
+  min-height: 7rem;
+}
+
+/* The one scroller: the dialog hugs content until the viewport runs out,
+   then this scrolls (docs/INSETS.md for the safe-area read). */
+.sheetScroll {
+  overflow-y: auto;
+  max-height: min(
+    85vh,
+    calc(
+      100vh - var(--ion-safe-area-top, 0px) - var(--ion-safe-area-bottom, 0px) -
+        2rem
+    )
+  );
+  width: 100%;
+  box-sizing: border-box;
+}
+
+/* Slim header row for the auto-height sheet: back / title / action. The
+   side slots share a min-width so the title centres for real. */
+.sheetHeader {
+  display: flex;
+  align-items: center;
+  padding: 0.5rem 0.5rem 0;
+
+  h2 {
+    flex: 1;
+    margin: 0;
+    text-align: center;
+    font-size: 1.0625rem;
+    font-weight: 600;
+  }
+}
+
+.sheetHeaderSide,
+.sheetHeaderSideEnd {
+  min-width: 4.5rem;
+  display: flex;
+}
+
+.sheetHeaderSideEnd {
+  justify-content: flex-end;
+}
+
+.homeBody {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 0.25rem;
+  text-align: center;
+  width: 100%;
+  box-sizing: border-box;
+}
+
+/* Web pitch: the sentence that stands in for the StoreKit-only buy button —
+   what sync is and where to get it. Sits where the buttons would. */
+.pitchNote {
+  margin: 0 0 1rem;
+  font-size: 1rem;
+  line-height: 1.5;
+  color: var(--ion-text-color);
+}
+
+/* Sub-pages pushed inside the sheet (Link Account, SelfHost) share the state
+   block and fine print with the home view, on the same plain background. */
+.loginBody {
+  padding: 1.5rem 1.25rem;
+  text-align: center;
+}
+
+.loginLede {
+  margin: 0.5rem 0 1.5rem;
+  color: var(--ion-color-medium);
+}
+
+.state {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 0.25rem;
+  margin-bottom: 1.5rem;
+}
+
+.stateLabel {
+  font-size: 2rem;
+  font-weight: 700;
+  letter-spacing: -0.01em;
+}
+
+.stateDetail {
+  color: var(--ion-color-medium);
+  font-size: 0.875rem;
+}
+
+/* "On" is the Settings row's green: the card is that row expanded, and
+   the two must never disagree on what good looks like. The checkmark
+   lives on the badge. */
+.stateOn {
+  .stateLabel {
+    color: var(--status-good);
+  }
+}
+
+/* The computer page's empty-state glyph: a big quiet landmark so the page
+   reads designed rather than bare. Success green: linking is the good
+   path. */
+.computerGlyph {
+  display: block;
+  margin: 1rem auto 0.25rem;
+  font-size: 4.5rem;
+  color: var(--status-good);
+  opacity: 0.85;
+}
+
+/* Read-only / Expired is not an error and must not look like one: the pilot's
+   flights are all still there. Amber, not red. */
+.stateReadonly {
+  .stateLabel {
+    color: var(--ion-color-warning);
+  }
+}
+
+.stateError {
+  .stateLabel {
+    color: var(--ion-color-danger);
+  }
+}
+
+.errorMessage {
+  color: var(--ion-color-danger);
+  font-size: 0.875rem;
+  word-break: break-word;
+  margin: 0 0 1rem;
+}
+
+/* Gloves-first (STEERING): every block action here is well past the
+   platform minimum, even though this is ground UI. Clear block buttons
+   (Back) share it deliberately: that text style set the tone the whole
+   quiet family now matches. */
+.homeBody ion-button[expand="block"],
+.loginBody ion-button[expand="block"] {
+  --padding-top: 1.25rem;
+  --padding-bottom: 1.25rem;
+  --border-radius: 14px;
+  margin-bottom: 0.75rem;
+  font-weight: 600;
+}
+
+/* Busy state without layout shift (Ionic best practice: overlay, never
+   swap): the label keeps the button's intrinsic size and goes invisible;
+   the spinner rides on top, sized in em so it fits any button. */
+.busyLabel {
+  position: relative;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.busyLabelBusy .busyText {
+  visibility: hidden;
+}
+
+.busySpinner {
+  position: absolute;
+  inset: 0;
+  margin: auto;
+  width: 1.2em;
+  height: 1.2em;
+}
+
+/* A slotted icon sits outside busyLabel's overlay; hide it while busy,
+   keeping its box so the button holds size. */
+.busyHiddenIcon {
+  visibility: hidden;
+}
+
+/* Quiet, secondary actions (More options, Restore Purchases, the quiet
+   sign-in): present for the pilot who is looking for them, silent for
+   everyone else — in the same text voice as the Back button. */
+.quietAction {
+  --padding-top: 1rem;
+  --padding-bottom: 1rem;
+  font-weight: 600;
+}
+
+/* Apple's HIG wants their sign-in button monochrome — never the app's accent
+   color — with the contrast variant per background: black on light, white on
+   dark. */
+.siwaButton {
+  --background: #000;
+  --background-activated: #333;
+  --background-focused: #333;
+  --background-hover: #333;
+  --color: #fff;
+
+  :root:global(.ion-palette-dark) & {
+    --background: #fff;
+    --background-activated: #e6e6e6;
+    --background-focused: #e6e6e6;
+    --background-hover: #e6e6e6;
+    --color: #000;
+  }
+}
+
+/* Plain CSS, not ion-padding: this app imports only core/normalize/structure/
+   typography, so Ionic's utility classes (padding.css) aren't loaded and
+   ion-padding / ion-margin-horizontal are silently no-ops. Importing the
+   utility system to move one note would be the tail wagging the dog —
+   STEERING wants plain CSS. */
+.formNote {
+  padding: 0 1.25rem;
+}
+
+/* Same reason as .formNote — this used to carry `ion-padding`, which is
+   a no-op here, so the one message that has to be readable rendered
+   edge-to-edge. Aligned with the inset list it belongs to. */
+.formProblem {
+  padding: 0 1.25rem;
+  margin: 1rem 0 0;
+}
+
+.finePrint {
+  display: block;
+  color: var(--ion-color-medium);
+  font-size: 0.8125rem;
+  line-height: 1.4;
+  margin-top: 0.5rem;
+
+  a {
+    color: inherit;
+  }
+}

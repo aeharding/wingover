@@ -1,4 +1,4 @@
-import { cx } from "../cx";
+import { cx } from "../shared/cx";
 
 import styles from "./Tile.module.css";
 
@@ -28,7 +28,7 @@ export default function Tile({
   return (
     <div className={classes}>
       <div className={styles.label}>{label}</div>
-      <div className={styles.value} data-testid={testId}>
+      <div className={styles.value} data-testid={testId} data-tile-value="">
         {value}
       </div>
       {icon && <div className={styles.icon}>{icon}</div>}

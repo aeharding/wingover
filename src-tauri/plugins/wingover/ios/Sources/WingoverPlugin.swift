@@ -191,13 +191,12 @@ class WingoverPlugin: Plugin, CLLocationManagerDelegate,
 
   @objc public func startCapture(_ invoke: Invoke) throws {
     DispatchQueue.main.async {
-      guard CLLocationManager.authorizationStatus() == .authorizedWhenInUse
-        || CLLocationManager.authorizationStatus() == .authorizedAlways
-      else {
-        invoke.reject("location permission not granted")
-        return
-      }
-
+      // No guards here by design: the sensor layer senses and actuates,
+      // it does not decide (ARCHITECTURE.md). The JS engine refuses a
+      // watch on missing permission or reduced accuracy BEFORE issuing
+      // start_watch, using what checkPermissions reports; if capture is
+      // ever started anyway, the delegate's lastError codes and the
+      // barren delivery stream tell the truth downstream.
       self.locationManager.desiredAccuracy = kCLLocationAccuracyBest
       self.locationManager.distanceFilter = kCLDistanceFilterNone
       self.locationManager.activityType = .airborne
@@ -339,7 +338,7 @@ class WingoverPlugin: Plugin, CLLocationManagerDelegate,
 
   @objc override public func checkPermissions(_ invoke: Invoke) {
     DispatchQueue.main.async {
-      invoke.resolve(["location": self.authorizationString()])
+      invoke.resolve(self.permissionStatus())
     }
   }
 
@@ -353,7 +352,7 @@ class WingoverPlugin: Plugin, CLLocationManagerDelegate,
         self.permissionRequests.append(invoke)
         self.locationManager.requestWhenInUseAuthorization()
       } else {
-        invoke.resolve(["location": self.authorizationString()])
+        invoke.resolve(self.permissionStatus())
       }
     }
   }
@@ -365,7 +364,15 @@ class WingoverPlugin: Plugin, CLLocationManagerDelegate,
   public func locationManager(
     _ manager: CLLocationManager, didUpdateLocations locations: [CLLocation]
   ) {
-    lastError = nil
+    // Deliveries reassert the accuracy-authorization truth rather than
+    // blindly clearing: with Precise Location off, coarse fixes keep
+    // arriving and must not wipe the imprecise error before a drain
+    // ships it. Flipping Precise back on clears it with the first
+    // delivery. Capture itself is never stopped here — mid-flight the
+    // app ignores this error by design and keeps consuming.
+    lastError =
+      manager.accuracyAuthorization == .fullAccuracy
+      ? nil : "reduced-accuracy"
     for location in locations {
       guard location.horizontalAccuracy >= 0 else { continue }
       let fix = convertLocation(location)
@@ -396,9 +403,20 @@ class WingoverPlugin: Plugin, CLLocationManagerDelegate,
       positionRequests = []
       for request in requests { request.reject(error.localizedDescription) }
     }
-    if let clError = error as? CLError, clError.code == .locationUnknown {
-      // Transient: CoreLocation keeps trying, updates resume on their own.
-      return
+    if let clError = error as? CLError {
+      if clError.code == .locationUnknown {
+        // Transient: CoreLocation keeps trying, updates resume on their own.
+        return
+      }
+      if clError.code == .denied {
+        // Revoking authorization mid-watch fires BOTH delegates:
+        // didChangeAuthorization sets the code, then this error arrives
+        // with localized prose that would overwrite it — and prose fails
+        // the JS classifier, downgrading a permission loss to a generic
+        // "unavailable". Keep it a stable code.
+        lastError = "permission-denied"
+        return
+      }
     }
     Logger.error(error)
     lastError = error.localizedDescription
@@ -410,16 +428,62 @@ class WingoverPlugin: Plugin, CLLocationManagerDelegate,
     let requests = permissionRequests
     permissionRequests = []
     for request in requests {
-      request.resolve(["location": authorizationString()])
+      request.resolve(permissionStatus())
     }
+    // Stable codes, not prose: these strings are the wire contract the
+    // JS source matches on (nativeSource.ts). EXHAUSTIVE, and it clears:
+    // a code must not outlive the state that caused it. Revoked
+    // authorization stops delivery, so didUpdateLocations' reassert can
+    // never run again — every later transition has to be judged here or
+    // the old code keeps mirroring through drain forever (Settings ->
+    // Never -> Ask Next Time left a stale "permission-denied" holding the
+    // red takeover against a state that no longer existed).
     if status == .denied || status == .restricted {
-      lastError = "location permission denied"
+      lastError = "permission-denied"
+    } else if status == .notDetermined {
+      // Reset to "Ask Next Time": nothing is wrong, the question is
+      // simply unasked. JS reads that as ready and bounces the watch,
+      // whose start sequence does the asking.
+      lastError = nil
+    } else if manager.accuracyAuthorization != .fullAccuracy {
+      // Precise Location flipped off while we're running (this delegate
+      // fires without an app relaunch for accuracy-only changes). Under
+      // reduced accuracy CoreLocation may deliver very sparsely, so
+      // don't wait for the next fix to reassert — surface it now; the
+      // next drain ships it.
+      lastError = "reduced-accuracy"
+    } else {
+      // Authorized at full accuracy: whatever we last reported is over.
+      lastError = nil
     }
   }
 
   //
   // Helpers
   //
+
+  // ONE shape for every permission answer: check, request, and the
+  // delegate that resolves the prompt. JS reassigns the same status from
+  // all three, so a resolve missing "precise" reads as full accuracy and
+  // starts capture with Precise Location off — coarse fixes then flow, the
+  // drain code is suppressed as stale, and the pilot sits on Acquiring GPS
+  // with no explanation. Pinned by contract-fixtures/request_permissions.*.
+  //
+  // servicesEnabled reports the DEVICE-wide switch, not this app's grant.
+  // It senses; it does not decide (JS's permissionRefusal folds it into a
+  // denial). It is here so the recovery loop and the watch's pre-capture
+  // gate can never disagree: every input to the refusal rule rides in one
+  // dictionary, so there is no state one of them can see and the other
+  // cannot. Today's iOS folds Location Services off into an app-level
+  // denial anyway (device-tested); this is the defense for the platforms
+  // and versions where it does not.
+  private func permissionStatus() -> JsonObject {
+    [
+      "location": authorizationString(),
+      "precise": locationManager.accuracyAuthorization == .fullAccuracy,
+      "servicesEnabled": CLLocationManager.locationServicesEnabled(),
+    ]
+  }
 
   private func authorizationString() -> String {
     switch CLLocationManager.authorizationStatus() {

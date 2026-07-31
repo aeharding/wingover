@@ -1,6 +1,6 @@
 import { invoke } from "@tauri-apps/api/core";
 
-import { isTauri } from "../../engine/platform";
+import { isTauri } from "../../platform";
 import type { CredentialProvider, Credentials } from "../types";
 
 /**
@@ -120,15 +120,33 @@ export async function appleSubscriptionState(): Promise<
 > {
   const jws = await probeEntitlementJWS();
   if (!jws) return null;
+  const payload = decodeJwsPayload(jws);
+  // Undecodable = no verdict; decodable without an expiry = a
+  // transaction that is not an active sub, which reads "expired" (the
+  // pre-rename behavior — null here would show such a pilot the pitch).
+  if (payload === null) return null;
+  return payload.expiresDate !== undefined && payload.expiresDate > Date.now()
+    ? "active"
+    : "expired";
+}
+
+/**
+ * The transaction's expiry, decoded locally, for DISPLAY and plausibility
+ * checks only — entitlement remains the server's verdict, verified against
+ * Apple's roots. The JWS payload is plain base64url JSON; reading a field is
+ * not trusting it. null = undecodable or no expiry field.
+ */
+export function jwsExpiresAt(jws: string): number | null {
+  return decodeJwsPayload(jws)?.expiresDate ?? null;
+}
+
+function decodeJwsPayload(jws: string): { expiresDate?: number } | null {
   try {
     const part = jws.split(".")[1] ?? "";
     const base64 = part.replace(/-/g, "+").replace(/_/g, "/");
-    const payload = JSON.parse(
+    return JSON.parse(
       atob(base64 + "=".repeat((4 - (base64.length % 4)) % 4)),
     ) as { expiresDate?: number };
-    return payload.expiresDate !== undefined && payload.expiresDate > Date.now()
-      ? "active"
-      : "expired";
   } catch {
     return null;
   }

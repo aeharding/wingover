@@ -1,0 +1,20 @@
+{
+  "surface": "keychain_get",
+  "hop": "swift->rust->js",
+  "description": "errSecItemNotFound resolves with an explicit null, not a rejection: a fresh install has no credential and that is not an error. Rust's Option would also read an absent key as None, so the null is the part worth pinning.",
+  "produces": "src-tauri/plugins/wingover/ios/Sources/WingoverPlugin.swift (keychainGet)",
+  "consumes": "src/sync/store/keychain.ts (load)",
+  "codes": ["key", "value"],
+  "request": {
+    "key": "sync.credentials"
+  },
+  "response": {
+    "value": null
+  },
+  "jsResponse": null,
+  "expect": {
+    "js": {
+      "credentials": null
+    }
+  }
+}

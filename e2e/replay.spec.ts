@@ -1,5 +1,7 @@
 import { expect, test } from "@playwright/test";
 
+import { dismissLandingSheet } from "./landingSheet";
+
 type Page = import("@playwright/test").Page;
 
 async function openImportedFlight(page: Page) {
@@ -33,6 +35,21 @@ async function sliderFraction(page: Page) {
   return now / max;
 }
 
+// Every pointer coordinate below is derived from the chart's box, so the box
+// has to be the SETTLED one. The pane opens by animating its height
+// (ReplayDrawer, 300ms), so the chart is still sliding up when the dock
+// first becomes visible, and boundingBox() waits only for "attached" (a
+// local run measured 95px low). hover() gates on a stable box, unchanged
+// across two animation frames, and parks the cursor on the chart's center.
+// CI run 30215284122 measured mid-slide and put the later drag 0.09px under
+// the settled chart's bottom edge, in the frame gap where no pointer
+// handler lives: that press did nothing at all.
+async function stableBarogramBox(page: Page) {
+  const barogram = page.getByTestId("barogram");
+  await barogram.hover();
+  return (await barogram.boundingBox())!;
+}
+
 test("the fullscreen play button opens the pane playing; scrub and speed follow", async ({
   page,
 }) => {
@@ -55,7 +72,7 @@ test("the fullscreen play button opens the pane playing; scrub and speed follow"
   expect(atEnd).not.toBeNull();
 
   // Scrub back to mid-flight: the aircraft follows the playhead.
-  const box = (await page.getByTestId("barogram").boundingBox())!;
+  const box = await stableBarogramBox(page);
   const y = box.y + box.height / 2;
   await page.mouse.move(box.x + box.width * 0.5, y);
   await page.mouse.down();
@@ -133,6 +150,7 @@ async function recordLongFlight(page: Page) {
   await page.waitForTimeout(1500);
   await page.getByRole("button", { name: "Stop flight" }).click();
   await page.getByRole("button", { name: "Stop", exact: true }).click();
+  await dismissLandingSheet(page);
   await expect(
     page.getByRole("button", { name: "Start Flight" }),
   ).toBeVisible();
@@ -163,7 +181,7 @@ test("trim rewrites the recording; the cut survives a reload", async ({
 
   // The scrub IS the control: drag the cut point to ~40% of the flight.
   // The bracket mark rides along and the host slider tracks the cut.
-  const chart = (await page.getByTestId("barogram").boundingBox())!;
+  const chart = await stableBarogramBox(page);
   const y = chart.y + chart.height / 2;
   await page.mouse.move(chart.x + chart.width * 0.05, y);
   await page.mouse.down();
@@ -249,6 +267,7 @@ test("the timeline zooms with the wheel and resets", async ({ page }) => {
   await page.waitForTimeout(1000);
   await page.getByRole("button", { name: "Stop flight" }).click();
   await page.getByRole("button", { name: "Stop", exact: true }).click();
+  await dismissLandingSheet(page);
   await expect(
     page.getByRole("button", { name: "Start Flight" }),
   ).toBeVisible();
@@ -263,7 +282,7 @@ test("the timeline zooms with the wheel and resets", async ({ page }) => {
   await expect(barogram).toBeVisible();
   await expect(barogram).toHaveAttribute("data-zoomed", "false");
 
-  const box = (await barogram.boundingBox())!;
+  const box = await stableBarogramBox(page);
   await page.mouse.move(box.x + box.width / 2, box.y + box.height / 2);
   // Poll with repeated wheel input: a single event can land in the gap
   // before the (post-paint) wheel listener attaches.

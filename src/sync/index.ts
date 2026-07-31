@@ -1,5 +1,5 @@
 import { engine } from "../engine/index";
-import { isTauri } from "../engine/platform";
+import { isTauri } from "../platform";
 import { resetSyncedData } from "../storage/db";
 import {
   getBooleanSetting,
@@ -11,6 +11,7 @@ import {
   appleIdentityToken,
   appleProvider,
   isEnvMismatch,
+  jwsExpiresAt,
   probeEntitlementJWS,
   purchaseJWS,
   siwaProvider,
@@ -51,14 +52,17 @@ export const currentAccount = replicate.currentAccount;
  *
  * Anything that must happen regardless of which page is mounted belongs
  * engine-side (STEERING) — a pilot who backgrounds the app mid-flight, or never
- * opens the Fly tab, must still get the same behavior. `idle` is the only
- * status with no session in play: `ended` still holds a flight that hasn't been
- * persisted and discarded yet, so sync stays out of the way until the engine
- * settles back to idle and the finished flight is safely in PouchDB.
+ * opens the Fly tab, must still get the same behavior. Paused while this
+ * engine is capturing or holds an uncollected flight: `ended` still holds a
+ * flight that hasn't been persisted and discarded yet, so sync stays out of
+ * the way until it is safely in PouchDB. `blocked` records nothing (the watch
+ * is refused, dead, or owned by another tab), so sync runs freely there.
  */
 function watchEngine() {
-  const apply = () =>
-    replicate.setPaused(engine.snapshotSync().status !== "idle");
+  const apply = () => {
+    const status = engine.snapshotSync().status;
+    replicate.setPaused(status !== "idle" && status !== "blocked");
+  };
   apply();
   engine.subscribe(apply);
 }
@@ -182,10 +186,31 @@ export async function resume(override?: CredentialProvider): Promise<void> {
 export async function purchase(
   term: SubscriptionTerm = "monthly",
 ): Promise<void> {
-  const purchased = await purchaseJWS(SUBSCRIPTION_PRODUCT_IDS[term]);
+  let purchased = await purchaseJWS(SUBSCRIPTION_PRODUCT_IDS[term]);
   // The supporter guard (SYNC-UX.md, junction 2): a pilot already synced to
-  // their own server bought support, not a migration — their login is theirs.
+  // their own server bought support, not a migration — their login is
+  // theirs, and no retry sheet should be shown for a transaction the
+  // guard is about to park.
   if (replicate.currentAccount()?.kind === "manual") return;
+  // Sandbox can answer .success with the STALE expired transaction and no
+  // sheet when an unfinished copy sits on the queue (observed on-device
+  // 2026-07-30: Resubscribe spun, "succeeded", still lapsed, no Apple
+  // UI). Resolving finished that copy, so one retry presents the real
+  // sheet. The retry is best-effort ONLY: by this point a real purchase
+  // may already exist, so a dismissed or pending retry must fall through
+  // to the probe below, never throw a paid pilot back to the pitch. The
+  // expiry read compares Apple's stamp to the device clock; skew can
+  // re-present the sheet on a good purchase, and the fall-through is
+  // what makes that harmless.
+  const staleExpiry = jwsExpiresAt(purchased);
+  if (staleExpiry !== null && staleExpiry <= Date.now()) {
+    try {
+      purchased = await purchaseJWS(SUBSCRIPTION_PRODUCT_IDS[term]);
+    } catch {
+      // Dismissed/pending retry: the probe decides from what StoreKit
+      // actually holds.
+    }
+  }
   // The purchase sheet can hand back a STALE transaction when Apple decides
   // the sub is already owned (observed: Resubscribe on a lapsed sandbox sub
   // returned the original purchase while currentEntitlements held the fresh

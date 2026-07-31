@@ -31,6 +31,32 @@ function hasCredibleSpeed(fix: Fix): boolean {
   return fix.horizontalAccuracy <= MAX_SPEED_ACCURACY_M;
 }
 
+// Reduced-accuracy sources (iOS Precise Location off) sit kilometers
+// coarse indefinitely (observed 13 km+ in Safari); real GPS converges
+// far below this within seconds of sky view, and even cell
+// triangulation lands under ~2 km. Sustained gross coarseness is a
+// source-level problem, not a slow first fix.
+export const IMPRECISE_M = 2000;
+export const IMPRECISE_SUSTAIN_MS = 12_000;
+
+// The reduced-accuracy signature: kilometer-coarse horizontal AND no
+// altitude solution at all. Cell-triangulated cold-start fixes are coarse
+// but sit under ~2 km; anything GPS-assisted has an altitude. Judged per
+// fix, not per run: with Precise Location off the browser pins to a grid
+// tile and may deliver ONE fix then go silent, so the web source latches
+// on wall clock (IMPRECISE_SUSTAIN_MS), not on a count of arrivals.
+// Reads raw source coordinates, before Fix normalization (a null
+// altitudeAccuracy is no altitude solution).
+export function coordsLookReduced(coords: {
+  accuracy: number;
+  altitudeAccuracy: number | null;
+}): boolean {
+  return (
+    coords.accuracy > IMPRECISE_M &&
+    !Number.isFinite(coords.altitudeAccuracy ?? Number.POSITIVE_INFINITY)
+  );
+}
+
 export function gpsReadyIndex(track: Fix[]): number | null {
   let run = 0;
   for (let i = 0; i < track.length; i++) {
@@ -40,21 +66,45 @@ export function gpsReadyIndex(track: Fix[]): number | null {
   return null;
 }
 
+function isFlying(fix: Fix): boolean {
+  return hasCredibleSpeed(fix) && fix.speed >= TAKEOFF_SPEED_MPS;
+}
+
+function isMoving(fix: Fix): boolean {
+  return hasCredibleSpeed(fix) && fix.speed >= MOVEMENT_SPEED_MPS;
+}
+
+function sustainedThrough(track: Fix[], i: number): boolean {
+  if (i < TAKEOFF_SUSTAIN_FIXES - 1) return false;
+  for (let j = i - TAKEOFF_SUSTAIN_FIXES + 1; j <= i; j++) {
+    if (!isFlying(track[j])) return false;
+  }
+  return true;
+}
+
+// Takeoff, backdated to where the ground roll began, asked ONE fix at a
+// time: the engine calls this per ingested fix, and a replayed backlog is
+// thousands of fixes in a single batch, so the cost of the question must
+// not scale with the track behind it. Rescanning the whole buffer per fix
+// blocked the main thread for 24 s on a 94k-fix pre-takeoff backlog;
+// windowed, the same backlog costs 113 ms. Only the walk-back reaches
+// further, and only on the fix that triggers.
+export function takeoffAt(track: Fix[], i: number): number | null {
+  if (!sustainedThrough(track, i)) return null;
+  let start = i - TAKEOFF_SUSTAIN_FIXES + 1;
+  while (start > 0 && isMoving(track[start - 1])) start--;
+  return start;
+}
+
+// The same question over a track nobody watched arrive — a WAL rehydrated
+// after the app was killed. Fixes reach the log before the session write
+// that names their takeoff, so a durable buffer can hold a launch the
+// session still calls pre-takeoff; this is what re-derives it. Once per
+// hydration, never per fix.
 export function detectTakeoff(track: Fix[]): number | null {
-  let run = 0;
   for (let i = 0; i < track.length; i++) {
-    const fix = track[i];
-    run = hasCredibleSpeed(fix) && fix.speed >= TAKEOFF_SPEED_MPS ? run + 1 : 0;
-    if (run >= TAKEOFF_SUSTAIN_FIXES) {
-      let start = i - run + 1;
-      while (
-        start > 0 &&
-        hasCredibleSpeed(track[start - 1]) &&
-        track[start - 1].speed >= MOVEMENT_SPEED_MPS
-      )
-        start--;
-      return start;
-    }
+    const start = takeoffAt(track, i);
+    if (start !== null) return start;
   }
   return null;
 }

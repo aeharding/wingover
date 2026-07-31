@@ -7,13 +7,20 @@ import "./theme.css";
 
 import { createRoot } from "react-dom/client";
 
+// Side effect: the engine-side foreground recovery AND flight collection
+// wiring must run from boot, not from whichever page happens to import it
+// first — collection has to run with no surface mounted at all, including
+// with the crash screen up in place of the flight surface.
+import "./engine/session";
 import { stripMintedFlightNames } from "./storage/db";
 import { resume } from "./sync";
 import { installCapacitorShim, installKeyboardLayout } from "./tauri-ionic";
 import App from "./ui/App";
-import { initAppTheme } from "./ui/appTheme";
-import { installExternalLinkHandler } from "./ui/externalLinks";
-import { captureLaunchUrl } from "./ui/map/config";
+import { initAppTheme } from "./ui/app/appTheme";
+import { initSatelliteAvailability } from "./ui/app/map/satelliteAvailability";
+import { installExternalLinkHandler } from "./ui/shared/externalLinks";
+import { initIdbHeal } from "./ui/shared/idbHeal";
+import { captureLaunchUrl } from "./ui/shared/map/config";
 
 installExternalLinkHandler();
 // Resize <ion-app> and flag html.keyboard-open when tauri-plugin-ionic
@@ -28,6 +35,10 @@ captureLaunchUrl();
 // first render — palettes/dark.class.css and every scheme-aware rule key
 // off that class, not prefers-color-scheme.
 initAppTheme();
+initIdbHeal();
+// A stored satellite view the active backend cannot render would otherwise pin
+// the palette dark with no visible toggle to undo it.
+initSatelliteAvailability();
 // Sync that stops at the end of the session isn't sync. Fire-and-forget: the
 // credential is on disk or it isn't, and nothing here should delay first paint.
 void resume();

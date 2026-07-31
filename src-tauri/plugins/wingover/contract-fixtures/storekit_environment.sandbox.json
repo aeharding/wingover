@@ -1,0 +1,17 @@
+{
+  "surface": "storekit_environment",
+  "hop": "swift->rust->js",
+  "description": "TestFlight. The value is Apple's AppStore.Environment rawValue, not a literal this repo writes, so the JS mapping is the only place the domain is pinned.",
+  "produces": "src-tauri/plugins/wingover/ios/Sources/WingoverPlugin.swift (storekitEnvironment)",
+  "consumes": "src/sync/providers/apple.ts (appEnvironment)",
+  "codes": ["environment"],
+  "response": {
+    "environment": "Sandbox"
+  },
+  "jsResponse": "Sandbox",
+  "expect": {
+    "js": {
+      "appEnvironment": "Sandbox"
+    }
+  }
+}

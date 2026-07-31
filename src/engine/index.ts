@@ -1,10 +1,11 @@
-import { webCore, withWebCore } from "./core";
+import { isTauri } from "../platform";
+import { withWebCore } from "./core";
+import { Engine } from "./engine";
 import { createGpxSource } from "./gpxSource";
 import { nativeCore } from "./nativeSource";
-import { isTauri } from "./platform";
-import { GeolocationRecordingEngine } from "./real";
 import { createSimulatorSource } from "./simulatorSource";
 import type { RecordingEngine } from "./types";
+import { createNavigatorSource } from "./webSource";
 
 const initialSearch = typeof location === "undefined" ? "" : location.search;
 
@@ -27,14 +28,14 @@ function chooseEngine(): RecordingEngine {
     if (params.has("mock-gpx")) {
       const parsed = Number(params.get("mock-speed"));
       const compression = Number.isFinite(parsed) && parsed > 0 ? parsed : 60;
-      return new GeolocationRecordingEngine(
+      return new Engine(
         withWebCore(createGpxSource(params.get("mock-gpx")!, compression)),
       );
     }
     if (params.has("mock-speed")) {
       const parsed = Number(params.get("mock-speed"));
       const compression = Number.isFinite(parsed) && parsed > 0 ? parsed : 60;
-      return new GeolocationRecordingEngine(
+      return new Engine(
         withWebCore(
           createSimulatorSource(
             compression,
@@ -44,7 +45,9 @@ function chooseEngine(): RecordingEngine {
       );
     }
   }
-  return new GeolocationRecordingEngine(isTauri() ? nativeCore : webCore);
+  return new Engine(
+    isTauri() ? nativeCore : withWebCore(createNavigatorSource()),
+  );
 }
 
 // Dev-only: override the simulator's start coordinate, e.g.

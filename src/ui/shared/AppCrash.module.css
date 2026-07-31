@@ -1,0 +1,42 @@
+/* Its own sheet, not ErrorScreen's. That file is the engine's BLOCKED status
+   (permission denied, imprecise, busy) — a state the pilot can act on, with
+   one consumer, the flight surface. A crash is a different thing entirely and
+   sharing a stylesheet is not a reason to share a file. */
+
+.screen {
+  position: fixed;
+  inset: 0;
+  z-index: 2147483647;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 1.25rem;
+  padding: 0 calc(2rem + env(safe-area-inset-right)) 0
+    calc(2rem + env(safe-area-inset-left));
+  background: color(display-p3 0.52 0.04 0.03);
+  color: #fff;
+  text-align: center;
+
+  h2 {
+    font-size: 1.7rem;
+    font-weight: 700;
+  }
+
+  p {
+    color: rgb(255 255 255 / 0.88);
+    font-size: 1.05rem;
+    max-width: 26rem;
+  }
+}
+
+.action {
+  width: min(100%, 420px);
+  padding: 1.4rem;
+  font-size: 1.4rem;
+  font-weight: 600;
+  color: #000;
+  background: #fff;
+  border: none;
+  border-radius: 999px;
+}

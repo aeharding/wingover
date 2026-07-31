@@ -10,7 +10,7 @@ export type { Waypoint } from "../engine/types";
 // test suites — divergence fails CI in both languages.
 
 // 0.2 mi ≈ 321.869 m — the reach/announce geofence for both planned pins
-// (session.ts) and mid-flight ad-hoc waypoints (real.ts). golden.json and the
+// (session.ts) and mid-flight ad-hoc waypoints (engine.ts). golden.json and the
 // cargo/vitest waypoint vectors pass explicit radiusM, so they are unaffected.
 export const WAYPOINT_RADIUS_M = 0.2 * 1609.344;
 

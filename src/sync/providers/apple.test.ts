@@ -1,6 +1,7 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
 
 import type { Credentials } from "../types";
+import { jwsExpiresAt } from "./apple";
 import { isEnvMismatch, isUnlinked, siwaProvider } from "./apple";
 
 /**
@@ -119,5 +120,30 @@ describe("isEnvMismatch (the resume() cross-environment guard)", () => {
         "Sandbox",
       ),
     ).toBe(false);
+  });
+});
+
+describe("jwsExpiresAt (the stale-purchase plausibility read)", () => {
+  const jwsWith = (payload: object) =>
+    ["eyJhbGciOiJFUzI1NiJ9", btoa(JSON.stringify(payload)), "sig"]
+      .join(".")
+      .replace(/\+/g, "-")
+      .replace(/\//g, "_")
+      .replace(/=+/g, "");
+
+  it("reads a future expiry", () => {
+    const at = Date.now() + 60_000;
+    expect(jwsExpiresAt(jwsWith({ expiresDate: at }))).toBe(at);
+  });
+
+  it("reads a past expiry (the sandbox stale hand-back)", () => {
+    const at = Date.now() - 60_000;
+    expect(jwsExpiresAt(jwsWith({ expiresDate: at }))).toBe(at);
+  });
+
+  it("null for a payload without an expiry, and for garbage", () => {
+    expect(jwsExpiresAt(jwsWith({ productId: "x" }))).toBeNull();
+    expect(jwsExpiresAt("not-a-jws")).toBeNull();
+    expect(jwsExpiresAt("")).toBeNull();
   });
 });

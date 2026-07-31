@@ -1,5 +1,7 @@
 import { expect, test } from "@playwright/test";
 
+import { dismissLandingSheet } from "./landingSheet";
+
 // Tests of the real MapLibre backend and its resilience — the parts a fake
 // map cannot exercise: slow/partial style loading, sprite stalls, and the
 // setStyle layer-teardown restore path. These use plain @playwright/test (no
@@ -218,6 +220,7 @@ test("flight detail draws the track even when the map style loads slowly", async
   await page.waitForTimeout(500);
   await page.getByRole("button", { name: "Stop flight" }).click();
   await page.getByRole("button", { name: "Stop", exact: true }).click();
+  await dismissLandingSheet(page);
   await expect(
     page.getByRole("button", { name: "Start Flight" }),
   ).toBeVisible();
@@ -263,6 +266,7 @@ test("leaving fullscreen eases the flight map back to its framing", async ({
   await page.waitForTimeout(500);
   await page.getByRole("button", { name: "Stop flight" }).click();
   await page.getByRole("button", { name: "Stop", exact: true }).click();
+  await dismissLandingSheet(page);
   await expect(
     page.getByRole("button", { name: "Start Flight" }),
   ).toBeVisible();
@@ -350,6 +354,9 @@ test("the unsnapped compass realigns north, instantly", async ({ page }) => {
   await page.getByRole("button", { name: "Start Flight" }).click();
   await expect(page.getByTestId("recording")).toBeVisible({ timeout: 10_000 });
 
+  // No `!`: a missing handle reads as NaN, which every numeric matcher
+  // below fails (and keeps polling) instead of throwing. NaN, not 0 — 0
+  // would PASS the realign assertion on a map that was never there.
   const bearing = () =>
     page.evaluate(() =>
       Math.abs(
@@ -359,9 +366,25 @@ test("the unsnapped compass realigns north, instantly", async ({ page }) => {
           ) as HTMLElement & {
             __map?: { getBearing(): number };
           }
-        ).__map!.getBearing(),
+        )?.__map?.getBearing() ?? NaN,
       ),
     );
+
+  // The adapter chunk loads lazily, so the handle lands well after
+  // "recording": 2.6s post-load in the trace for #152, against a Track up
+  // click at 2.7s. expect.poll calls its function OUTSIDE its try, so a
+  // throwing probe would end the test then and there rather than poll —
+  // no timeout can cover that. Gate on the handle, and probe safely.
+  await page.waitForFunction(
+    () =>
+      !!(
+        document.querySelector(
+          '[data-testid="live-map"] [data-testid="map-container"]',
+        ) as HTMLElement & { __map?: unknown }
+      )?.__map,
+    undefined,
+    { timeout: 15_000 },
+  );
 
   // Track-up rotates the camera to course; the sim flies a curving path,
   // so a nonzero bearing arrives within a few fixes.
@@ -442,6 +465,7 @@ test("composite map draws all flights even with a slow style", async ({
   await page.waitForTimeout(500);
   await page.getByRole("button", { name: "Stop flight" }).click();
   await page.getByRole("button", { name: "Stop", exact: true }).click();
+  await dismissLandingSheet(page);
   await expect(
     page.getByRole("button", { name: "Start Flight" }),
   ).toBeVisible();

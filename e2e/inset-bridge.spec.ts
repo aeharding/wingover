@@ -1,5 +1,7 @@
 import { expect, type Page, test } from "@playwright/test";
 
+import { dismissLandingSheet } from "./landingSheet";
+
 // The CSS→JS inset bridge: the map's buttons read var(--ion-safe-area-*)
 // straight from CSS, but the basemap attribution (MapKit's logo, and this
 // mirror) goes through MapCanvas's probe → setInsets. The bug class this
@@ -17,6 +19,7 @@ async function recordQuickFlight(page: Page) {
   await page.waitForTimeout(500);
   await page.getByRole("button", { name: "Stop flight" }).click();
   await page.getByRole("button", { name: "Stop", exact: true }).click();
+  await dismissLandingSheet(page);
   await expect(
     page.getByRole("button", { name: "Start Flight" }),
   ).toBeVisible();

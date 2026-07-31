@@ -92,6 +92,49 @@ re-implement it.
 (`recording → landed → ended`), replay, storage, UI. Background parity via
 burst replay, per STEERING.md.
 
+One overlay sits above that lifecycle: **`blocked`**, a live-source health
+state (permission denied, reduced accuracy, recorder held by another tab).
+It is derived from an in-memory error, never journaled, and strictly
+pre-takeoff — the error setters refuse to install a blocking error once a
+flight has started, so nothing can block a flight in progress. It never
+touches the WAL, the track, or finalization, so burst-replay byte-identity
+is unaffected.
+
+Every source is responsible for knowing its own refusals by its platform's
+means, and the engine believes what it is told. The native source ASKS
+(`check_permissions`, the real CoreLocation authorization); the browser
+source EXPERIMENTS (a fresh watch, and a wall-clock latch on the
+reduced-accuracy fix signature, because the browser Geolocation API has
+nothing to ask). Wall-clock detection is legitimate — the signature is
+partly an _absence_ of fixes, which no function of fix timestamps can
+observe — but it belongs to the source that needs it. The engine holds no
+timers.
+
+One refusal is retracted by evidence rather than by report, and that is
+the engine's remaining share of the fix signature: an imprecise takeover
+keeps its watch alive on purpose, so `handlePositions` clears it on the
+first non-reduced fix. A bounce would tear down the very watch producing
+the disproof, which is why this one does not travel the report channel.
+
+One channel carries it. A source's `onRefusal` reports what stands RIGHT
+NOW: a refusal, or `null` for "nothing refuses any more". Both are reports
+about the same thing, so the engine has one place to apply one set of
+rules (`handleRefusal`) — a started flight is never blocked, `busy` is
+nobody's to replace, a non-blocking report never tears down a takeover, an
+unchanged reason is not republished, and `null` buys a fresh watch. A
+pilot who trades one refusal for another (Precise Location off, then
+Location Services off) sees the screen follow, and on a source that can
+ask its platform, without a bounce for a refusal already known.
+
+The one capability a source declares is `revive()`: "find out whether you
+still refuse, and report it." Every foreground and the error screen's Try
+Again forward to it, and what it costs is the source's business — a
+browser reruns its watch (Safari kills one silently while the page is
+backgrounded, and a Settings trip is exactly that); the native source asks
+CoreLocation once, and only from a state it actually refused from, because
+reporting `null` bounces the watch and bouncing a healthy capture would
+stop CoreLocation and delete the native session log for nothing.
+
 The WAL hydrates the engine exactly once per page load; after that,
 in-memory state is authoritative and WAL reads are never re-applied. A
 replay burst delivers many fixes in one task, so any WAL read racing it is
@@ -198,7 +241,10 @@ to avoid duplicating arithmetic.)
 
 1. ✅ Rust: `store.rs` (append-only log, hydration, ordering guard),
    `core.rs` (lifecycle, persist-then-announce, waypoint persistence),
-   `announcer.rs` (golden vectors) — 9 cargo tests on Linux CI.
+   `announcer.rs` (golden vectors), `wire.rs` (contract fixtures) — 13
+   cargo tests, run by the macOS `ios` CI job on the host target. Not the
+   Linux job: `tauri`'s wry feature would drag webkit2gtk onto the runner
+   that everything else waits on.
 2. ✅ Swift: dieted to capture/drain/permissions/speak (~compiles on Mac
    only — unverified here).
 3. ✅ JS: `nativeSource` wire contract unchanged (commands now answered by

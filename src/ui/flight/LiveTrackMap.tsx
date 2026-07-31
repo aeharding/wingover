@@ -1,11 +1,14 @@
 import { useEffect, useEffectEvent, useRef, useState } from "react";
 
 import type { Fix, Waypoint } from "../../engine/types";
-import { cx } from "../cx";
-import type { MapViewKind } from "../map/config";
-import { applyFollowWheelZoom } from "../map/followZoom";
-import { readLiveViewState, writeLiveViewState } from "../map/liveViewState";
-import MapCanvas from "../map/MapCanvas";
+import { cx } from "../shared/cx";
+import type { MapViewKind } from "../shared/map/config";
+import { applyFollowWheelZoom } from "../shared/map/followZoom";
+import {
+  readLiveViewState,
+  writeLiveViewState,
+} from "../shared/map/liveViewState";
+import MapCanvas from "../shared/map/MapCanvas";
 import {
   ACCENT_CYAN,
   ADHOC_COLOR,
@@ -19,8 +22,8 @@ import {
   type MarkerSpec,
   PLANNED_COLOR,
   TRACK_LINE_WIDTH_PX,
-} from "../map/types";
-import ZoomControl from "../map/ZoomControl";
+} from "../shared/map/types";
+import ZoomControl from "../shared/map/ZoomControl";
 
 import styles from "./LiveTrackMap.module.css";
 
@@ -51,7 +54,7 @@ function waypointPinEl(color: string, label: string): HTMLElement {
 }
 
 interface LiveTrackMapProps {
-  // Host placement (FlyPage absolutely fills its recording screen).
+  // Host placement (RecordingSurface absolutely fills its screen).
   className?: string;
   track: Fix[];
   latest: Fix | null;
@@ -59,18 +62,25 @@ interface LiveTrackMapProps {
   follow: boolean;
   trackUp: boolean;
   topInset?: number;
+  // The landscape instrument rail's width — chrome on the map's LEFT.
+  leftInset?: number;
   // All planned pins (immutable) — the grey optimal-path reference line.
   plannedWaypoints: Waypoint[];
   // The active nav sequence in steer-to order — the numbered markers.
   navWaypoints: Waypoint[];
   // Long-press on the map to drop an ad-hoc waypoint. at = [longitude, latitude].
   onAddWaypoint?: (at: LngLat) => void;
+  // One gesture, one meaning: a press that turns into a pan withdraws the
+  // checkpoint it proposed. Only ever fires mid-gesture — the confirm scrim
+  // is position:fixed/inset:0 (BigConfirm.module.css), so a pending proposal
+  // covers the map and no fresh drag can start under it.
+  onWithdrawWaypoint?: () => void;
   // Tap a waypoint pin to select it (id), or deselect (null) — drives the
   // "clear this checkpoint" control.
   onSelectWaypoint?: (id: string | null) => void;
   onFollowChange: (follow: boolean) => void;
   // The abstract map, once created (null when it is destroyed for a
-  // provider re-create) — FlyPage gates the satellite toggle on its
+  // provider re-create) — MapControls gates the satellite toggle on its
   // supportsSatellite.
   onMapReady?: (map: MapView | null) => void;
 }
@@ -83,9 +93,11 @@ export default function LiveTrackMap({
   follow,
   trackUp,
   topInset = 0,
+  leftInset = 0,
   plannedWaypoints,
   navWaypoints,
   onAddWaypoint,
+  onWithdrawWaypoint,
   onSelectWaypoint,
   onFollowChange,
   onMapReady,
@@ -105,10 +117,13 @@ export default function LiveTrackMap({
   const positionInitializedRef = useRef(false);
   const interactingRef = useRef(false);
 
-  // Only the real top-panel offset now (keeps the aircraft below the header
-  // overlay). The map container is exactly viewport-sized — no overscan.
+  // The real instrument-chrome offsets only (keeps the aircraft clear of
+  // the portrait strip / landscape rail). The map container is exactly
+  // viewport-sized — no overscan. MapKit ignores moveTo padding and gets
+  // the rail via the safe-area publish instead (FlightSurface.module.css);
+  // MapLibre centers off this.
   function cameraPadding(): Insets {
-    return { top: topInset, bottom: 0, left: 0, right: 0 };
+    return { top: topInset, bottom: 0, left: leftInset, right: 0 };
   }
 
   // Draw the current state: the aircraft snaps to the newest fix and, while
@@ -148,6 +163,7 @@ export default function LiveTrackMap({
 
   const handleDragStart = useEffectEvent(() => {
     onFollowChange(false);
+    onWithdrawWaypoint?.();
   });
 
   // While following, intercept the wheel and apply the zoom directly (see
@@ -325,7 +341,7 @@ export default function LiveTrackMap({
     if (!map) return;
     // Only a SNAPPED camera re-orients on mode change: free-browsing keeps
     // the pilot's bearing (the compass button realigns north imperatively
-    // from FlyPage instead), and nothing in flight ever animates — an
+    // from FlightSurface instead), and nothing in flight ever animates — an
     // animated rotation tweens the basemap while the flown-line overlay
     // re-renders a beat behind it, so the path visibly wiggles.
     if (follow) renderNow();

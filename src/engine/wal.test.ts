@@ -1,5 +1,5 @@
-import { IDBFactory } from "fake-indexeddb";
-import { beforeEach, describe, expect, it } from "vitest";
+import { IDBDatabase, IDBFactory } from "fake-indexeddb";
+import { afterEach, beforeEach, describe, expect, it } from "vitest";
 
 import { readWal, type WalSession, writeWalSession } from "./wal";
 
@@ -40,5 +40,25 @@ describe("WalSession round-trip", () => {
     const read = (await readWal()).session;
     expect(read?.adhocWaypoints).toBeUndefined();
     expect(read?.removedIds).toBeUndefined();
+  });
+});
+
+describe("readWal failure", () => {
+  const realTransaction = IDBDatabase.prototype.transaction;
+
+  afterEach(() => {
+    IDBDatabase.prototype.transaction = realTransaction;
+  });
+
+  // Boot waits on this promise: an aborted read must reject (with a real
+  // Error, never a bare null) or the app never renders anything at all.
+  it("rejects with an Error when the read transaction aborts", async () => {
+    await writeWalSession({ armedAt: 1, takeoffIndex: null });
+    IDBDatabase.prototype.transaction = function (...args) {
+      const tx = realTransaction.apply(this, args);
+      queueMicrotask(() => tx.abort());
+      return tx;
+    };
+    await expect(readWal()).rejects.toBeInstanceOf(Error);
   });
 });

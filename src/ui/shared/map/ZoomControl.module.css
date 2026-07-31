@@ -1,0 +1,89 @@
+/* The touch zone: a generous strip down the right edge of the screen, far
+   taller than the visible gauge, so a thumb can grab the edge well above or
+   below the slider and still drag. It stops short of the button cluster. */
+.strip {
+  position: absolute;
+  /* Inboard of the safe area: zero in portrait; in landscape the strip
+     (and the rail/thumb riding its right edge) steps clear of the notch
+     side's rounded corner instead of hugging unreachable glass. The
+     DERIVED var, not env(): this control is shared beyond the fly page,
+     and an inboard host that consumed the right edge must reach here
+     (INSETS.md). On the fly page the var equals env anyway. */
+  right: var(--ion-safe-area-right, 0px);
+  top: 25%;
+  bottom: calc(9.5rem + env(safe-area-inset-bottom));
+  width: 2.2rem;
+  z-index: 6;
+  touch-action: none;
+  display: flex;
+  align-items: center; /* float the short gauge in the middle of the zone */
+  justify-content: flex-end; /* ...against the screen edge */
+}
+
+/* The flight-detail fullscreen map with the replay pane docked below: the
+   region's bottom edge sits ON the pane, which owns the home indicator, so
+   no safe-area term — and the cluster is the stock 3.25rem 2x2 (top edge
+   8rem up), not the fly page's 3.5rem. Same clearance above it. */
+.strip[data-variant="detail"] {
+  bottom: 8.75rem;
+}
+
+/* The gauge is purely an indicator (the whole strip takes the touch), so it
+   never intercepts pointers. It is short — floating between the stats and
+   the buttons — and hidden at rest, fading in only while dragging. The
+   dragging state rides the strip's data-active attribute (the same one the
+   e2e asserts), not a second class. */
+.gauge {
+  position: relative;
+  height: min(27vh, 215px);
+  width: 1.2rem;
+  pointer-events: none;
+  opacity: 0;
+  transition: opacity 0.1s ease;
+
+  .strip[data-active="true"] & {
+    opacity: 1;
+  }
+}
+
+/* The rail runs down the very right edge of the screen. */
+.rail {
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  right: 0;
+  width: 3px;
+  border-radius: 2px 0 0 2px;
+  background: rgba(255, 255, 255, 0.5);
+}
+
+/* The thumb is a right-pointing, round-cornered triangle — a playhead that
+   points at the current zoom on the edge rail (top = fully out, bottom =
+   fully in). The drop-shadow gives it an outline so it reads over any
+   basemap. Positioned along the rail by inline `top`. */
+.thumb {
+  position: absolute;
+  right: 0;
+  width: 1.65rem;
+  height: 2.5rem;
+  transform: translateY(-50%);
+  /* Transparency lives here (uniform), NOT on the fill+stroke: a translucent
+     fill and stroke would double-paint where they overlap and draw a ghost
+     triangle inside the triangle. */
+  opacity: 0.9;
+  filter: drop-shadow(0 0 1.5px rgba(0, 0, 0, 0.7));
+
+  svg {
+    display: block;
+    width: 100%;
+    height: 100%;
+    overflow: visible;
+  }
+
+  path {
+    fill: #f2f5f8;
+    stroke: #f2f5f8;
+    stroke-width: 18;
+    stroke-linejoin: round;
+  }
+}

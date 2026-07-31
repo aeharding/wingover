@@ -2,7 +2,7 @@
    saturated values, packed TIGHT — in flight the block must read at a
    glance and cede as little map as possible. Sunlight readability over
    looks; a translucent panel over bright imagery washes out. (The
-   instruments GRID hosting these lives with FlyPage — it is the page's
+   instruments GRID hosting these lives with FlightSurface — it is the page's
    layout, not the tile's.) */
 .tile {
   position: relative;
@@ -10,15 +10,22 @@
   padding: 0.1rem 0.6rem 0.15rem;
   min-width: 0;
   line-height: 1;
+  /* Centered when the host's grid row is taller than the content (the
+     landscape rail's equal-split rows); auto-height rows see no change. */
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
 }
 
+/* The --tile-* knobs let a HOST compact the type (FlightSurface's landscape
+   rail splits 8 rows over a phone's short edge); default = full size. */
 .label {
-  font-size: 0.72rem;
+  font-size: var(--tile-label-size, 0.72rem);
   color: #c2c7cd;
 }
 
 .value {
-  font-size: clamp(1.4rem, 7.3vw, 1.95rem);
+  font-size: var(--tile-value-size, clamp(1.4rem, 7.3vw, 1.95rem));
   font-weight: 800;
   color: #fff;
   font-variant-numeric: tabular-nums;
@@ -44,14 +51,41 @@
   grid-column: 1 / -1;
 }
 
+/* The landscape rail (FlightSurface) gives every tile a definite 1fr row, so
+   the tile becomes its own query container and the value sizes off the
+   ROW itself: the cqh term fills the height the label leaves, the cqw
+   term caps at what the width can carry for the worst tabular value
+   ("12,860 ft", ~5.6em) — a wider rail lifts it automatically. Gated to
+   the rail's media: portrait rows are content-sized, and size
+   containment on a content-sized row would collapse it. */
+@media (orientation: landscape) and (max-height: 500px) {
+  .tile {
+    container-type: size;
+  }
+
+  /* cq units measure the CONTENT box, so the icon well's padding shrinks
+     what cqw means inside .hasIcon — the cap is per tile type to
+     compensate: each is 100 / its worst-case value width in em (plain
+     "12,860 ft" ~5.6em; icon "+180°" ~3.5em), so every tile is
+     height-governed (equal type) until a degenerate geometry truly
+     cannot fit its own worst value. */
+  .value {
+    font-size: min(62cqh, 17.5cqw);
+  }
+
+  .hasIcon .value {
+    font-size: min(62cqh, 28cqw);
+  }
+}
+
 .hasIcon {
-  padding-right: clamp(3rem, 12vw, 4rem);
+  padding-right: var(--tile-icon-well, clamp(3rem, 12vw, 4rem));
 }
 
 .icon {
   position: absolute;
   top: 50%;
-  right: 0.9rem;
+  right: var(--tile-icon-right, 0.9rem);
   translate: 0 -50%;
   display: flex;
   align-items: center;

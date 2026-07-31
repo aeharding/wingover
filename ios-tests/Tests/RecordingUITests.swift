@@ -58,19 +58,20 @@ final class RecordingUITests: XCTestCase {
     return content.split(separator: "\n").count
   }
 
-  // A previous aborted run can leave a live flight (the engine self-heals
-  // across relaunches by design — session.jsonl survives until stop).
-  // Walk it back to idle so the test starts from a known state.
-  private func recoverToIdle(_ app: XCUIApplication) {
-    let stop = app.buttons["Stop flight"].firstMatch
-    let cancel = app.buttons["Cancel"].firstMatch
-    if stop.waitForExistence(timeout: 3) {
-      stop.tap()
-      let confirm = app.buttons["Stop"].firstMatch
-      if confirm.waitForExistence(timeout: 5) { confirm.tap() }
-      _ = app.buttons["Fly"].firstMatch.waitForExistence(timeout: 20)
-    } else if cancel.exists {
-      cancel.tap()
+  override func setUp() {
+    // This drill records for over a minute and backgrounds the app in the
+    // middle of it, so plenty of it can fail with the flight still recording
+    // — and the next invocation inherits that flight (run.sh resets the
+    // simulator's location and permissions between invocations, never the
+    // app's flight). Measured: run 30456461261, where a Home press that timed
+    // out here left the flight live and WaypointUITests failed next with "no
+    // Plan tab".
+    addTeardownBlock {
+      let app = XCUIApplication(bundleIdentifier: "app.wingover.wingover")
+      // The proof of background recording is read with the app backgrounded,
+      // and a backgrounded app has an empty accessibility tree.
+      app.activate()
+      recoverToIdle(app)
     }
   }
 
@@ -127,7 +128,11 @@ final class RecordingUITests: XCTestCase {
     XCTAssertTrue(confirm.waitForExistence(timeout: 5), "no End flight? confirm")
     confirm.tap()
 
-    // Saved: the tab shell replaces the flight surface.
+    // Saved: the sheet announces it, and dismissing it puts the tab shell
+    // back. Until it is dismissed the tab bar is not in the AX tree at all
+    // (see dismissLandingSheet).
+    dismissLandingSheet(app)
+
     let logbookTab = app.buttons["Logbook"].firstMatch
     XCTAssertTrue(
       logbookTab.waitForExistence(timeout: 20),

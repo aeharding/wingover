@@ -23,6 +23,7 @@ mod core;
 mod error;
 mod fix;
 mod store;
+mod wire;
 
 #[cfg(not(target_os = "ios"))]
 mod desktop;
@@ -49,13 +50,14 @@ fn spawn_ingest_thread<R: Runtime>(app: tauri::AppHandle<R>) {
             continue;
         }
         let sensor = app.wingover();
-        let batch = match sensor.drain() {
-            Ok(batch) => batch,
+        let (batch, sensor_error) = match sensor.drain() {
+            Ok(drained) => drained,
             Err(error) => {
                 eprintln!("wingover plugin drain failed: {error}");
                 continue;
             }
         };
+        core.set_sensor_error(sensor_error);
         match core.ingest(&batch) {
             Ok(announcements) => {
                 for text in announcements {
@@ -73,6 +75,7 @@ mod commands {
     use tauri::{command, AppHandle, Manager, Runtime};
 
     use crate::core::Core;
+    use crate::wire::FixesResponse;
     use crate::{Result, Waypoint, WingoverExt};
 
     #[command]
@@ -90,9 +93,15 @@ mod commands {
     pub(crate) async fn fixes_since<R: Runtime>(
         app: AppHandle<R>,
         ts: i64,
-    ) -> Result<serde_json::Value> {
-        let fixes = app.state::<Core>().fixes_since(ts)?;
-        Ok(serde_json::json!({ "fixes": fixes }))
+    ) -> Result<FixesResponse> {
+        let core = app.state::<Core>();
+        // A typed shape, not a json! literal: this response is the one
+        // the sensor's health code has to survive, so it gets a struct a
+        // test can round-trip (wire.rs, contract-fixtures/).
+        Ok(FixesResponse {
+            fixes: core.fixes_since(ts)?,
+            error: core.sensor_error(),
+        })
     }
 
     #[command]

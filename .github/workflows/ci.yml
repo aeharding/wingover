@@ -78,6 +78,15 @@ jobs:
           cargo build --locked \
             --manifest-path src-tauri/plugins/ionic/Cargo.toml \
             --target aarch64-apple-ios
+      # The realtime core and the wire contract, on the HOST target: the
+      # Linux job builds no Rust at all (tauri's wry feature would drag in
+      # webkit2gtk), and the compile above never runs a test. wire.rs is
+      # deliberately not cfg-gated, so the shapes Swift and JS agree on
+      # (contract-fixtures/) are checked here with no simulator.
+      - name: Run the plugin's Rust tests
+        run: |
+          cargo test --locked \
+            --manifest-path src-tauri/plugins/wingover/Cargo.toml
 
   # The behaviors no browser test can reach: the REAL WKWebView + REAL iOS
   # keyboard, driven by XCUITest (ios-tests/ — a standalone runner with no

@@ -1,0 +1,63 @@
+/* The flight surface's frozen sunlight design, like the armed screen:
+   black, centered, gloves-first sizing. Sits over everything (a pilot
+   who must act should not be reading instruments through it). */
+.screen {
+  position: absolute;
+  inset: 0;
+  z-index: 30;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 1.25rem;
+  padding: 0 calc(2rem + env(safe-area-inset-right)) 0
+    calc(2rem + env(safe-area-inset-left));
+  background: #000;
+  text-align: center;
+
+  h2 {
+    font-size: 1.7rem;
+    font-weight: 700;
+  }
+
+  p {
+    color: #9a9fa6;
+    font-size: 1.05rem;
+    max-width: 26rem;
+  }
+}
+
+/* The one action, Start-button sized: white on black is the highest
+   luminance contrast the surface has (sunlight readability is a
+   luminance game before it is a hue game). */
+.action {
+  width: min(100%, 420px);
+  padding: 1.4rem;
+  font-size: 1.4rem;
+  font-weight: 600;
+  color: #000;
+  background: #fff;
+  border: none;
+  border-radius: 999px;
+}
+
+.cancel {
+  composes: cancel from "./controls.module.css";
+}
+
+/* Location-class errors: full alarm red. The pilot is about to pocket
+   the phone; at arm's length in sunlight this must read as STOP, not
+   as a quiet loading state. Deep red keeps white text on the right
+   side of the luminance-contrast line; the white action pill stays the
+   brightest thing on screen. */
+.urgent {
+  background: color(display-p3 0.52 0.04 0.03);
+
+  p {
+    color: rgb(255 255 255 / 0.88);
+  }
+
+  .cancel {
+    background: rgb(0 0 0 / 0.32);
+  }
+}

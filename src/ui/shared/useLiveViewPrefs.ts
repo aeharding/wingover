@@ -1,0 +1,61 @@
+import { useEffect, useState } from "react";
+
+import { getSetting, setSetting } from "../../storage/local";
+import type { MapViewKind } from "./map/config";
+import { readLiveViewState, writeLiveViewState } from "./map/liveViewState";
+
+export interface LiveViewPrefs {
+  mapView: MapViewKind;
+  follow: boolean;
+  trackUp: boolean;
+}
+
+/** The prefs plus their one writer, as consumers hold them. */
+export type LiveView = LiveViewPrefs & {
+  update: (patch: Partial<LiveViewPrefs>) => void;
+};
+
+/**
+ * The live map's three persisted preferences as one piece of state, with
+ * updates written through to liveViewState (and mapView to settings, so
+ * the ground maps follow the same street/satellite choice).
+ *
+ * Per-component state, not a shared store: call it in exactly ONE place per
+ * mounted tree and pass the result down. Two live copies would disagree.
+ *
+ * There are two owners, and they are never mounted together: FlyPage (the
+ * arming reset, written through before the status flips) and FlightSurface
+ * (everything after). The handoff goes through liveViewState, not React —
+ * App.tsx swaps one for the other, so neither instance survives the
+ * transition.
+ */
+export function useLiveViewPrefs(): LiveView {
+  const [prefs, setPrefs] = useState<LiveViewPrefs>(() => {
+    const saved = readLiveViewState();
+    return {
+      mapView: saved.mapView ?? "street",
+      follow: saved.follow ?? true,
+      trackUp: saved.trackUp ?? false,
+    };
+  });
+
+  // The ground maps' street/satellite choice (a setting) seeds the live
+  // map too; liveViewState is the tiebreak until the async read lands.
+  useEffect(() => {
+    void getSetting("mapView").then((value) => {
+      if (value === "street" || value === "satellite") {
+        setPrefs((current) =>
+          current.mapView === value ? current : { ...current, mapView: value },
+        );
+      }
+    });
+  }, []);
+
+  function update(patch: Partial<LiveViewPrefs>) {
+    setPrefs((current) => ({ ...current, ...patch }));
+    writeLiveViewState(patch);
+    if (patch.mapView) void setSetting("mapView", patch.mapView);
+  }
+
+  return { ...prefs, update };
+}

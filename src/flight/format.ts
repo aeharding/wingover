@@ -65,7 +65,7 @@ export function formatFlightDate(startedAt: number, now = new Date()): string {
  * clock form was not ("55:37" read as either minutes or hours). The LIVE
  * flight timer keeps formatDuration's ticking clock on purpose: a
  * stopwatch that visibly advances reads as recording; a frozen "1 hr
- * 34 min" reads as stalled. FlyPage is almost a separate app.
+ * 34 min" reads as stalled. The flight surface is almost a separate app.
  */
 export function formatAirtime(totalSeconds: number): string {
   const seconds = Math.max(0, Math.floor(totalSeconds));

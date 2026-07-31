@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest";
 
 import { WebCore, withWebCore } from "./core";
-import type { PositionSource } from "./real";
+import type { PositionSource } from "./engine";
 
 // TS twins of the cargo tests in core.rs — same scenarios, same semantics.
 const waypoint = { id: "a", latitude: 43, longitude: -89.4, radiusM: 200 };

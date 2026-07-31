@@ -1,0 +1,20 @@
+{
+  "surface": "storekit_purchase",
+  "hop": "swift->rust->js",
+  "description": "A completed purchase always carries a JWS; a cancelled or pending one rejects with cancelled / pending instead. Rust types the field Option while JS asserts string, so null here would sail through both.",
+  "produces": "src-tauri/plugins/wingover/ios/Sources/WingoverPlugin.swift (storekitPurchase)",
+  "consumes": "src/sync/providers/apple.ts (purchaseJWS)",
+  "codes": ["productId", "jws", "cancelled", "pending"],
+  "request": {
+    "productId": "app.wingover.sync.yearly"
+  },
+  "response": {
+    "jws": "eyJhbGciOiJFUzI1NiJ9.eyJwcm9kdWN0SWQiOiJhcHAud2luZ292ZXIuc3luYy55ZWFybHkifQ.c2lnbmF0dXJl"
+  },
+  "jsResponse": "eyJhbGciOiJFUzI1NiJ9.eyJwcm9kdWN0SWQiOiJhcHAud2luZ292ZXIuc3luYy55ZWFybHkifQ.c2lnbmF0dXJl",
+  "expect": {
+    "js": {
+      "jws": "eyJhbGciOiJFUzI1NiJ9.eyJwcm9kdWN0SWQiOiJhcHAud2luZ292ZXIuc3luYy55ZWFybHkifQ.c2lnbmF0dXJl"
+    }
+  }
+}

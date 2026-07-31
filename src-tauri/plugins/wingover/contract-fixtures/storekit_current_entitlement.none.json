@@ -1,0 +1,20 @@
+{
+  "surface": "storekit_current_entitlement",
+  "hop": "swift->rust->js",
+  "description": "This Apple Account never subscribed. Null, not a rejection: a lapsed pilot still gets a transaction here (read-only, never locked out), so null means nothing was ever bought.",
+  "produces": "src-tauri/plugins/wingover/ios/Sources/WingoverPlugin.swift (storekitCurrentEntitlement)",
+  "consumes": "src/sync/providers/apple.ts (currentEntitlementJWS)",
+  "codes": ["productIds", "jws"],
+  "request": {
+    "productIds": ["app.wingover.sync.monthly", "app.wingover.sync.yearly"]
+  },
+  "response": {
+    "jws": null
+  },
+  "jsResponse": null,
+  "expect": {
+    "js": {
+      "jws": null
+    }
+  }
+}

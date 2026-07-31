@@ -1,5 +1,7 @@
 import { expect, type Page, test } from "@playwright/test";
 
+import { dismissLandingSheet } from "./landingSheet";
+
 // CDP setGeolocation cannot supply altitude/speed, which the accuracy gate
 // and takeoff detection require — stub watchPosition itself so the test
 // drives the real engine's actual consumption path.
@@ -16,6 +18,13 @@ const GEO_STUB = `(() => {
       }
     },
     watcherCount: () => watchers.size,
+    // Safari can silently kill a watch while the page is backgrounded
+    // (e.g. a Settings trip): callbacks just stop, the page is never
+    // told. Drop the watchers without notifying anyone.
+    killWatches: () => {
+      watchers.clear();
+      errorWatchers.clear();
+    },
   };
   const errorWatchers = new Map();
   window.__geo.fail = (code) => {
@@ -58,7 +67,8 @@ const URL = "/?map-style=blank";
 interface FixSpec {
   speed?: number;
   accuracy?: number;
-  altitudeAccuracy?: number;
+  // null = the source has no altitude solution (reduced accuracy).
+  altitudeAccuracy?: number | null;
   latitude?: number;
   longitude?: number;
   heading?: number;
@@ -78,7 +88,8 @@ function makeEmitter(page: Page) {
           longitude: spec.longitude ?? -89.4,
           altitude: 300,
           accuracy: spec.accuracy ?? 5,
-          altitudeAccuracy: spec.altitudeAccuracy ?? 8,
+          altitudeAccuracy:
+            spec.altitudeAccuracy === undefined ? 8 : spec.altitudeAccuracy,
           heading: spec.heading ?? 0,
           speed: spec.speed ?? 0,
         },
@@ -164,6 +175,7 @@ test("real engine: gate, backdated takeoff, reload kill drill, stop", async ({
 
   await page.getByRole("button", { name: "Stop flight" }).click();
   await page.getByRole("button", { name: "Stop", exact: true }).click();
+  await dismissLandingSheet(page);
   await expect(page.getByRole("button", { name: "Start Flight" })).toBeVisible({
     timeout: 15_000,
   });
@@ -205,6 +217,17 @@ test("landing prompt: dismiss re-arms, stop saves", async ({ page }) => {
   await emit(Array.from({ length: 15 }, () => ({ speed: 0.3 })));
   await expect(page.getByTestId("landing-prompt")).toBeVisible();
 
+  // The prompt's action carries the detect-landing countdown, and the countdown
+  // is the only thing in the app that tells a pilot when the flight
+  // finalizes itself. Asserted by SHAPE, not a value: the number is a
+  // function of fix timestamps, but /Stop/ alone (used below, where the
+  // click is the point) matches a bare "Stop" and a "Stop (NaN)" just as
+  // happily, so the detectLanding branch and the countdown were pinned by
+  // nothing.
+  await expect(
+    page.getByTestId("landing-prompt").getByRole("button", { name: /Stop/ }),
+  ).toHaveText(/^Stop \(\d+\)$/);
+
   await page.getByRole("button", { name: "Still flying" }).click();
   await expect(page.getByTestId("landing-prompt")).toBeHidden();
 
@@ -220,6 +243,7 @@ test("landing prompt: dismiss re-arms, stop saves", async ({ page }) => {
     .getByTestId("landing-prompt")
     .getByRole("button", { name: /Stop/ })
     .click();
+  await dismissLandingSheet(page);
   await expect(
     page.getByRole("button", { name: "Start Flight" }),
   ).toBeVisible();
@@ -241,6 +265,7 @@ test("backgrounded landing: a burst-replayed flight finalizes retroactively", as
   // wall-clock wait.
   await emit(Array.from({ length: 50 }, () => ({ speed: 0.3 })));
 
+  await dismissLandingSheet(page);
   await expect(
     page.getByRole("button", { name: "Start Flight" }),
   ).toBeVisible();
@@ -248,7 +273,7 @@ test("backgrounded landing: a burst-replayed flight finalizes retroactively", as
   await expect(page.getByText(/1 flights/)).toBeVisible();
 });
 
-test("permission denied surfaces on the arming screen and clears on fix", async ({
+test("permission denied blocks with the error screen and recovers via reload", async ({
   page,
 }) => {
   await page.addInitScript(GEO_STUB);
@@ -265,12 +290,185 @@ test("permission denied surfaces on the arming screen and clears on fix", async 
     );
   });
   await expect(page.getByTestId("gps-error")).toContainText(
-    "Location permission denied",
+    "Location Access Needed",
   );
 
-  // A fix arriving clears the banner
+  // Blocked is absorbing: stray fixes are ignored. Web denied recovers
+  // via Reload (browsers only re-prompt on a fresh page load); the WAL
+  // rehydrates the session and the watch comes back on boot.
+  await emit([{}]);
+  await expect(page.getByTestId("gps-error")).toBeVisible();
+  await expect(page.getByRole("button", { name: "Try Again" })).toBeHidden();
+
+  await page.getByRole("button", { name: "Reload" }).click();
+  await waitForWatch(page);
   await emit([{}]);
   await expect(page.getByTestId("gps-error")).toBeHidden();
+  await expect(page.getByTestId("armed")).toBeVisible();
+});
+
+test("precise off during a Settings trip surfaces the screen despite a dead watch", async ({
+  page,
+}) => {
+  // Burns the real 12 s sustain window by design (the latch is the thing
+  // under test); the default 30 s budget leaves too little margin for CI
+  // under the zero-retry policy.
+  test.setTimeout(60_000);
+  await page.addInitScript(GEO_STUB);
+  const emit = makeEmitter(page);
+  await page.goto(URL);
+
+  await page.getByRole("button", { name: "Start Flight" }).click();
+  await expect(page.getByTestId("armed")).toBeVisible();
+  await waitForWatch(page);
+
+  // Mediocre fixes: acquiring, never armed.
+  await emit([{ accuracy: 40 }, { accuracy: 40 }]);
+
+  // The Settings trip: Safari silently kills the watch (the engine is
+  // never told), the pilot flips Precise off and comes back, which
+  // fires visibilitychange. The foreground bounce must revive the
+  // watch...
+  await page.evaluate(() => {
+    (
+      window as unknown as { __geo: { killWatches: () => void } }
+    ).__geo.killWatches();
+    document.dispatchEvent(new Event("visibilitychange"));
+  });
+  await waitForWatch(page);
+
+  // ...so the reduced fix reaches the engine, and the wall-clock latch
+  // surfaces the screen even though this single fix is all we get.
+  await emit([{ accuracy: 13_000, altitudeAccuracy: null }]);
+  await expect(page.getByTestId("gps-error")).toContainText(
+    "Precise Location Is Off",
+    { timeout: 15_000 },
+  );
+});
+
+// Records every Ionic shell element the DOM ever ACQUIRES, from
+// document-start — proof about frames no screenshot can catch.
+const SHELL_WATCHER = `(() => {
+  window.__shellSeen = [];
+  window.__nodesSeen = 0;
+  // ion-tabs/ion-tab-bar are the nav shell; idle-facts is the home screen's
+  // always-rendered marker (app/pages/FlyPage). The home screen is watched
+  // because its ungated render is the dangerous one: Start Flight clears a
+  // live flight's WAL.
+  const WRONG = 'ion-tabs, ion-tab-bar, [data-testid="idle-facts"]';
+  const mark = (el) =>
+    window.__shellSeen.push(
+      el.getAttribute("data-testid") ?? el.tagName.toLowerCase(),
+    );
+  // addedNodes holds only the ROOT of each inserted subtree, so the
+  // shell must be searched for inside every insertion, not matched on it.
+  const scan = (node) => {
+    window.__nodesSeen += 1;
+    if (node.matches?.(WRONG)) mark(node);
+    if (node.querySelectorAll) {
+      for (const el of node.querySelectorAll(WRONG)) mark(el);
+    }
+  };
+  new MutationObserver((records) => {
+    for (const record of records) {
+      for (const node of record.addedNodes) scan(node);
+    }
+  }).observe(document, { childList: true, subtree: true });
+})();`;
+
+function shellSeen(page: Page) {
+  return page.evaluate(
+    () => (window as unknown as { __shellSeen: string[] }).__shellSeen,
+  );
+}
+
+function nodesSeen(page: Page) {
+  return page.evaluate(
+    () => (window as unknown as { __nodesSeen: number }).__nodesSeen,
+  );
+}
+
+// Poll the WAL itself until the session row records takeoff. The engine
+// enqueues that write, it does not await it, so a reload fired straight
+// after arming can beat the commit and boot "armed" — a false failure of
+// the relaunch drills, not a real one of the app.
+function walRecordsTakeoff(page: Page) {
+  return page.waitForFunction(
+    () =>
+      new Promise<boolean>((resolve) => {
+        const open = indexedDB.open("wingover-wal");
+        open.onerror = () => resolve(false);
+        open.onsuccess = () => {
+          const db = open.result;
+          try {
+            const get = db
+              .transaction("meta")
+              .objectStore("meta")
+              .get("session");
+            get.onerror = () => {
+              db.close();
+              resolve(false);
+            };
+            get.onsuccess = () => {
+              db.close();
+              const session = get.result as { takeoffIndex?: number | null };
+              resolve(session?.takeoffIndex != null);
+            };
+          } catch {
+            db.close();
+            resolve(false);
+          }
+        };
+      }),
+  );
+}
+
+test("mid-flight relaunch never flashes the nav shell", async ({ page }) => {
+  await page.addInitScript(SHELL_WATCHER);
+  await page.addInitScript(GEO_STUB);
+  const emit = makeEmitter(page);
+  await page.goto(URL);
+  await armAndFly(page, emit);
+  await walRecordsTakeoff(page);
+
+  // The relaunch: init scripts re-run at document-start, so the watcher
+  // sees every frame of the reborn page.
+  await page.goto(URL);
+  await expect(page.getByTestId("recording")).toBeVisible();
+  // The watcher must have been alive DURING this load, or the empty
+  // shell list below proves nothing.
+  expect(await nodesSeen(page)).toBeGreaterThan(0);
+  expect(await shellSeen(page)).toEqual([]);
+});
+
+test("idle relaunch still boots the shell (watcher positive control)", async ({
+  page,
+}) => {
+  await page.addInitScript(SHELL_WATCHER);
+  await page.addInitScript(GEO_STUB);
+  await page.goto(URL);
+  await expect(page.getByText("Logbook", { exact: true })).toBeVisible();
+  expect((await shellSeen(page)).length).toBeGreaterThan(0);
+});
+
+// The gate must fail VISIBLE. A WAL that cannot be read boots a reload
+// screen: never a blank app, and never the idle shell, whose Start Flight
+// would clear the flight the unreadable WAL may still hold.
+test("an unreadable WAL boots a reload screen, not a blank app", async ({
+  page,
+}) => {
+  await page.addInitScript(SHELL_WATCHER);
+  await page.addInitScript(`{
+    const realOpen = indexedDB.open.bind(indexedDB);
+    indexedDB.open = function (name, ...rest) {
+      if (name === "wingover-wal") throw new Error("drill: wal unreadable");
+      return realOpen(name, ...rest);
+    };
+  }`);
+  await page.goto(URL);
+  await expect(page.getByTestId("boot-failed")).toBeVisible();
+  await expect(page.getByRole("button", { name: "Reload" })).toBeVisible();
+  expect(await shellSeen(page)).toEqual([]);
 });
 
 test("a pin becomes a spoken waypoint announcement mid-flight", async ({
@@ -402,6 +600,40 @@ test("a long-press mid-flight proposes a checkpoint behind a confirm", async ({
   await expect(dialog).toBeVisible();
   await dialog.getByRole("button", { name: "Add" }).click();
   await expect(page.getByTestId("waypoint-pin")).toHaveCount(1);
+});
+
+test("a press that becomes a pan withdraws the checkpoint it proposed", async ({
+  page,
+}) => {
+  await page.addInitScript(GEO_STUB);
+  const emit = makeEmitter(page);
+  await page.goto(URL);
+  await armAndFly(page, emit);
+  // Same settling wait as the drill above: a zoomstart mid-hold cancels the
+  // press timer, so a camera still easing in proposes nothing to withdraw.
+  await page.waitForTimeout(1200);
+
+  const map = (await page.getByTestId("live-map").boundingBox())!;
+  const centerX = map.x + map.width / 2;
+  const centerY = map.y + map.height / 2;
+  const dialog = page.getByRole("alertdialog");
+
+  // The gesture CI produced by accident on run 30509713312: a loaded runner
+  // took 466 ms to deliver the drag command after mouse.down, so the press
+  // timer fired first and the proposal landed mid-drag. Holding until the
+  // dialog is actually up reproduces that ordering without a sleep.
+  await page.mouse.move(centerX, centerY);
+  await page.mouse.down();
+  await expect(dialog).toBeVisible();
+  await page.mouse.move(centerX - 140, centerY, { steps: 8 });
+  await page.mouse.up();
+
+  // The pan is the meaning that survives: no dialog, no pin, follow unpinned.
+  await expect(dialog).toBeHidden();
+  await expect(page.getByTestId("waypoint-pin")).toHaveCount(0);
+  await expect(
+    page.getByRole("button", { name: "Follow aircraft" }),
+  ).toHaveAttribute("data-active", "false");
 });
 
 test("track-up toggle rotates the camera immediately, not on a glide", async ({

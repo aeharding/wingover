@@ -1,0 +1,18 @@
+{
+  "surface": "check_permissions",
+  "hop": "swift->rust->js",
+  "description": "Ready to record. Rust is a passthrough here (serde_json::Value), so the Swift dictionary IS the JS object: two languages, no type between them.",
+  "produces": "src-tauri/plugins/wingover/ios/Sources/WingoverPlugin.swift (checkPermissions)",
+  "consumes": "src/engine/nativeSource.ts (permissionRefusal)",
+  "codes": ["location", "precise", "servicesEnabled", "granted"],
+  "response": {
+    "location": "granted",
+    "precise": true,
+    "servicesEnabled": true
+  },
+  "expect": {
+    "js": {
+      "refusal": null
+    }
+  }
+}

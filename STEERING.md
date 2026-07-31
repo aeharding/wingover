@@ -87,16 +87,33 @@ The invariants, in priority order:
 2. No recoverable failure loses more than a few seconds of track.
 3. After _any_ interruption, foregrounding the app shows the recording in progress, exactly where it left off, with zero pilot action.
 
-| Failure                           | Behavior                                                                                                                                          |
-| --------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------- |
-| App backgrounded / screen off     | Native engine records normally; UI is irrelevant                                                                                                  |
-| Webview killed by memory pressure | Recording unaffected; webview reloads and rehydrates from native state                                                                            |
-| App process killed by OS          | iOS keeps location apps alive aggressively; if it happens anyway, next launch finds an unfinalized WAL → offers/auto-resumes recovery             |
-| Pilot force-quits mid-flight      | iOS stops location for force-quit apps (platform limit shared by every flight app); WAL recovery on next launch, nothing already recorded is lost |
-| Phone reboot / battery death      | WAL recovery on next launch                                                                                                                       |
-| Storage write failure             | Surface loudly; never fail silently                                                                                                               |
+| Failure                           | Behavior                                                                                                                                                                                                                               |
+| --------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| App backgrounded / screen off     | Native engine records normally; UI is irrelevant                                                                                                                                                                                       |
+| Webview killed by memory pressure | Recording unaffected; webview reloads and rehydrates from native state                                                                                                                                                                 |
+| App process killed by OS          | iOS keeps location apps alive aggressively; if it happens anyway, next launch finds an unfinalized WAL → offers/auto-resumes recovery                                                                                                  |
+| Pilot force-quits mid-flight      | iOS stops location for force-quit apps (platform limit shared by every flight app); WAL recovery on next launch, nothing already recorded is lost                                                                                      |
+| Phone reboot / battery death      | WAL recovery on next launch                                                                                                                                                                                                            |
+| Storage write failure             | Ring-scoped: native retries silently (the Rust log is the record of truth; a JS WAL blip loses nothing). Web/PWA, where the JS WAL is the only copy: never fail silently — flight _finalization_ failure surfaces loudly on every ring |
 
 These invariants double as the primary test suite: the "kill drills" (background 30+ min, force webview termination, force app termination, relaunch mid-recording) are automated in CI against simulators and re-run on physical hardware before each release. See Testing Strategy.
+
+### What the engine and the WAL are NOT
+
+Stated as plainly as the invariants, because this is the boundary that keeps them cheap. Each of these is a thing the engine deliberately does not do, and a proposal to add one needs to argue against this section first.
+
+**The WAL holds exactly one flight.** It is not a queue, a backlog, or a history. A flight is finalized into IndexedDB and the WAL is cleared before anything else may start. If the WAL is not clear, the next flight does not begin — that refusal is the feature, not a limitation to engineer around. Anything that would let two unfinalized flights coexist is out of scope by construction.
+
+**The recovery point is the pilot's next visit, not some earlier instant.** A pilot who flies comes back to the app at least once, to press Start Flight. Being caught up by then is the whole obligation. This is what makes the WAL single-flight safe, and it is why the engine owes nothing to a pilot who never returns: there is no background finalization while the app is closed, no scheduled task, no server.
+
+**Multi-tab is a safety property, not a feature.** The recorder lock exists so a second tab cannot destroy the first's WAL. It is not there to make two tabs work well together, and no effort should go into making the second one a good experience beyond refusing to corrupt anything.
+
+What is actually being bought, and the only things worth complexity:
+
+1. **A crash on the flight surface heals itself.** It reloads once and comes back where it was, track intact, ideally unnoticed — the webview never held the recording to begin with. Anywhere else (logbook, plan, settings) a crash just shows a crash screen, and that is fine.
+2. Recording survives the phone sleeping, the app backgrounding, and the JS process being stopped — **specifically across takeoff and landing**, the two moments the pilot is not looking at the screen and the two the flight is worthless without.
+
+A race that can only be lost while the pilot is present, watching, and would be repaired by the next launch anyway is not in the same class as those two, and should not be priced like it.
 
 ### Background parity: the engine replays, the UI derives
 
@@ -127,8 +144,11 @@ arriving in a burst instead of one per second.
   wired engine-side (`src/engine/session.ts`; the web core
   `src/engine/core.ts` is a TS twin of the plugin's core.rs, driven by
   the same watch lifecycle). The boundary is a directory boundary — React
-  exists only under `src/ui/` — and it is mechanical: eslint bans
-  React/Ionic imports from `src/engine`, `src/flight`, and `src/storage`.
+  exists only under `src/ui/` — and it is mechanical: the seams are
+  enforced by `eslint.config.js`, which is the enumeration (React and
+  Ionic out of the headless world, the platform out of the engine, each
+  layer reached through its public surface). A seam that is not in that
+  file is not a seam yet.
 - **A flight owns its waypoints.** The Plan tab is a reusable template for
   the NEXT flight; starting a flight copies the plan's pins into the
   session. Mid-flight additions join that flight only. An active flight
@@ -150,6 +170,7 @@ Real test flights exist but are precious — the maintainer can fly, but not ite
 - **Native engine tests.** The location source is abstracted so the Swift (later Kotlin) engine is unit-tested with injected fixes: WAL write/flush ordering, recovery from truncated and corrupt WALs, finalization, baro handling.
 - **Golden-track tests.** Known input flight → asserted stats (duration, distance, max altitude/speed, launch/land detection) and stable export output. Export is deliberately lossy and that is the trade: GPX 1.1 carries lat/lon/ele/time and dropped `<speed>`/`<course>` from 1.0, and has no home at all for climb rate or accuracy-in-meters (`hdop`/`vdop` are dilution-of-precision, a different quantity). So a round-trip returns a track that is interoperable, not identical — import reconstructs speed, course and climb rate from geometry, and the accuracies are gone. Interop is worth that at the export boundary; it is why the stored track stays JSON, where the record is complete.
 - **Soak test.** A long simulated flight with randomized interruption events injected throughout, asserting zero data loss — run scheduled in CI, not on every commit.
+- **Adversarial audit.** Engine- and native-touching changes get an independent bug hunt and a doctrine-grounded architecture review before merge ([docs/ENGINE-AUDIT.md](docs/ENGINE-AUDIT.md)) — the failure mode of this codebase is plausible code that passes green tests, and audits have caught what rings could not.
 - **Honest gaps, ground-truthed before flying.** Simulators can't reproduce real jetsam decisions, GPS chip behavior, or battery/thermal reality. That gap closes on the ground first: unattended real-device drills — phone recording in a pocket during a long drive or walk, screen off, hours at a stretch — exercise the identical pipeline; a flight is the same data, just higher. TestFlight beta pilots widen coverage before 1.0.
 
 **Flight-ready** means: the full automated matrix is green, and multiple unattended multi-hour ground recordings on physical hardware have completed with zero loss. Only then does a real flight happen — as sign-off, with the expectation it works the first time.

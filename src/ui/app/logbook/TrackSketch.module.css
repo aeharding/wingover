@@ -1,0 +1,6 @@
+/* Fills whatever box it is given; the viewBox does the fitting. */
+.sketch {
+  display: block;
+  width: 100%;
+  height: 100%;
+}

@@ -1,0 +1,17 @@
+{
+  "surface": "storekit_environment",
+  "hop": "swift->rust->js",
+  "description": "App Store.",
+  "produces": "src-tauri/plugins/wingover/ios/Sources/WingoverPlugin.swift (storekitEnvironment)",
+  "consumes": "src/sync/providers/apple.ts (appEnvironment)",
+  "codes": ["environment"],
+  "response": {
+    "environment": "Production"
+  },
+  "jsResponse": "Production",
+  "expect": {
+    "js": {
+      "appEnvironment": "Production"
+    }
+  }
+}

@@ -1,0 +1,35 @@
+{
+  "surface": "current_position",
+  "hop": "swift->rust->js",
+  "description": "One-shot Center-on-me, the only surface where Rust deserializes a bare Fix. Complete on purpose: every optional key of the fix contract appears here, so a Swift rename of any of them fails somewhere.",
+  "produces": "src-tauri/plugins/wingover/ios/Sources/WingoverPlugin.swift (currentPosition; convertLocation)",
+  "consumes": "src/platform/currentPosition.ts (getCurrentPosition)",
+  "codes": [
+    "timestamp",
+    "latitude",
+    "longitude",
+    "horizontalAccuracy",
+    "altitude",
+    "verticalAccuracy",
+    "speed",
+    "course"
+  ],
+  "response": {
+    "timestamp": 1721815200000,
+    "latitude": 43.0731,
+    "longitude": -89.4012,
+    "horizontalAccuracy": 4.5,
+    "altitude": 412.3,
+    "verticalAccuracy": 6.3,
+    "speed": 11.4,
+    "course": 271.5
+  },
+  "expect": {
+    "js": {
+      "currentPosition": {
+        "latitude": 43.0731,
+        "longitude": -89.4012
+      }
+    }
+  }
+}
