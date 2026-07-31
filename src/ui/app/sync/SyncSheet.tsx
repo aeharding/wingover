@@ -329,7 +329,6 @@ function Pitch({
       {native && (
         <IonButton
           fill="clear"
-          size="small"
           className={styles.quietAction}
           disabled={busy}
           onClick={onRestore}
@@ -342,7 +341,6 @@ function Pitch({
       {/* Self-host is a LOGIN, reachable from the pitch one tap in. */}
       <IonButton
         fill="clear"
-        size="small"
         className={styles.quietAction}
         data-testid="sync-more"
         onClick={() =>

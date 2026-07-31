@@ -249,12 +249,12 @@
   margin: 0 0 1rem;
 }
 
-/* Gloves-first (STEERING): every block ACTION here is well past the
-   platform minimum, even though this is ground UI. Scoped to non-clear
-   buttons: a full-width text link (Back) is navigation, not a CTA, and
-   must keep the quiet idiom. */
-.homeBody ion-button[expand="block"]:not([fill="clear"]),
-.loginBody ion-button[expand="block"]:not([fill="clear"]) {
+/* Gloves-first (STEERING): every block action here is well past the
+   platform minimum, even though this is ground UI. Clear block buttons
+   (Back) share it deliberately: that text style set the tone the whole
+   quiet family now matches. */
+.homeBody ion-button[expand="block"],
+.loginBody ion-button[expand="block"] {
   --padding-top: 1.25rem;
   --padding-bottom: 1.25rem;
   --border-radius: 14px;
@@ -290,11 +290,13 @@
   visibility: hidden;
 }
 
-/* Quiet, secondary actions (Restore Purchases, Manage subscription): present
-   for the pilot who is looking for them, silent for everyone else. */
+/* Quiet, secondary actions (More options, Restore Purchases, the quiet
+   sign-in): present for the pilot who is looking for them, silent for
+   everyone else — in the same text voice as the Back button. */
 .quietAction {
   --padding-top: 1rem;
   --padding-bottom: 1rem;
+  font-weight: 600;
 }
 
 /* Apple's HIG wants their sign-in button monochrome — never the app's accent

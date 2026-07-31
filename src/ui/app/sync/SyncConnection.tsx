@@ -91,7 +91,6 @@ export function AppleSignInButton({
     return (
       <IonButton
         fill="clear"
-        size="small"
         className={styles.quietAction}
         disabled={busy}
         onClick={onClick}
@@ -295,7 +294,6 @@ export function Connected({
       {showMore && (
         <IonButton
           fill="clear"
-          size="small"
           className={styles.quietAction}
           onClick={moreOptions}
           data-testid="sync-more"
@@ -360,14 +358,10 @@ export function LinkAccountPage({
   const computer = !purchase;
 
   function renderBack() {
-    // Full width per the spec, but the QUIET idiom: this is navigation,
-    // typographically identical to More options.
     return (
       <IonButton
         expand="block"
         fill="clear"
-        size="small"
-        className={styles.quietAction}
         onClick={pop}
         data-testid="link-page-back"
       >
