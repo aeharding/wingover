@@ -83,6 +83,13 @@ latest.json is NOT immutable-cached (short TTL).
    way the WAF does.
 3. **Coverage.** The app still uses one near-global box (see below).
    Precise coverage in the manifest would let it stop asking for ocean.
+   Decided with Alex 2026-07-30: ship USA-only with the mode offered
+   everywhere; outside coverage, chart view draws nothing over the
+   street base (404s render transparent) and that is accepted. When the
+   manifest carries coverage, the app stops requesting outside it and
+   stops OFFERING the mode where the viewport has none. No hand-authored
+   region boxes client-side; that is this project's recurring defect
+   class.
 4. `tilePixels` appeared in the old manifest and nothing reads it: the
    MapKit path takes the size off the decoded image and the MapLibre
    source is declared at 256 so the 768px tiles land as retina.
