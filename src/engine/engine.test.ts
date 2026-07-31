@@ -1129,7 +1129,7 @@ describe("Engine", () => {
       setWaypoints: () => {},
     });
     engines.push(engine);
-    await engine.start({ autoEnd: false });
+    await engine.start({ detectLanding: false });
     await settle();
 
     const batch: SourcePosition[] = [];
@@ -1166,7 +1166,7 @@ describe("landing finalization", () => {
   // The user-facing contract: the sustain wait and the grace tail belong
   // to DETECTION, not to the flight. The flight of record is clipped at
   // the first fix that met the landing threshold.
-  it("auto-end clips the flight at the first sub-threshold fix", async () => {
+  it("landing detection clips the flight at the first sub-threshold fix", async () => {
     const engine = createEngine();
     await armAndTakeOff(engine);
     const touchdownTs = timestamp + 1000;
@@ -1184,7 +1184,7 @@ describe("landing finalization", () => {
   // The field regression (flight of 2026-07-10): packing up at walking
   // pace never completed the old 1.0 m/s sustain window, so the whole
   // walk-around saved into the flight of record.
-  it("a walking-pace tail detects, auto-ends, and clips at touchdown", async () => {
+  it("a walking-pace tail detects, finalizes, and clips at touchdown", async () => {
     const engine = createEngine();
     await armAndTakeOff(engine);
     const touchdownTs = timestamp + 1000;
@@ -1204,16 +1204,61 @@ describe("landing finalization", () => {
     );
   });
 
-  it("autoEnd off: grace expiry never finalizes — the pilot decides", async () => {
+  it("a pre-rename journal's autoEnd still reads as detectLanding", async () => {
+    // Journals written before the rename carry the fact as autoEnd; a live
+    // flight's WAL crosses app updates, so the old name reads forever.
+    await writeWalSession({
+      armedAt: timestamp,
+      takeoffIndex: null,
+      autoEnd: false,
+    });
+    const reborn = createEngine();
+    const snapshot = await reborn.getSnapshot();
+    expect(snapshot.detectLanding).toBe(false);
+  });
+
+  it("a legacy opt-out survives the session rewrites of a full flight", async () => {
+    // The fold's property under load: takeoff and landing both rewrite the
+    // journal, and the rewritten session must still carry the opt-out (it
+    // is the only thing standing between a touch-and-go pilot and an
+    // auto-ended recording).
+    await writeWalSession({
+      armedAt: timestamp,
+      takeoffIndex: null,
+      autoEnd: false,
+    });
     const engine = createEngine();
-    await armAndTakeOff(engine, { autoEnd: false });
+    await engine.getSnapshot();
+    // Fly the HYDRATED session: hydration restarted its watch, and takeoff
+    // must come from the fix stream. A start() here would (correctly)
+    // replace the legacy session with a fresh default-true one.
+    for (let i = 0; i < 3; i++) geolocation.emit(position({ speed: 0 }));
+    geolocation.emit(position({ speed: 2 }));
+    geolocation.emit(position({ speed: 3 }));
+    for (let i = 0; i < 5; i++) geolocation.emit(position({ speed: 6 }));
+    for (let i = 0; i < LANDING_SUSTAIN_FIXES + 35; i++) {
+      geolocation.emit(position({ speed: 0.3 }));
+    }
+    await engine.getSnapshot();
+    const journaled = (await readWal()).session;
+    expect(journaled?.detectLanding).toBe(false);
+    // The RAW legacy field must also survive the rewrites: a rolled-back
+    // build reads autoEnd with no fold. (The fold only adds detectLanding,
+    // so autoEnd here reflects what is actually stored.)
+    expect(journaled?.autoEnd).toBe(false);
+    expect(engine.snapshotSync().status).toBe("landed");
+  });
+
+  it("detectLanding off: grace expiry never finalizes — the pilot decides", async () => {
+    const engine = createEngine();
+    await armAndTakeOff(engine, { detectLanding: false });
     const touchdownTs = timestamp + 1000;
     for (let i = 0; i < LANDING_SUSTAIN_FIXES + 35; i++) {
       geolocation.emit(position({ speed: 0.3 }));
     }
     // Far past the grace window, still prompting.
     expect(engine.snapshotSync().status).toBe("landed");
-    expect(engine.snapshotSync().autoEnd).toBe(false);
+    expect(engine.snapshotSync().detectLanding).toBe(false);
     await engine.getSnapshot();
 
     // The choice is flight-scoped and survives a webview death.

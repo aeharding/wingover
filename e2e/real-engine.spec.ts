@@ -217,12 +217,12 @@ test("landing prompt: dismiss re-arms, stop saves", async ({ page }) => {
   await emit(Array.from({ length: 15 }, () => ({ speed: 0.3 })));
   await expect(page.getByTestId("landing-prompt")).toBeVisible();
 
-  // The prompt's action carries the auto-end countdown, and the countdown
+  // The prompt's action carries the detect-landing countdown, and the countdown
   // is the only thing in the app that tells a pilot when the flight
   // finalizes itself. Asserted by SHAPE, not a value: the number is a
   // function of fix timestamps, but /Stop/ alone (used below, where the
   // click is the point) matches a bare "Stop" and a "Stop (NaN)" just as
-  // happily, so the autoEnd branch and the countdown were pinned by
+  // happily, so the detectLanding branch and the countdown were pinned by
   // nothing.
   await expect(
     page.getByTestId("landing-prompt").getByRole("button", { name: /Stop/ }),

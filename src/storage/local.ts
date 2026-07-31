@@ -7,7 +7,7 @@ import { syncedDb } from "./db";
  *
  * `db` (storage/db.ts) is the synced store — flights and pins, the things a
  * pilot owns and expects on every device. Settings are the opposite:
- * maptilerKey, mapView, units and autoEndFlight are preferences *of this
+ * maptilerKey, mapView, units and detectLanding are preferences *of this
  * device*, and a phone strapped to a leg has no business dictating the map view
  * on a laptop. They lived in `db` only because there was nothing to sync to.
  */
@@ -138,6 +138,25 @@ export async function getBooleanSetting(
 
 export async function setBooleanSetting(key: string, value: boolean) {
   await setSetting(key, value ? "true" : "false");
+}
+
+/**
+ * The landing-detection preference (Settings: "Detect landing"). Reads the
+ * pre-rename key when the new one is unset: devices that stored
+ * "autoEndFlight" before the 2026-07-30 rename keep their choice.
+ */
+export async function getDetectLanding(): Promise<boolean> {
+  const stored = await getSetting("detectLanding");
+  if (stored !== null) return stored === "true";
+  return getBooleanSetting("autoEndFlight", true);
+}
+
+export async function setDetectLanding(value: boolean): Promise<void> {
+  await setBooleanSetting("detectLanding", value);
+  // Mirrored to the pre-rename key so a rolled-back build (Watchtower can
+  // roll the beta back) still reads the pilot's choice. Remove with the
+  // WAL's autoEnd shim.
+  await setBooleanSetting("autoEndFlight", value);
 }
 
 interface JsonDoc<T> {
