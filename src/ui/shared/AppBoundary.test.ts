@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 
-import { mayHeal } from "./AppBoundary";
+import { mayHeal } from "./healBudget";
 
 // The heal window is the one piece of this that can loop forever if it is
 // wrong, and it is the piece a reload erases: the marker lives in storage

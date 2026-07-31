@@ -1,4 +1,5 @@
 import { isTauri } from "../../platform/index";
+import { takeHeal } from "./healBudget";
 
 /**
  * The severed-IndexedDB heal (Voyager's pattern, observed 2026-07-30 on
@@ -11,22 +12,17 @@ import { isTauri } from "../../platform/index";
  * already broken in a way no instance swap can reach, because the broken
  * thing is the process's connection to storage itself.
  *
- * One reload per cooldown window, stamped in localStorage so the stamp
- * survives the reload. If storage is still dead on the reloaded boot, the
+ * One reload per window, drawn from the shared heal budget (healBudget,
+ * with AppBoundary's crash heal) so the stamp survives the reload and a
+ * full disk cannot loop it. If storage is still dead on the reloaded boot, the
  * WAL read rejects, hydration lands on "failed", and the boot-failed
  * screen takes over — that is the escalation, and it already exists.
  */
 const HEALED_AT_KEY = "wingover.idbHealedAt";
-const COOLDOWN_MS = 60_000;
 
 // Both spellings WebKit uses for a severed session, either name or message.
 export const SEVERED_IDB =
   /database connection is closing|Indexed Database server lost/i;
-
-/** Pure, for the drill: heal at most once per window. */
-export function shouldHeal(lastHealedAt: number, now: number): boolean {
-  return now - lastHealedAt >= COOLDOWN_MS;
-}
 
 function probeIdb(): Promise<void> {
   return new Promise((resolve, reject) => {
@@ -42,9 +38,10 @@ function probeIdb(): Promise<void> {
 }
 
 function heal(reason: unknown) {
-  const last = Number(localStorage.getItem(HEALED_AT_KEY) ?? 0);
-  if (!shouldHeal(last, Date.now())) return;
-  localStorage.setItem(HEALED_AT_KEY, String(Date.now()));
+  // The shared budget (healBudget) enforces once-per-window across the
+  // reload, and refuses on an unusable store — a full disk must not
+  // become a reload loop.
+  if (!takeHeal(HEALED_AT_KEY)) return;
   console.error("IndexedDB severed; healing with one reload:", reason);
   window.location.reload();
 }

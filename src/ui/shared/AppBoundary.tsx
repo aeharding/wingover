@@ -2,6 +2,7 @@ import { type ReactNode, useLayoutEffect } from "react";
 import { ErrorBoundary } from "react-error-boundary";
 
 import AppCrash from "./AppCrash";
+import { takeHeal } from "./healBudget";
 
 /**
  * The app's only error boundary. Without one, a throw during render or commit
@@ -29,30 +30,12 @@ import AppCrash from "./AppCrash";
  */
 
 const HEALED_AT_KEY = "wingover.crash.healedAt";
-const HEAL_WINDOW_MS = 60_000;
-
-/**
- * The entire heal policy, pure so it can be tested without a DOM or a reload.
- *
- * The marker has to be PERSISTED, not held in a variable: the reload destroys
- * every value in the page, so an in-memory counter cannot enforce "once per
- * 60 s" and the result is an unbounded reload loop.
- */
-export function mayHeal(now: number, healedAt: number | null): boolean {
-  if (healedAt === null) return true;
-  return now - healedAt >= HEAL_WINDOW_MS;
-}
 
 /**
  * Takes this page-load's one heal, or returns false. Called in exactly one
- * place, by the fallback, so the decision is made once and nothing re-checks.
- *
- * Claiming means WRITING the marker, not just reading it, and the reload is
- * conditional on that write. An earlier version reloaded even when the write
- * threw, reasoning that nothing was on screen to fall back to. On a full disk
- * — `setItem` throws, `getItem` keeps returning null — that never enforces the
- * window: measured at 101 navigations in 12 seconds, a hard reload every 90 ms
- * during an active recording. A crash screen is always better than that.
+ * place, by the fallback, so the decision is made once and nothing
+ * re-checks. The window policy and the full-disk refusal live in
+ * healBudget, shared with idbHeal.
  */
 let claimed: boolean | null = null;
 
@@ -65,25 +48,8 @@ function claimHeal(): boolean {
   // AppCrash committing and reload() never called.
   //
   // A page-load memo is the right lifetime because a reload is what clears it.
-  claimed ??= takeHeal();
+  claimed ??= takeHeal(HEALED_AT_KEY);
   return claimed;
-}
-
-function takeHeal(): boolean {
-  try {
-    const raw = localStorage.getItem(HEALED_AT_KEY);
-    const at = raw === null ? null : Number(raw);
-    if (!mayHeal(Date.now(), at !== null && Number.isFinite(at) ? at : null)) {
-      return false;
-    }
-    // Written BEFORE the reload, or the next crash cannot see it.
-    localStorage.setItem(HEALED_AT_KEY, String(Date.now()));
-    return true;
-  } catch {
-    // Unusable store: the window cannot be enforced across a reload, so there
-    // is no safe reload to offer.
-    return false;
-  }
 }
 
 /**
