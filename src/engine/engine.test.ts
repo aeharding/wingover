@@ -1240,7 +1240,12 @@ describe("landing finalization", () => {
       geolocation.emit(position({ speed: 0.3 }));
     }
     await engine.getSnapshot();
-    expect((await readWal()).session?.detectLanding).toBe(false);
+    const journaled = (await readWal()).session;
+    expect(journaled?.detectLanding).toBe(false);
+    // The RAW legacy field must also survive the rewrites: a rolled-back
+    // build reads autoEnd with no fold. (The fold only adds detectLanding,
+    // so autoEnd here reflects what is actually stored.)
+    expect(journaled?.autoEnd).toBe(false);
     expect(engine.snapshotSync().status).toBe("landed");
   });
 
