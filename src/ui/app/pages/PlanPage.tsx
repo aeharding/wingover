@@ -14,6 +14,7 @@ import { getCurrentPosition } from "../../../platform/currentPosition";
 import {
   deleteAllPins,
   deletePin,
+  isExpectedSwapRejection,
   listPins,
   onDocsChanged,
   type Pin,
@@ -97,7 +98,11 @@ export default function PlanPage() {
     // severed session during the one flow that must never reload.
     void listPins()
       .then(setPins)
-      .catch((error) => console.error("pin list read failed:", error));
+      .catch((error) => {
+        if (isExpectedSwapRejection(error)) return;
+        console.error("pin list read failed:", error);
+        throw error;
+      });
   }
 
   // Will-enter for the phone shell; a mount effect for the desktop shell

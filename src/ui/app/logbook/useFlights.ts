@@ -1,7 +1,12 @@
 import { useIonViewWillEnter } from "@ionic/react";
 import { useEffect, useState } from "react";
 
-import { type Flight, listFlights, onDocsChanged } from "../../../storage/db";
+import {
+  type Flight,
+  isExpectedSwapRejection,
+  listFlights,
+  onDocsChanged,
+} from "../../../storage/db";
 
 /**
  * The logbook, live: loaded on view entry and again whenever a flight doc
@@ -29,7 +34,11 @@ export function useFlights(): {
     // severed session during the one flow that must never reload.
     void listFlights()
       .then((flights) => setState({ flights, loaded: true }))
-      .catch((error) => console.error("flight list read failed:", error));
+      .catch((error) => {
+        if (isExpectedSwapRejection(error)) return;
+        console.error("flight list read failed:", error);
+        throw error;
+      });
   };
 
   useIonViewWillEnter(() => {

@@ -1,5 +1,6 @@
 import { engine } from "../../engine/index";
 import { isTauri } from "../../platform/index";
+import { describeRejection, SEVERED_IDB } from "../../storage/idbErrors";
 import { takeHeal } from "./healBudget";
 
 /**
@@ -33,25 +34,10 @@ const PROBE_TIMEOUT_MS = 5_000;
 
 const bootedAt = Date.now();
 
-// Both spellings WebKit uses for a severed session. A quota error is a
-// different problem with a different owner and must never match: healing
-// on any probe failure would reload a full phone on every foreground.
-export const SEVERED_IDB =
-  /database connection is closing|Indexed Database server lost/i;
-
-/**
- * PouchDB wraps IDB errors as {name: "indexed_db_went_bad", message:
- * "unknown", reason: <the real text>} — the severed signature hides in
- * .reason, so read it too.
- */
-export function describeRejection(reason: unknown): string {
-  if (reason instanceof Error) {
-    const nested = (reason as { reason?: unknown }).reason;
-    const tail = typeof nested === "string" ? ` ${nested}` : "";
-    return `${reason.name}: ${reason.message}${tail}`;
-  }
-  return String(reason);
-}
+// The severed signatures and the PouchDB unwrap live in
+// storage/idbErrors, shared with db.ts's swap classifier; re-exported
+// here for the drills.
+export { describeRejection, SEVERED_IDB } from "../../storage/idbErrors";
 
 /** Pure, for the drills: the terminal count over a persisted "start:count". */
 export function nextCount(

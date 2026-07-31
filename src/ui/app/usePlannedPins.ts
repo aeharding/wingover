@@ -1,6 +1,11 @@
 import { useEffect, useState } from "react";
 
-import { listPins, onDocsChanged, type Pin } from "../../storage/db";
+import {
+  isExpectedSwapRejection,
+  listPins,
+  onDocsChanged,
+  type Pin,
+} from "../../storage/db";
 
 /**
  * The planned route, for the idle-screen distance. Reloaded on every entry
@@ -20,13 +25,21 @@ export function usePlannedPins(): Pin[] {
     // severed session during the one flow that must never reload.
     void listPins()
       .then(setPins)
-      .catch((error) => console.error("pin list read failed:", error));
+      .catch((error) => {
+        if (isExpectedSwapRejection(error)) return;
+        console.error("pin list read failed:", error);
+        throw error;
+      });
     return onDocsChanged(
       "pin",
       () =>
         void listPins()
           .then(setPins)
-          .catch((error) => console.error("pin list read failed:", error)),
+          .catch((error) => {
+            if (isExpectedSwapRejection(error)) return;
+            console.error("pin list read failed:", error);
+            throw error;
+          }),
     );
   }, []);
 
