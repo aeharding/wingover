@@ -19,6 +19,7 @@ import App from "./ui/App";
 import { initAppTheme } from "./ui/app/appTheme";
 import { initSatelliteAvailability } from "./ui/app/map/satelliteAvailability";
 import { installExternalLinkHandler } from "./ui/shared/externalLinks";
+import { initIdbHeal } from "./ui/shared/idbHeal";
 import { captureLaunchUrl } from "./ui/shared/map/config";
 
 installExternalLinkHandler();
@@ -34,6 +35,7 @@ captureLaunchUrl();
 // first render — palettes/dark.class.css and every scheme-aware rule key
 // off that class, not prefers-color-scheme.
 initAppTheme();
+initIdbHeal();
 // A stored satellite view the active backend cannot render would otherwise pin
 // the palette dark with no visible toggle to undo it.
 initSatelliteAvailability();

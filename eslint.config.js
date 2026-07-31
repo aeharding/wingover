@@ -491,13 +491,15 @@ export default defineConfig(
   },
   {
     // No location.reload() in app code. The sanctioned exceptions are all
-    // screens for a page that is already broken: their Reload button is
-    // pilot-initiated and WAL-rehydrated, plus AppBoundary's one automatic
-    // heal per 60 s in flight (AGENTS.md).
+    // for a page that is already broken: the error screens' Reload button
+    // (pilot-initiated, WAL-rehydrated), AppBoundary's one automatic heal
+    // per 60 s in flight, and idbHeal's one reload when the webview's
+    // IndexedDB connections were severed by a bundle swap (AGENTS.md).
     ignores: [
       "src/ui/flight/ErrorScreen.tsx",
       "src/ui/shared/AppBoundary.tsx",
       "src/ui/shared/AppCrash.tsx",
+      "src/ui/shared/idbHeal.ts",
     ],
     rules: {
       "no-restricted-syntax": ["error", NO_RELOAD],

@@ -30,11 +30,14 @@ plugin from `src-tauri/plugins/wingover/` when touching Rust.
 - Never push to main: every main merge burns a limited TestFlight build.
   Branch + PR, worktrees under `.claude/worktrees/`.
 - No `location.reload()` in app code (instance-swap + notify instead).
-  Two sanctioned kinds, both on a page that is already broken, and the
+  Three sanctioned kinds, all on a page that is already broken, and the
   ignore list in `eslint.config.js` is the authority on which files:
   the error screens' Reload button (pilot-initiated, WAL-rehydrated),
-  and `AppBoundary`'s single automatic heal per 60 s when a crash
-  happens in flight.
+  `AppBoundary`'s single automatic heal per 60 s when a crash happens
+  in flight, and `idbHeal`'s reload when a bundle swap severed the
+  webview's IndexedDB connections (no instance swap can reach a broken
+  storage server; probed only on foreground, so the reload is
+  human-gated, one per window).
 - `src/ui/` has three buckets and the two ends never meet: `app/` (the
   ground app), `flight/` (the in-flight surface, which replaces the whole
   shell in flight), `shared/` (what both genuinely need). `app` and
