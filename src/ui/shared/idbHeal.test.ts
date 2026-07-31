@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 
-import { describeRejection, nextCount, SEVERED_IDB } from "./idbHeal";
+import { describeRejection, SEVERED_IDB } from "./idbHeal";
 
 describe("severed-IndexedDB heal", () => {
   it("matches both WebKit spellings of a severed session, and not a quota error", () => {
@@ -29,18 +29,5 @@ describe("severed-IndexedDB heal", () => {
       reason: "QuotaExceededError",
     });
     expect(SEVERED_IDB.test(describeRejection(quota))).toBe(false);
-  });
-
-  it("terminal count: two heals in the window, then the module stops", () => {
-    const now = 1_700_000_000_000;
-    const first = nextCount(null, now);
-    expect(first.allowed).toBe(true);
-    const second = nextCount(first.next, now + 61_000);
-    expect(second.allowed).toBe(true);
-    const third = nextCount(second.next, now + 122_000);
-    expect(third.allowed).toBe(false);
-    // A fresh window resets the count.
-    const later = nextCount(second.next, now + 11 * 60_000);
-    expect(later.allowed).toBe(true);
   });
 });

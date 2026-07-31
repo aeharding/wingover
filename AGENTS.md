@@ -36,8 +36,8 @@ plugin from `src-tauri/plugins/wingover/` when touching Rust.
   `AppBoundary`'s single automatic heal per 60 s when a crash happens
   in flight, and `idbHeal`'s reload when a bundle swap severed the
   webview's IndexedDB connections (no instance swap can reach a broken
-  storage server; bounded by uptime, a per-class window stamp, and a
-  two-in-ten-minutes terminal count).
+  storage server; probed only on foreground, so the reload is
+  human-gated, one per window).
 - `src/ui/` has three buckets and the two ends never meet: `app/` (the
   ground app), `flight/` (the in-flight surface, which replaces the whole
   shell in flight), `shared/` (what both genuinely need). `app` and
