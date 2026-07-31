@@ -132,19 +132,6 @@
   align-items: flex-end;
 }
 
-/* The chart edition, in the button column and wearing the button skin so it
-   reads as part of the same chrome. Right-aligned to the buttons in the
-   overlay's flex column; sized by its text, not by the 3.25rem chip. */
-.currency {
-  padding: 0.3rem 0.5rem;
-  font-size: 0.75rem;
-  font-weight: 600;
-  color: var(--map-chip-text);
-  white-space: nowrap;
-  background: var(--map-chip-bg);
-  border-radius: 8px;
-}
-
 .button {
   display: flex;
   align-items: center;

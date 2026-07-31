@@ -63,15 +63,14 @@ latest.json is NOT immutable-cached (short TTL).
 
 ### Open questions for the pipeline workstream (as of 2026-07-30)
 
-1. **The published manifest does not match this contract yet.** The live
-   file is still the pre-rework shape — a bare release, no
-   `current`/`next` wrapper — and it advertises
-   `/vfr/07-09-2026/2x/{z}/{x}/{y}.jxl`, which 404s. The set that
-   actually serves is `07-09-2026k/3x` (verified with direct GETs at
-   z6/z8/z10/z12 including Alaska). The app therefore shows no chart from
-   the manifest today; it deliberately does NOT fall back to a compiled-in
-   prefix. Until the rework ships, point a build at a bake by hand with
-   `?vfr=<template>` or a `wingover.vfr` localStorage key.
+1. **RESOLVED 2026-07-30.** The stale file you saw was the v1-era
+   manifest pinned in Cloudflare's cache by its own immutable header;
+   Alex purged the URL. A plain GET now returns the contract shape with
+   `current.tiles` = `.../vfr/07-09-2026k/3x/{z}/{x}/{y}.jxl` and
+   `max-age=300`. The pipeline publishes this file only after a bake's
+   verify job passes, and a daily 0906Z cron promotes `next` at its
+   effective moment. Re-test the app's manifest path with no overrides;
+   it should just work now.
 2. **CORS is an exact-origin allowlist, and the app fetches tiles with
    `fetch()`.** Measured header matrix, tiles and manifest alike:
    `http://localhost:5173` allowed, `http://localhost:5219` 200 but NO
@@ -107,11 +106,10 @@ latest.json is NOT immutable-cached (short TTL).
    2026-07-30: WebKit decodes it, Chromium and Firefox reject it, a
    corrupted twin is rejected by all three, and the same three engines
    give the same verdicts on REAL tiles pulled off the host.
-4. **Currency line.** DONE (`ChartCurrency`): "Sectional Jul 9, 2026" in
-   the plan map's control column while chart view is up, formatted in UTC
-   (0901Z reads as the previous day west of about UTC-9, Hawaii
-   included). Only the plan map shows it so far; the other three ground
-   maps have the mode but not the chip.
+4. **Currency line.** BUILT, then CUT 2026-07-30 at Alex's call after
+   seeing it live ("I dont need the label"). `ChartCurrency`, its CSS,
+   `chartLabel`, and the manifest `cycle` field all left with it; the
+   edition is still selectable by `effective` if a label ever returns.
 5. **Land the branch.** NOT DONE, and blocked: the branch is under Alex's
    hold, so it is committed locally and never pushed. When it opens:
    branch + PR (NEVER push main; every main merge burns a limited

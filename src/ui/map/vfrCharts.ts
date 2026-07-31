@@ -30,8 +30,6 @@ export const VFR_COVERAGE: Bounds = [
 ];
 
 export interface VfrChart {
-  // The FAA cycle this pyramid was baked from, as the pipeline labels it.
-  cycle: string | null;
   // Absolute {z}/{x}/{y} tile template.
   tiles: string;
   minZoom: number;
@@ -42,7 +40,6 @@ export interface VfrChart {
 }
 
 interface RawRelease {
-  cycle?: unknown;
   tiles?: unknown;
   minZoom?: unknown;
   maxZoom?: unknown;
@@ -86,7 +83,6 @@ function toChart(raw: unknown): VfrChart | null {
   if (typeof minZoom !== "number" || typeof maxZoom !== "number") return null;
   if (!Number.isFinite(minZoom) || !Number.isFinite(maxZoom)) return null;
   return {
-    cycle: typeof release.cycle === "string" ? release.cycle : null,
     tiles: absolute(tiles),
     minZoom,
     maxZoom,
@@ -117,24 +113,6 @@ export function selectChart(manifest: unknown, nowMs: number): VfrChart | null {
     return upcoming;
   }
   return toChart(current);
-}
-
-/**
- * How this chart is labelled to a pilot: its edition date, which is the
- * date it took force. In UTC, because that is the reckoning the FAA
- * publishes in (0901Z) and a local rendering shows the day BEFORE for
- * anyone west of about UTC-9, which includes Hawaii, where these charts
- * are flown. Falls back to whatever the manifest called the cycle when it
- * states no effective time, and to nothing when it states neither.
- */
-export function chartLabel(chart: VfrChart): string | null {
-  if (chart.effective === null) return chart.cycle;
-  return new Date(chart.effective).toLocaleDateString(undefined, {
-    timeZone: "UTC",
-    month: "short",
-    day: "numeric",
-    year: "numeric",
-  });
 }
 
 // A pinned tile template, for pointing a build at one specific bake:
