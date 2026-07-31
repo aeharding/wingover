@@ -63,10 +63,13 @@ export function StatusBlock({
     const timer = setInterval(() => setTick((n) => n + 1), 60_000);
     return () => clearInterval(timer);
   }, []);
+  // The card says "Sync on"; the Settings row, already labeled Sync,
+  // keeps the shared derivation's bare "On".
+  const cardLabel = label === "On" ? "Sync on" : label;
   return (
     <div className={cx(styles.state, SHEET_TONE_CLASS[tone])}>
       <span className={styles.stateLabel} data-testid={testId}>
-        {label}
+        {cardLabel}
       </span>
       <span className={styles.stateDetail}>{detail}</span>
     </div>
