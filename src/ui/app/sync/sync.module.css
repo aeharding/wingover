@@ -249,10 +249,12 @@
   margin: 0 0 1rem;
 }
 
-/* Gloves-first (STEERING): every block action here is well past the platform
-   minimum, even though this is ground UI. */
-.homeBody ion-button[expand="block"],
-.loginBody ion-button[expand="block"] {
+/* Gloves-first (STEERING): every block ACTION here is well past the
+   platform minimum, even though this is ground UI. Scoped to non-clear
+   buttons: a full-width text link (Back) is navigation, not a CTA, and
+   must keep the quiet idiom. */
+.homeBody ion-button[expand="block"]:not([fill="clear"]),
+.loginBody ion-button[expand="block"]:not([fill="clear"]) {
   --padding-top: 1.25rem;
   --padding-bottom: 1.25rem;
   --border-radius: 14px;
