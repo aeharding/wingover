@@ -28,6 +28,11 @@ import { takeHeal } from "./healBudget";
 const HEALED_AT_KEY = "wingover.idbHealedAt";
 const COUNT_KEY = "wingover.idbHealCount";
 const TERMINAL_WINDOW_MS = 10 * 60_000;
+// One heal is the designed fix (the observed incident heals with exactly
+// one reload); the second covers a sever landing mid-heal (an install
+// racing the reload). A third recurrence inside the window means reloads
+// demonstrably do not fix this fault, and each further one costs the
+// pilot another blank cycle for nothing.
 const TERMINAL_COUNT = 2;
 const MIN_UPTIME_MS = 15_000;
 const PROBE_TIMEOUT_MS = 5_000;
