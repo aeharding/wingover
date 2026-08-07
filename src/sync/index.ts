@@ -201,7 +201,9 @@ export async function purchase(
   // to the probe below, never throw a paid pilot back to the pitch. The
   // expiry read compares Apple's stamp to the device clock; skew can
   // re-present the sheet on a good purchase, and the fall-through is
-  // what makes that harmless.
+  // what makes that harmless. The plugin's transaction housekeeping
+  // (WingoverPlugin.swift) now finishes queued corpses at the source;
+  // this retry stays as the in-session last resort.
   const staleExpiry = jwsExpiresAt(purchased);
   if (staleExpiry !== null && staleExpiry <= Date.now()) {
     try {

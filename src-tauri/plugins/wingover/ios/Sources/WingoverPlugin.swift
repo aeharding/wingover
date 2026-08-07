@@ -142,6 +142,19 @@ final class NewWindowToBrowserDelegate: NSObject, WKUIDelegate {
   }
 }
 
+// finish() acks StoreKit's delivery queue and nothing more: the transaction
+// stays in Transaction.all and in currentEntitlements, which is how every
+// subscriber's resume() still finds a purchase storekitPurchase already
+// finished. Both arms deliberately: finishing grants nothing (entitlement is
+// the server's verdict against Apple's roots), and an arm left unfinished
+// would be redelivered forever.
+private func finishTransaction(_ result: VerificationResult<Transaction>) async {
+  switch result {
+  case .verified(let transaction): await transaction.finish()
+  case .unverified(let transaction, _): await transaction.finish()
+  }
+}
+
 // Sensor/actuator shim (ARCHITECTURE.md): five dumb primitives — capture,
 // drain, permissions, speak, share. NO business logic, NO storage: the
 // Rust core owns the durable session log, cursors, and all announcement
@@ -605,6 +618,29 @@ class WingoverPlugin: Plugin, CLLocationManagerDelegate,
   // authority on entitlement — so an unverified result is still handed over
   // rather than filtered here, because this shim's opinion doesn't count.
 
+  // StoreKit redelivers a transaction until finish(), and renewals, Ask to
+  // Buy resolutions, and offer redemptions are pushed only via
+  // Transaction.updates — without a listener nothing ever finishes them.
+  // The litter is not benign: with an unfinished EXPIRED copy queued,
+  // product.purchase() answers .success with that stale copy and presents
+  // no sheet (observed on-device in sandbox, 2026-07-30 and 2026-08-06;
+  // the resubscribe dead tap). sync/index.ts guards the same failure
+  // downstream with a one-shot retry; these drain it at the source, and
+  // they live with the process because the webview is disposable: a reload
+  // or jetsam must not orphan the queue. Two independent tasks because a
+  // transaction the App Store processes mid-sweep is delivered via updates
+  // alone — the sweep must not delay attaching the listener.
+  private let transactionUpdates = Task {
+    for await result in Transaction.updates {
+      await finishTransaction(result)
+    }
+  }
+  private let transactionBacklog = Task {
+    for await result in Transaction.unfinished {
+      await finishTransaction(result)
+    }
+  }
+
   @objc public func storekitProducts(_ invoke: Invoke) throws {
     let args = try invoke.parseArgs(ProductsArgs.self)
     Task {
@@ -687,13 +723,13 @@ class WingoverPlugin: Plugin, CLLocationManagerDelegate,
         }
         switch try await product.purchase() {
         case .success(let verification):
+          // Finish BEFORE resolving: finish() leaves the transaction in
+          // currentEntitlements, so a failed server call still recovers
+          // next session — and the stale-corpse retry in sync/index.ts
+          // re-enters here the moment JS holds the JWS, so a corpse must
+          // be finished before the answer that triggers the retry.
+          await finishTransaction(verification)
           invoke.resolve(["jws": verification.jwsRepresentation])
-          // Finish only after handing the JWS over. If the server call then
-          // fails, currentEntitlements still returns this transaction, so the
-          // next session recovers — nothing is stranded.
-          if case .verified(let transaction) = verification {
-            await transaction.finish()
-          }
         case .userCancelled:
           invoke.reject("cancelled")
         case .pending:
