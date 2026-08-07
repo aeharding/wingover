@@ -110,7 +110,8 @@ export async function resolveMapStyle(
   // Asked for, not failed — so it is a real answer, and never retried.
   if (blankStyleRequested()) return NO_BASEMAP_STYLE;
   const key = await resolveMaptilerKey();
-  if (view === "street") return fetchStyle(streetStyleUrl(key, appearance));
+  // Chart rides the street basemap; the sectional raster goes on top.
+  if (view !== "satellite") return fetchStyle(streetStyleUrl(key, appearance));
   // Satellite is the pilot's own MapTiler key or nothing. Answering with
   // street would be the map showing a view nobody asked for; null gets the
   // grid instead, and the caller's retry picks a key up if one arrives.

@@ -23,6 +23,7 @@ import {
   type LngLat,
   type MapView,
 } from "../../shared/map/types";
+import useChartOverlay from "../../shared/map/useChartOverlay";
 import ViewToggle from "../../shared/map/ViewToggle";
 import { useAppearance } from "../appTheme";
 import CompassButton from "../map/CompassButton";
@@ -50,6 +51,7 @@ export default function AllFlightsMapPage() {
   const [map, setMap] = useState<MapView | null>(null);
   const lineRef = useRef<Line | null>(null);
   const skipArrivalFitRef = useRef(false);
+  useChartOverlay(map, view === "chart");
 
   function load() {
     (async () => {
@@ -158,7 +160,7 @@ export default function AllFlightsMapPage() {
             <div className={mapCss.overlay} data-testid="map-overlay">
               {map && <CompassButton map={map} />}
               {map?.supportsSatellite && (
-                <ViewToggle view={view} onChange={changeView} />
+                <ViewToggle view={view} charts onChange={changeView} />
               )}
             </div>
           </MapCanvas>

@@ -123,6 +123,13 @@
   flex-direction: column;
   gap: 0.6rem;
   z-index: 10;
+
+  /* Children hug the anchored edge. Every button is the same width, so this
+     is invisible until something wider joins the column (the chart chip):
+     without it the column widens leftward and leaves the buttons stranded
+     off the map's right edge. Hosts that anchor the overlay LEFT flip this
+     with it. */
+  align-items: flex-end;
 }
 
 .button {
