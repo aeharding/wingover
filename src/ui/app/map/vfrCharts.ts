@@ -1,5 +1,5 @@
-import { launchParam } from "./config";
-import type { Bounds } from "./types";
+import { launchParam } from "../../shared/map/config";
+import type { Bounds } from "../../shared/map/types";
 
 /**
  * Where the FAA VFR sectional tiles are, right now.

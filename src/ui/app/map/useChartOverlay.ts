@@ -1,6 +1,6 @@
 import { useEffect, useRef } from "react";
 
-import type { MapView, RasterOverlay } from "./types";
+import type { MapView, RasterOverlay } from "../../shared/map/types";
 import useVfrChart from "./useVfrChart";
 import { VFR_COVERAGE } from "./vfrCharts";
 
@@ -15,8 +15,7 @@ interface Held {
  * Attached from an effect rather than from the page's onReady because the
  * manifest answer arrives over the network, long after the map is ready.
  * Silent when there is no chart for this device (manifest unreachable, or
- * a browser that cannot decode JXL) and when the backend has no raster
- * support at all (the fake one): charts are an enhancement, and an
+ * a browser that cannot decode JXL): charts are an enhancement, and an
  * enhancement never explains itself to a pilot.
  */
 export default function useChartOverlay(map: MapView | null, enabled: boolean) {
@@ -35,11 +34,11 @@ export default function useChartOverlay(map: MapView | null, enabled: boolean) {
       return;
     }
     if (!chart || held.current) return;
-    const overlay = map.rasterOverlay?.(chart.tiles, {
+    const overlay = map.rasterOverlay(chart.tiles, {
       minZoom: chart.minZoom,
       maxZoom: chart.maxZoom,
       bounds: VFR_COVERAGE,
     });
-    if (overlay) held.current = { view: map, overlay };
+    held.current = { view: map, overlay };
   }, [map, enabled, chart]);
 }

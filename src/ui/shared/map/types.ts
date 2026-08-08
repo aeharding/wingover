@@ -244,9 +244,7 @@ export interface MapView {
   aircraft(): Aircraft;
   // An XYZ raster tile layer over the base map, under lines/markers (the
   // VFR sectional chart). {z}/{x}/{y} placeholders, web-mercator 256px.
-  // Optional: a backend without it (fake) never shows the layer, and
-  // callers must tolerate that.
-  rasterOverlay?(template: string, opts?: RasterOverlayOptions): RasterOverlay;
+  rasterOverlay(template: string, opts?: RasterOverlayOptions): RasterOverlay;
 
   on(gesture: Gesture, handler: (e: GestureEvent) => void): Unsub;
 }

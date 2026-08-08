@@ -21,12 +21,13 @@ import {
   type MarkerLayer,
   PLAN_LINE_COLOR,
 } from "../../shared/map/types";
-import useChartOverlay from "../../shared/map/useChartOverlay";
 import ViewToggle from "../../shared/map/ViewToggle";
 import { useSettings } from "../../shared/settings/SettingsContext";
 import { useAppearance } from "../appTheme";
 import { afterNextFrame } from "../map/afterFrame";
 import CompassButton from "../map/CompassButton";
+import useChartOverlay from "../map/useChartOverlay";
+import useGroundMapViews from "../map/useGroundMapViews";
 import useMapView from "../map/useMapView";
 import { useReplayDrawer } from "../replay/useReplayDrawer";
 import { endpointMarker } from "./endpointMarker";
@@ -74,6 +75,8 @@ export default function FlightSeat({
   const planLineRef = useRef<Line | null>(null);
   const markersRef = useRef<MarkerLayer | null>(null);
   const skipArrivalFrameRef = useRef(false);
+  const views = useGroundMapViews(map);
+  const canToggleView = views.length > 1;
   useChartOverlay(map, view === "chart");
   // The replay pane slides open under the seat map; closes with a
   // selection swap or when the section is URL-hidden.
@@ -282,8 +285,8 @@ export default function FlightSeat({
                 </button>
               }
               br={
-                map?.supportsSatellite ? (
-                  <ViewToggle view={view} charts onChange={changeView} />
+                canToggleView ? (
+                  <ViewToggle view={view} views={views} onChange={changeView} />
                 ) : undefined
               }
             />

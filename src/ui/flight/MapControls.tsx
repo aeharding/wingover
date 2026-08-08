@@ -9,7 +9,7 @@ import {
 import type { Waypoint } from "../../engine/types";
 import NativeIcon from "../shared/components/NativeIcon";
 import { cx } from "../shared/cx";
-import type { MapViewKind } from "../shared/map/config";
+import { BASE_VIEWS, type MapViewKind } from "../shared/map/config";
 import MapCluster from "../shared/map/MapCluster";
 import type { MapView } from "../shared/map/types";
 import ViewToggle from "../shared/map/ViewToggle";
@@ -111,7 +111,11 @@ export default function MapControls({
         }
         bl={
           liveMap?.supportsSatellite ? (
-            <ViewToggle view={mapView} onChange={onChangeMapView} />
+            <ViewToggle
+              view={mapView}
+              views={BASE_VIEWS}
+              onChange={onChangeMapView}
+            />
           ) : undefined
         }
         br={

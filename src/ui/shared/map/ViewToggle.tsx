@@ -2,16 +2,15 @@ import { airplaneOutline, globeOutline, mapOutline } from "ionicons/icons";
 
 import NativeIcon from "../components/NativeIcon";
 import type { MapViewKind } from "./config";
-import useVfrChart from "./useVfrChart";
 
 import mapCss from "./map.module.css";
 
 interface ViewToggleProps {
   view: MapViewKind;
-  // Ground maps that draw the sectional (useChartOverlay) opt in; the
-  // flight surface does not, and neither does any map that would offer a
-  // mode it cannot render.
-  charts?: boolean;
+  // The cycle this map offers, in press order. Callers decide what is on
+  // it: ground maps may include "chart" (useGroundMapViews), the flight
+  // surface never does.
+  views: MapViewKind[];
   onChange: (view: MapViewKind) => void;
 }
 
@@ -27,21 +26,11 @@ const ICON: Record<MapViewKind, string> = {
   chart: airplaneOutline,
 };
 
-export default function ViewToggle({
-  view,
-  charts,
-  onChange,
-}: ViewToggleProps) {
-  const chart = useVfrChart();
-  // Sectionals join the cycle only once one has actually resolved for this
-  // device: no manifest, or no JXL decoder, means no mode to offer. An
-  // unoffered view falls out of the cycle, so a stored "chart" on a device
-  // that lost charts steps back to street.
-  const cycle: MapViewKind[] =
-    charts && chart
-      ? ["street", "satellite", "chart"]
-      : ["street", "satellite"];
-  const next = cycle[(cycle.indexOf(view) + 1) % cycle.length];
+export default function ViewToggle({ view, views, onChange }: ViewToggleProps) {
+  // A view that is not on the cycle — a stored "chart" on a device that
+  // has since lost charts — indexes to -1, so the next press lands on the
+  // first view rather than nowhere.
+  const next = views[(views.indexOf(view) + 1) % views.length];
   return (
     <button
       className={mapCss.button}
