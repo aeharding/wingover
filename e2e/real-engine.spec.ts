@@ -617,6 +617,10 @@ test("a finger that moves while holding leaves the checkpoint dialog up", async 
   const centerX = map.x + map.width / 2;
   const centerY = map.y + map.height / 2;
   const dialog = page.getByRole("alertdialog");
+  const follow = page.getByRole("button", { name: "Follow aircraft" });
+  // Follow going inactive is what proves the move reached the map, so it has
+  // to be active going in.
+  await expect(follow).toHaveAttribute("data-active", "true");
 
   // Hold until the dialog is up, then wander and let go. Only the dialog's
   // own buttons answer it; a hand moving in turbulence does not.
@@ -626,13 +630,15 @@ test("a finger that moves while holding leaves the checkpoint dialog up", async 
   await page.mouse.move(centerX - 140, centerY, { steps: 8 });
   await page.mouse.up();
 
+  // Releasing over the scrim is not a click ON the scrim: the browser fires
+  // click on the common ancestor of the mousedown target (the map canvas) and
+  // the mouseup target (the scrim), which is above the scrim, so its
+  // scrim-is-Cancel handler never runs. A scrim that ever dismisses on
+  // pointerup instead would fail here, and this is the reason.
   await expect(dialog).toBeVisible();
   // The move still reaches the map underneath (MapLibre tracks a drag on the
-  // document, scrim or no scrim), so the pan happens and unpins follow. The
-  // proposal names a place, not a camera, and outlives it.
-  await expect(
-    page.getByRole("button", { name: "Follow aircraft" }),
-  ).toHaveAttribute("data-active", "false");
+  // document, scrim or no scrim), so the pan happens and unpins follow.
+  await expect(follow).toHaveAttribute("data-active", "false");
   await dialog.getByRole("button", { name: "Add" }).click();
   await expect(page.getByTestId("waypoint-pin")).toHaveCount(1);
 });

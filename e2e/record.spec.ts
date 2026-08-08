@@ -1,6 +1,7 @@
 import { expect, type Page, test } from "@playwright/test";
 
 import { dismissLandingSheet } from "./landingSheet";
+import { dragToUnsnap } from "./mapDrag";
 
 /**
  * Wait until the live map's backend is really there before touching it.
@@ -373,13 +374,7 @@ test("follow and track-up: two modes, deliberate resumes", async ({ page }) => {
   // Dragging the map unsnaps BOTH modes: the camera is neither following
   // nor rotating, whatever it was doing before.
   await liveMapReady(page);
-  const map = (await page.getByTestId("live-map").boundingBox())!;
-  await page.mouse.move(map.x + map.width / 2, map.y + map.height / 2);
-  await page.mouse.down();
-  await page.mouse.move(map.x + map.width / 2 - 140, map.y + map.height / 2, {
-    steps: 8,
-  });
-  await page.mouse.up();
+  await dragToUnsnap(page);
   await expect(follow).toHaveAttribute("data-active", "false");
   await expect(northReset).toHaveAttribute("data-active", "false");
 
