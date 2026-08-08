@@ -1,6 +1,7 @@
 import { expect, test } from "@playwright/test";
 
 import { dismissLandingSheet } from "./landingSheet";
+import { dragToUnsnap } from "./mapDrag";
 
 // Tests of the real MapLibre backend and its resilience — the parts a fake
 // map cannot exercise: slow/partial style loading, sprite stalls, and the
@@ -392,13 +393,7 @@ test("the unsnapped compass realigns north, instantly", async ({ page }) => {
   await expect.poll(bearing, { timeout: 15_000 }).toBeGreaterThan(1);
 
   // Unsnap; the bearing freezes wherever course left it.
-  const map = (await page.getByTestId("live-map").boundingBox())!;
-  await page.mouse.move(map.x + map.width / 2, map.y + map.height / 2);
-  await page.mouse.down();
-  await page.mouse.move(map.x + map.width / 2 - 140, map.y + map.height / 2, {
-    steps: 8,
-  });
-  await page.mouse.up();
+  await dragToUnsnap(page);
 
   // PRECONDITION, not the assertion: under CI load the drag can land a
   // frame late, and clicking "Align north" before the unsnap registered

@@ -602,7 +602,7 @@ test("a long-press mid-flight proposes a checkpoint behind a confirm", async ({
   await expect(page.getByTestId("waypoint-pin")).toHaveCount(1);
 });
 
-test("a press that becomes a pan withdraws the checkpoint it proposed", async ({
+test("a finger that moves while holding leaves the checkpoint dialog up", async ({
   page,
 }) => {
   await page.addInitScript(GEO_STUB);
@@ -610,30 +610,37 @@ test("a press that becomes a pan withdraws the checkpoint it proposed", async ({
   await page.goto(URL);
   await armAndFly(page, emit);
   // Same settling wait as the drill above: a zoomstart mid-hold cancels the
-  // press timer, so a camera still easing in proposes nothing to withdraw.
+  // press timer, so a camera still easing in proposes nothing.
   await page.waitForTimeout(1200);
 
   const map = (await page.getByTestId("live-map").boundingBox())!;
   const centerX = map.x + map.width / 2;
   const centerY = map.y + map.height / 2;
   const dialog = page.getByRole("alertdialog");
+  const follow = page.getByRole("button", { name: "Follow aircraft" });
+  // Follow going inactive is what proves the move reached the map, so it has
+  // to be active going in.
+  await expect(follow).toHaveAttribute("data-active", "true");
 
-  // The gesture CI produced by accident on run 30509713312: a loaded runner
-  // took 466 ms to deliver the drag command after mouse.down, so the press
-  // timer fired first and the proposal landed mid-drag. Holding until the
-  // dialog is actually up reproduces that ordering without a sleep.
+  // Hold until the dialog is up, then wander and let go. Only the dialog's
+  // own buttons answer it; a hand moving in turbulence does not.
   await page.mouse.move(centerX, centerY);
   await page.mouse.down();
   await expect(dialog).toBeVisible();
   await page.mouse.move(centerX - 140, centerY, { steps: 8 });
   await page.mouse.up();
 
-  // The pan is the meaning that survives: no dialog, no pin, follow unpinned.
-  await expect(dialog).toBeHidden();
-  await expect(page.getByTestId("waypoint-pin")).toHaveCount(0);
-  await expect(
-    page.getByRole("button", { name: "Follow aircraft" }),
-  ).toHaveAttribute("data-active", "false");
+  // Releasing over the scrim is not a click ON the scrim: the browser fires
+  // click on the common ancestor of the mousedown target (the map canvas) and
+  // the mouseup target (the scrim), which is above the scrim, so its
+  // scrim-is-Cancel handler never runs. A scrim that ever dismisses on
+  // pointerup instead would fail here, and this is the reason.
+  await expect(dialog).toBeVisible();
+  // The move still reaches the map underneath (MapLibre tracks a drag on the
+  // document, scrim or no scrim), so the pan happens and unpins follow.
+  await expect(follow).toHaveAttribute("data-active", "false");
+  await dialog.getByRole("button", { name: "Add" }).click();
+  await expect(page.getByTestId("waypoint-pin")).toHaveCount(1);
 });
 
 test("track-up toggle rotates the camera immediately, not on a glide", async ({
