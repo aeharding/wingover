@@ -611,11 +611,13 @@ export async function createMapKitMapView(
 
     moveTo(to: Partial<Camera>, opts?: MoveOptions) {
       const animated = opts?.animate ? true : false;
-      // ONE projection read for the whole move: every path below that moves
-      // the zoom moves it by a ratio off this number, and the zoom paths run
-      // at pointer rate (the ZoomControl drag, the wheel) on the surface
-      // whose repaints are counted. Read only for a move that carries a
-      // zoom, so the ~1 Hz follow re-center pays nothing for it.
+      // One projection read per moveTo — every path below that moves the
+      // zoom takes its ratio off this number, and these run at pointer rate
+      // (the ZoomControl drag, the wheel) on the surface whose repaints are
+      // counted. It does not cover what a CALLER reads first: the wheel zoom
+      // probes cameraReliable() and camera() before getting here. Read only
+      // for a move that carries a zoom, so the ~1 Hz follow re-center pays
+      // nothing for it.
       const from = to.zoom === undefined ? null : projectedZoom();
       // No projection, no ratio: the whole move goes the absolute way.
       if (to.zoom !== undefined && from === null) {

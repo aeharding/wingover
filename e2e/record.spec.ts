@@ -314,6 +314,14 @@ test("the zoom a pilot sets is remembered for a mid-flight reload", async ({
   const control = page.getByRole("slider", { name: "Zoom" });
   const shownZoom = async () =>
     Number(await control.getAttribute("aria-valuenow"));
+  // For polling ACROSS a reload, where the strip is briefly gone: a poll
+  // callback that throws dies on the spot instead of retrying, so a missing
+  // element has to read as a value, not an exception.
+  const shownZoomOrNull = () =>
+    control
+      .getAttribute("aria-valuenow", { timeout: 1000 })
+      .then((raw) => (raw === null ? null : Number(raw)))
+      .catch(() => null);
 
   // Arming dropped that zoom: the flight opens mid-strip, not continental.
   await expect.poll(shownZoom).toBeGreaterThan(11);
@@ -338,6 +346,13 @@ test("the zoom a pilot sets is remembered for a mid-flight reload", async ({
 
   await expect.poll(storedZoom).toBeGreaterThan(afterStrip);
   await expect.poll(storedZoom).toBeCloseTo(await shownZoom(), 2);
+
+  // The other half of remembering: the flight surface comes back on it.
+  const chosen = (await storedZoom())!;
+  await page.reload();
+  await expect(page.getByTestId("recording")).toBeVisible({ timeout: 10_000 });
+
+  await expect.poll(shownZoomOrNull).toBeCloseTo(chosen, 1);
 });
 
 test("follow and track-up: two modes, deliberate resumes", async ({ page }) => {

@@ -54,10 +54,11 @@ function waypointPinEl(color: string, label: string): HTMLElement {
 }
 
 // The pilot's zoom, kept for a mid-flight reload. Persisting is the
-// CALLER's job on both of the app's own zoom paths (the strip and the
-// wheel): they move the camera programmatically, and a programmatic move
-// draws no zoom settle out of either backend — MapKit fires "zoom-end" for
-// gestures only. The setupMap listener below is for the remaining path, a
+// CALLER's job on both of the app's own zoom paths — the strip (once, when
+// the drag ends: it fires at pointer rate) and the wheel (per tick, they
+// are discrete). Both move the camera programmatically, and MapKit's
+// "zoom-end" is a gesture event, so on that backend nothing downstream ever
+// announces them. The setupMap listener below is for the remaining path, a
 // native pinch while unsnapped.
 function persistZoom(zoom: number) {
   writeLiveViewState({ zoom });
@@ -342,11 +343,11 @@ export default function LiveTrackMap({
   }, [follow]);
 
   // Zoom-control input jumps the map directly — no React state per move
-  // (this fires at pointer rate), no smoothing (the finger IS the animation).
+  // (this fires at pointer rate), no smoothing (the finger IS the animation),
+  // and no persist either: the strip stores once, when the drag ends.
   function applyZoom(zoom: number) {
     if (!map) return;
     map.moveTo({ zoom }, { animate: false });
-    persistZoom(zoom);
   }
 
   const applyTrackUpChange = useEffectEvent(() => {
@@ -387,7 +388,9 @@ export default function LiveTrackMap({
           onMapReady?.(next);
         }}
       />
-      {map && <ZoomControl map={map} onInput={applyZoom} />}
+      {map && (
+        <ZoomControl map={map} onInput={applyZoom} onInputEnd={persistZoom} />
+      )}
       {/* Inert guard along the bottom edge — the iOS app-switch swipe
           (home indicator). A touch that starts here targets the guard,
           not the map's canvas, so the map cannot pan while iOS decides

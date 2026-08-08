@@ -83,6 +83,10 @@ function clamp01(v: number): number {
 interface ZoomControlProps {
   map: MapView;
   onInput: (zoom: number) => void;
+  // The last zoom of a finished drag (release or cancel), once. For work
+  // that belongs at the END of the gesture rather than at pointer rate —
+  // the live map persists the pilot's zoom here.
+  onInputEnd?: (zoom: number) => void;
   // Where the strip is riding: "fly" (default) spans the fly page's
   // full-viewport map; "detail" spans the flight-detail fullscreen map's
   // region while the replay pane is docked below it (ZoomControl.module.css
@@ -93,6 +97,7 @@ interface ZoomControlProps {
 export default function ZoomControl({
   map,
   onInput,
+  onInputEnd,
   variant = "fly",
 }: ZoomControlProps) {
   const dragRef = useRef<{
@@ -100,6 +105,7 @@ export default function ZoomControl({
     min: number;
     max: number;
     startFraction: number;
+    last: number;
   } | null>(null);
   const thumbRef = useRef<HTMLDivElement>(null);
   const [active, setActive] = useState(false);
@@ -112,6 +118,15 @@ export default function ZoomControl({
     if (thumbRef.current) {
       thumbRef.current.style.top = `${clamp01(fraction) * 100}%`;
     }
+  }
+
+  // Release and cancel are the same ending: the map is left wherever the
+  // last move put it, so both report that zoom once.
+  function endDrag() {
+    const drag = dragRef.current;
+    dragRef.current = null;
+    setActive(false);
+    if (drag) onInputEnd?.(drag.last);
   }
 
   useEffect(() => {
@@ -144,13 +159,27 @@ export default function ZoomControl({
       aria-valuemax={Number(bounds.max.toFixed(2))}
       aria-valuenow={Number(zoom.toFixed(2))}
       onPointerDown={(event) => {
+        // The whole drag is measured from where the camera is RIGHT NOW, so
+        // a backend that cannot say where that is cannot be dragged: its
+        // camera() answers a fallback constant, the start fraction comes out
+        // off the rail (-1.14 for a continental read against a flight-zoom
+        // strip), and the first move would clamp that to the fully-out cap
+        // and zoom the map there. The pilot re-grabs a moment later.
+        if (!map.cameraReliable()) return;
         event.currentTarget.setPointerCapture(event.pointerId);
         // Snapshot the starting fraction + bounds; the drag is a pure px→
         // fraction offset from here, so the thumb never re-derives from the
         // (laggy) zoom value.
         const { min, max } = spanBounds(map);
-        const startFraction = (map.camera().zoom - min) / (max - min);
-        dragRef.current = { startY: event.clientY, min, max, startFraction };
+        const from = map.camera().zoom;
+        const startFraction = (from - min) / (max - min);
+        dragRef.current = {
+          startY: event.clientY,
+          min,
+          max,
+          startFraction,
+          last: from,
+        };
         setActive(true);
         placeThumb(startFraction);
       }}
@@ -164,17 +193,12 @@ export default function ZoomControl({
         );
         placeThumb(fraction); // imperative → no lag
         const next = drag.min + fraction * (drag.max - drag.min);
+        drag.last = next;
         onInput(next);
         setZoom(next); // aria only; does not drive the thumb
       }}
-      onPointerUp={() => {
-        dragRef.current = null;
-        setActive(false);
-      }}
-      onPointerCancel={() => {
-        dragRef.current = null;
-        setActive(false);
-      }}
+      onPointerUp={endDrag}
+      onPointerCancel={endDrag}
     >
       {/* The gauge: hidden until touched. A rounded triangle rides the rail,
           pointing at the current zoom — top of the rail is fully out, bottom
