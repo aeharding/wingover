@@ -23,7 +23,7 @@ import {
   PLANNED_COLOR,
   TRACK_LINE_WIDTH_PX,
 } from "../shared/map/types";
-import ZoomControl from "../shared/map/ZoomControl";
+import ZoomControl, { DEFAULT_FLIGHT_ZOOM } from "../shared/map/ZoomControl";
 
 import styles from "./LiveTrackMap.module.css";
 
@@ -220,6 +220,11 @@ export default function LiveTrackMap({
     mapView.on("wheel", (event) => handleWheel(event));
     mapView.on("longpress", (event) => handleLongPress(event.at));
     mapView.on("zoomend", () => {
+      // An unlaid-out map has no projection to read a zoom from and reports
+      // a continental fallback instead (MapKit adapter's camera()); persisted,
+      // that would start every later flight zoomed out. Same guard as
+      // MapCanvas puts on its camera capture.
+      if (mapView.el.clientWidth === 0) return;
       writeLiveViewState({ zoom: mapView.camera().zoom });
     });
 
@@ -234,7 +239,7 @@ export default function LiveTrackMap({
       mapView.moveTo(
         {
           center,
-          zoom: saved.zoom ?? 13,
+          zoom: saved.zoom ?? DEFAULT_FLIGHT_ZOOM,
           bearing: trackUp ? last.course : 0,
           padding: cameraPadding(),
         },
@@ -296,7 +301,7 @@ export default function LiveTrackMap({
       map.moveTo(
         {
           center: [fix.longitude, fix.latitude],
-          zoom: readLiveViewState().zoom ?? 13,
+          zoom: readLiveViewState().zoom ?? DEFAULT_FLIGHT_ZOOM,
           bearing: trackUp ? fix.course : 0,
           padding: cameraPadding(),
         },

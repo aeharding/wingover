@@ -1,6 +1,10 @@
 import { beforeEach, describe, expect, it } from "vitest";
 
-import { readLiveViewState, writeLiveViewState } from "./liveViewState";
+import {
+  clearLiveViewCamera,
+  readLiveViewState,
+  writeLiveViewState,
+} from "./liveViewState";
 
 describe("liveViewState", () => {
   beforeEach(() => {
@@ -17,6 +21,24 @@ describe("liveViewState", () => {
     expect(readLiveViewState()).toEqual({
       trackUp: true,
       zoom: 14,
+      follow: false,
+    });
+  });
+
+  it("drops the camera on arming and keeps the preferences", () => {
+    writeLiveViewState({
+      mapView: "satellite",
+      trackUp: true,
+      follow: false,
+      zoom: 16,
+      center: [-122.4, 37.8],
+    });
+
+    clearLiveViewCamera();
+
+    expect(readLiveViewState()).toEqual({
+      mapView: "satellite",
+      trackUp: true,
       follow: false,
     });
   });

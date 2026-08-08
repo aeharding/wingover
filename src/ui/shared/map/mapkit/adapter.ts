@@ -238,6 +238,9 @@ export async function createMapKitMapView(
   function width() {
     return container.clientWidth || 390;
   }
+  function height() {
+    return container.clientHeight || 779;
+  }
   // Zoom from the live projection, NOT region.span or a calibrated
   // cameraDistance constant — both are unreliable (a programmatic
   // cameraDistance set leaves region.span stale/continental, and the
@@ -411,6 +414,56 @@ export async function createMapKitMapView(
     }
   }
 
+  // Zoom as an ABSOLUTE region, for the window where projectedZoom() has no
+  // answer (pre-layout, hidden container). The relative path below has
+  // nothing to scale off there, and a dropped zoom leaves the camera at
+  // MapKit's construction-time continental view — with follow only ever
+  // re-sending center and bearing, for the rest of the flight. Same scale
+  // the zoom probe reads: a 256 px tile spans 360 / 2^zoom degrees of
+  // longitude, and the same height in pixels spans cos(lat) as many degrees
+  // of latitude. Applied through the region API fitBounds uses.
+  function setZoomByRegion(zoom: number, at: LngLat, animated: boolean) {
+    const perPixel = 360 / (256 * Math.pow(2, zoom));
+    const halfLon = (perPixel * width()) / 2;
+    // At most the aspect-correct half-height, and never past the pole:
+    // MapKit fits whichever span demands more room, so an over-tall region
+    // would land short of the zoom asked for.
+    const halfLat = Math.min(
+      (perPixel * height() * Math.cos((at[1] * Math.PI) / 180)) / 2,
+      Math.max(0, 85 - Math.abs(at[1])),
+    );
+    const region = new mapkit.BoundingRegion(
+      at[1] + halfLat,
+      at[0] + halfLon,
+      at[1] - halfLat,
+      at[0] - halfLon,
+    ).toCoordinateRegion();
+    // A region set hard-zeroes the camera's rotation (see setInsets); a
+    // non-animated one lands instantly, so put the rotation straight back.
+    const rotation = map.rotation;
+    map.setRegionAnimated(region, animated);
+    if (map.rotation !== rotation) map.rotation = rotation;
+  }
+
+  // Relative zoom: scale cameraDistance by the zoom delta. No absolute
+  // calibration — MapKit's region↔distance mapping is unreliable, but
+  // cameraDistance is linear in the visible scale, so a ratio is exact.
+  function applyZoom(zoom: number, animated: boolean) {
+    const from = projectedZoom();
+    const dist =
+      from === null ? NaN : map.cameraDistance * Math.pow(2, from - zoom);
+    if (!Number.isFinite(dist) || dist <= 0) {
+      setZoomByRegion(
+        zoom,
+        [map.center.longitude, map.center.latitude],
+        animated,
+      );
+      return;
+    }
+    if (animated) map.setCameraDistanceAnimated(dist, true);
+    else map.cameraDistance = dist;
+  }
+
   // Write the padding WITHOUT MapKit's visible-rect re-derivation, through
   // the captured impl. Apple's own opt-out — `setPadding(padding, {
   // updateVisibleMapRect: false })` — stores the padding and re-places the
@@ -536,6 +589,7 @@ export async function createMapKitMapView(
           const dist = map.cameraDistance * Math.pow(2, -delta);
           map.setCenterAnimated(toCoord(to.center), true);
           if (Number.isFinite(dist) && dist > 0) map.cameraDistance = dist;
+          else setZoomByRegion(to.zoom, to.center, false);
         }
         return;
       }
@@ -582,20 +636,7 @@ export async function createMapKitMapView(
         if (animated) map.setCenterAnimated(toCoord(to.center), true);
         else map.center = toCoord(to.center);
       }
-      if (to.zoom !== undefined) {
-        // Relative zoom: scale cameraDistance by the zoom delta. No absolute
-        // calibration — MapKit's region↔distance mapping is unreliable, but
-        // cameraDistance is linear in the visible scale, so a ratio is exact.
-        const zoom = projectedZoom();
-        const dist =
-          zoom === null
-            ? NaN
-            : map.cameraDistance * Math.pow(2, zoom - to.zoom);
-        if (Number.isFinite(dist) && dist > 0) {
-          if (animated) map.setCameraDistanceAnimated(dist, true);
-          else map.cameraDistance = dist;
-        }
-      }
+      if (to.zoom !== undefined) applyZoom(to.zoom, animated);
     },
 
     fitBounds(bounds: Bounds, opts) {
@@ -612,7 +653,7 @@ export async function createMapKitMapView(
           typeof pad === "number"
             ? { top: pad, right: pad, bottom: pad, left: pad }
             : pad;
-        const { w, h } = { w: width(), h: container.clientHeight || 779 };
+        const { w, h } = { w: width(), h: height() };
         region.span.longitudeDelta /= Math.max(
           0.1,
           1 - (inset.left + inset.right) / w,

@@ -68,7 +68,15 @@ const privateSurface = { setPadding: true, honorsOptions: true };
 //  4. A region / visible-rect set hard-writes `rotation = 0` onto the
 //     camera it derives. Non-animated it lands instantly, so `_rotating` is
 //     never latched and no rotation-end fires — only the region settle.
+//  5. That same region set IS a camera: MapKit fits the span into the
+//     container, so whichever of the two spans demands more room decides
+//     the zoom the map lands on.
 class FakeMap {
+  constructor(readonly container: HTMLElement) {}
+
+  // Layout has happened and coordinates project to distinct points. False
+  // models the pre-layout window the zoom probe cannot answer in.
+  projectionReady = true;
   rotationValue = 0;
   paddingValue: PaddingLike = { top: 0, right: 0, bottom: 0, left: 0 };
   // Where the Apple logo and Legal link sit. setPadding re-places the
@@ -253,12 +261,25 @@ class FakeMap {
     this.cameraDistance = distance;
   }
 
-  setRegionAnimated(region: unknown, animated?: boolean) {
-    void region;
+  setRegionAnimated(region: RegionLike, animated?: boolean) {
     // _setVisibleMapRect → node.setVisibleMapRectAnimated, which derives
     // the camera for the rect and hard-sets `rotation = 0` on it before
-    // handing it to setCameraAnimated.
+    // handing it to setCameraAnimated. Deriving that camera is the whole
+    // point of the call: the region is fitted, so the scale is set by
+    // whichever span needs more room (a latitude degree is 1/cos(lat)
+    // mercator degrees).
     this.visibleMapRectUpdates += 1;
+    this.centerValue = {
+      latitude: region.center.latitude,
+      longitude: region.center.longitude,
+    };
+    const lat = (region.center.latitude * Math.PI) / 180;
+    const byWidth =
+      (360 * this.container.clientWidth) / (256 * region.span.longitudeDelta);
+    const byHeight =
+      (360 * this.container.clientHeight * Math.cos(lat)) /
+      (256 * region.span.latitudeDelta);
+    this.zoom = Math.log2(Math.min(byWidth, byHeight));
     if (animated) {
       this.cameraAnimation = { rotating: false, rotation: 0 };
       return;
@@ -289,6 +310,9 @@ class FakeMap {
     latitude: number;
     longitude: number;
   }) {
+    // Pre-layout there is no projection: every coordinate lands on the same
+    // point, and the adapter's probe measures a zero-length step.
+    if (!this.projectionReady) return { x: 0, y: 0 };
     const scale = (256 * Math.pow(2, this.zoom)) / 360;
     const x = coordinate.longitude * scale;
     const y = -coordinate.latitude * scale;
@@ -329,6 +353,11 @@ interface PaddingOptions {
   updateVisibleMapRect?: boolean;
 }
 
+interface RegionLike {
+  center: { latitude: number; longitude: number };
+  span: { latitudeDelta: number; longitudeDelta: number };
+}
+
 class FakeAnnotation {
   element: HTMLElement | null = null;
   constructor(
@@ -359,8 +388,8 @@ function theMap(): FakeMap {
 
 const fakeMapKit = {
   Map: class extends FakeMap {
-    constructor() {
-      super();
+    constructor(container: HTMLElement) {
+      super(container);
       created.push(this);
     }
   },
@@ -451,10 +480,20 @@ function expectGlyphMatchesCamera(course: number) {
   expect(norm(glyphAngle() + cameraBearing())).toBeCloseTo(norm(course), 6);
 }
 
-async function createView(): Promise<MapView> {
+// happy-dom lays nothing out, so the size the adapter reads off the
+// container — and the fake projects a fitted region against — is declared.
+const VIEWPORT = { width: 390, height: 779 };
+
+function makeContainer(): HTMLElement {
   const container = document.createElement("div");
+  Object.defineProperty(container, "clientWidth", { value: VIEWPORT.width });
+  Object.defineProperty(container, "clientHeight", { value: VIEWPORT.height });
   document.body.appendChild(container);
-  return createMapKitMapView(container, "street", "light");
+  return container;
+}
+
+async function createView(): Promise<MapView> {
+  return createMapKitMapView(makeContainer(), "street", "light");
 }
 
 const AT: [number, number] = [-122.4, 37.8];
@@ -700,8 +739,7 @@ describe("mapkit adapter: a cancelled touch unwinds the pan recognizer", () => {
   });
 
   it("bounces isScrollEnabled when a touch on the map is cancelled", async () => {
-    const container = document.createElement("div");
-    document.body.appendChild(container);
+    const container = makeContainer();
     await createMapKitMapView(container, "street", "light");
     expect(theMap().scrollEnabledWrites).toEqual([]);
 
@@ -758,5 +796,62 @@ describe("mapkit adapter: the zoom probe vs a rotated camera", () => {
     // Two levels out from 14 = 4x the camera distance. The x-only probe
     // read 13, scaled by 2x, and left the camera a level too far in.
     expect(theMap().cameraDistance).toBeCloseTo(5000 * 4, 6);
+  });
+});
+
+// Every zoom write is RELATIVE — a cameraDistance ratio off the projected
+// zoom — and before layout the projection has no answer to take the ratio
+// from. The write used to be dropped there, and nothing re-sent it: follow
+// only ever writes center and bearing, so a flight that armed in that window
+// flew the whole way at MapKit's construction-time continental view. The
+// backend the e2e suite drives (MapLibre) is immune, so this window only
+// exists here.
+describe("mapkit adapter: a zoom set before the projection is alive", () => {
+  beforeEach(() => {
+    (globalThis as unknown as { mapkit: unknown }).mapkit = fakeMapKit;
+    created.length = 0;
+    privateSurface.setPadding = true;
+    privateSurface.honorsOptions = true;
+    document.body.innerHTML = "";
+  });
+
+  it("lands the flight's arrival zoom absolutely, not as a ratio", async () => {
+    const view = await createView();
+    theMap().projectionReady = false;
+    const distance = theMap().cameraDistance;
+    // The probe cannot answer, so the camera reports the continental
+    // fallback rather than a made-up number.
+    expect(view.camera().zoom).toBe(3);
+
+    view.moveTo({ center: AT, zoom: 13.5 }, { animate: false });
+
+    // Layout lands; the camera is where the arrival frame asked for, and
+    // the relative path was never the one that put it there.
+    theMap().projectionReady = true;
+    expect(view.camera().zoom).toBeCloseTo(13.5, 6);
+    expect(view.camera().center[0]).toBeCloseTo(AT[0], 6);
+    expect(view.camera().center[1]).toBeCloseTo(AT[1], 6);
+    expect(theMap().cameraDistance).toBe(distance);
+  });
+
+  it("keeps a track-up camera's rotation through the region set", async () => {
+    const view = await createView();
+    view.moveTo({ bearing: 270 }, { animate: false });
+    theMap().projectionReady = false;
+
+    view.moveTo({ center: AT, zoom: 13.5 }, { animate: false });
+
+    // A region set hard-zeroes the rotation on its way through.
+    expect(cameraBearing()).toBeCloseTo(270, 6);
+  });
+
+  it("lands an animated center+zoom the projection could not scale", async () => {
+    const view = await createView();
+    theMap().projectionReady = false;
+
+    view.moveTo({ center: AT, zoom: 12 }, { animate: true });
+
+    theMap().projectionReady = true;
+    expect(view.camera().zoom).toBeCloseTo(12, 6);
   });
 });

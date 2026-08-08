@@ -30,19 +30,43 @@ const DRAG_RANGE_PX = 280;
 const WIDEST_SPAN_M = 48_280; // ~30 mi across the screen
 const TIGHTEST_SPAN_M = 563; // ~0.35 mi
 const MERCATOR_M_PER_PX_Z0 = 156_543.033_92;
+// A phone in portrait: the width DEFAULT_FLIGHT_ZOOM below is read on, and
+// the fallback when there is no window to measure.
+export const REFERENCE_WIDTH_PX = 390;
 
 function zoomForSpan(latDeg: number, widthPx: number, spanM: number): number {
   const lat = (latDeg * Math.PI) / 180;
   return Math.log2((MERCATOR_M_PER_PX_Z0 * Math.cos(lat) * widthPx) / spanM);
 }
 
-function spanBounds(map: MapView): { min: number; max: number } {
-  const widthPx = (typeof window !== "undefined" && window.innerWidth) || 390;
-  const latitude = map.camera().center[1];
+/** The strip's two ends, as zoom levels: fully out, fully in. */
+export function zoomSpanBounds(
+  latDeg: number,
+  widthPx: number,
+): { min: number; max: number } {
   return {
-    min: zoomForSpan(latitude, widthPx, WIDEST_SPAN_M),
-    max: zoomForSpan(latitude, widthPx, TIGHTEST_SPAN_M),
+    min: zoomForSpan(latDeg, widthPx, WIDEST_SPAN_M),
+    max: zoomForSpan(latDeg, widthPx, TIGHTEST_SPAN_M),
   };
+}
+
+// Where a flight starts when the pilot has chosen no zoom of their own:
+// the middle of the strip above, so the first correction is a short drag
+// whichever way they want it. Zoom is logarithmic in span, so the midpoint
+// zoom is the geometric mean of the two span ends; ~13.52, read at the
+// equator on a REFERENCE_WIDTH_PX screen. Latitude shifts it (a fixed zoom
+// covers cos(lat) of the ground span), so away from the equator the arrival
+// sits a little inboard of the strip's middle.
+export const DEFAULT_FLIGHT_ZOOM = zoomForSpan(
+  0,
+  REFERENCE_WIDTH_PX,
+  Math.sqrt(WIDEST_SPAN_M * TIGHTEST_SPAN_M),
+);
+
+function spanBounds(map: MapView): { min: number; max: number } {
+  const widthPx =
+    (typeof window !== "undefined" && window.innerWidth) || REFERENCE_WIDTH_PX;
+  return zoomSpanBounds(map.camera().center[1], widthPx);
 }
 
 // 0 = fully out (thumb at the top cap), 1 = fully in (bottom cap) — matches
