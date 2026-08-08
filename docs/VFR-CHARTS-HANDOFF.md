@@ -15,10 +15,9 @@ not modify the pipeline repo from this workstream.
   immutable-cached; every bake ships to a NEW prefix, never in place.
 - Tiles are @3x only: 768px images on the standard XYZ grid, JXL d4/e7,
   z0-12. No @2x set exists by decision; lower-dpr devices supersample.
-- The app side is built and committed on `feat/vfr-sectional-poc` (local
-  only, under Alex's no-push hold): raster overlays on both map backends,
-  manifest resolution, a third "chart" view mode, a JXL feature gate, and
-  the edition chip. See "App work" below for what each commit did.
+- The app side is PR #216 off `feat/vfr-sectional-poc`: raster overlays on
+  both map backends, manifest resolution, a third "chart" view mode, and a
+  JXL feature gate. See "App work" below for what each commit did.
 
 ## The interface: latest.json
 
@@ -46,8 +45,8 @@ Expected shape (what the app parses):
 the braces, which WHATWG URL percent-encodes). `minZoom`/`maxZoom` are
 required: past maxZoom the adapters crop and upscale the deepest ancestor
 rather than requesting tiles that were never baked, so a release without
-them is rejected. `cycle` and `effective` are optional to the parser but
-`effective` is what the pre-effective rule and the edition chip run on.
+them is rejected. `cycle` and `effective` are optional to the parser, but
+`effective` is what the pre-effective rule runs on.
 
 **Pre-effective cycles:** the FAA publishes each new cycle's files ~20
 days before they take force, and the pipeline bakes them as soon as they
@@ -96,7 +95,7 @@ latest.json is NOT immutable-cached (short TTL).
 
 ## App work
 
-1. **Manifest resolution.** DONE (`src/ui/map/vfrCharts.ts`). Fetches
+1. **Manifest resolution.** DONE (`src/ui/app/map/vfrCharts.ts`). Fetches
    latest.json once per session, caching only success so a launch with no
    signal does not cost charts until relaunch. Implements the
    pre-effective rule, validates the template and zoom range, and shows
@@ -105,26 +104,29 @@ latest.json is NOT immutable-cached (short TTL).
 2. **Chart toggle.** DONE. `MapViewKind` gained `"chart"`; it rides the
    street basemap with the sectionals over it. The mode is the existing
    app-wide `mapView` setting, so all four ground maps honor it
-   (`useChartOverlay`); the flight surface keeps its own two-view state
-   and its toggle does not offer a third.
+   (`useChartOverlay`). `ViewToggle` takes the cycle it should offer as a
+   prop: ground maps pass `useGroundMapViews()`, the flight surface passes
+   `BASE_VIEWS`, so flight neither offers the mode nor resolves a chart to
+   decide.
 3. **JXL feature-detect.** DONE, inside vfrCharts.ts: a 60-byte 1x1 probe
    in the same ISOBMFF container the tiles ship in. No decoder means no
    mode, no layer and no fetch. Measured through Playwright on
    2026-07-30: WebKit decodes it, Chromium and Firefox reject it, a
    corrupted twin is rejected by all three, and the same three engines
    give the same verdicts on REAL tiles pulled off the host.
-4. **Currency line.** BUILT, then CUT 2026-07-30 at Alex's call after
-   seeing it live ("I dont need the label"). `ChartCurrency`, its CSS,
-   `chartLabel`, and the manifest `cycle` field all left with it; the
-   edition is still selectable by `effective` if a label ever returns.
-5. **Land the branch.** NOT DONE, and blocked: the branch is under Alex's
-   hold, so it is committed locally and never pushed. When it opens:
-   branch + PR (NEVER push main; every main merge burns a limited
-   TestFlight build), full local gates first (`tsc --noEmit`,
-   `eslint . --max-warnings 0`, `format:check`, `check:css`, `vitest`,
-   `playwright`). Note the branch is ~60 PRs behind main and predates the
-   `src/ui/{app,flight,shared}` split, so it needs a rebase that moves
-   `src/ui/pages/PlanPage.tsx` into the `app/` bucket.
+4. **Currency line, then the edition chip.** BUILT, then CUT: the line on
+   2026-07-30 at Alex's call after seeing it live ("I dont need the
+   label"), and the chip that replaced it soon after. `ChartCurrency`, its
+   CSS, `chartLabel`, and the manifest `cycle` field all left with them;
+   the edition is still selectable by `effective` if a label ever returns.
+5. **The pinned template is origin-gated.** `?vfr=<template>` (or a
+   `wingover.vfr` localStorage key) may name the chart host or the app's
+   own origin, and nothing else — `pinnedTemplate` in vfrCharts.ts, with
+   the cases in vfrCharts.test.ts. A template is a URL whose bitmaps the
+   map draws AS the sectional and requests tile by tile, so an ungated one
+   made any link a way to show a pilot someone else's chart and watch
+   where he looked. It is read BEFORE the codec gate, which is also what
+   makes chart view reachable in Chromium (see Verification).
 
 ## Load-bearing constraints (violating these reopens settled decisions)
 
@@ -140,10 +142,12 @@ latest.json is NOT immutable-cached (short TTL).
   near-global: the product spans the antimeridian (Marianas 145E to
   Virgin Islands 60W, Samoa 14S to Point Barrow 72N), so no single tight
   box exists. Precise coverage arrives via the manifest.
-- Pilot-facing strings: no em dashes. Colors: display-p3, no sRGB
-  fallbacks. Settings UI: stock Ionic idiom.
-- `src/ui/` buckets: PlanPage is `app/`-side. Nothing here may import
-  from `flight/` (`wingover/ui-bucket-isolation` on main).
+- Charts are a GROUND feature, so everything that resolves one lives in
+  `src/ui/app/map/` (vfrCharts, useVfrChart, useChartOverlay,
+  useGroundMapViews). Only the raster seam and the toggle button are in
+  `shared/`. Putting the resolver back in `shared/` is what had the flight
+  surface probing the codec and fetching latest.json mid-flight for a mode
+  it does not offer.
 
 ## Verification (this is the part that bites)
 
@@ -162,10 +166,14 @@ latest.json is NOT immutable-cached (short TTL).
   before believing a failure.
 - First loads on a fresh prefix are cache-cold at the edge; slow first
   pans are normal.
-- The chart chrome can be photographed on Chromium by stubbing the
-  resolver (Chromium never reaches chart view otherwise). The layout bug
-  that found — a wide chip stranding the map buttons off the right edge —
-  is exactly what a screenshot catches and a unit test does not.
+- Chromium reaches chart view through `?vfr=`, which is read before the
+  codec gate precisely so the browser-based ring is not stopped by a
+  missing decoder. Point it at fixture tiles on the app's own origin (a
+  foreign host is refused). That is how `e2e/vfr-chart.spec.ts` proves the
+  mode joins the cycle and the raster layer lands.
+- Screenshots still earn their keep for the chrome: the one layout bug
+  this feature produced — a wide chip stranding the map buttons off the
+  right edge — is what a photo catches and a unit test does not.
 
 ## Pointers
 
@@ -173,9 +181,9 @@ latest.json is NOT immutable-cached (short TTL).
   `aeharding/charts.wingover.app`. Its README/scripts are the reference
   for what the tiles contain. Heavy rendering runs on the mac
   (`ssh mac`) in the `ghcr.io/osgeo/gdal:ubuntu-full-latest` container.
-- Map abstraction: `src/ui/map/` — `MapView` interface, mapkit +
-  maplibre + fake adapters. CSS-order and launch-URL load-order gotchas
-  are real; see the `map-view-abstraction` memory and git history.
+- Map abstraction: `src/ui/shared/map/` — the `MapView` interface and its
+  two adapters, mapkit and maplibre. CSS-order and launch-URL load-order
+  gotchas are real; see the `map-view-abstraction` memory and git history.
 - Auto-memory has the full decision trail: `vfr-charts-project`,
   `mapkit-js-gotchas`, `charts-furniture-over-neighbour`,
   `verify-ui-visually`, `stale-5173-dev-server`.
