@@ -31,6 +31,11 @@ import { ACCENT_CYAN, boxesOf } from "../types";
 import { loadMapKit } from "./loader";
 
 const REVEAL_FALLBACK_MS = 4000;
+
+// Long enough for a cold-edge chart tile on a weak cell link, short
+// enough that a stalled one gets asked again while the pilot is still
+// looking at that ground.
+const TILE_TIMEOUT_MS = 15_000;
 const ZERO_INSETS: Insets = { top: 0, bottom: 0, left: 0, right: 0 };
 
 // MapKit rotation is opposite-signed to MapLibre bearing (verified on device:
@@ -960,7 +965,11 @@ export async function createMapKitMapView(
         url: string,
       ): Promise<HTMLCanvasElement | null> {
         try {
-          const res = await fetch(url);
+          // A tile request that never settles is worse than one that
+          // fails: nothing retries it and nothing draws in its place.
+          const res = await fetch(url, {
+            signal: AbortSignal.timeout(TILE_TIMEOUT_MS),
+          });
           if (!res.ok) return null;
           const src = URL.createObjectURL(await res.blob());
           try {
@@ -986,6 +995,24 @@ export async function createMapKitMapView(
       // Ancestors are shared by sibling tiles — a small keep-latest cache
       // spares one fetch+decode per quadrant.
       const parents = new Map<string, Promise<HTMLCanvasElement | null>>();
+      // Only a decoded ancestor is worth keeping. A miss cached is a miss
+      // forever: MapKit asks again on the next pan or repaint, and this
+      // map would answer with the stored failure, so one dropped request
+      // would blank that quadrant for the rest of the session — silently,
+      // and over the ground the pilot is looking at.
+      const remember = (
+        key: string,
+        load: Promise<HTMLCanvasElement | null>,
+      ) => {
+        parents.set(key, load);
+        void load.then((canvas) => {
+          if (!canvas && parents.get(key) === load) parents.delete(key);
+        });
+        if (parents.size > 32) {
+          const oldest = parents.keys().next().value;
+          if (oldest !== undefined) parents.delete(oldest);
+        }
+      };
       const imageForTile = (
         x: number,
         y: number,
@@ -1011,11 +1038,7 @@ export async function createMapKitMapView(
         let parent = parents.get(key);
         if (!parent) {
           parent = loadCanvas(urlForTile(ancestorX, ancestorY, maxZoom));
-          parents.set(key, parent);
-          if (parents.size > 32) {
-            const oldest = parents.keys().next().value;
-            if (oldest !== undefined) parents.delete(oldest);
-          }
+          remember(key, parent);
         }
         return parent.then((source) => {
           if (!source) return blank();
