@@ -52,13 +52,13 @@ interface RawManifest {
 }
 
 // WHATWG URL percent-encodes { and } in a path, which would turn the
-// placeholders into %7Bz%7D and make every tile a 404. Resolve (the
-// manifest may state the template relative to itself), then put the
-// braces back.
+// placeholders into %7Bz%7D and make every tile a 404. Put them back.
+const withBraces = (href: string) =>
+  href.replaceAll("%7B", "{").replaceAll("%7D", "}");
+
+// The manifest may state its template relative to itself.
 function absolute(template: string): string {
-  return new URL(template, MANIFEST_URL).href
-    .replaceAll("%7B", "{")
-    .replaceAll("%7D", "}");
+  return withBraces(new URL(template, MANIFEST_URL).href);
 }
 
 function toMillis(value: unknown): number | null {
@@ -115,20 +115,43 @@ export function selectChart(manifest: unknown, nowMs: number): VfrChart | null {
   return toChart(current);
 }
 
-// A pinned tile template, for pointing a build at one specific bake:
-// ?vfr=<template> at launch, or a "wingover.vfr" localStorage key. Off
-// unless set, and it is the only way to reach a prefix the manifest does
-// not name — which is how a bake gets tested before it is published, and
-// how this branch was flown while latest.json still advertised a prefix
-// that had been rebaked away.
-function templateOverride(): string | null {
-  const param = launchParam("vfr");
-  if (param) return param;
+/**
+ * A pinned tile template, for pointing a build at one specific bake:
+ * ?vfr=<template> at launch, or a "wingover.vfr" localStorage key. Off
+ * unless set, and it is the only way to reach a prefix the manifest does
+ * not name — which is how a bake gets tested before it is published, and
+ * how the e2e ring reaches chart view at all.
+ *
+ * It may name the chart host or the app's own origin, and NOWHERE else. A
+ * template is a URL whose bitmaps the map then draws as the sectional, so
+ * an ungated one turns any link into "render a stranger's chart for this
+ * pilot, and report where he is looking, tile by tile."
+ */
+export function pinnedTemplate(
+  raw: string | null,
+  appOrigin: string,
+): string | null {
+  if (!raw) return null;
+  try {
+    const url = new URL(raw, appOrigin);
+    const homes = [new URL(MANIFEST_URL).origin, appOrigin];
+    return homes.includes(url.origin) ? withBraces(url.href) : null;
+  } catch {
+    return null;
+  }
+}
+
+function storedTemplate(): string | null {
   try {
     return localStorage.getItem("wingover.vfr");
   } catch {
     return null;
   }
+}
+
+function templateOverride(): string | null {
+  const raw = launchParam("vfr") ?? storedTemplate();
+  return pinnedTemplate(raw, location.origin);
 }
 
 // A 1x1 JXL in the SAME ISOBMFF container the tiles ship in (signature
@@ -160,13 +183,16 @@ function canDecodeJxl(): Promise<boolean> {
 }
 
 async function load(): Promise<VfrChart | null> {
-  // Codec first: a browser that cannot decode JXL has no use for the
+  // A pinned template answers BEFORE the codec gate, so that a run which
+  // pins one is testing the chart path rather than the browser's codec
+  // list: Chromium decodes no JXL, so gating first would end every
+  // headless run before the feature started. Every bake to date is z0-12;
+  // an override states only the template, so it takes that range on faith.
+  const override = templateOverride();
+  if (override) return toChart({ tiles: override, minZoom: 0, maxZoom: 12 });
+  // Codec next: a browser that cannot decode JXL has no use for the
   // manifest, and this costs no network.
   if (!(await canDecodeJxl())) return null;
-  const override = templateOverride();
-  // Every bake to date is z0-12; an override states only the template, so
-  // it takes that range on faith.
-  if (override) return toChart({ tiles: override, minZoom: 0, maxZoom: 12 });
   try {
     const response = await fetch(MANIFEST_URL, {
       signal: AbortSignal.timeout(FETCH_TIMEOUT_MS),

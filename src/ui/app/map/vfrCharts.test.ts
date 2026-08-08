@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 
-import { selectChart } from "./vfrCharts";
+import { pinnedTemplate, selectChart } from "./vfrCharts";
 
 const EFFECTIVE = "2026-09-03T09:01:00Z";
 const EFFECTIVE_MS = Date.parse(EFFECTIVE);
@@ -104,5 +104,41 @@ describe("selectChart", () => {
     expect(selectChart(null, 0)).toBeNull();
     expect(selectChart("nope", 0)).toBeNull();
     expect(selectChart({}, 0)).toBeNull();
+  });
+});
+
+describe("pinnedTemplate", () => {
+  const APP = "https://wingover.app";
+  const TILES = "/vfr/07-09-2026k/3x/{z}/{x}/{y}.jxl";
+
+  it("takes a bake on the chart host", () => {
+    expect(pinnedTemplate(CURRENT_TILES, APP)).toBe(CURRENT_TILES);
+  });
+
+  it("takes tiles served by the app itself, relative or absolute", () => {
+    expect(pinnedTemplate(TILES, APP)).toBe(`${APP}${TILES}`);
+    expect(pinnedTemplate(`${APP}${TILES}`, APP)).toBe(`${APP}${TILES}`);
+  });
+
+  it("refuses a foreign host", () => {
+    expect(pinnedTemplate(`https://evil.example${TILES}`, APP)).toBeNull();
+    // A lookalike is a different origin, and so is the same host on a
+    // different scheme or port.
+    expect(
+      pinnedTemplate(`https://charts.wingover.app.evil.example${TILES}`, APP),
+    ).toBeNull();
+    expect(
+      pinnedTemplate(`http://charts.wingover.app${TILES}`, APP),
+    ).toBeNull();
+    expect(pinnedTemplate(`https://wingover.app:8443${TILES}`, APP)).toBeNull();
+  });
+
+  it("stays off when unset", () => {
+    expect(pinnedTemplate(null, APP)).toBeNull();
+    expect(pinnedTemplate("", APP)).toBeNull();
+  });
+
+  it("keeps the placeholders unescaped", () => {
+    expect(pinnedTemplate(TILES, APP)).toContain("{z}/{x}/{y}");
   });
 });
