@@ -875,7 +875,7 @@ describe("mapkit adapter: a zoom set before the projection is alive", () => {
     expect(theMap().cameraDistance).toBe(distance);
   });
 
-  it("withholds the zoom settle until the projection can describe it", async () => {
+  it("holds a zoom settle back, then delivers it on the next live settle", async () => {
     const view = await createView();
     const persisted: number[] = [];
     // What the live map does with a zoom settle: read the camera and store
@@ -884,16 +884,40 @@ describe("mapkit adapter: a zoom set before the projection is alive", () => {
     theMap().projectionReady = false;
 
     // The arrival frame, in the cold window: the region set moves the
-    // camera for real, so MapKit has every reason to report a zoom settle.
+    // camera for real, so MapKit reports a settle for it.
     view.moveTo({ center: AT, zoom: 13.5 }, { animate: false });
     theMap().dispatch("zoom-end");
 
     expect(persisted).toEqual([]);
 
+    // The renderer warms up. Nothing re-fires a zoom settle — the zoom did
+    // not change when the projection woke — so the deferred one has to ride
+    // the next region settle out, which on the live map is the next fix's
+    // follow re-center.
     theMap().projectionReady = true;
-    theMap().dispatch("zoom-end");
+    theMap().dispatch("region-change-end");
 
     expect(persisted).toHaveLength(1);
     expect(persisted[0]).toBeCloseTo(13.5, 6);
+
+    // Delivered once, not on every settle after.
+    theMap().dispatch("region-change-end");
+
+    expect(persisted).toHaveLength(1);
+  });
+
+  it("forgets a held settle whose subscriber unsubscribed", async () => {
+    const view = await createView();
+    const persisted: number[] = [];
+    const off = view.on("zoomend", () => persisted.push(view.camera().zoom));
+    theMap().projectionReady = false;
+    view.moveTo({ center: AT, zoom: 13.5 }, { animate: false });
+    theMap().dispatch("zoom-end");
+
+    off();
+    theMap().projectionReady = true;
+    theMap().dispatch("region-change-end");
+
+    expect(persisted).toEqual([]);
   });
 });
