@@ -1,20 +1,34 @@
-import { describe, expect, it } from "vitest";
+import { afterEach, describe, expect, it, vi } from "vitest";
 
 import {
-  DEFAULT_FLIGHT_ZOOM,
-  REFERENCE_WIDTH_PX,
+  DEFAULT_FLIGHT_SPAN_M,
+  defaultFlightZoom,
   zoomSpanBounds,
 } from "./ZoomControl";
 
-describe("the flight's arrival zoom", () => {
-  it("sits in the middle of the zoom strip", () => {
-    const { min, max } = zoomSpanBounds(0, REFERENCE_WIDTH_PX);
+// The widths the strip measures itself against, across the screens the app
+// runs on: phone portrait, phone landscape, iPad, desktop PWA.
+const WIDTHS = [390, 844, 1024, 1728];
+const LATITUDES = [0, 33.4, 47.6, 61.2];
 
-    expect(DEFAULT_FLIGHT_ZOOM).toBeCloseTo((min + max) / 2, 6);
+afterEach(() => {
+  vi.unstubAllGlobals();
+});
+
+describe("the zoom a flight opens on", () => {
+  it("sits mid-strip on every screen and at every latitude", () => {
+    for (const innerWidth of WIDTHS) {
+      vi.stubGlobal("window", { innerWidth });
+      for (const latitude of LATITUDES) {
+        const { min, max } = zoomSpanBounds(latitude, innerWidth);
+
+        expect(defaultFlightZoom(latitude)).toBeCloseTo((min + max) / 2, 6);
+      }
+    }
   });
 
   it("frames a few kilometres of ground, not a continent", () => {
-    expect(DEFAULT_FLIGHT_ZOOM).toBeGreaterThan(12);
-    expect(DEFAULT_FLIGHT_ZOOM).toBeLessThan(15);
+    expect(DEFAULT_FLIGHT_SPAN_M).toBeGreaterThan(2_000);
+    expect(DEFAULT_FLIGHT_SPAN_M).toBeLessThan(10_000);
   });
 });

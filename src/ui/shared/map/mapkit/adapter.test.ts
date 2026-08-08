@@ -800,12 +800,12 @@ describe("mapkit adapter: the zoom probe vs a rotated camera", () => {
 });
 
 // Every zoom write is RELATIVE — a cameraDistance ratio off the projected
-// zoom — and before layout the projection has no answer to take the ratio
-// from. The write used to be dropped there, and nothing re-sent it: follow
-// only ever writes center and bearing, so a flight that armed in that window
-// flew the whole way at MapKit's construction-time continental view. The
-// backend the e2e suite drives (MapLibre) is immune, so this window only
-// exists here.
+// zoom — and the projection has no answer until the renderer is warm. The
+// write was dropped outright in that window, and nothing re-sends it (follow
+// writes only center and bearing), which is the mechanism PR #218 traced the
+// zoomed-out flight starts to. MapLibre derives zoom from its own transform
+// and has no such window, so e2e — which drives MapLibre — cannot reach any
+// of this.
 describe("mapkit adapter: a zoom set before the projection is alive", () => {
   beforeEach(() => {
     (globalThis as unknown as { mapkit: unknown }).mapkit = fakeMapKit;
@@ -845,13 +845,55 @@ describe("mapkit adapter: a zoom set before the projection is alive", () => {
     expect(cameraBearing()).toBeCloseTo(270, 6);
   });
 
-  it("lands an animated center+zoom the projection could not scale", async () => {
+  it("lands an animated move whole: no tween to stomp it, bearing kept", async () => {
     const view = await createView();
     theMap().projectionReady = false;
 
-    view.moveTo({ center: AT, zoom: 12 }, { animate: true });
+    // Nothing has painted, so there is nothing to animate from and the
+    // caller's animate flag is ignored: no tween is left running for the
+    // region set to fight, and none carries a zeroed rotation home.
+    view.moveTo({ center: AT, zoom: 12, bearing: 270 }, { animate: true });
 
+    expect(theMap().cameraAnimation).toBeNull();
+    expect(cameraBearing()).toBeCloseTo(270, 6);
     theMap().projectionReady = true;
     expect(view.camera().zoom).toBeCloseTo(12, 6);
+    expect(view.camera().center[0]).toBeCloseTo(AT[0], 6);
+  });
+
+  it("never hands a region a zoom that is not a number", async () => {
+    const view = await createView();
+    const rects = theMap().visibleMapRectUpdates;
+    const distance = theMap().cameraDistance;
+
+    // A zoom off JSON.parse (the persisted live view is not validated).
+    // MapKit's geometry constructors throw on NaN, and a throw here comes
+    // out of the caller's render into AppBoundary — a mid-flight reload.
+    view.moveTo({ zoom: Number.NaN }, { animate: false });
+
+    expect(theMap().visibleMapRectUpdates).toBe(rects);
+    expect(theMap().cameraDistance).toBe(distance);
+  });
+
+  it("withholds the zoom settle until the projection can describe it", async () => {
+    const view = await createView();
+    const persisted: number[] = [];
+    // What the live map does with a zoom settle: read the camera and store
+    // it (LiveTrackMap). A settle reported here is a zoom persisted.
+    view.on("zoomend", () => persisted.push(view.camera().zoom));
+    theMap().projectionReady = false;
+
+    // The arrival frame, in the cold window: the region set moves the
+    // camera for real, so MapKit has every reason to report a zoom settle.
+    view.moveTo({ center: AT, zoom: 13.5 }, { animate: false });
+    theMap().dispatch("zoom-end");
+
+    expect(persisted).toEqual([]);
+
+    theMap().projectionReady = true;
+    theMap().dispatch("zoom-end");
+
+    expect(persisted).toHaveLength(1);
+    expect(persisted[0]).toBeCloseTo(13.5, 6);
   });
 });

@@ -247,9 +247,12 @@ export async function createMapKitMapView(
   // distance↔zoom constant can't be calibrated against that stale span).
   // Projected longitude is linear in Web Mercator, so pixels-per-degree maps
   // straight to the app's 256-tile zoom, matching the ZoomControl's bounds.
-  // Null when the projection is degenerate (pre-layout, hidden container):
-  // a made-up number folded into camera-delta math would land the camera at
-  // an absolute wrong zoom, so callers must skip zoom work instead.
+  // Null when the projection is degenerate (pre-layout, hidden container, a
+  // renderer that has not warmed up): a made-up number folded into
+  // camera-delta math would land the camera at an absolute wrong zoom, so
+  // callers must not take a ratio off it. moveTo applies the zoom absolutely
+  // instead (moveColdly), camera() reports the continental fallback, and the
+  // zoom events are withheld until it answers again (see on()).
   function projectedZoom(): number | null {
     const c = map.center;
     const p0 = map.convertCoordinateToPointOnPage(
@@ -414,15 +417,21 @@ export async function createMapKitMapView(
     }
   }
 
-  // Zoom as an ABSOLUTE region, for the window where projectedZoom() has no
-  // answer (pre-layout, hidden container). The relative path below has
-  // nothing to scale off there, and a dropped zoom leaves the camera at
-  // MapKit's construction-time continental view — with follow only ever
-  // re-sending center and bearing, for the rest of the flight. Same scale
-  // the zoom probe reads: a 256 px tile spans 360 / 2^zoom degrees of
-  // longitude, and the same height in pixels spans cos(lat) as many degrees
-  // of latitude. Applied through the region API fitBounds uses.
-  function setZoomByRegion(zoom: number, at: LngLat, animated: boolean) {
+  // Zoom as an ABSOLUTE region, for whenever no ratio can be taken off the
+  // live projection. Same scale the zoom probe reads: a 256 px tile spans
+  // 360 / 2^zoom degrees of longitude, and the same height in pixels spans
+  // cos(lat) as many degrees of latitude. Applied through the region API
+  // fitBounds uses, always instantly — an animated region set builds a tween
+  // carrying rotation 0, which lands after any re-assert here could see it.
+  function setZoomByRegion(zoom: number, at: LngLat) {
+    // A region is a real camera the moment it is handed over, so it is built
+    // from real numbers or not at all: a persisted zoom arrives via
+    // JSON.parse, and MapKit's geometry constructors throw on NaN — out of
+    // moveTo, out of the caller's render, into AppBoundary.
+    if (!Number.isFinite(zoom)) return;
+    // No laid-out container, no region worth deriving: the fallback box is
+    // a size this map does not have.
+    if (container.clientWidth === 0) return;
     const perPixel = 360 / (256 * Math.pow(2, zoom));
     const halfLon = (perPixel * width()) / 2;
     // At most the aspect-correct half-height, and never past the pole:
@@ -438,26 +447,40 @@ export async function createMapKitMapView(
       at[1] - halfLat,
       at[0] - halfLon,
     ).toCoordinateRegion();
-    // A region set hard-zeroes the camera's rotation (see setInsets); a
-    // non-animated one lands instantly, so put the rotation straight back.
+    // A region set hard-zeroes the camera's rotation (see setInsets), and
+    // non-animated it lands instantly, so put the rotation straight back.
     const rotation = map.rotation;
-    map.setRegionAnimated(region, animated);
+    map.setRegionAnimated(region, false);
+    if (map.rotation !== rotation) map.rotation = rotation;
+  }
+
+  // A move issued while the projection has no answer. Every axis lands at
+  // once and absolutely: the zoom has no ratio to ride, and the caller's
+  // `animate` is ignored because the renderer has not painted a frame for a
+  // tween to start from. The region carries the zoom and re-derives the
+  // center, so center and bearing are written over it, and the zoom lands
+  // before the bearing because MapKit refuses to rotate below zoom 7.
+  function moveColdly(to: Partial<Camera>, zoom: number) {
+    const at: LngLat = to.center ?? [map.center.longitude, map.center.latitude];
+    setZoomByRegion(zoom, at);
+    map.center = toCoord(at);
+    if (to.bearing === undefined) return;
+    const rotation = bearingToRotation(to.bearing);
     if (map.rotation !== rotation) map.rotation = rotation;
   }
 
   // Relative zoom: scale cameraDistance by the zoom delta. No absolute
   // calibration — MapKit's region↔distance mapping is unreliable, but
   // cameraDistance is linear in the visible scale, so a ratio is exact.
+  // A ratio that comes out non-finite or non-positive is no ratio at all
+  // (a projection that died between moveTo's check and here, a zero camera
+  // distance): the zoom is applied absolutely rather than dropped.
   function applyZoom(zoom: number, animated: boolean) {
     const from = projectedZoom();
     const dist =
       from === null ? NaN : map.cameraDistance * Math.pow(2, from - zoom);
     if (!Number.isFinite(dist) || dist <= 0) {
-      setZoomByRegion(
-        zoom,
-        [map.center.longitude, map.center.latitude],
-        animated,
-      );
+      setZoomByRegion(zoom, [map.center.longitude, map.center.latitude]);
       return;
     }
     if (animated) map.setCameraDistanceAnimated(dist, true);
@@ -568,6 +591,14 @@ export async function createMapKitMapView(
 
     moveTo(to: Partial<Camera>, opts?: MoveOptions) {
       const animated = opts?.animate ? true : false;
+      // Every path below moves the camera by a ratio off the live
+      // projection; with no projection to read, the whole move goes the
+      // absolute way instead (moveColdly). Checked only for a move that
+      // carries a zoom, so the ~1 Hz follow re-center never pays for it.
+      if (to.zoom !== undefined && projectedZoom() === null) {
+        moveColdly(to, to.zoom);
+        return;
+      }
       // to.padding is ignored: the overscan padding is a MapLibre
       // oversized-container trick and is degenerate on MapKit's normal view.
       // Animated center+zoom rides ONE internal camera tween — see
@@ -578,8 +609,7 @@ export async function createMapKitMapView(
         to.zoom !== undefined &&
         to.bearing === undefined
       ) {
-        const zoom = projectedZoom();
-        const delta = zoom === null ? NaN : to.zoom - zoom;
+        const delta = to.zoom - (projectedZoom() ?? NaN);
         if (!atomicPanZoom(to.center, delta)) {
           // Private surface went missing (Apple restructured): ride the one
           // public composition path — a NON-animated zoom set during an
@@ -589,7 +619,6 @@ export async function createMapKitMapView(
           const dist = map.cameraDistance * Math.pow(2, -delta);
           map.setCenterAnimated(toCoord(to.center), true);
           if (Number.isFinite(dist) && dist > 0) map.cameraDistance = dist;
-          else setZoomByRegion(to.zoom, to.center, false);
         }
         return;
       }
@@ -1005,7 +1034,15 @@ export async function createMapKitMapView(
         zoom: "zoom-end",
         zoomend: "zoom-end",
       }[gesture];
-      const listener = (e: MapKitEvent) => handler({ at: eventAt(e) });
+      // A zoom settle the projection cannot describe is not reported at
+      // all. camera() answers the continental fallback in that window, and
+      // the live map persists what a zoom settle hands it — one such read
+      // stored and every later flight opens continental (PR #218).
+      const zoomGesture = gesture === "zoom" || gesture === "zoomend";
+      const listener = (e: MapKitEvent) => {
+        if (zoomGesture && projectedZoom() === null) return;
+        handler({ at: eventAt(e) });
+      };
       emap.addEventListener(type, listener);
       return () => emap.removeEventListener(type, listener);
     },
