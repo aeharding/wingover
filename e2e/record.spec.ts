@@ -286,6 +286,75 @@ test("zoom control zooms one-fingered from anywhere without unpinning follow", a
   await expect.poll(valuenow).toBeLessThan(zoomedIn);
 });
 
+// What the pilot's camera is worth: the zoom they chose has to be there
+// after a mid-flight reload, and the one the LAST flight ended on must not
+// frame this one. The app-level guard for both — the MapKit-only half of the
+// same bug (that backend announces no settle for a programmatic zoom, so the
+// strip and the wheel persisted nothing) is pinned in the adapter's unit
+// suite, since e2e drives MapLibre, which does announce them.
+test("the zoom a pilot sets is remembered for a mid-flight reload", async ({
+  page,
+}) => {
+  await page.goto("/?mock-speed=40&map-style=blank");
+  // The carried-over camera of a previous, zoomed-out flight.
+  await page.evaluate(() =>
+    localStorage.setItem(
+      "wingover.live-view",
+      JSON.stringify({ follow: true, trackUp: false, zoom: 3 }),
+    ),
+  );
+  await page.getByRole("button", { name: "Start Flight" }).click();
+  await expect(page.getByTestId("recording")).toBeVisible({ timeout: 10_000 });
+
+  const storedZoom = () =>
+    page.evaluate(() => {
+      const raw = localStorage.getItem("wingover.live-view");
+      return raw ? (JSON.parse(raw) as { zoom?: number }).zoom : undefined;
+    });
+  const control = page.getByRole("slider", { name: "Zoom" });
+  const shownZoom = async () =>
+    Number(await control.getAttribute("aria-valuenow"));
+  // For polling ACROSS a reload, where the strip is briefly gone: a poll
+  // callback that throws dies on the spot instead of retrying, so a missing
+  // element has to read as a value, not an exception.
+  const shownZoomOrNull = () =>
+    control
+      .getAttribute("aria-valuenow", { timeout: 1000 })
+      .then((raw) => (raw === null ? null : Number(raw)))
+      .catch(() => null);
+
+  // Arming dropped that zoom: the flight opens mid-strip, not continental.
+  await expect.poll(shownZoom).toBeGreaterThan(11);
+  const arrival = await shownZoom();
+
+  // The strip.
+  const box = (await control.boundingBox())!;
+  const x = box.x + box.width * 0.6;
+  await page.mouse.move(x, box.y + 20);
+  await page.mouse.down();
+  await page.mouse.move(x, box.y + 150, { steps: 8 });
+  await page.mouse.up();
+
+  await expect.poll(shownZoom).toBeGreaterThan(arrival);
+  await expect.poll(storedZoom).toBeCloseTo(await shownZoom(), 2);
+
+  // The wheel, over the map itself, still snapped to the aircraft.
+  const afterStrip = (await storedZoom())!;
+  const viewport = page.viewportSize()!;
+  await page.mouse.move(viewport.width / 2, viewport.height / 2);
+  await page.mouse.wheel(0, -450);
+
+  await expect.poll(storedZoom).toBeGreaterThan(afterStrip);
+  await expect.poll(storedZoom).toBeCloseTo(await shownZoom(), 2);
+
+  // The other half of remembering: the flight surface comes back on it.
+  const chosen = (await storedZoom())!;
+  await page.reload();
+  await expect(page.getByTestId("recording")).toBeVisible({ timeout: 10_000 });
+
+  await expect.poll(shownZoomOrNull).toBeCloseTo(chosen, 1);
+});
+
 test("follow and track-up: two modes, deliberate resumes", async ({ page }) => {
   await page.goto("/?mock-speed=40&map-style=blank");
   await page.getByRole("button", { name: "Start Flight" }).click();

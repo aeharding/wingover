@@ -425,6 +425,12 @@ export async function createMapLibreMapView(
       };
     },
 
+    // The transform owns the zoom from construction on — there is no
+    // window where this backend cannot say where its camera is.
+    cameraReliable() {
+      return true;
+    },
+
     moveTo(to: Partial<Camera>, opts?: MoveOptions) {
       const options: Record<string, unknown> = {};
       if (to.center) options.center = to.center;

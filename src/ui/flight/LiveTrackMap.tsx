@@ -23,7 +23,7 @@ import {
   PLANNED_COLOR,
   TRACK_LINE_WIDTH_PX,
 } from "../shared/map/types";
-import ZoomControl from "../shared/map/ZoomControl";
+import ZoomControl, { defaultFlightZoom } from "../shared/map/ZoomControl";
 
 import styles from "./LiveTrackMap.module.css";
 
@@ -51,6 +51,17 @@ function waypointPinEl(color: string, label: string): HTMLElement {
   el.setAttribute("aria-hidden", "true");
   el.innerHTML = `<svg viewBox="0 0 24 32" width="26" height="35" xmlns="http://www.w3.org/2000/svg"><path d="M12 0C5.4 0 0 5.4 0 12c0 9 12 20 12 20s12-11 12-20C24 5.4 18.6 0 12 0z" fill="${color}" stroke="rgba(0,0,0,0.35)" stroke-width="1"/><circle cx="12" cy="12" r="7" fill="#fff"/><text x="12" y="12" text-anchor="middle" dominant-baseline="central" font-size="9.5" font-weight="700" fill="#000">${label}</text></svg>`;
   return el;
+}
+
+// The pilot's zoom, kept for a mid-flight reload. Persisting is the
+// CALLER's job on both of the app's own zoom paths — the strip (once, when
+// the drag ends: it fires at pointer rate) and the wheel (per tick, they
+// are discrete). Both move the camera programmatically, and MapKit's
+// "zoom-end" is a gesture event, so on that backend nothing downstream ever
+// announces them. The setupMap listener below is for the remaining path, a
+// native pinch while unsnapped.
+function persistZoom(zoom: number) {
+  writeLiveViewState({ zoom });
 }
 
 interface LiveTrackMapProps {
@@ -172,7 +183,8 @@ export default function LiveTrackMap({
   const handleWheel = useEffectEvent((event: GestureEvent) => {
     if (!map) return;
     if (!follow || interactingRef.current) return;
-    applyFollowWheelZoom(map, event);
+    const zoom = applyFollowWheelZoom(map, event);
+    if (zoom !== null) persistZoom(zoom);
   });
 
   const handleLongPress = useEffectEvent((at: LngLat) => {
@@ -234,7 +246,7 @@ export default function LiveTrackMap({
       mapView.moveTo(
         {
           center,
-          zoom: saved.zoom ?? 13,
+          zoom: saved.zoom ?? defaultFlightZoom(last.latitude),
           bearing: trackUp ? last.course : 0,
           padding: cameraPadding(),
         },
@@ -296,7 +308,7 @@ export default function LiveTrackMap({
       map.moveTo(
         {
           center: [fix.longitude, fix.latitude],
-          zoom: readLiveViewState().zoom ?? 13,
+          zoom: readLiveViewState().zoom ?? defaultFlightZoom(fix.latitude),
           bearing: trackUp ? fix.course : 0,
           padding: cameraPadding(),
         },
@@ -331,7 +343,8 @@ export default function LiveTrackMap({
   }, [follow]);
 
   // Zoom-control input jumps the map directly — no React state per move
-  // (this fires at pointer rate), no smoothing (the finger IS the animation).
+  // (this fires at pointer rate), no smoothing (the finger IS the animation),
+  // and no persist either: the strip stores once, when the drag ends.
   function applyZoom(zoom: number) {
     if (!map) return;
     map.moveTo({ zoom }, { animate: false });
@@ -375,7 +388,9 @@ export default function LiveTrackMap({
           onMapReady?.(next);
         }}
       />
-      {map && <ZoomControl map={map} onInput={applyZoom} />}
+      {map && (
+        <ZoomControl map={map} onInput={applyZoom} onInputEnd={persistZoom} />
+      )}
       {/* Inert guard along the bottom edge — the iOS app-switch swipe
           (home indicator). A touch that starts here targets the guard,
           not the map's canvas, so the map cannot pan while iOS decides

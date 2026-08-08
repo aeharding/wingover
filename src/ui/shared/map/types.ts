@@ -207,6 +207,13 @@ export interface MapView {
   // Camera — the only live, imperative surface. moveTo unifies
   // jump / ease / fly; omitted fields hold their current value.
   camera(): Camera;
+  // Whether camera() is reporting the camera that exists. False only while
+  // a backend cannot describe its own view (MapKit before its projection
+  // answers), where camera() reports a fallback constant instead. A reader
+  // that merely displays the number can live with the fallback; one that
+  // COMPUTES a new camera from it (a relative wheel zoom) must not, or it
+  // moves the map to a place derived from a made-up reading.
+  cameraReliable(): boolean;
   moveTo(to: Partial<Camera>, opts?: MoveOptions): void;
   // Instant by default; animate: true eases to the fit — the
   // fullscreen-collapse reset.

@@ -68,7 +68,10 @@ export function useReplayMapDriver(
   });
 
   // While following, the wheel becomes a pure aircraft-anchored zoom —
-  // the exact fly-page behavior, shared via followZoom.ts.
+  // the exact fly-page behavior, shared via followZoom.ts. The zoom it
+  // returns is dropped here on purpose: that number is the LIVE map's
+  // persisted camera (liveViewState), and a replay in the logbook seat is
+  // not the pilot's flight view.
   const handleWheel = useEffectEvent((event: GestureEvent) => {
     if (!map) return;
     if (!camera.follow || interactingRef.current) return;

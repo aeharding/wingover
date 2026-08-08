@@ -12,6 +12,7 @@ import { formatDistance } from "../../../flight/format";
 import { haversineMeters } from "../../../flight/stats";
 import { sunFactLabel } from "../../../flight/sun";
 import type { Flight, Pin } from "../../../storage/db";
+import { clearLiveViewCamera } from "../../shared/map/liveViewState";
 import { useSettings } from "../../shared/settings/SettingsContext";
 import { useLiveViewPrefs } from "../../shared/useLiveViewPrefs";
 import FlyTrace from "../FlyTrace";
@@ -112,11 +113,14 @@ export default function FlyPage() {
 
   async function startNewFlight() {
     // Arming resets the live view to the flight's default: snapped to the
-    // aircraft, north-up. (Unsnapping later takes track-up down with it — see
-    // RecordingSurface's changeFollow.) Written through before the status
-    // flips, because FlightSurface reads it back on mount.
+    // aircraft, north-up, at the default zoom. (Unsnapping later takes
+    // track-up down with it — see RecordingSurface's changeFollow.) Written
+    // through before the status flips, because FlightSurface reads it back on
+    // mount. Arming is the ONLY path here: a mid-flight reload or heal goes
+    // straight to the flight surface (App.tsx), so it keeps the camera.
     liveView.update({ follow: true });
     liveView.update({ trackUp: false });
+    clearLiveViewCamera();
     await startFlight();
   }
 

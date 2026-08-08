@@ -30,19 +30,48 @@ const DRAG_RANGE_PX = 280;
 const WIDEST_SPAN_M = 48_280; // ~30 mi across the screen
 const TIGHTEST_SPAN_M = 563; // ~0.35 mi
 const MERCATOR_M_PER_PX_Z0 = 156_543.033_92;
+// A phone in portrait, for the rare frame with no window to measure.
+const FALLBACK_WIDTH_PX = 390;
 
 function zoomForSpan(latDeg: number, widthPx: number, spanM: number): number {
   const lat = (latDeg * Math.PI) / 180;
   return Math.log2((MERCATOR_M_PER_PX_Z0 * Math.cos(lat) * widthPx) / spanM);
 }
 
-function spanBounds(map: MapView): { min: number; max: number } {
-  const widthPx = (typeof window !== "undefined" && window.innerWidth) || 390;
-  const latitude = map.camera().center[1];
+/** The strip's two ends, as zoom levels: fully out, fully in. */
+export function zoomSpanBounds(
+  latDeg: number,
+  widthPx: number,
+): { min: number; max: number } {
   return {
-    min: zoomForSpan(latitude, widthPx, WIDEST_SPAN_M),
-    max: zoomForSpan(latitude, widthPx, TIGHTEST_SPAN_M),
+    min: zoomForSpan(latDeg, widthPx, WIDEST_SPAN_M),
+    max: zoomForSpan(latDeg, widthPx, TIGHTEST_SPAN_M),
   };
+}
+
+// What a flight opens on when the pilot has chosen no zoom of their own:
+// the middle of the strip above, so the first correction is a short drag
+// whichever way they want it. A SPAN and not a zoom, because the strip is
+// span-based: the same zoom sits at a different point on it per screen
+// width and latitude (mid-strip on a phone, a third of the way up on a
+// desktop window), while the same span is mid-strip everywhere. ~5.2 km of
+// ground across the screen, the geometric mean of the two ends — zoom is
+// logarithmic in span, so that mean IS the midpoint in zoom.
+export const DEFAULT_FLIGHT_SPAN_M = Math.sqrt(WIDEST_SPAN_M * TIGHTEST_SPAN_M);
+
+export function defaultFlightZoom(latDeg: number): number {
+  return zoomForSpan(latDeg, viewportWidth(), DEFAULT_FLIGHT_SPAN_M);
+}
+
+// The VISIBLE viewport, per the note above the spans.
+function viewportWidth(): number {
+  return (
+    (typeof window !== "undefined" && window.innerWidth) || FALLBACK_WIDTH_PX
+  );
+}
+
+function spanBounds(map: MapView): { min: number; max: number } {
+  return zoomSpanBounds(map.camera().center[1], viewportWidth());
 }
 
 // 0 = fully out (thumb at the top cap), 1 = fully in (bottom cap) — matches
@@ -54,6 +83,10 @@ function clamp01(v: number): number {
 interface ZoomControlProps {
   map: MapView;
   onInput: (zoom: number) => void;
+  // The last zoom of a finished drag (release or cancel), once. For work
+  // that belongs at the END of the gesture rather than at pointer rate —
+  // the live map persists the pilot's zoom here.
+  onInputEnd?: (zoom: number) => void;
   // Where the strip is riding: "fly" (default) spans the fly page's
   // full-viewport map; "detail" spans the flight-detail fullscreen map's
   // region while the replay pane is docked below it (ZoomControl.module.css
@@ -64,6 +97,7 @@ interface ZoomControlProps {
 export default function ZoomControl({
   map,
   onInput,
+  onInputEnd,
   variant = "fly",
 }: ZoomControlProps) {
   const dragRef = useRef<{
@@ -71,6 +105,7 @@ export default function ZoomControl({
     min: number;
     max: number;
     startFraction: number;
+    last: number;
   } | null>(null);
   const thumbRef = useRef<HTMLDivElement>(null);
   const [active, setActive] = useState(false);
@@ -83,6 +118,15 @@ export default function ZoomControl({
     if (thumbRef.current) {
       thumbRef.current.style.top = `${clamp01(fraction) * 100}%`;
     }
+  }
+
+  // Release and cancel are the same ending: the map is left wherever the
+  // last move put it, so both report that zoom once.
+  function endDrag() {
+    const drag = dragRef.current;
+    dragRef.current = null;
+    setActive(false);
+    if (drag) onInputEnd?.(drag.last);
   }
 
   useEffect(() => {
@@ -115,13 +159,27 @@ export default function ZoomControl({
       aria-valuemax={Number(bounds.max.toFixed(2))}
       aria-valuenow={Number(zoom.toFixed(2))}
       onPointerDown={(event) => {
+        // The whole drag is measured from where the camera is RIGHT NOW, so
+        // a backend that cannot say where that is cannot be dragged: its
+        // camera() answers a fallback constant, the start fraction comes out
+        // off the rail (-1.14 for a continental read against a flight-zoom
+        // strip), and the first move would clamp that to the fully-out cap
+        // and zoom the map there. The pilot re-grabs a moment later.
+        if (!map.cameraReliable()) return;
         event.currentTarget.setPointerCapture(event.pointerId);
         // Snapshot the starting fraction + bounds; the drag is a pure px→
         // fraction offset from here, so the thumb never re-derives from the
         // (laggy) zoom value.
         const { min, max } = spanBounds(map);
-        const startFraction = (map.camera().zoom - min) / (max - min);
-        dragRef.current = { startY: event.clientY, min, max, startFraction };
+        const from = map.camera().zoom;
+        const startFraction = (from - min) / (max - min);
+        dragRef.current = {
+          startY: event.clientY,
+          min,
+          max,
+          startFraction,
+          last: from,
+        };
         setActive(true);
         placeThumb(startFraction);
       }}
@@ -135,17 +193,12 @@ export default function ZoomControl({
         );
         placeThumb(fraction); // imperative → no lag
         const next = drag.min + fraction * (drag.max - drag.min);
+        drag.last = next;
         onInput(next);
         setZoom(next); // aria only; does not drive the thumb
       }}
-      onPointerUp={() => {
-        dragRef.current = null;
-        setActive(false);
-      }}
-      onPointerCancel={() => {
-        dragRef.current = null;
-        setActive(false);
-      }}
+      onPointerUp={endDrag}
+      onPointerCancel={endDrag}
     >
       {/* The gauge: hidden until touched. A rounded triangle rides the rail,
           pointing at the current zoom — top of the rail is fully out, bottom
