@@ -605,6 +605,10 @@ export async function createMapKitMapView(
       };
     },
 
+    cameraReliable() {
+      return projectedZoom() !== null;
+    },
+
     moveTo(to: Partial<Camera>, opts?: MoveOptions) {
       const animated = opts?.animate ? true : false;
       // ONE projection read for the whole move: every path below that moves

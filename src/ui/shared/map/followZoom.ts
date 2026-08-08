@@ -10,11 +10,27 @@ import type { GestureEvent, MapView } from "./types";
 const WHEEL_ZOOM_RATE = 1 / 450;
 const PINCH_ZOOM_RATE = 1 / 100; // trackpad pinch reports ctrlKey
 
-export function applyFollowWheelZoom(map: MapView, event: GestureEvent): void {
+/**
+ * Returns the zoom the camera was moved to, or null when the tick was
+ * skipped. Callers that persist the pilot's zoom read that number here:
+ * this is a programmatic move, and no backend reports a zoom settle for
+ * one, so nothing downstream will announce it (LiveTrackMap).
+ */
+export function applyFollowWheelZoom(
+  map: MapView,
+  event: GestureEvent,
+): number | null {
   event.preventDefault?.();
+  // This zoom is RELATIVE to the camera's own reading, so a backend that
+  // cannot describe its camera cannot be zoomed by it: the reading would be
+  // a fallback constant and the tick would jump the map to it. A tick lost
+  // in that sub-second window costs the pilot nothing; a jump to a
+  // continental view mid-flight costs them the map.
+  if (!map.cameraReliable()) return null;
   const rate = event.ctrlKey ? PINCH_ZOOM_RATE : WHEEL_ZOOM_RATE;
   const { min, max } = map.zoomRange();
   const from = map.camera().zoom;
   const next = Math.min(max, Math.max(min, from - (event.deltaY ?? 0) * rate));
   map.moveTo({ zoom: next }, { animate: false });
+  return next;
 }

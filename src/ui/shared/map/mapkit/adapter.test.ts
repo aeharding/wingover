@@ -797,6 +797,24 @@ describe("mapkit adapter: the zoom probe vs a rotated camera", () => {
     // read 13, scaled by 2x, and left the camera a level too far in.
     expect(theMap().cameraDistance).toBeCloseTo(5000 * 4, 6);
   });
+
+  // MapKit's "zoom-end" is a GESTURE event: a cameraDistance or region write
+  // moves the camera and announces nothing. Reproduced in dev against the
+  // real library (PR #218: a wheel zoom mid-flight visibly zoomed the map
+  // and never reached the zoomend subscriber), which is why the app persists
+  // the pilot's zoom at its own entry points instead of waiting to be told.
+  it("announces no zoom settle for a programmatic zoom", async () => {
+    const view = await createView();
+    const settles: number[] = [];
+    view.on("zoomend", () => settles.push(view.camera().zoom));
+
+    view.moveTo({ zoom: 12 }, { animate: false });
+
+    // The camera really moved — two levels out is 4x the distance — and
+    // nothing announced it.
+    expect(theMap().cameraDistance).toBeCloseTo(5000 * 4, 6);
+    expect(settles).toEqual([]);
+  });
 });
 
 // Every zoom write is RELATIVE — a cameraDistance ratio off the projected
@@ -820,14 +838,17 @@ describe("mapkit adapter: a zoom set before the projection is alive", () => {
     theMap().projectionReady = false;
     const distance = theMap().cameraDistance;
     // The probe cannot answer, so the camera reports the continental
-    // fallback rather than a made-up number.
+    // fallback rather than a made-up number — and says so, which is what
+    // keeps a relative zoom (the wheel) from computing off it.
     expect(view.camera().zoom).toBe(3);
+    expect(view.cameraReliable()).toBe(false);
 
     view.moveTo({ center: AT, zoom: 13.5 }, { animate: false });
 
     // Layout lands; the camera is where the arrival frame asked for, and
     // the relative path was never the one that put it there.
     theMap().projectionReady = true;
+    expect(view.cameraReliable()).toBe(true);
     expect(view.camera().zoom).toBeCloseTo(13.5, 6);
     expect(view.camera().center[0]).toBeCloseTo(AT[0], 6);
     expect(view.camera().center[1]).toBeCloseTo(AT[1], 6);

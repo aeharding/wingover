@@ -53,6 +53,16 @@ function waypointPinEl(color: string, label: string): HTMLElement {
   return el;
 }
 
+// The pilot's zoom, kept for a mid-flight reload. Persisting is the
+// CALLER's job on both of the app's own zoom paths (the strip and the
+// wheel): they move the camera programmatically, and a programmatic move
+// draws no zoom settle out of either backend — MapKit fires "zoom-end" for
+// gestures only. The setupMap listener below is for the remaining path, a
+// native pinch while unsnapped.
+function persistZoom(zoom: number) {
+  writeLiveViewState({ zoom });
+}
+
 interface LiveTrackMapProps {
   // Host placement (RecordingSurface absolutely fills its screen).
   className?: string;
@@ -172,7 +182,8 @@ export default function LiveTrackMap({
   const handleWheel = useEffectEvent((event: GestureEvent) => {
     if (!map) return;
     if (!follow || interactingRef.current) return;
-    applyFollowWheelZoom(map, event);
+    const zoom = applyFollowWheelZoom(map, event);
+    if (zoom !== null) persistZoom(zoom);
   });
 
   const handleLongPress = useEffectEvent((at: LngLat) => {
@@ -335,6 +346,7 @@ export default function LiveTrackMap({
   function applyZoom(zoom: number) {
     if (!map) return;
     map.moveTo({ zoom }, { animate: false });
+    persistZoom(zoom);
   }
 
   const applyTrackUpChange = useEffectEvent(() => {
