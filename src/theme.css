@@ -307,6 +307,30 @@ html.keyboard-open {
   --safe-area-inset-bottom: 0px;
 }
 
+/* Long press: no selection loupe, no callout. A web view treats its text as
+   selectable, so a finger held anywhere raises WebKit's magnifier and the
+   Copy menu; no native app's labels do either. Ionic ships this rule only
+   under ion-app (`html.plt-mobile ion-app`, @ionic/core), and a flight sheds
+   ion-app entirely (App.tsx) — leaving the one surface a pilot rests a hand
+   on uncovered. -webkit-touch-callout has no unprefixed form and nothing
+   else in the app sets it. Coarse pointers only: on a desktop PWA, dragging
+   to copy text is ordinary. Fields opt back in — the loupe that places a
+   caret is the one worth keeping, and selection is how you edit. */
+@media (pointer: coarse) {
+  :root {
+    -webkit-user-select: none;
+    user-select: none;
+    -webkit-touch-callout: none;
+  }
+
+  input,
+  textarea,
+  [contenteditable] {
+    -webkit-user-select: text;
+    user-select: text;
+  }
+}
+
 /* Native iOS look: the nav bar shares the page background (Ionic's default
    is the slightly-lighter step-50 gray, which reads as a third gray next to
    the black page and the systemGray6 grouped cells). The hairline border
