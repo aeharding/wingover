@@ -210,7 +210,7 @@ Toggleable views, PPG Flyer-style:
 
 - **Street**: OpenFreeMap vector tiles — keyless, free, OSM-based.
 - **Satellite**: MapTiler raster imagery + OpenFreeMap label/road layers composited on top (hybrid — labels stay vector and upright over photography).
-- **Sectional**: self-hosted FAA VFR raster scans over the street basemap, on ground maps only. Public-domain data, so the online layer is free; offline region packs are the parked paid feature. The flight surface stays on the two above.
+- **Sectional**: self-hosted FAA VFR raster scans over the street basemap. Public-domain data, so the online layer is free; offline region packs are the parked paid feature. Offered in flight as well as on the ground: a sectional is what a pilot navigates by.
 
 No backend, so the MapTiler key is a build-time constant (origin-restricted, client-visible by design — standard for maps) with a settings override; builds without a key simply hide the satellite toggle. All tile/style URLs are user-overridable config, never hardcoded — self-hosters can point at their own tiles, and the parked offline feature (PMTiles region downloads) slots into the same seam. Proper attribution always visible. Apple MapKit was considered and rejected: proprietary renderer lock-in, no offline path, privacy cost.
 

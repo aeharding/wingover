@@ -9,9 +9,10 @@ import {
 import type { Waypoint } from "../../engine/types";
 import NativeIcon from "../shared/components/NativeIcon";
 import { cx } from "../shared/cx";
-import { BASE_VIEWS, type MapViewKind } from "../shared/map/config";
+import type { MapViewKind } from "../shared/map/config";
 import MapCluster from "../shared/map/MapCluster";
 import type { MapView } from "../shared/map/types";
+import useMapViews from "../shared/map/useMapViews";
 import ViewToggle from "../shared/map/ViewToggle";
 
 import mapCss from "../shared/map/map.module.css";
@@ -44,6 +45,8 @@ export default function MapControls({
   onClearWaypoint: (id: string) => void;
   onStop: () => void;
 }) {
+  const views = useMapViews(liveMap);
+
   function pressCompass() {
     if (follow) {
       onChangeTrackUp(!trackUp);
@@ -110,10 +113,10 @@ export default function MapControls({
           </button>
         }
         bl={
-          liveMap?.supportsSatellite ? (
+          views.length > 1 ? (
             <ViewToggle
               view={mapView}
-              views={BASE_VIEWS}
+              views={views}
               onChange={onChangeMapView}
             />
           ) : undefined

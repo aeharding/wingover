@@ -7,9 +7,7 @@ import mapCss from "./map.module.css";
 
 interface ViewToggleProps {
   view: MapViewKind;
-  // The cycle this map offers, in press order. Callers decide what is on
-  // it: ground maps may include "chart" (useGroundMapViews), the flight
-  // surface never does.
+  // The cycle this map offers, in press order, from useMapViews.
   views: MapViewKind[];
   onChange: (view: MapViewKind) => void;
 }

@@ -53,6 +53,29 @@ test("a pinned sectional joins the view cycle and draws", async ({ page }) => {
   expect(tiles.length).toBe(settled);
 });
 
+test("the sectional is there in flight, where it is navigated by", async ({
+  page,
+}) => {
+  const tiles: string[] = [];
+  page.on("request", (request) => {
+    if (request.url().includes("/vfr-fixture/")) tiles.push(request.url());
+  });
+
+  await page.goto(
+    `/?mock-speed=40&map-style=blank&vfr=${encodeURIComponent(TEMPLATE)}`,
+  );
+  await page.getByRole("button", { name: "Start Flight" }).click();
+  await expect(page.getByTestId("recording")).toBeVisible({ timeout: 10_000 });
+
+  const toggle = page.getByRole("button", { name: "Sectional chart view" });
+  await expect(toggle).toBeVisible();
+  await toggle.click();
+
+  await expect(() => expect(tiles.length).toBeGreaterThan(0)).toPass({
+    timeout: 10_000,
+  });
+});
+
 test("a sectional pinned to a foreign host is refused", async ({ page }) => {
   // Requests TO the foreign host, not the navigation that names it in its
   // query string.

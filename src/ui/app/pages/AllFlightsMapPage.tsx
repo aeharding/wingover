@@ -23,11 +23,11 @@ import {
   type LngLat,
   type MapView,
 } from "../../shared/map/types";
+import useChartOverlay from "../../shared/map/useChartOverlay";
+import useMapViews from "../../shared/map/useMapViews";
 import ViewToggle from "../../shared/map/ViewToggle";
 import { useAppearance } from "../appTheme";
 import CompassButton from "../map/CompassButton";
-import useChartOverlay from "../map/useChartOverlay";
-import useGroundMapViews from "../map/useGroundMapViews";
 import useMapView from "../map/useMapView";
 import { useIsDesktop } from "../useIsDesktop";
 
@@ -52,7 +52,7 @@ export default function AllFlightsMapPage() {
   const [map, setMap] = useState<MapView | null>(null);
   const lineRef = useRef<Line | null>(null);
   const skipArrivalFitRef = useRef(false);
-  const views = useGroundMapViews(map);
+  const views = useMapViews(map);
   const canToggleView = views.length > 1;
   useChartOverlay(map, view === "chart");
 

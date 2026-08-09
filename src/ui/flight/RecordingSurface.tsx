@@ -5,6 +5,7 @@ import type { Units } from "../../flight/format";
 import { LANDING_GRACE_MS } from "../../flight/landing";
 import type { MapViewKind } from "../shared/map/config";
 import type { MapView } from "../shared/map/types";
+import useChartOverlay from "../shared/map/useChartOverlay";
 import type { LiveView } from "../shared/useLiveViewPrefs";
 import { ConfirmSurface } from "./BigConfirm";
 import InstrumentsStrip from "./InstrumentsStrip";
@@ -41,6 +42,7 @@ export default function RecordingSurface({
   const { ref: instrumentsRef, insets } = useInstrumentInsets();
   const waypoints = useWaypointUi(snapshot.activeWaypoints, nextWaypoint?.id);
   const { mapView, follow, trackUp, update } = liveView;
+  useChartOverlay(liveMap, mapView === "chart");
 
   const first = track[0];
   const pending = waypoints.pending;

@@ -5,10 +5,6 @@ import { getSetting } from "../../../storage/local";
 // is exactly where the sectional has nothing to say.
 export type MapViewKind = "street" | "satellite" | "chart";
 
-// The two views every map offers. Ground maps may add "chart" on top
-// (useGroundMapViews); the flight surface never does.
-export const BASE_VIEWS: MapViewKind[] = ["street", "satellite"];
-
 // Which world the basemap lives in. Ground screens (logbook, plan, detail,
 // desktop PWA) follow the system scheme like the rest of the app
 // (useSystemAppearance); the LIVE flight map is always light — full sun on

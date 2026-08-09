@@ -1,6 +1,6 @@
 import { useEffect, useRef } from "react";
 
-import type { MapView, RasterOverlay } from "../../shared/map/types";
+import type { MapView, RasterOverlay } from "./types";
 import useVfrChart from "./useVfrChart";
 import { VFR_COVERAGE } from "./vfrCharts";
 
@@ -10,7 +10,7 @@ interface Held {
 }
 
 /**
- * Draws the FAA sectionals over a ground map while `enabled`.
+ * Draws the FAA sectionals over a map while `enabled`.
  *
  * Attached from an effect rather than from the page's onReady because the
  * manifest answer arrives over the network, long after the map is ready.

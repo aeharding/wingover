@@ -43,6 +43,8 @@ import {
   type MarkerLayer,
   PLAN_LINE_COLOR,
 } from "../../shared/map/types";
+import useChartOverlay from "../../shared/map/useChartOverlay";
+import useMapViews from "../../shared/map/useMapViews";
 import ViewToggle from "../../shared/map/ViewToggle";
 import { useSettings } from "../../shared/settings/SettingsContext";
 import { useAppearance } from "../appTheme";
@@ -54,8 +56,6 @@ import { useFlightDrafts } from "../logbook/useFlightDrafts";
 import { useFlightOptionsSheet } from "../logbook/useFlightOptionsSheet";
 import { afterNextFrame } from "../map/afterFrame";
 import CompassButton from "../map/CompassButton";
-import useChartOverlay from "../map/useChartOverlay";
-import useGroundMapViews from "../map/useGroundMapViews";
 import useMapView from "../map/useMapView";
 import { useReplayDrawer } from "../replay/useReplayDrawer";
 
@@ -122,7 +122,7 @@ export default function FlightDetailPage() {
   // callback must see the CURRENT intent, not the one it closed over.
   const mapFullRef = useRef(false);
   const contentRef = useRef<HTMLIonContentElement>(null);
-  const views = useGroundMapViews(map);
+  const views = useMapViews(map);
   const canToggleView = views.length > 1;
   useChartOverlay(map, view === "chart");
   // The map surface lives in this portal so full screen can REPARENT it (same

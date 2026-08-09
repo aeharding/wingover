@@ -95,7 +95,7 @@ latest.json is NOT immutable-cached (short TTL).
 
 ## App work
 
-1. **Manifest resolution.** DONE (`src/ui/app/map/vfrCharts.ts`). Fetches
+1. **Manifest resolution.** DONE (`src/ui/shared/map/vfrCharts.ts`). Fetches
    latest.json once per session, caching only success so a launch with no
    signal does not cost charts until relaunch. Implements the
    pre-effective rule, validates the template and zoom range, and shows
@@ -104,10 +104,10 @@ latest.json is NOT immutable-cached (short TTL).
 2. **Chart toggle.** DONE. `MapViewKind` gained `"chart"`; it rides the
    street basemap with the sectionals over it. The mode is the existing
    app-wide `mapView` setting, so all four ground maps honor it
-   (`useChartOverlay`). `ViewToggle` takes the cycle it should offer as a
-   prop: ground maps pass `useGroundMapViews()`, the flight surface passes
-   `BASE_VIEWS`, so flight neither offers the mode nor resolves a chart to
-   decide.
+   (`useChartOverlay`), and so does the flight surface, which keeps its own
+   view state in `liveViewState`. `ViewToggle` takes the cycle it should
+   offer as a prop, from `useMapViews(map)`: street always, satellite when
+   the backend can show it, sectional once one resolves.
 3. **JXL feature-detect.** DONE, inside vfrCharts.ts: a 60-byte 1x1 probe
    in the same ISOBMFF container the tiles ship in. No decoder means no
    mode, no layer and no fetch. Measured through Playwright on
@@ -142,12 +142,12 @@ latest.json is NOT immutable-cached (short TTL).
   near-global: the product spans the antimeridian (Marianas 145E to
   Virgin Islands 60W, Samoa 14S to Point Barrow 72N), so no single tight
   box exists. Precise coverage arrives via the manifest.
-- Charts are a GROUND feature, so everything that resolves one lives in
-  `src/ui/app/map/` (vfrCharts, useVfrChart, useChartOverlay,
-  useGroundMapViews). Only the raster seam and the toggle button are in
-  `shared/`. Putting the resolver back in `shared/` is what had the flight
-  surface probing the codec and fetching latest.json mid-flight for a mode
-  it does not offer.
+- A sectional is a NAVIGATION chart, so the flight surface offers it too.
+  Everything chart-side therefore lives in `src/ui/shared/map/` and both
+  buckets use it. This was ground-only for one round, on nothing but an
+  agent's assumption; Alex found it missing in flight and it was wrong.
+  The cost is real and accepted: chart tiles are ~100KB each and the
+  flight surface now fetches them when the pilot picks the mode.
 
 ## Verification (this is the part that bites)
 
