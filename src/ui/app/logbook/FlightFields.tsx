@@ -36,7 +36,7 @@ export default function FlightFields({
           ref={nameRef}
           label="Name"
           clearInput
-          autocapitalize="words"
+          autocapitalize="sentences"
           placeholder="Add name"
           value={drafts.name}
           aria-label="Flight name"
@@ -50,7 +50,7 @@ export default function FlightFields({
         <IonInput
           label="Launch"
           clearInput
-          autocapitalize="words"
+          autocapitalize="sentences"
           placeholder="Add location"
           value={drafts.launch}
           aria-label="Launch location"
