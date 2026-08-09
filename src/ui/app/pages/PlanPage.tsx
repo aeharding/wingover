@@ -30,6 +30,8 @@ import {
   type MarkerSpec,
   PLANNED_COLOR,
 } from "../../shared/map/types";
+import useChartOverlay from "../../shared/map/useChartOverlay";
+import useMapViews from "../../shared/map/useMapViews";
 import ViewToggle from "../../shared/map/ViewToggle";
 import { useSettings } from "../../shared/settings/SettingsContext";
 import { useAppearance } from "../appTheme";
@@ -82,6 +84,9 @@ export default function PlanPage() {
   const lineRef = useRef<Line | null>(null);
   const markersRef = useRef<MarkerLayer | null>(null);
   const skipArrivalFrameRef = useRef(false);
+  const views = useMapViews(map);
+  const canToggleView = views.length > 1;
+  useChartOverlay(map, view === "chart");
 
   // Total route length = sum of the legs between consecutive pins, for
   // planning (matches the idle Fly screen's "Planned route").
@@ -408,8 +413,8 @@ export default function PlanPage() {
                 >
                   <IonIcon icon={locateOutline} />
                 </button>
-                {map?.supportsSatellite && (
-                  <ViewToggle view={view} onChange={changeView} />
+                {canToggleView && (
+                  <ViewToggle view={view} views={views} onChange={changeView} />
                 )}
               </div>
               {/* No aria-label on the pill: the native WaypointUITests probe

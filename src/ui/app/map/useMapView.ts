@@ -15,6 +15,11 @@ import type { MapViewKind } from "../../shared/map/config";
  * appTheme.ts. The FLIGHT surface deliberately does not participate: its
  * view lives in liveViewState, chosen for flying, not browsing.
  */
+const KINDS: MapViewKind[] = ["street", "satellite", "chart"];
+
+const isKind = (value: string | null): value is MapViewKind =>
+  KINDS.includes(value as MapViewKind);
+
 export default function useMapView(): [
   MapViewKind,
   (view: MapViewKind) => void,
@@ -24,12 +29,10 @@ export default function useMapView(): [
   useEffect(() => {
     let alive = true;
     void getSetting("mapView").then((value) => {
-      if (alive && (value === "street" || value === "satellite")) {
-        setView(value);
-      }
+      if (alive && isKind(value)) setView(value);
     });
     const off = onSettingChanged("mapView", (value) => {
-      if (value === "street" || value === "satellite") setView(value);
+      if (isKind(value)) setView(value);
     });
     return () => {
       alive = false;

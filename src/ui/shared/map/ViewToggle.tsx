@@ -1,4 +1,4 @@
-import { globeOutline, mapOutline } from "ionicons/icons";
+import { airplaneOutline, globeOutline, mapOutline } from "ionicons/icons";
 
 import NativeIcon from "../components/NativeIcon";
 import type { MapViewKind } from "./config";
@@ -7,18 +7,35 @@ import mapCss from "./map.module.css";
 
 interface ViewToggleProps {
   view: MapViewKind;
+  // The cycle this map offers, in press order, from useMapViews.
+  views: MapViewKind[];
   onChange: (view: MapViewKind) => void;
 }
 
-export default function ViewToggle({ view, onChange }: ViewToggleProps) {
-  const next: MapViewKind = view === "street" ? "satellite" : "street";
+const LABEL: Record<MapViewKind, string> = {
+  street: "Street view",
+  satellite: "Satellite view",
+  chart: "Sectional chart view",
+};
+
+const ICON: Record<MapViewKind, string> = {
+  street: mapOutline,
+  satellite: globeOutline,
+  chart: airplaneOutline,
+};
+
+export default function ViewToggle({ view, views, onChange }: ViewToggleProps) {
+  // A view that is not on the cycle — a stored "chart" on a device that
+  // has since lost charts — indexes to -1, so the next press lands on the
+  // first view rather than nowhere.
+  const next = views[(views.indexOf(view) + 1) % views.length];
   return (
     <button
       className={mapCss.button}
-      aria-label={next === "satellite" ? "Satellite view" : "Street view"}
+      aria-label={LABEL[next]}
       onClick={() => onChange(next)}
     >
-      <NativeIcon icon={next === "satellite" ? globeOutline : mapOutline} />
+      <NativeIcon icon={ICON[next]} />
     </button>
   );
 }

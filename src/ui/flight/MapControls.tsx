@@ -12,6 +12,7 @@ import { cx } from "../shared/cx";
 import type { MapViewKind } from "../shared/map/config";
 import MapCluster from "../shared/map/MapCluster";
 import type { MapView } from "../shared/map/types";
+import useMapViews from "../shared/map/useMapViews";
 import ViewToggle from "../shared/map/ViewToggle";
 
 import mapCss from "../shared/map/map.module.css";
@@ -44,6 +45,8 @@ export default function MapControls({
   onClearWaypoint: (id: string) => void;
   onStop: () => void;
 }) {
+  const views = useMapViews(liveMap);
+
   function pressCompass() {
     if (follow) {
       onChangeTrackUp(!trackUp);
@@ -110,8 +113,12 @@ export default function MapControls({
           </button>
         }
         bl={
-          liveMap?.supportsSatellite ? (
-            <ViewToggle view={mapView} onChange={onChangeMapView} />
+          views.length > 1 ? (
+            <ViewToggle
+              view={mapView}
+              views={views}
+              onChange={onChangeMapView}
+            />
           ) : undefined
         }
         br={

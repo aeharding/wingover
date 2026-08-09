@@ -18,8 +18,11 @@ import type {
   MarkerLayer,
   MarkerSpec,
   MoveOptions,
+  RasterOverlay,
+  RasterOverlayOptions,
   Unsub,
 } from "../types";
+import { boxesOf } from "../types";
 import { createAircraftLayer } from "./aircraft";
 import { createGraticuleLayer } from "./graticule";
 import {
@@ -51,6 +54,29 @@ interface LineRecord {
   style: LineStyle;
   data: FeatureCollection;
   attrMarked: boolean;
+}
+
+interface RasterRecord {
+  sourceId: string;
+  layerId: string;
+  template: string;
+  opts: RasterOverlayOptions;
+}
+
+// One [w, s, e, n] hull over the coverage box(es) — maplibre's raster
+// source takes a single bounds and only fetches visible tiles, so the
+// hull is enough there.
+function boundsHull(
+  bounds: Bounds | Bounds[],
+): [number, number, number, number] {
+  let [w, s, e, n] = [Infinity, Infinity, -Infinity, -Infinity];
+  for (const [[west, south], [east, north]] of boxesOf(bounds)) {
+    if (west < w) w = west;
+    if (south < s) s = south;
+    if (east > e) e = east;
+    if (north > n) n = north;
+  }
+  return [w, s, e, n];
 }
 
 // A LngLat is a [number, number] pair; a Feature is an object. Discriminate
@@ -143,9 +169,11 @@ export async function createMapLibreMapView(
   // Set from style.load, cleared before each setStyle. See sync().
   let styleReady = false;
   const lines: LineRecord[] = [];
+  const rasters: RasterRecord[] = [];
   let aircraftState: AircraftState | null = null;
   let aircraftRegistered = false;
   let nextLineId = 0;
+  let nextRasterId = 0;
 
   // Re-create any registered source/layer that a style (re)load tore down.
   // Idempotent and independent per item: a mid-flight setStyle drops every
@@ -161,6 +189,41 @@ export async function createMapLibreMapView(
   // nothing.
   function sync() {
     if (!styleReady) return;
+    // Rasters first, and always UNDER any line already present (a live add
+    // arrives after the route line exists; a restyle replays rasters before
+    // the lines loop below re-adds the lines on top).
+    for (const rec of rasters) {
+      if (!map.getSource(rec.sourceId)) {
+        map.addSource(rec.sourceId, {
+          type: "raster",
+          tiles: [rec.template],
+          tileSize: 256,
+          // Source maxzoom, not layer: the GPU overzooms past it so the
+          // chart stays visible instead of dropping out.
+          ...(rec.opts.minZoom !== undefined
+            ? { minzoom: rec.opts.minZoom }
+            : {}),
+          ...(rec.opts.maxZoom !== undefined
+            ? { maxzoom: rec.opts.maxZoom }
+            : {}),
+          ...(rec.opts.bounds ? { bounds: boundsHull(rec.opts.bounds) } : {}),
+        });
+      }
+      if (!map.getLayer(rec.layerId)) {
+        const firstLine = lines.find((l) => map.getLayer(l.layerId))?.layerId;
+        map.addLayer(
+          {
+            id: rec.layerId,
+            type: "raster",
+            source: rec.sourceId,
+            ...(rec.opts.opacity !== undefined
+              ? { paint: { "raster-opacity": rec.opts.opacity } }
+              : {}),
+          },
+          firstLine,
+        );
+      }
+    }
     for (const rec of lines) {
       if (!map.getSource(rec.sourceId)) {
         map.addSource(rec.sourceId, { type: "geojson", data: rec.data });
@@ -576,6 +639,29 @@ export async function createMapLibreMapView(
           aircraftRegistered = false;
           aircraftState = null;
           if (map.getLayer("aircraft")) map.removeLayer("aircraft");
+        },
+      };
+    },
+
+    rasterOverlay(
+      template: string,
+      opts?: RasterOverlayOptions,
+    ): RasterOverlay {
+      const rec: RasterRecord = {
+        sourceId: `raster-source-${nextRasterId}`,
+        layerId: `raster-${nextRasterId}`,
+        template,
+        opts: opts ?? {},
+      };
+      nextRasterId += 1;
+      rasters.push(rec);
+      sync();
+      return {
+        remove() {
+          const index = rasters.indexOf(rec);
+          if (index >= 0) rasters.splice(index, 1);
+          if (map.getLayer(rec.layerId)) map.removeLayer(rec.layerId);
+          if (map.getSource(rec.sourceId)) map.removeSource(rec.sourceId);
         },
       };
     },
