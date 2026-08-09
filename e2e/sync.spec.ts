@@ -268,7 +268,7 @@ test("one sheet: pitch when nothing, self-host connects, status when on", async 
   // body tag below dies with the document if anyone reintroduces one.
   await page.evaluate(() => document.body.setAttribute("data-no-reload", "1"));
   await page.getByTestId("settings-sync").click();
-  await expect(page.getByTestId("sync-state")).toHaveText("On");
+  await expect(page.getByTestId("sync-state")).toHaveText("Sync on");
   await expect(page.getByTestId("sync-off")).toContainText("Log out");
   await page.getByTestId("sync-off").click();
   // Fully synced, so no confirm to click through: the sheet closes itself
