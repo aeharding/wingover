@@ -342,7 +342,7 @@ export default function FlightSeat({
                     <IonInput
                       label="Name"
                       clearInput
-                      autocapitalize="words"
+                      autocapitalize="sentences"
                       placeholder="Add name"
                       value={drafts.name}
                       aria-label="Flight name"
@@ -356,7 +356,7 @@ export default function FlightSeat({
                     <IonInput
                       label="Launch"
                       clearInput
-                      autocapitalize="words"
+                      autocapitalize="sentences"
                       placeholder="Add location"
                       value={drafts.launch}
                       aria-label="Launch location"
