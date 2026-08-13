@@ -3,8 +3,19 @@ name: TestFlight
 on:
   push:
     branches: [main]
+    # The release ref, and the ONLY trigger that stamps `production` into the
+    # settings footer: vite.config.ts derives the ring from GITHUB_REF_NAME,
+    # and only a bare version tag equals package.json's version. Without this
+    # every iOS build was cut from `main`, so every one of them — the App
+    # Store binary included — said "beta" in Settings. Same pattern and same
+    # tags `pnpm release` writes (.release-it.json) as docker.yml, which has
+    # shipped the web side of this correctly all along.
+    tags:
+      - "[0-9]+.[0-9]+.[0-9]+"
     # Only things that ship in the app: docs and unrelated workflows were
-    # burning a ~10-minute macOS build per push.
+    # burning a ~10-minute macOS build per push. Branch pushes only — GitHub
+    # does not evaluate `paths` for tag pushes, so a release builds whatever
+    # it touched.
     paths:
       - "src/**"
       - "src-tauri/**"
@@ -26,6 +37,13 @@ on:
 
 jobs:
   testflight:
+    # `pnpm release` pushes the release commit and its tag together, so both
+    # refs fire on the same sha. The tag run is the release; the main run
+    # would be its beta-stamped twin — a second ~10-minute macOS build of
+    # identical code, uploaded under a lower build number. Skip it. The
+    # message is release-it's, pinned in .release-it.json; on a tag push and
+    # on workflow_dispatch there is no head_commit and this reads as true.
+    if: "startsWith(github.ref, 'refs/tags/') || !startsWith(github.event.head_commit.message, 'chore: release ')"
     concurrency:
       group: ios-release
     environment: deploy
