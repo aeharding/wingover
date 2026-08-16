@@ -1,4 +1,6 @@
 import type { Fix } from "../engine/types";
+import { bearingBetween } from "./nav";
+import { haversineMeters } from "./stats";
 
 const EARTH_RADIUS = 6371000;
 
@@ -11,10 +13,18 @@ const HOME = {
 const CRUISE_ALTITUDE = HOME.groundAltitude + 300;
 const GPS_ACQUIRE_SECONDS = 18;
 const LAUNCH_RUN_END_S = 52;
-// The simulated pilot lands after two hours: stop in place with zero
-// speed and let the ENGINE detect and finalize — the simulator only
-// supplies data.
+// The simulated pilot lands after two hours: fly home, descend, and stop
+// AT the launch point with zero speed — the engine's landing detection
+// insists on all three (landing.ts), and the simulator only supplies
+// data; the engine detects and finalizes.
 export const SIM_FLIGHT_END_S = LAUNCH_RUN_END_S + 2 * 60 * 60;
+
+const RETURN_SPEED_MPS = 10.5;
+const DESCENT_RATE_MPS = 1.5;
+// A literal, not the detector's threshold: the data producer must not
+// import the decider it is used to exercise (a fixture defined in terms
+// of the code under test can never disconfirm it).
+const CIRCLING_SPEED_MPS = 4;
 
 function mulberry32(seed: number) {
   let a = seed >>> 0;
@@ -34,6 +44,7 @@ export class FlightSimulator {
   private latitude = HOME.latitude;
   private longitude = HOME.longitude;
   private altitude = HOME.groundAltitude;
+  private home = { latitude: HOME.latitude, longitude: HOME.longitude };
 
   constructor(
     seed: number,
@@ -45,6 +56,7 @@ export class FlightSimulator {
     if (home) {
       this.latitude = home.latitude;
       this.longitude = home.longitude;
+      this.home = { latitude: home.latitude, longitude: home.longitude };
     }
   }
 
@@ -59,6 +71,19 @@ export class FlightSimulator {
     const horizontalAccuracy = 35 - 30 * acquireProgress + this.rand() * 2;
     const verticalAccuracy = 55 - 45 * acquireProgress + this.rand() * 3;
 
+    const here = { latitude: this.latitude, longitude: this.longitude };
+    const remaining = SIM_FLIGHT_END_S - t;
+    const distanceHome = haversineMeters(here, this.home);
+    const airborne = t >= LAUNCH_RUN_END_S && t < SIM_FLIGHT_END_S;
+    // Turn for home when the flight time left just covers the trip (~30 s
+    // spare), and bleed the altitude off over the last ~200 s, so the
+    // clock stops on a wing already down at the launch point.
+    const returning =
+      airborne && remaining <= distanceHome / RETURN_SPEED_MPS + 30;
+    const descending =
+      airborne &&
+      remaining * DESCENT_RATE_MPS <= this.altitude - HOME.groundAltitude + 30;
+
     let speed: number;
     let climb: number;
 
@@ -71,15 +96,20 @@ export class FlightSimulator {
     } else if (t >= SIM_FLIGHT_END_S) {
       speed = 0;
       climb = 0;
-    } else if (this.altitude < CRUISE_ALTITUDE) {
+    } else if (returning) {
+      this.heading = bearingBetween(here, this.home);
+      // Overhead early: circle tight, still unmistakably flying.
+      speed = distanceHome > 100 ? RETURN_SPEED_MPS : CIRCLING_SPEED_MPS;
+      climb = descending ? -DESCENT_RATE_MPS : 0;
+    } else if (this.altitude < CRUISE_ALTITUDE && !descending) {
       speed = 10;
       climb = 1.5;
     } else {
       speed = 10.5 + (this.rand() - 0.5) * 2;
-      climb = (this.rand() - 0.5) * 1.2;
+      climb = descending ? -DESCENT_RATE_MPS : (this.rand() - 0.5) * 1.2;
     }
 
-    if (speed > 0) {
+    if (speed > 0 && !returning) {
       this.heading = (this.heading + (this.rand() - 0.5) * 6 + 360) % 360;
     }
     const headingRadians = (this.heading * Math.PI) / 180;

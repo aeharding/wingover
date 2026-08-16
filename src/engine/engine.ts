@@ -157,7 +157,10 @@ export class Engine implements EngineImpl {
   // never journaled, so no session write can lose it. takeoffIndex has the
   // same twin (rebuildTakeoff). landingIndex does NOT yet: it is journaled
   // only, so a lost write leaves markLanding to re-anchor it from the
-  // trailing window. reachInside = per-waypoint arm state (outside/inside);
+  // trailing window. landingDismissed is a third class — journaled pilot
+  // intent, not derivable from fixes: losing its write revives the prompt
+  // on rehydration, which the pilot (present for the tap seconds earlier)
+  // re-answers. reachInside = per-waypoint arm state (outside/inside);
   // reachedIds = the set that has crossed inside.
   private reachInside = new Map<string, boolean>();
   private reachedIds = new Set<string>();
@@ -698,11 +701,21 @@ export class Engine implements EngineImpl {
   // until the next start() cleared it away. Derived in memory only: a
   // passive tab that lost the recorder lock must not write the owner's
   // WAL, and this is a pure function of fixes that already survived.
+  // A journaled index can also outrun the fixes it points into: the fix
+  // flush is enqueued before the session write and a failed batch is
+  // retained for retry, not rethrown, so a crash can leave takeoffIndex
+  // past the rehydrated buffer. Left alone it would sit inert until the
+  // buffer grew back past it — and then anchor landing detection to an
+  // arbitrary mid-flight fix. Out of range means the write it indexed is
+  // gone: re-derive from the fixes that survived, like everything else.
   private rebuildTakeoff() {
-    if (!this.session || this.session.takeoffIndex !== null) return;
+    const session = this.session;
+    if (!session) return;
+    const journaled = session.takeoffIndex;
+    if (journaled !== null && journaled < this.buffer.length) return;
     const takeoffIndex = detectTakeoff(this.buffer);
-    if (takeoffIndex === null) return;
-    this.session = { ...this.session, takeoffIndex };
+    if (takeoffIndex === journaled) return;
+    this.session = { ...session, takeoffIndex };
   }
 
   // The sanctioned exit from "blocked" besides discard()/start(): clear
@@ -1045,27 +1058,27 @@ export class Engine implements EngineImpl {
   private markLanding() {
     const session = this.session;
     if (!session || session.takeoffIndex === null) return;
+    // Flight-scoped pilot intent (wal.ts landingDismissed): never re-ask.
+    if (session.landingDismissed) return;
 
+    const launch = this.buffer[session.takeoffIndex];
     const windowStart = Math.max(
       session.takeoffIndex,
       this.buffer.length - LANDING_SUSTAIN_FIXES,
     );
-    const landedNow = isLanded(this.buffer.slice(windowStart));
+    const landedNow =
+      launch != null && isLanded(this.buffer.slice(windowStart), launch);
 
     if (!landedNow) {
-      if (session.landingIndex != null || session.landingDismissed) {
-        this.session = {
-          ...session,
-          landingIndex: null,
-          landingDismissed: false,
-        };
+      if (session.landingIndex != null) {
+        this.session = { ...session, landingIndex: null };
         const updated = this.session;
         this.enqueueWal(() => writeWalSession(updated));
       }
       return;
     }
 
-    if (session.landingDismissed || session.landingIndex != null) return;
+    if (session.landingIndex != null) return;
 
     const landingIndex = this.buffer.length - LANDING_SUSTAIN_FIXES;
     this.session = { ...session, landingIndex };

@@ -1,7 +1,9 @@
 import { describe, expect, it } from "vitest";
 
-import { FlightSimulator } from "./simulator";
+import { isLanded } from "./landing";
+import { FlightSimulator, SIM_FLIGHT_END_S } from "./simulator";
 import { computeStats, haversineMeters } from "./stats";
+import { detectTakeoff } from "./takeoff";
 
 describe("FlightSimulator", () => {
   it("is deterministic for a given seed", () => {
@@ -22,6 +24,22 @@ describe("FlightSimulator", () => {
     const a = new FlightSimulator(1, 0).fixesUpTo(60);
     const b = new FlightSimulator(2, 0).fixesUpTo(60);
     expect(a).not.toEqual(b);
+  });
+
+  // The sim's landing is the engine's to detect (record.spec's hands-free
+  // two-hour flight), and detection now insists on stopping at the launch
+  // point at launch elevation — so the sim must genuinely fly home and
+  // descend, whatever the seed wandered. Swept, not sampled: production
+  // seeds are Date.now() % 100000, and e2e runs with zero retries.
+  it("ends on the ground at the launch point, where detection can see it", () => {
+    for (let seed = 0; seed < 50; seed++) {
+      const track = new FlightSimulator(seed, 0).fixesUpTo(
+        SIM_FLIGHT_END_S + 20,
+      );
+      const takeoff = detectTakeoff(track);
+      expect(takeoff).not.toBeNull();
+      expect(isLanded(track, track[takeoff!])).toBe(true);
+    }
   });
 });
 

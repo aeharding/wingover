@@ -208,7 +208,9 @@ test("reload while armed keeps the session and still auto-takes-off", async ({
   await expect(page.getByTestId("recording")).toBeVisible();
 });
 
-test("landing prompt: dismiss re-arms, stop saves", async ({ page }) => {
+test("landing prompt: Still flying is final for the flight, stop saves", async ({
+  page,
+}) => {
   await page.addInitScript(GEO_STUB);
   const emit = makeEmitter(page);
   await page.goto(URL);
@@ -220,10 +222,9 @@ test("landing prompt: dismiss re-arms, stop saves", async ({ page }) => {
   // The prompt's action carries the detect-landing countdown, and the countdown
   // is the only thing in the app that tells a pilot when the flight
   // finalizes itself. Asserted by SHAPE, not a value: the number is a
-  // function of fix timestamps, but /Stop/ alone (used below, where the
-  // click is the point) matches a bare "Stop" and a "Stop (NaN)" just as
-  // happily, so the detectLanding branch and the countdown were pinned by
-  // nothing.
+  // function of fix timestamps, but /Stop/ alone matches a bare "Stop"
+  // and a "Stop (NaN)" just as happily, so the detectLanding branch and
+  // the countdown were pinned by nothing.
   await expect(
     page.getByTestId("landing-prompt").getByRole("button", { name: /Stop/ }),
   ).toHaveText(/^Stop \(\d+\)$/);
@@ -231,18 +232,24 @@ test("landing prompt: dismiss re-arms, stop saves", async ({ page }) => {
   await page.getByRole("button", { name: "Still flying" }).click();
   await expect(page.getByTestId("landing-prompt")).toBeHidden();
 
-  // More stationary fixes must not re-prompt until movement resumes
+  // More stationary fixes must not re-prompt...
   await emit(Array.from({ length: 5 }, () => ({ speed: 0.3 })));
   await expect(page.getByTestId("landing-prompt")).toBeHidden();
 
+  // ...and neither may moving off and going still again: the answer was
+  // for the flight (field regression: wind-parked at altitude, re-asked
+  // on every later slowdown). Asserted through a reload so the verdict
+  // comes from the rehydrated WAL, fully derived before first render —
+  // a non-journaled or re-armed dismissal would paint the prompt here.
   await emit(Array.from({ length: 5 }, () => ({ speed: 7 })));
-  await emit(Array.from({ length: 15 }, () => ({ speed: 0.3 })));
-  await expect(page.getByTestId("landing-prompt")).toBeVisible();
+  await emit(Array.from({ length: 20 }, () => ({ speed: 0.3 })));
+  await page.goto(URL);
+  await expect(page.getByTestId("recording")).toBeVisible();
+  await expect(page.getByTestId("landing-prompt")).toBeHidden();
 
-  await page
-    .getByTestId("landing-prompt")
-    .getByRole("button", { name: /Stop/ })
-    .click();
+  // This flight now ends only on the pilot's own stop.
+  await page.getByRole("button", { name: "Stop flight" }).click();
+  await page.getByRole("button", { name: "Stop", exact: true }).click();
   await dismissLandingSheet(page);
   await expect(
     page.getByRole("button", { name: "Start Flight" }),
