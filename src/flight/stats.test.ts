@@ -29,9 +29,10 @@ describe("FlightSimulator", () => {
   // The sim's landing is the engine's to detect (record.spec's hands-free
   // two-hour flight), and detection now insists on stopping at the launch
   // point at launch elevation — so the sim must genuinely fly home and
-  // descend, whatever the seed wandered.
+  // descend, whatever the seed wandered. Swept, not sampled: production
+  // seeds are Date.now() % 100000, and e2e runs with zero retries.
   it("ends on the ground at the launch point, where detection can see it", () => {
-    for (const seed of [1, 7, 42]) {
+    for (let seed = 0; seed < 50; seed++) {
       const track = new FlightSimulator(seed, 0).fixesUpTo(
         SIM_FLIGHT_END_S + 20,
       );

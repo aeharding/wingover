@@ -5,7 +5,10 @@ export interface WalSession {
   takeoffIndex: number | null;
   landingIndex?: number | null;
   // "Still flying" pressed: flight-scoped and final — detection never
-  // re-asks; the flight ends only on the pilot's Stop.
+  // re-asks; the flight ends only on the pilot's Stop. Pre-2026-08 builds
+  // clear this flag when movement resumes, so a rollback rehydrating it
+  // regresses to the old re-prompt behavior — annoying, never data-losing,
+  // so no shim (unlike autoEnd below).
   landingDismissed?: boolean;
   // Journaled pilot intent (wall clock): a manual stop finalizes the
   // flight exactly like an expired landing grace — derived, durable,

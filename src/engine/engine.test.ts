@@ -10,7 +10,8 @@ import {
   type SourceError,
   type SourcePosition,
 } from "./engine";
-import { readWal, writeWalSession } from "./wal";
+import type { Fix } from "./types";
+import { appendWalFixes, readWal, writeWalSession } from "./wal";
 import { createNavigatorSource } from "./webSource";
 
 class FakeGeolocation {
@@ -938,8 +939,9 @@ describe("Engine", () => {
     first.dismissLanding();
     for (let i = 0; i < 10; i++) geolocation.emit(position({ speed: 0.3 }));
     // Private-field poke: the dismissal's session write must be durable
-    // before "death" — this pins a landed dismissal surviving replay, not
-    // the (self-healing) crash race against its own write.
+    // before "death". This pins a journaled dismissal surviving replay; a
+    // crash that beats the write is out of scope (the WAL still holds
+    // landingIndex, so that path re-prompts the pilot who just tapped).
     await (first as unknown as { walQueue: Promise<unknown> }).walQueue;
 
     const reborn = createEngine();
@@ -965,6 +967,82 @@ describe("Engine", () => {
 
     // Back down at the launch site the real landing still detects.
     for (let i = 0; i < 5; i++) geolocation.emit(position({ speed: 7 }));
+    for (let i = 0; i < LANDING_SUSTAIN_FIXES; i++) {
+      geolocation.emit(position({ speed: 0.3 }));
+    }
+    expect(engine.snapshotSync().status).toBe("landed");
+  });
+
+  // The launch anchor is the backdated ground-roll fix, not the first
+  // buffered fix: GPS can arm across the field from where the roll
+  // starts, and a landing back AT the roll must still detect. 0.004°
+  // latitude ≈ 440 m — a buffer[0] anchor would miss the 275 m radius.
+  it("landing anchors to the takeoff fix, not the start of the buffer", async () => {
+    const engine = createEngine();
+    await engine.start();
+    for (let i = 0; i < 3; i++) geolocation.emit(position({ speed: 0 }));
+    geolocation.emit(position({ speed: 2, latitude: 43.004 }));
+    geolocation.emit(position({ speed: 3, latitude: 43.004 }));
+    for (let i = 0; i < 5; i++) {
+      geolocation.emit(position({ speed: 6, latitude: 43.004 }));
+    }
+    expect(engine.snapshotSync().status).toBe("recording");
+
+    for (let i = 0; i < 5; i++) {
+      geolocation.emit(position({ speed: 7, latitude: 43.02 }));
+    }
+    for (let i = 0; i < LANDING_SUSTAIN_FIXES; i++) {
+      geolocation.emit(position({ speed: 0.3, latitude: 43.004 }));
+    }
+    expect(engine.snapshotSync().status).toBe("landed");
+  });
+
+  // The chosen trade, in the direction STEERING prices it: a land-out
+  // away from launch records too long (until the pilot's stop) rather
+  // than ever ending a flight still in the air.
+  it("a land-out away from launch never auto-ends", async () => {
+    const engine = createEngine();
+    await armAndTakeOff(engine);
+    for (let i = 0; i < 5; i++) {
+      geolocation.emit(position({ speed: 7, latitude: 43.01 }));
+    }
+    for (let i = 0; i < LANDING_SUSTAIN_FIXES + 40; i++) {
+      geolocation.emit(position({ speed: 0.3, latitude: 43.01 }));
+    }
+    expect(engine.snapshotSync().status).toBe("recording");
+  });
+
+  // A crash can journal a takeoffIndex whose fixes never landed (the fix
+  // flush precedes the session write, and a failed batch is retained for
+  // retry, not rethrown). Left inert it would eventually anchor landing
+  // detection to an arbitrary mid-flight fix once the buffer grew past
+  // it; hydration must re-derive from the fixes that survived.
+  it("a takeoffIndex past the rehydrated buffer re-derives from surviving fixes", async () => {
+    const walFixes: Fix[] = Array.from({ length: 6 }, () => {
+      timestamp += 1000;
+      return {
+        timestamp,
+        latitude: 43.0,
+        longitude: -89.4,
+        altitude: 300,
+        speed: 0,
+        course: 90,
+        climbRate: 0,
+        horizontalAccuracy: 5,
+        verticalAccuracy: 8,
+      };
+    });
+    await writeWalSession({ armedAt: walFixes[0].timestamp, takeoffIndex: 50 });
+    await appendWalFixes(walFixes);
+
+    const engine = createEngine();
+    expect((await engine.getSnapshot()).status).toBe("armed");
+
+    // The rebuilt session flies and lands like one that never crashed.
+    geolocation.emit(position({ speed: 2 }));
+    geolocation.emit(position({ speed: 3 }));
+    for (let i = 0; i < 5; i++) geolocation.emit(position({ speed: 6 }));
+    expect(engine.snapshotSync().status).toBe("recording");
     for (let i = 0; i < LANDING_SUSTAIN_FIXES; i++) {
       geolocation.emit(position({ speed: 0.3 }));
     }

@@ -1,5 +1,4 @@
 import type { Fix } from "../engine/types";
-import { LANDING_SPEED_MPS } from "./landing";
 import { bearingBetween } from "./nav";
 import { haversineMeters } from "./stats";
 
@@ -22,6 +21,10 @@ export const SIM_FLIGHT_END_S = LAUNCH_RUN_END_S + 2 * 60 * 60;
 
 const RETURN_SPEED_MPS = 10.5;
 const DESCENT_RATE_MPS = 1.5;
+// A literal, not the detector's threshold: the data producer must not
+// import the decider it is used to exercise (a fixture defined in terms
+// of the code under test can never disconfirm it).
+const CIRCLING_SPEED_MPS = 4;
 
 function mulberry32(seed: number) {
   let a = seed >>> 0;
@@ -96,7 +99,7 @@ export class FlightSimulator {
     } else if (returning) {
       this.heading = bearingBetween(here, this.home);
       // Overhead early: circle tight, still unmistakably flying.
-      speed = distanceHome > 100 ? RETURN_SPEED_MPS : LANDING_SPEED_MPS + 1.5;
+      speed = distanceHome > 100 ? RETURN_SPEED_MPS : CIRCLING_SPEED_MPS;
       climb = descending ? -DESCENT_RATE_MPS : 0;
     } else if (this.altitude < CRUISE_ALTITUDE && !descending) {
       speed = 10;
