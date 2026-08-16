@@ -47,15 +47,20 @@ platform :ios do
     ipa = Dir[File.join(export_dir, "*.ipa")].first
     UI.user_error!("No IPA produced by exportArchive") unless ipa
 
-    # Internal-first: internal testers can install the moment processing
-    # finishes, no Beta App Review. External distribution (a "Public Testers"
-    # group + distribute_external: true) comes back when there's a public
-    # beta to run — it needs the group to exist AND a review pass per build.
+    # Voyager-style distribution: internal testers get the build the moment
+    # processing finishes; the "Public Testers" external group (the
+    # testflight.apple.com/join/aaH9CJef link) gets it after Beta App Review.
+    # The group name must match App Store Connect exactly or this step fails
+    # after the upload. reject_build_waiting_for_review keeps a superseded
+    # build from holding the review slot when the next merge lands.
     upload_to_testflight(
       ipa: ipa,
       app_identifier: APP_IDENTIFIER,
       api_key_path: "authkey.json",
+      distribute_external: true,
+      groups: ["Public Testers"],
       changelog: "GitHub Actions build #{build_number}, ref #{ENV['GITHUB_REF']}, sha #{ENV['GITHUB_SHA']}, msg #{ENV['COMMIT_MSG']}",
+      reject_build_waiting_for_review: true,
     )
   end
 
