@@ -1045,27 +1045,29 @@ export class Engine implements EngineImpl {
   private markLanding() {
     const session = this.session;
     if (!session || session.takeoffIndex === null) return;
+    // "Still flying" is an answer for the whole flight: detection asked,
+    // the pilot overruled it, and it never asks again — this flight ends
+    // only on the pilot's Stop.
+    if (session.landingDismissed) return;
 
+    const launch = this.buffer[session.takeoffIndex];
     const windowStart = Math.max(
       session.takeoffIndex,
       this.buffer.length - LANDING_SUSTAIN_FIXES,
     );
-    const landedNow = isLanded(this.buffer.slice(windowStart));
+    const landedNow =
+      launch != null && isLanded(this.buffer.slice(windowStart), launch);
 
     if (!landedNow) {
-      if (session.landingIndex != null || session.landingDismissed) {
-        this.session = {
-          ...session,
-          landingIndex: null,
-          landingDismissed: false,
-        };
+      if (session.landingIndex != null) {
+        this.session = { ...session, landingIndex: null };
         const updated = this.session;
         this.enqueueWal(() => writeWalSession(updated));
       }
       return;
     }
 
-    if (session.landingDismissed || session.landingIndex != null) return;
+    if (session.landingIndex != null) return;
 
     const landingIndex = this.buffer.length - LANDING_SUSTAIN_FIXES;
     this.session = { ...session, landingIndex };

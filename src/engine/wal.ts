@@ -4,6 +4,8 @@ export interface WalSession {
   armedAt: number;
   takeoffIndex: number | null;
   landingIndex?: number | null;
+  // "Still flying" pressed: flight-scoped and final — detection never
+  // re-asks; the flight ends only on the pilot's Stop.
   landingDismissed?: boolean;
   // Journaled pilot intent (wall clock): a manual stop finalizes the
   // flight exactly like an expired landing grace — derived, durable,

@@ -1,4 +1,5 @@
 import type { Fix } from "../engine/types";
+import { haversineMeters } from "./stats";
 
 // Above walking pace, below any flying speed. Calibrated against five
 // real flights (Alex, 2026-07-10/11): the packing-up walk medians
@@ -15,14 +16,43 @@ export const LANDING_SUSTAIN_FIXES = 15;
 // replay exactly as it would have live.
 export const LANDING_GRACE_MS = 30_000;
 
+// Speed alone false-positived on a real flight (Alex, 2026-08): winds
+// aloft at altitude can hold ground speed under 2 m/s indefinitely, and
+// a windy final approach does the same while descending. So a landing
+// must also LOOK like the launch site: near it, at its elevation, and
+// no longer changing altitude. The trade is deliberate — a land-out
+// away from launch never auto-detects and waits for the pilot's Stop,
+// which records too long rather than ending a flight still in the air
+// (STEERING: recording never loses a flight).
+export const LANDING_RADIUS_M = 275; // ~900 ft horizontally from launch
+export const LANDING_ALTITUDE_M = 45; // ~150 ft above/below launch
+// GPS altitude jitters a few meters at rest; a paramotor's shallowest
+// descent (~1.2 m/s) moves ~18 m across the sustain window. This bound
+// sits between them, so a slow-drifting descent through launch
+// elevation cannot complete the window.
+export const LANDING_ALTITUDE_DRIFT_M = 10;
+
+function nearLaunch(fix: Fix, launch: Fix): boolean {
+  return (
+    haversineMeters(fix, launch) <= LANDING_RADIUS_M &&
+    Math.abs(fix.altitude - launch.altitude) <= LANDING_ALTITUDE_M
+  );
+}
+
 // The recorded track only exists after sustained takeoff speed, so a
-// trailing run of near-zero ground speed can only mean the wing is down
-// (or a rare stationary wind-hover — which is why landing prompts instead
-// of auto-stopping).
-export function isLanded(track: Fix[]): boolean {
+// trailing run of near-zero ground speed at launch elevation, near the
+// launch point, holding a constant altitude can only mean the wing is
+// down. Every criterion must hold for the whole sustain window.
+export function isLanded(track: Fix[], launch: Fix): boolean {
   if (track.length < LANDING_SUSTAIN_FIXES) return false;
+  let lowest = Number.POSITIVE_INFINITY;
+  let highest = Number.NEGATIVE_INFINITY;
   for (let i = track.length - LANDING_SUSTAIN_FIXES; i < track.length; i++) {
-    if (track[i].speed > LANDING_SPEED_MPS) return false;
+    const fix = track[i];
+    if (fix.speed > LANDING_SPEED_MPS) return false;
+    if (!nearLaunch(fix, launch)) return false;
+    lowest = Math.min(lowest, fix.altitude);
+    highest = Math.max(highest, fix.altitude);
   }
-  return true;
+  return highest - lowest <= LANDING_ALTITUDE_DRIFT_M;
 }

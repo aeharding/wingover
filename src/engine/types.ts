@@ -161,6 +161,7 @@ export interface RecordingEngine {
   // recovery lands in acquiring, never idle. Safe to call on any
   // foreground: no-op for busy, after takeoff, or without a session.
   retry(): void;
-  // landed → recording: pilot overrides a detected touchdown.
+  // landed → recording: pilot overrides a detected touchdown. Final for
+  // the flight — detection never re-asks; only end() finishes it.
   dismissLanding(): void;
 }

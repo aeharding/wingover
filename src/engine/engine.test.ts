@@ -903,7 +903,10 @@ describe("Engine", () => {
     expect(await readWal()).toEqual({ session: null, fixes: [] });
   });
 
-  it("dismiss returns landed to recording until movement resumes", async () => {
+  // The pilot's answer is final for the flight (field regression,
+  // 2026-08: wind-parked at altitude, dismissed, and re-prompted on every
+  // later slowdown). After one "Still flying" only end() finishes it.
+  it("dismiss silences landing detection for the rest of the flight", async () => {
     const engine = createEngine();
     await armAndTakeOff(engine);
 
@@ -919,7 +922,48 @@ describe("Engine", () => {
     }
     expect(engine.snapshotSync().status).toBe("recording");
 
-    // Movement clears the dismissal; a fresh landing detects again
+    for (let i = 0; i < 5; i++) geolocation.emit(position({ speed: 7 }));
+    for (let i = 0; i < LANDING_SUSTAIN_FIXES + 40; i++) {
+      geolocation.emit(position({ speed: 0.3 }));
+    }
+    expect(engine.snapshotSync().status).toBe("recording");
+  });
+
+  it("a dismissal survives death and replay — no re-prompt on rehydration", async () => {
+    const first = createEngine();
+    await armAndTakeOff(first);
+    for (let i = 0; i < LANDING_SUSTAIN_FIXES; i++) {
+      geolocation.emit(position({ speed: 0.3 }));
+    }
+    first.dismissLanding();
+    for (let i = 0; i < 10; i++) geolocation.emit(position({ speed: 0.3 }));
+    // Private-field poke: the dismissal's session write must be durable
+    // before "death" — this pins a landed dismissal surviving replay, not
+    // the (self-healing) crash race against its own write.
+    await (first as unknown as { walQueue: Promise<unknown> }).walQueue;
+
+    const reborn = createEngine();
+    expect((await reborn.getSnapshot()).status).toBe("recording");
+    for (let i = 0; i < LANDING_SUSTAIN_FIXES + 40; i++) {
+      geolocation.emit(position({ speed: 0.3 }));
+    }
+    expect(reborn.snapshotSync().status).toBe("recording");
+  });
+
+  // The 2026-08 false positive itself: winds aloft held ground speed
+  // near zero while the pilot flew high above launch. Slow is not landed
+  // unless it is also AT the launch site, at launch elevation, holding
+  // altitude (flight/landing.ts).
+  it("a slow drift at altitude is not a landing", async () => {
+    const engine = createEngine();
+    await armAndTakeOff(engine);
+
+    for (let i = 0; i < LANDING_SUSTAIN_FIXES + 5; i++) {
+      geolocation.emit(position({ speed: 0.3, altitude: 600 }));
+    }
+    expect(engine.snapshotSync().status).toBe("recording");
+
+    // Back down at the launch site the real landing still detects.
     for (let i = 0; i < 5; i++) geolocation.emit(position({ speed: 7 }));
     for (let i = 0; i < LANDING_SUSTAIN_FIXES; i++) {
       geolocation.emit(position({ speed: 0.3 }));
