@@ -453,28 +453,12 @@
           <small>Paramotor flight recorder</small>
         </span>
       </a>
-      <a class="nav-open" href="/logbook">Open app</a>
+      <!-- get.wingover.app routes by platform: an installed iOS app opens
+           via Universal Link, iOS without it gets the App Store, everyone
+           else the web app. It must stay a separate subdomain; a Universal
+           Link tapped on its own domain opens Safari, not the app. -->
+      <a class="nav-open" href="https://get.wingover.app">Open app</a>
     </nav>
-    <script>
-      // iOS should get the native app, not the foreground-only PWA (no
-      // background recording on web). Point the button at get.wingover.app:
-      // it opens the app if installed (Universal Links) and otherwise sends
-      // iOS to the App Store. Everyone else keeps the web app. The default
-      // href works with no JS. iPad on iPadOS 13+ reports as "Macintosh", so
-      // the touch check catches it.
-      (function () {
-        var ua = navigator.userAgent || "";
-        var isIOS =
-          /iphone|ipod|ipad/i.test(ua) ||
-          (navigator.platform === "MacIntel" && navigator.maxTouchPoints > 1);
-        if (!isIOS) return;
-        var btn = document.querySelector(".nav-open");
-        if (btn) {
-          btn.href = "https://get.wingover.app";
-          btn.textContent = "Get the app";
-        }
-      })();
-    </script>
 
     <main>
       <header class="hero">
