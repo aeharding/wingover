@@ -22,6 +22,7 @@ import type { MapView } from "../../shared/map/types";
 import { useSettings } from "../../shared/settings/SettingsContext";
 import Barogram from "./Barogram";
 import Readout from "./Readout";
+import ReplayNavigationDebug from "./ReplayNavigationDebug";
 import {
   recallTimeline,
   rememberPosition,
@@ -153,6 +154,7 @@ export default function ReplayDock({
       className={cx(chassis.dock, seat && chassis.seat)}
       data-testid="replay-dock"
     >
+      <ReplayNavigationDebug track={feed.track} units={units} />
       <div className={chassis.readouts}>
         <Readout
           label="Above launch"

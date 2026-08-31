@@ -8,10 +8,12 @@ import type { MapView } from "../shared/map/types";
 import useChartOverlay from "../shared/map/useChartOverlay";
 import type { LiveView } from "../shared/useLiveViewPrefs";
 import { ConfirmSurface } from "./BigConfirm";
+import DirectionHint from "./DirectionHint";
 import InstrumentsStrip from "./InstrumentsStrip";
 import LiveTrackMap from "./LiveTrackMap";
 import MapControls from "./MapControls";
 import { useInstrumentInsets } from "./useInstrumentInsets";
+import useNavigationGuidance from "./useNavigationGuidance";
 import { useWaypointUi } from "./useWaypointUi";
 
 import styles from "./FlightSurface.module.css";
@@ -45,6 +47,7 @@ export default function RecordingSurface({
   useChartOverlay(liveMap, mapView === "chart");
 
   const first = track[0];
+  const guidance = useNavigationGuidance(track, nextWaypoint);
   const pending = waypoints.pending;
   const showLandingPrompt = snapshot.status === "landed" && landingAt !== null;
 
@@ -85,6 +88,7 @@ export default function RecordingSurface({
         latest={latest}
         first={first}
         nextWaypoint={nextWaypoint}
+        guidance={guidance}
         units={units}
       />
       <LiveTrackMap
@@ -103,6 +107,7 @@ export default function RecordingSurface({
         onSelectWaypoint={waypoints.select}
         onFollowChange={changeFollow}
       />
+      <DirectionHint direction={guidance?.directionHint ?? null} />
       <MapControls
         mapView={mapView}
         follow={follow}

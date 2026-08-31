@@ -1,0 +1,26 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<gpx version="1.1" creator="wingover-e2e" xmlns="http://www.topografix.com/GPX/1/1">
+  <trk><name>RTL inbound</name><trkseg>
+    <trkpt lat="43.075000" lon="-89.550000"><ele>300</ele><time>2026-07-18T01:25:00.000Z</time></trkpt>
+    <trkpt lat="43.075090" lon="-89.550000"><ele>302</ele><time>2026-07-18T01:25:01.000Z</time></trkpt>
+    <trkpt lat="43.075180" lon="-89.549990"><ele>304</ele><time>2026-07-18T01:25:02.000Z</time></trkpt>
+    <trkpt lat="43.075270" lon="-89.549970"><ele>306</ele><time>2026-07-18T01:25:03.000Z</time></trkpt>
+    <trkpt lat="43.075360" lon="-89.549940"><ele>308</ele><time>2026-07-18T01:25:04.000Z</time></trkpt>
+    <trkpt lat="43.075450" lon="-89.549900"><ele>310</ele><time>2026-07-18T01:25:05.000Z</time></trkpt>
+    <trkpt lat="43.095450" lon="-89.549900"><ele>330</ele><time>2026-07-18T01:25:06.000Z</time></trkpt>
+    <trkpt lat="43.095343" lon="-89.549920"><ele>330</ele><time>2026-07-18T01:25:07.000Z</time></trkpt>
+    <trkpt lat="43.095236" lon="-89.549940"><ele>330</ele><time>2026-07-18T01:25:08.000Z</time></trkpt>
+    <trkpt lat="43.095129" lon="-89.549960"><ele>330</ele><time>2026-07-18T01:25:09.000Z</time></trkpt>
+    <trkpt lat="43.095022" lon="-89.549980"><ele>330</ele><time>2026-07-18T01:25:10.000Z</time></trkpt>
+    <trkpt lat="43.094915" lon="-89.550000"><ele>330</ele><time>2026-07-18T01:25:11.000Z</time></trkpt>
+    <trkpt lat="43.094808" lon="-89.550020"><ele>330</ele><time>2026-07-18T01:25:12.000Z</time></trkpt>
+    <trkpt lat="43.094701" lon="-89.550040"><ele>330</ele><time>2026-07-18T01:25:13.000Z</time></trkpt>
+    <trkpt lat="43.094594" lon="-89.550060"><ele>330</ele><time>2026-07-18T01:25:14.000Z</time></trkpt>
+    <trkpt lat="43.094487" lon="-89.550080"><ele>330</ele><time>2026-07-18T01:25:15.000Z</time></trkpt>
+    <trkpt lat="43.094380" lon="-89.550100"><ele>330</ele><time>2026-07-18T01:25:16.000Z</time></trkpt>
+    <trkpt lat="43.094273" lon="-89.550120"><ele>330</ele><time>2026-07-18T01:25:17.000Z</time></trkpt>
+    <trkpt lat="43.094166" lon="-89.550140"><ele>330</ele><time>2026-07-18T01:25:18.000Z</time></trkpt>
+    <trkpt lat="43.094059" lon="-89.550160"><ele>330</ele><time>2026-07-18T01:25:19.000Z</time></trkpt>
+    <trkpt lat="43.093952" lon="-89.550180"><ele>330</ele><time>2026-07-18T01:25:20.000Z</time></trkpt>
+  </trkseg></trk>
+</gpx>

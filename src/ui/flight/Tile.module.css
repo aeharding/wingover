@@ -24,6 +24,27 @@
   color: #c2c7cd;
 }
 
+.labelRow,
+.valueRow {
+  min-width: 0;
+}
+
+.splitRow {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) max-content;
+  align-items: end;
+  gap: 0.35rem;
+}
+
+.secondaryLabel {
+  overflow: hidden;
+  color: #c2c7cd;
+  font-size: var(--tile-label-size, 0.72rem);
+  text-align: right;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
 .value {
   font-size: var(--tile-value-size, clamp(1.4rem, 7.3vw, 1.95rem));
   font-weight: 800;
@@ -45,6 +66,18 @@
   .yellow & {
     color: var(--stat-yellow);
   }
+}
+
+.secondaryValue {
+  text-align: right;
+}
+
+.value.secondaryValue.greenValue {
+  color: var(--stat-green);
+}
+
+.value.secondaryValue.magentaValue {
+  color: var(--stat-magenta);
 }
 
 .wide {

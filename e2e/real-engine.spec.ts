@@ -557,7 +557,7 @@ test("in-flight nav: planned distance, tap-select and clear a checkpoint", async
   // Take off: nav targets the next waypoint, but with nothing SELECTED the
   // clear-checkpoint button is not shown (it is not a "remove next" button).
   await armAndFly(page, emit);
-  await expect(page.getByText("Distance to waypoint")).toBeVisible();
+  await expect(page.getByText("To waypoint", { exact: true })).toBeVisible();
   await expect(page.getByTestId("remove-waypoint")).toHaveCount(0);
 
   // Fly to just shy of the first pin so its marker sits on-screen (the ring is
@@ -572,7 +572,7 @@ test("in-flight nav: planned distance, tap-select and clear a checkpoint", async
   // the button hides again (nothing selected).
   await page.getByTestId("remove-waypoint").click();
   await expect(page.getByTestId("remove-waypoint")).toHaveCount(0);
-  await expect(page.getByText("Distance to waypoint")).toBeVisible();
+  await expect(page.getByText("To waypoint", { exact: true })).toBeVisible();
 });
 
 test("a long-press mid-flight proposes a checkpoint behind a confirm", async ({

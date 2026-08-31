@@ -35,6 +35,10 @@
 
   &.open {
     grid-template-rows: 1fr;
+
+    .clip {
+      overflow: visible;
+    }
   }
 
   @media (prefers-reduced-motion: reduce) {

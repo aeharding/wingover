@@ -61,6 +61,12 @@ test("the fullscreen play button opens the pane playing; scrub and speed follow"
   await expect(page.getByTestId("flight-detail-map-fullroot")).toBeVisible();
   await page.getByTestId("replay-start").click();
   await expect(page.getByTestId("replay-dock")).toBeVisible();
+  const navigationDebug = page.getByTestId("replay-navigation-debug");
+  await expect(navigationDebug).toBeVisible();
+  await expect(navigationDebug).toContainText("UI sunset");
+  await expect(navigationDebug).toContainText("UI launch");
+  await expect(navigationDebug).toContainText("ETA exact");
+  await expect(navigationDebug).toContainText("Speed used");
 
   // Opened playing: the short fixture plays through and holds at the end.
   await expect.poll(() => sliderFraction(page)).toBeGreaterThanOrEqual(1);

@@ -36,6 +36,20 @@ export function formatDistance(meters: number, units: Units): string {
   })} ${suffix}`;
 }
 
+export function formatNavigationDistance(meters: number, units: Units): string {
+  const value = units === "imperial" ? meters * METERS_TO_MILES : meters / 1000;
+  const suffix = units === "imperial" ? "mi" : "km";
+  const roundedTenths = Math.round(value * 10) / 10;
+  const roundedHundredths = Math.round(value * 100) / 100;
+  let fractionDigits = 2;
+  if (roundedTenths >= 100) fractionDigits = 0;
+  else if (roundedHundredths >= 10) fractionDigits = 1;
+  return `${value.toLocaleString(undefined, {
+    minimumFractionDigits: fractionDigits,
+    maximumFractionDigits: fractionDigits,
+  })} ${suffix}`;
+}
+
 /**
  * The logbook row's timestamp, de-noised: weekday plus date at minutes
  * precision ("Sun, Jul 12 · 6:42 AM"), the weekday because that is how
@@ -108,4 +122,28 @@ export function formatDuration(totalSeconds: number): string {
   if (hours > 0)
     return `${hours}:${String(minutes).padStart(2, "0")}:${String(remainder).padStart(2, "0")}`;
   return `${minutes}:${String(remainder).padStart(2, "0")}`;
+}
+
+function signedMinutes(minutes: number, offsetMs: number): string {
+  const sign = offsetMs < 0 ? "−" : "+";
+  return `S${sign}${String(Math.abs(minutes)).padStart(2, "0")}`;
+}
+
+export function formatEta(etaSeconds: number): string {
+  const minutes = Math.max(0, Math.ceil(etaSeconds / 60));
+  if (minutes < 60) return `:${String(minutes).padStart(2, "0")}`;
+  const hours = Math.floor(minutes / 60);
+  return `${hours}:${String(minutes % 60).padStart(2, "0")}`;
+}
+
+export function formatSunsetOffset(offsetMs: number): string {
+  const minutes =
+    offsetMs < 0
+      ? -Math.ceil(-offsetMs / 60_000)
+      : Math.floor(offsetMs / 60_000);
+  return signedMinutes(minutes, offsetMs);
+}
+
+export function formatArrivalSunsetOffset(offsetMs: number): string {
+  return signedMinutes(Math.ceil(offsetMs / 60_000), offsetMs);
 }

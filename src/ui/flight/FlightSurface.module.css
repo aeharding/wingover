@@ -19,6 +19,7 @@
      --wingover-accent alone changes nothing the tiles see. */
   --wingover-accent: color(display-p3 0.32 0.8 1);
   --stat-cyan: var(--wingover-accent);
+  --stat-magenta: color(display-p3 1 0.25 0.78);
   /* The in-flight map chips stay dark chrome in every scheme (this map is
      always light; dark chips are the frozen sunlight design). The ground
      app themes these tokens per scheme in theme.css. */
@@ -104,7 +105,7 @@
      left (see .instruments), this wide. One var, read by the rail's own
      width AND the map's safe-area publish below, so they can never drift. */
   @media (orientation: landscape) and (max-height: 500px) {
-    --fly-rail-w: 176px;
+    --fly-rail-w: 192px;
   }
 }
 
@@ -130,7 +131,7 @@
      aircraft in the open map, not the geometric screen center. */
   @media (orientation: landscape) and (max-height: 500px) {
     --ion-safe-area-left: calc(
-      env(safe-area-inset-left) + var(--fly-rail-w, 168px)
+      env(safe-area-inset-left) + var(--fly-rail-w, 192px)
     );
   }
 }
@@ -290,6 +291,10 @@
   padding-left: env(safe-area-inset-left);
   padding-right: env(safe-area-inset-right);
 
+  &[data-sunset-guidance="true"] {
+    grid-template-columns: minmax(0, 0.96fr) minmax(0, 1.04fr);
+  }
+
   @media (min-width: 768px) {
     top: 0.75rem;
     left: auto;
@@ -313,7 +318,7 @@
     bottom: 0;
     left: 0;
     right: auto;
-    width: calc(var(--fly-rail-w, 168px) + env(safe-area-inset-left));
+    width: calc(var(--fly-rail-w, 192px) + env(safe-area-inset-left));
     border-radius: 0;
     overflow: visible;
     grid-template-columns: 1fr;
@@ -324,6 +329,10 @@
     --tile-label-size: 0.62rem;
     --tile-icon-well: 3.2rem;
     --tile-icon-right: 0.3rem;
+
+    &[data-sunset-guidance="true"] {
+      grid-template-columns: 1fr;
+    }
 
     /* The two icon glyphs scale with the ROW like the values do (cq
        units resolve against the tile container), at roughly portrait's
@@ -339,4 +348,12 @@
       height: 78cqh;
     }
   }
+}
+
+.sunsetMinus {
+  display: inline-block;
+  inline-size: 0.55em;
+  text-align: center;
+  transform: scaleX(0.68);
+  transform-origin: center;
 }

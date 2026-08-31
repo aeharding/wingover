@@ -5,6 +5,7 @@
    variant — same-file, visible in the family's contract). */
 
 .dock {
+  position: relative;
   display: flex;
   flex-direction: column;
   gap: 0.5rem;
