@@ -4,6 +4,8 @@ import {
   estimateAdaptiveReturnSpeed,
   estimateTargetCourseSpeed,
   hasCoupledAcceleration,
+  type ReturnSpeedEstimate,
+  type TargetCourseSpeedEstimate,
 } from "./returnSpeed";
 import { haversineMeters } from "./stats";
 import { sunsetNear } from "./sun";
@@ -12,7 +14,6 @@ const ONE_MILE_M = 1609.344;
 const REARM_DISTANCE_M = ONE_MILE_M * 1.2;
 const INBOUND_WINDOW_MS = 12_000;
 const MEASURED_SPEED_WINDOW_MS = 5_000;
-const NO_MODEL_CALIBRATION_WINDOW_MS = 10 * 60_000;
 const CALIBRATION_MAX_AGE_MS = 30 * 60_000;
 const CALIBRATION_FULL_ALTITUDE_DELTA_M = 100;
 const CALIBRATION_MAX_ALTITUDE_DELTA_M = 500;
@@ -22,8 +23,9 @@ const CALIBRATION_MAX_ERROR_DEGREES = 10;
 const TARGET_SPEED_FULL_COURSE_DELTA_DEGREES = 10;
 const TARGET_SPEED_MAX_COURSE_DELTA_DEGREES = 20;
 const SUNSET_LEAD_MS = 30 * 60 * 1000;
-const MIN_NAV_SPEED_MPS = 5;
-const MIN_CLOSING_SPEED_MPS = 3;
+const SUNSET_TRAIL_MS = 60 * 60 * 1000;
+const MIN_NAV_SPEED_MPS = 1;
+const MIN_CLOSING_SPEED_MPS = 1;
 const ACQUIRE_ERROR_DEGREES = 30;
 const HINT_MIN_DEGREES = 5;
 const HINT_MAX_DEGREES = 20;
@@ -49,6 +51,12 @@ export interface NavigationGuidance {
   sunsetOffsetMs: number | null;
   arrivalSunsetOffsetMs: number | null;
   directionHint: DirectionHint;
+}
+
+export interface NavigationGuidanceDiagnostics {
+  guidance: NavigationGuidance | null;
+  model: ReturnSpeedEstimate | null;
+  targetSpeed: TargetCourseSpeedEstimate | null;
 }
 
 function recentFixes(track: readonly Fix[], windowMs: number): Fix[] {
@@ -120,7 +128,9 @@ function inboundEndingAt(
   if (!end) return null;
   const since = end.timestamp - INBOUND_WINDOW_MS;
   let startIndex = endIndex;
-  while (startIndex > 0 && track[startIndex - 1].timestamp >= since) {
+  while (startIndex > 0 && track[startIndex].timestamp > since) {
+    const gap = track[startIndex].timestamp - track[startIndex - 1].timestamp;
+    if (gap > MAX_FIX_GAP_MS) break;
     startIndex--;
   }
   const fixes = track.slice(startIndex, endIndex + 1);
@@ -302,8 +312,9 @@ function returnSpeed(
   track: readonly Fix[],
   target: NavigationTarget,
   course: number,
+  model: ReturnSpeedEstimate | null,
+  targetSpeed: TargetCourseSpeedEstimate | null,
 ): number | null {
-  const model = estimateAdaptiveReturnSpeed(track, course);
   const inbound = stableInbound(track, target);
   if (inbound && isCalibrationInbound(inbound)) {
     const measured = measuredInboundSpeed(inbound, target);
@@ -314,9 +325,8 @@ function returnSpeed(
     );
   }
   const latest = track[track.length - 1];
-  const targetSpeed = estimateTargetCourseSpeed(track, course);
   if (targetSpeed && latest) {
-    const modelWindowMs = model?.windowMs ?? NO_MODEL_CALIBRATION_WINDOW_MS;
+    const modelWindowMs = model?.windowMs ?? CALIBRATION_MAX_AGE_MS;
     const weight = targetSpeedWeight(
       latest,
       course,
@@ -362,7 +372,7 @@ function returnSpeed(
   }
   const calibration = recentInboundCalibration(track, target);
   if (calibration && latest) {
-    const modelWindowMs = model?.windowMs ?? NO_MODEL_CALIBRATION_WINDOW_MS;
+    const modelWindowMs = model?.windowMs ?? CALIBRATION_MAX_AGE_MS;
     const weight = calibrationWeight(
       latest,
       course,
@@ -424,54 +434,77 @@ function directionHint(
   return inbound ? hintFromInbound(inbound) : null;
 }
 
-function relevantSunset(
-  track: readonly Fix[],
-  target: NavigationTarget,
-): number | null {
-  const first = track[0];
+function relevantSunset(track: readonly Fix[]): number | null {
   const latest = track[track.length - 1];
-  if (!first || !latest) return null;
-  const candidates = [latest, first].map((fix) =>
-    sunsetNear(
-      new Date(fix.timestamp),
-      target.latitude,
-      target.longitude,
-    )?.getTime(),
-  );
-  for (const sunset of candidates) {
-    if (
-      sunset &&
-      first.timestamp <= sunset &&
-      latest.timestamp >= sunset - SUNSET_LEAD_MS
-    ) {
-      return sunset;
-    }
+  if (!latest) return null;
+  const sunset = sunsetNear(
+    new Date(latest.timestamp),
+    latest.latitude,
+    latest.longitude,
+  )?.getTime();
+  if (
+    sunset &&
+    latest.timestamp >= sunset - SUNSET_LEAD_MS &&
+    latest.timestamp <= sunset + SUNSET_TRAIL_MS
+  ) {
+    return sunset;
   }
   return null;
+}
+
+function deriveNavigationGuidanceDiagnostics(
+  track: readonly Fix[],
+  target: NavigationTarget,
+  includeHiddenArrival: boolean,
+): NavigationGuidanceDiagnostics {
+  const latest = track[track.length - 1];
+  if (!latest) return { guidance: null, model: null, targetSpeed: null };
+  const distanceMeters = haversineMeters(latest, target);
+  const targetCourse = bearingBetween(latest, target);
+  const directionDegrees = relativeBearing(latest.course, targetCourse);
+  const shouldEstimateArrival =
+    includeHiddenArrival ||
+    target.kind !== "launch" ||
+    distanceMeters > ONE_MILE_M;
+  const model = shouldEstimateArrival
+    ? estimateAdaptiveReturnSpeed(track, targetCourse)
+    : null;
+  const targetSpeed = shouldEstimateArrival
+    ? estimateTargetCourseSpeed(track, target)
+    : null;
+  const speed = shouldEstimateArrival
+    ? returnSpeed(track, target, targetCourse, model, targetSpeed)
+    : null;
+  const etaSeconds = speed ? distanceMeters / speed : null;
+  const sunsetAt = relevantSunset(track);
+  return {
+    guidance: {
+      distanceMeters,
+      directionDegrees,
+      etaSeconds,
+      sunsetAt,
+      sunsetOffsetMs: sunsetAt ? latest.timestamp - sunsetAt : null,
+      arrivalSunsetOffsetMs:
+        sunsetAt && etaSeconds
+          ? latest.timestamp + etaSeconds * 1000 - sunsetAt
+          : null,
+      directionHint: directionHint(track, target, distanceMeters),
+    },
+    model,
+    targetSpeed,
+  };
 }
 
 export function deriveNavigationGuidance(
   track: readonly Fix[],
   target: NavigationTarget,
 ): NavigationGuidance | null {
-  const latest = track[track.length - 1];
-  if (!latest) return null;
-  const distanceMeters = haversineMeters(latest, target);
-  const targetCourse = bearingBetween(latest, target);
-  const directionDegrees = relativeBearing(latest.course, targetCourse);
-  const speed = returnSpeed(track, target, targetCourse);
-  const etaSeconds = speed ? distanceMeters / speed : null;
-  const sunsetAt = relevantSunset(track, target);
-  return {
-    distanceMeters,
-    directionDegrees,
-    etaSeconds,
-    sunsetAt,
-    sunsetOffsetMs: sunsetAt ? latest.timestamp - sunsetAt : null,
-    arrivalSunsetOffsetMs:
-      sunsetAt && etaSeconds
-        ? latest.timestamp + etaSeconds * 1000 - sunsetAt
-        : null,
-    directionHint: directionHint(track, target, distanceMeters),
-  };
+  return deriveNavigationGuidanceDiagnostics(track, target, false).guidance;
+}
+
+export function deriveNavigationDiagnostics(
+  track: readonly Fix[],
+  target: NavigationTarget,
+): NavigationGuidanceDiagnostics {
+  return deriveNavigationGuidanceDiagnostics(track, target, true);
 }

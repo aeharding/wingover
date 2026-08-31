@@ -17,6 +17,10 @@
   justify-content: center;
 }
 
+.split {
+  padding-inline: 0.4rem;
+}
+
 /* The --tile-* knobs let a HOST compact the type (FlightSurface's landscape
    rail splits 8 rows over a phone's short edge); default = full size. */
 .label {
@@ -33,7 +37,7 @@
   display: grid;
   grid-template-columns: minmax(0, 1fr) max-content;
   align-items: end;
-  gap: 0.35rem;
+  gap: 0.1rem;
 }
 
 .secondaryLabel {

@@ -56,6 +56,24 @@ describe("deriveNavigationGuidance", () => {
     ).toBe("right");
   });
 
+  it("acquires inbound guidance with ordinary fix timestamp jitter", () => {
+    const fasterCadence = inboundTrack(8, 14).map((sample, index) => ({
+      ...sample,
+      timestamp: index * 999,
+    }));
+    const slowerCadence = inboundTrack(8, 13).map((sample, index) => ({
+      ...sample,
+      timestamp: index * 1001,
+    }));
+
+    expect(deriveNavigationGuidance(fasterCadence, launch)?.directionHint).toBe(
+      "left",
+    );
+    expect(deriveNavigationGuidance(slowerCadence, launch)?.directionHint).toBe(
+      "left",
+    );
+  });
+
   it("shows nothing when aligned, far off, inside a mile, or targeting a waypoint", () => {
     expect(
       deriveNavigationGuidance(inboundTrack(2), launch)?.directionHint,
@@ -183,6 +201,14 @@ describe("deriveNavigationGuidance", () => {
     expect(guidance.etaSeconds).toBeCloseTo(guidance.distanceMeters / 7);
   });
 
+  it("keeps ETA while a strong headwind reduces groundspeed below five meters per second", () => {
+    const track = inboundTrack(0).map((sample) => ({ ...sample, speed: 4 }));
+
+    const guidance = deriveNavigationGuidance(track, launch)!;
+
+    expect(guidance.etaSeconds).toBeCloseTo(guidance.distanceMeters / 4);
+  });
+
   it("retains a recent inbound calibration after turning away", () => {
     const inbound = inboundTrack(0).map((sample) => ({
       ...sample,
@@ -197,6 +223,55 @@ describe("deriveNavigationGuidance", () => {
       [...inbound, turnedAway],
       launch,
     )!;
+    expect(guidance.etaSeconds).toBeCloseTo(guidance.distanceMeters / 6);
+  });
+
+  it("retains direct evidence for thirty minutes without a circle model", () => {
+    const direct = inboundTrack(0, 7).map((sample) => ({
+      ...sample,
+      speed: 6,
+    }));
+    const last = direct[direct.length - 1];
+    const afterFifteenMinutes = {
+      ...last,
+      course: 90,
+      timestamp: last.timestamp + 15 * 60_000,
+    };
+    const afterThirtyOneMinutes = {
+      ...afterFifteenMinutes,
+      timestamp: last.timestamp + 31 * 60_000,
+    };
+
+    const retained = deriveNavigationGuidance(
+      [...direct, afterFifteenMinutes],
+      launch,
+    )!;
+    const expired = deriveNavigationGuidance(
+      [...direct, afterThirtyOneMinutes],
+      launch,
+    )!;
+
+    expect(retained.etaSeconds).toBeCloseTo(retained.distanceMeters / 6);
+    expect(expired.etaSeconds).toBeNull();
+  });
+
+  it("fades historical direct evidence as the target bearing changes", () => {
+    const historical = inboundTrack(0, 7).map((sample) => ({
+      ...sample,
+      latitude: 43.03,
+      longitude: -89,
+      course: 180,
+      speed: 6,
+    }));
+    const moved = {
+      ...historical[historical.length - 1],
+      longitude: -88.988,
+      course: 90,
+      timestamp: historical[historical.length - 1].timestamp + 1000,
+    };
+
+    const guidance = deriveNavigationGuidance([...historical, moved], launch)!;
+
     expect(guidance.etaSeconds).toBeCloseTo(guidance.distanceMeters / 6);
   });
 
@@ -241,12 +316,17 @@ describe("deriveNavigationGuidance", () => {
   });
 
   it("uses one sunset reference for now and projected arrival", () => {
+    const geometry = inboundTrack(0);
+    const endpoint = geometry[geometry.length - 1];
     const sunset = sunsetNear(
       new Date(Date.UTC(2026, 6, 18, 18)),
-      launch.latitude,
-      launch.longitude,
+      endpoint.latitude,
+      endpoint.longitude,
     )!;
-    const track = inboundTrack(0, 13, sunset.getTime() - 3 * 60_000 - 12_000);
+    const track = [
+      fix(sunset.getTime() - 60 * 60_000, 43, -89, 180),
+      ...inboundTrack(0, 13, sunset.getTime() - 3 * 60_000 - 12_000),
+    ];
     const guidance = deriveNavigationGuidance(track, launch)!;
     expect(guidance.sunsetAt).toBe(sunset.getTime());
     expect(guidance.sunsetOffsetMs).toBe(-3 * 60_000);
@@ -255,25 +335,44 @@ describe("deriveNavigationGuidance", () => {
     );
   });
 
-  it("keeps sunset visible after crossing it but not on a later launch", () => {
+  it("shows sunset from thirty minutes before through one hour after", () => {
     const sunset = sunsetNear(
       new Date(Date.UTC(2026, 6, 18, 18)),
       launch.latitude,
       launch.longitude,
     )!;
-    const crossed = [
-      fix(sunset.getTime() - 45 * 60_000, 43.03, -89, 180),
-      fix(sunset.getTime() + 4 * 60 * 60_000, 43.03, -89, 180),
+    const launchedAfterSunset = [
+      fix(sunset.getTime() + 10 * 60_000, 43, -89, 180),
+      fix(sunset.getTime() + 20 * 60_000, 43, -89, 180),
     ];
-    const launchedLater = [
-      fix(sunset.getTime() + 10 * 60_000, 43.03, -89, 180),
-      fix(sunset.getTime() + 20 * 60_000, 43.03, -89, 180),
-    ];
-    expect(deriveNavigationGuidance(crossed, launch)?.sunsetAt).toBe(
-      sunset.getTime(),
-    );
+    const tooEarly = [fix(sunset.getTime() - 40 * 60_000, 43, -89, 180)];
+    const tooLate = [fix(sunset.getTime() + 61 * 60_000, 43, -89, 180)];
+
     expect(
-      deriveNavigationGuidance(launchedLater, launch)?.sunsetAt,
-    ).toBeNull();
+      deriveNavigationGuidance(launchedAfterSunset, launch)?.sunsetAt,
+    ).toBe(sunset.getTime());
+    expect(deriveNavigationGuidance(tooEarly, launch)?.sunsetAt).toBeNull();
+    expect(deriveNavigationGuidance(tooLate, launch)?.sunsetAt).toBeNull();
+  });
+
+  it("keeps the sunset reference stable when a waypoint changes", () => {
+    const sunset = sunsetNear(
+      new Date(Date.UTC(2026, 8, 1)),
+      launch.latitude,
+      launch.longitude,
+    )!;
+    const track = [
+      fix(sunset.getTime() - 28 * 60_000, 43, -89, 180),
+      fix(sunset.getTime() - 27 * 60_000, 43.03, -89, 180),
+    ];
+    const waypoint: NavigationTarget = {
+      kind: "waypoint",
+      latitude: 43,
+      longitude: -90,
+    };
+
+    expect(deriveNavigationGuidance(track, waypoint)?.sunsetAt).toBe(
+      deriveNavigationGuidance(track, launch)?.sunsetAt,
+    );
   });
 });

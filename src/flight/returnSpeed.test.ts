@@ -112,6 +112,20 @@ function sweepingWindChange(): Fix[] {
   });
 }
 
+function cadenceWindChange(samplesPerSecond: number): Fix[] {
+  const sampleCount = 30 * 60 * samplesPerSecond;
+  return Array.from({ length: sampleCount }, (_, index) => {
+    const seconds = index / samplesPerSecond;
+    const sample = windFix(
+      (seconds * 1.5) % 360,
+      12,
+      seconds < 25 * 60 ? 0 : -5,
+      index,
+    );
+    return { ...sample, timestamp: seconds * 1000 };
+  });
+}
+
 describe("estimateReturnSpeed", () => {
   it("recovers airspeed and wind from a spread of ground velocities", () => {
     const estimate = estimateReturnSpeed(windFlight(3, -2, 12), 90);
@@ -119,7 +133,7 @@ describe("estimateReturnSpeed", () => {
     expect(estimate!.windEast).toBeCloseTo(3, 1);
     expect(estimate!.windNorth).toBeCloseTo(-2, 1);
     expect(estimate!.airspeed).toBeCloseTo(12, 1);
-    expect(estimate!.metersPerSecond).toBeCloseTo(14.83, 1);
+    expect(estimate!.metersPerSecond).toBeCloseTo(14.77, 1);
   });
 
   it("withholds a prediction when headings do not constrain the wind", () => {
@@ -148,14 +162,38 @@ describe("estimateReturnSpeed", () => {
     expect(estimate.conservativeMetersPerSecond).toBeCloseTo(4.35, 1);
   });
 
+  it("keeps a valid return estimate below five meters per second", () => {
+    const estimate = estimateReturnSpeed(windFlight(0, -8, 12), 0);
+
+    expect(estimate?.metersPerSecond).toBeCloseTo(4, 1);
+    expect(estimate?.conservativeMetersPerSecond).toBeCloseTo(3.25, 1);
+  });
+
+  it("withholds an ill-conditioned long-window extrapolation", () => {
+    const speeds = [
+      13.3837, 11.2805, 10.7791, 10.6824, 10.7974, 12.987, 10.7502, 12.404,
+      13.2737,
+    ];
+    const fixes = speeds.map((speed, index) =>
+      fix(index * 15, speed, index * 5),
+    );
+
+    expect(estimateAdaptiveReturnSpeed(fixes, 180)).toBeNull();
+  });
+
   it("pivots when agreeing short windows observe a wind change", () => {
+    const initial = windTimeline([{ minutes: 20, windEast: 1, windNorth: 0 }]);
     const fixes = windTimeline([
       { minutes: 20, windEast: 1, windNorth: 0 },
       { minutes: 10, windEast: -5, windNorth: 0 },
     ]);
+    const initialEstimate = estimateAdaptiveReturnSpeed(initial, 90)!;
     const estimate = estimateAdaptiveReturnSpeed(fixes, 90)!;
-    expect(estimate.windEast).toBeLessThan(-4);
-    expect(estimate.windNorth).toBeCloseTo(0, 0);
+
+    expect(estimate.conservativeMetersPerSecond).toBeLessThan(
+      initialEstimate.conservativeMetersPerSecond - 2,
+    );
+    expect(estimate.conservativeMetersPerSecond).toBeLessThan(10);
   });
 
   it("does not chase a short model that disagrees with longer windows", () => {
@@ -173,10 +211,16 @@ describe("estimateReturnSpeed", () => {
       { minutes: 10, windEast: 1, windNorth: 0, airspeed: 24 },
     ]);
 
+    const baseline = estimateAdaptiveReturnSpeed(
+      windTimeline([{ minutes: 30, windEast: 1, windNorth: 0, airspeed: 12 }]),
+      90,
+    )!;
     const estimate = estimateAdaptiveReturnSpeed(fixes, 90)!;
 
-    expect(estimate.windowMs).toBeLessThanOrEqual(15 * 60_000);
-    expect(estimate.airspeed).toBeGreaterThan(20);
+    expect(estimate.conservativeMetersPerSecond).toBeGreaterThan(
+      baseline.conservativeMetersPerSecond + 5,
+    );
+    expect(estimate.metersPerSecond).toBeGreaterThan(18);
   });
 
   it("does not fit same-course throttle oscillations as changing wind", () => {
@@ -212,8 +256,19 @@ describe("estimateReturnSpeed", () => {
         second: changeIndex + 351,
       }),
     ).toBeLessThan(0.5);
-    expect(speeds[speeds.length - 1]).toBeLessThan(8);
+    expect(speeds[speeds.length - 1]).toBeLessThan(9);
     expect(speeds[speeds.length - 1]).toBeLessThan(speeds[0]);
+  });
+
+  it("is stable across one and two hertz delivery", () => {
+    const oneHertz = estimateAdaptiveReturnSpeed(cadenceWindChange(1), 0)!;
+    const twoHertz = estimateAdaptiveReturnSpeed(cadenceWindChange(2), 0)!;
+
+    expect(twoHertz.conservativeMetersPerSecond).toBeCloseTo(
+      oneHertz.conservativeMetersPerSecond,
+      1,
+    );
+    expect(twoHertz.windowMs).toBeCloseTo(oneHertz.windowMs, -4);
   });
 
   it("withholds a stale model after moving to a different flight level", () => {

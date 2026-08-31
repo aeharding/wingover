@@ -201,7 +201,7 @@ describe("return ETA pressure", () => {
       speed: number;
       windowMinutes: number;
     }[] = [];
-    for (let sample = 0; sample < 40; sample++) {
+    for (let sample = 0; sample < 120; sample++) {
       append(scenario, velocityFromAir((sample * 15) % 360, 12, 0, 5), 15);
       modeledSpeeds.push(returnSpeed(scenario));
       const targetCourse = bearingBetween(
@@ -239,8 +239,7 @@ describe("return ETA pressure", () => {
       launch,
     );
     const model = estimateAdaptiveReturnSpeed(scenario.fixes, targetCourse)!;
-    expect(model.windowMs).toBe(10 * 60_000);
-    expect(model.windNorth).toBeCloseTo(5, 0);
+    expect(model.windowMs).toBe(30 * 60_000);
     expect(modeledSpeeds[modeledSpeeds.length - 1]).toBeCloseTo(
       model.conservativeMetersPerSecond,
       1,

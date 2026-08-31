@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 
 import {
+  etaDisplayMinutes,
   formatArrivalSunsetOffset,
   formatEta,
   formatNavigationDistance,
@@ -9,6 +10,7 @@ import {
 
 describe("navigation time formatting", () => {
   it("formats ordinary ETA without a sign", () => {
+    expect(etaDisplayMinutes(12 * 60 + 1)).toBe(13);
     expect(formatEta(12 * 60)).toBe(":12");
     expect(formatEta(12 * 60 + 1)).toBe(":13");
     expect(formatEta(65 * 60)).toBe("1:05");

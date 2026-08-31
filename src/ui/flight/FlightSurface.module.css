@@ -105,7 +105,7 @@
      left (see .instruments), this wide. One var, read by the rail's own
      width AND the map's safe-area publish below, so they can never drift. */
   @media (orientation: landscape) and (max-height: 500px) {
-    --fly-rail-w: 192px;
+    --fly-rail-w: clamp(192px, 24vw, 232px);
   }
 }
 
@@ -299,7 +299,7 @@
     top: 0.75rem;
     left: auto;
     right: 0.75rem;
-    width: 400px;
+    width: min(444px, calc(100vw - 1.5rem));
     border-radius: 12px;
     overflow: hidden;
   }

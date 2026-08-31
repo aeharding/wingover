@@ -4,7 +4,9 @@ import { createRoot } from "react-dom/client";
 import { describe, expect, it } from "vitest";
 
 import type { Fix } from "../../engine/types";
+import { bearingBetween } from "../../flight/nav";
 import type { NavigationGuidance } from "../../flight/navigationGuidance";
+import { haversineMeters } from "../../flight/stats";
 import useNavigationGuidance from "./useNavigationGuidance";
 
 (
@@ -47,6 +49,40 @@ describe("useNavigationGuidance", () => {
     const closer = { ...latest, timestamp: 2000, latitude: 43.02 };
     act(() => root.render(<Harness fixes={[...track, closer]} tick={2} />));
     expect(results[2]!.distanceMeters).toBeLessThan(results[1]!.distanceMeters);
+    act(() => root.unmount());
+  });
+
+  it("switches guidance from a waypoint back to launch", () => {
+    const track = [launch, latest];
+    const waypoint = {
+      id: "waypoint-1",
+      latitude: 43.03,
+      longitude: -88.97,
+      radiusM: 100,
+    };
+    const results: (NavigationGuidance | null)[] = [];
+    const root = createRoot(document.createElement("div"));
+
+    function Harness({ target }: { target: typeof waypoint | null }) {
+      results.push(useNavigationGuidance(track, target));
+      return null;
+    }
+
+    act(() => root.render(<Harness target={waypoint} />));
+    act(() => root.render(<Harness target={null} />));
+
+    expect(results[0]!.distanceMeters).toBeCloseTo(
+      haversineMeters(latest, waypoint),
+    );
+    expect(results[0]!.directionDegrees).toBeCloseTo(
+      bearingBetween(latest, waypoint) - latest.course,
+    );
+    expect(results[1]!.distanceMeters).toBeCloseTo(
+      haversineMeters(latest, launch),
+    );
+    expect(results[1]!.distanceMeters).not.toBeCloseTo(
+      results[0]!.distanceMeters,
+    );
     act(() => root.unmount());
   });
 });

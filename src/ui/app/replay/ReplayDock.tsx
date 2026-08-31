@@ -18,6 +18,7 @@ import {
 } from "../../../flight/format";
 import NativeIcon from "../../shared/components/NativeIcon";
 import { cx } from "../../shared/cx";
+import { launchParam } from "../../shared/map/config";
 import type { MapView } from "../../shared/map/types";
 import { useSettings } from "../../shared/settings/SettingsContext";
 import Barogram from "./Barogram";
@@ -148,13 +149,16 @@ export default function ReplayDock({
 
   const first = track[0];
   const latest = feed.latest;
+  const showNavigationDebug = launchParam("rtl-debug") === "1";
 
   return (
     <div
       className={cx(chassis.dock, seat && chassis.seat)}
       data-testid="replay-dock"
     >
-      <ReplayNavigationDebug track={feed.track} units={units} />
+      {showNavigationDebug && (
+        <ReplayNavigationDebug track={feed.track} units={units} />
+      )}
       <div className={chassis.readouts}>
         <Readout
           label="Above launch"

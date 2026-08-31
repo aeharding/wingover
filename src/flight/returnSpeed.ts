@@ -1,8 +1,13 @@
 import type { Fix } from "../engine/types";
+import { bearingBetween } from "./nav";
 
 const DEFAULT_WINDOW_MS = 30 * 60 * 1000;
 const HEADING_BIN_DEGREES = 15;
-const MIN_SPEED_MPS = 5;
+const HEADING_BIN_FULL_SUPPORT_SECONDS = 6;
+const MAX_FIX_SUPPORT_SECONDS = 1;
+const WINDOW_FADE_FRACTION = 0.1;
+const MIN_SAMPLE_SPEED_MPS = 1;
+const MIN_AIRSPEED_MPS = 5;
 const MAX_SPEED_MPS = 40;
 const MIN_CONSERVATIVE_SPEED_MPS = 1;
 const MIN_HEADING_SPAN = 90;
@@ -15,12 +20,13 @@ const MAX_CLIMB_RATE_MPS = 3;
 const MAX_SPEED_ACCELERATION_MPS2 = 2;
 const MAX_VERTICAL_ACCELERATION_MPS2 = 1.5;
 const MANEUVER_COUPLING_WINDOW_MS = 2000;
-const SHORT_MODEL_FULL_HEADING_SPAN = 135;
-const SHORT_MODEL_FULL_SENSITIVITY_MPS = 0.5;
 const SHORT_MODEL_MAX_SENSITIVITY_MPS = 2;
+const SHORT_MODEL_CONFIDENCE_SCALE_MPS = 2;
+const TEN_MINUTE_MODEL_WEIGHT = 0.35;
+const FIFTEEN_MINUTE_MODEL_WEIGHT = 0.15;
+const THIRTY_MINUTE_MODEL_WEIGHT = 0.5;
 const ALTITUDE_FULL_WEIGHT_DELTA_M = 100;
 const ALTITUDE_ZERO_WEIGHT_DELTA_M = 500;
-const SHORT_MODEL_CONFIRMATION_FIX_COUNT = 20;
 const TARGET_COURSE_MAX_AGE_MS = 30 * MINUTE_MS;
 const TARGET_COURSE_MAX_ERROR_DEGREES = 15;
 const TARGET_COURSE_MAX_GAP_MS = 3000;
@@ -42,12 +48,22 @@ interface WeightedVelocity extends Velocity {
   weight: number;
 }
 
+interface ReturnTarget {
+  latitude: number;
+  longitude: number;
+}
+
 interface Circle {
+  coefficients: Vector3;
+  covariance: Matrix3;
   east: number;
   north: number;
   radius: number;
   residual: number;
 }
+
+type Vector3 = [number, number, number];
+type Matrix3 = [Vector3, Vector3, Vector3];
 
 export interface ReturnSpeedEstimate {
   metersPerSecond: number;
@@ -99,14 +115,6 @@ function decliningConfidence(
   return 1 - (value - fullUntil) / (noneAt - fullUntil);
 }
 
-function increasingConfidence(
-  value: number,
-  noneUntil: number,
-  fullAt: number,
-) {
-  return 1 - decliningConfidence(value, noneUntil, fullAt);
-}
-
 function weightedMean(
   samples: readonly WeightedVelocity[],
   select: (sample: WeightedVelocity) => number,
@@ -127,27 +135,58 @@ function velocity(fix: Fix): Velocity {
   };
 }
 
-function binVelocities(fixes: readonly Fix[], altitude: number): Velocity[] {
+function fixSupportSeconds(fixes: readonly Fix[], index: number): number {
+  const previous = fixes[index - 1];
+  const next = fixes[index + 1];
+  let gapMs = 1000;
+  if (previous) gapMs = fixes[index].timestamp - previous.timestamp;
+  else if (next) gapMs = next.timestamp - fixes[index].timestamp;
+  return Math.min(MAX_FIX_SUPPORT_SECONDS, Math.max(0, gapMs / 1000));
+}
+
+function binVelocities(
+  fixes: readonly Fix[],
+  altitude: number,
+  latestTimestamp: number,
+  windowMs: number,
+): WeightedVelocity[] {
   const bins = new Map<number, WeightedVelocity[]>();
-  for (const fix of fixes) {
-    if (fix.speed < MIN_SPEED_MPS || fix.speed > MAX_SPEED_MPS) continue;
+  for (let index = 0; index < fixes.length; index++) {
+    const fix = fixes[index];
+    if (fix.speed < MIN_SAMPLE_SPEED_MPS || fix.speed > MAX_SPEED_MPS) continue;
     if (fix.horizontalAccuracy > 100) continue;
-    const weight = decliningConfidence(
+    const altitudeWeight = decliningConfidence(
       Math.abs(fix.altitude - altitude),
       ALTITUDE_FULL_WEIGHT_DELTA_M,
       ALTITUDE_ZERO_WEIGHT_DELTA_M,
     );
+    const age = latestTimestamp - fix.timestamp;
+    const windowWeight = decliningConfidence(
+      age,
+      windowMs * (1 - WINDOW_FADE_FRACTION),
+      windowMs,
+    );
+    const weight =
+      altitudeWeight * windowWeight * fixSupportSeconds(fixes, index);
     if (weight <= 0) continue;
     const key = Math.floor(fix.course / HEADING_BIN_DEGREES);
     const samples = bins.get(key) ?? [];
     samples.push({ ...velocity(fix), weight });
     bins.set(key, samples);
   }
-  return [...bins.values()].map((samples) => ({
-    east: weightedMean(samples, (sample) => sample.east),
-    north: weightedMean(samples, (sample) => sample.north),
-    course: weightedMean(samples, (sample) => sample.course),
-  }));
+  return [...bins.values()].map((samples) => {
+    const support = samples.reduce((sum, sample) => sum + sample.weight, 0);
+    const supportProgress = Math.min(
+      1,
+      support / HEADING_BIN_FULL_SUPPORT_SECONDS,
+    );
+    return {
+      east: weightedMean(samples, (sample) => sample.east),
+      north: weightedMean(samples, (sample) => sample.north),
+      course: weightedMean(samples, (sample) => sample.course),
+      weight: supportProgress * supportProgress,
+    };
+  });
 }
 
 function headingSpan(samples: readonly Velocity[]): number {
@@ -162,44 +201,70 @@ function headingSpan(samples: readonly Velocity[]): number {
   return 360 - largestGap;
 }
 
-function fitCircle(samples: readonly Velocity[]): Circle | null {
-  if (samples.length < 6) return null;
-  const meanEast =
-    samples.reduce((sum, sample) => sum + sample.east, 0) / samples.length;
-  const meanNorth =
-    samples.reduce((sum, sample) => sum + sample.north, 0) / samples.length;
-  let eastSquared = 0;
-  let northSquared = 0;
-  let eastNorth = 0;
-  let eastRadius = 0;
-  let northRadius = 0;
-  for (const sample of samples) {
-    const east = sample.east - meanEast;
-    const north = sample.north - meanNorth;
-    const radiusSquared = east * east + north * north;
-    eastSquared += east * east;
-    northSquared += north * north;
-    eastNorth += east * north;
-    eastRadius += east * radiusSquared;
-    northRadius += north * radiusSquared;
-  }
-  const determinant = eastSquared * northSquared - eastNorth * eastNorth;
-  if (Math.abs(determinant) < 0.001) return null;
-  const centerEast =
-    meanEast +
-    (eastRadius * northSquared - northRadius * eastNorth) / (2 * determinant);
-  const centerNorth =
-    meanNorth +
-    (northRadius * eastSquared - eastRadius * eastNorth) / (2 * determinant);
-  const radii = samples.map((sample) =>
-    Math.hypot(sample.east - centerEast, sample.north - centerNorth),
-  );
-  const radius = median(radii);
-  const residual = median(radii.map((value) => Math.abs(value - radius)));
-  return { east: centerEast, north: centerNorth, radius, residual };
+function invertMatrix3(matrix: Matrix3): Matrix3 | null {
+  const [[a, b, c], [d, e, f], [g, h, i]] = matrix;
+  const determinant =
+    a * (e * i - f * h) - b * (d * i - f * g) + c * (d * h - e * g);
+  if (Math.abs(determinant) < 1e-9) return null;
+  return [
+    [e * i - f * h, c * h - b * i, b * f - c * e],
+    [f * g - d * i, a * i - c * g, c * d - a * f],
+    [d * h - e * g, b * g - a * h, a * e - b * d],
+  ].map((row) => row.map((value) => value / determinant)) as Matrix3;
 }
 
-function robustCircle(samples: readonly Velocity[]): Circle | null {
+function multiplyMatrixVector(matrix: Matrix3, vector: Vector3): Vector3 {
+  return matrix.map((row) =>
+    row.reduce((sum, value, index) => sum + value * vector[index], 0),
+  ) as Vector3;
+}
+
+function fitCircle(samples: readonly WeightedVelocity[]): Circle | null {
+  if (samples.length < 6) return null;
+  const normal: Matrix3 = [
+    [0, 0, 0],
+    [0, 0, 0],
+    [0, 0, 0],
+  ];
+  const right: Vector3 = [0, 0, 0];
+  for (const sample of samples) {
+    const row: Vector3 = [sample.east, sample.north, 1];
+    const squaredSpeed =
+      sample.east * sample.east + sample.north * sample.north;
+    for (let column = 0; column < 3; column++) {
+      right[column] += sample.weight * row[column] * squaredSpeed;
+      for (let other = 0; other < 3; other++) {
+        normal[column][other] += sample.weight * row[column] * row[other];
+      }
+    }
+  }
+  const inverse = invertMatrix3(normal);
+  if (!inverse) return null;
+  const coefficients = multiplyMatrixVector(inverse, right);
+  const east = coefficients[0] / 2;
+  const north = coefficients[1] / 2;
+  const radiusSquared = coefficients[2] + east * east + north * north;
+  if (radiusSquared <= 0) return null;
+  const radius = Math.sqrt(radiusSquared);
+  const residual = weightedMean(samples, (sample) =>
+    Math.abs(Math.hypot(sample.east - east, sample.north - north) - radius),
+  );
+  const algebraicError = weightedMean(samples, (sample) => {
+    const predicted =
+      coefficients[0] * sample.east +
+      coefficients[1] * sample.north +
+      coefficients[2];
+    const observed = sample.east * sample.east + sample.north * sample.north;
+    const error = observed - predicted;
+    return error * error;
+  });
+  const covariance = inverse.map((row) =>
+    row.map((value) => value * algebraicError),
+  ) as Matrix3;
+  return { coefficients, covariance, east, north, radius, residual };
+}
+
+function robustCircle(samples: readonly WeightedVelocity[]): Circle | null {
   const initial = fitCircle(samples);
   if (!initial) return null;
   const deviations = samples.map((sample) =>
@@ -208,9 +273,21 @@ function robustCircle(samples: readonly Velocity[]): Circle | null {
         initial.radius,
     ),
   );
-  const limit = Math.max(1.25, median(deviations) * 3);
-  const kept = samples.filter((_, index) => deviations[index] <= limit);
-  return fitCircle(kept) ?? initial;
+  const limit = Math.max(
+    1.25,
+    (deviations.reduce(
+      (sum, deviation, index) => sum + deviation * samples[index].weight,
+      0,
+    ) /
+      samples.reduce((sum, sample) => sum + sample.weight, 0)) *
+      3,
+  );
+  const reweighted = samples.map((sample, index) => ({
+    ...sample,
+    weight:
+      sample.weight * Math.min(1, limit / Math.max(limit, deviations[index])),
+  }));
+  return fitCircle(reweighted) ?? initial;
 }
 
 function projectedSpeed(circle: Circle, course: number): number | null {
@@ -222,36 +299,36 @@ function projectedSpeed(circle: Circle, course: number): number | null {
   const airAlongSquared = circle.radius * circle.radius - cross * cross;
   if (airAlongSquared <= 0) return null;
   const speed = along + Math.sqrt(airAlongSquared);
-  if (speed < MIN_SPEED_MPS || speed > MAX_SPEED_MPS) return null;
+  if (speed < MIN_CONSERVATIVE_SPEED_MPS || speed > MAX_SPEED_MPS) return null;
   return speed;
 }
 
-function modelSensitivity(
-  samples: readonly Velocity[],
-  circle: Circle,
-  course: number,
-  speed: number,
-): number {
-  let maximum = 0;
-  for (let index = 0; index < samples.length; index++) {
-    const alternate = robustCircle([
-      ...samples.slice(0, index),
-      ...samples.slice(index + 1),
-    ]);
-    if (!alternate) return SHORT_MODEL_MAX_SENSITIVITY_MPS;
-    const alternateSpeed = projectedSpeed(alternate, course);
-    if (!alternateSpeed) return SHORT_MODEL_MAX_SENSITIVITY_MPS;
-    maximum = Math.max(
-      maximum,
-      Math.abs(alternateSpeed - speed),
-      Math.abs(alternate.radius - circle.radius),
-      Math.hypot(alternate.east - circle.east, alternate.north - circle.north),
-    );
+function modelSensitivity(circle: Circle, course: number): number {
+  const radians = (course * Math.PI) / 180;
+  const courseEast = Math.sin(radians);
+  const courseNorth = Math.cos(radians);
+  const along = circle.east * courseEast + circle.north * courseNorth;
+  const root = Math.sqrt(circle.coefficients[2] + along * along);
+  if (!Number.isFinite(root) || root <= 0) {
+    return SHORT_MODEL_MAX_SENSITIVITY_MPS;
   }
-  return maximum;
+  const alongScale = 1 + along / root;
+  const gradient: Vector3 = [
+    (courseEast * alongScale) / 2,
+    (courseNorth * alongScale) / 2,
+    1 / (2 * root),
+  ];
+  let variance = 0;
+  for (let row = 0; row < 3; row++) {
+    for (let column = 0; column < 3; column++) {
+      variance +=
+        gradient[row] * circle.covariance[row][column] * gradient[column];
+    }
+  }
+  return Math.sqrt(Math.max(0, variance));
 }
 
-export function estimateReturnSpeed(
+function returnSpeedCandidate(
   fixes: readonly Fix[],
   targetCourse: number,
   windowMs = DEFAULT_WINDOW_MS,
@@ -262,15 +339,18 @@ export function estimateReturnSpeed(
   const samples = binVelocities(
     fixes.filter((fix) => fix.timestamp >= since),
     latest.altitude,
+    latest.timestamp,
+    windowMs,
   );
   const span = headingSpan(samples);
   if (span < MIN_HEADING_SPAN) return null;
   const circle = robustCircle(samples);
-  if (!circle || circle.residual > 3 || circle.radius < MIN_SPEED_MPS) {
+  if (!circle || circle.residual > 3 || circle.radius < MIN_AIRSPEED_MPS) {
     return null;
   }
   const speed = projectedSpeed(circle, targetCourse);
   if (!speed) return null;
+  const sensitivity = modelSensitivity(circle, targetCourse);
   const uncertainty = Math.max(0.75, circle.residual * 1.5);
   return {
     metersPerSecond: speed,
@@ -284,9 +364,21 @@ export function estimateReturnSpeed(
     residual: circle.residual,
     headingSpan: span,
     sampleCount: samples.length,
-    sensitivity: modelSensitivity(samples, circle, targetCourse, speed),
+    sensitivity,
     windowMs,
   };
+}
+
+export function estimateReturnSpeed(
+  fixes: readonly Fix[],
+  targetCourse: number,
+  windowMs = DEFAULT_WINDOW_MS,
+): ReturnSpeedEstimate | null {
+  const candidate = returnSpeedCandidate(fixes, targetCourse, windowMs);
+  if (!candidate || candidate.sensitivity >= SHORT_MODEL_MAX_SENSITIVITY_MPS) {
+    return null;
+  }
+  return candidate;
 }
 
 function relativeBearing(from: number, to: number): number {
@@ -366,11 +458,12 @@ function stableFixes(fixes: readonly Fix[]): Fix[] {
 function targetCourseFixIsUsable(
   fixes: readonly Fix[],
   index: number,
-  targetCourse: number,
+  target: number | ReturnTarget,
 ): boolean {
   const fix = fixes[index];
+  const targetCourse = courseToTarget(fix, target);
   return (
-    fix.speed >= MIN_SPEED_MPS &&
+    fix.speed >= MIN_SAMPLE_SPEED_MPS &&
     fix.speed <= MAX_SPEED_MPS &&
     fix.horizontalAccuracy <= 100 &&
     Math.abs(fix.climbRate) <= MAX_CLIMB_RATE_MPS &&
@@ -388,7 +481,7 @@ function targetCourseFixIsUsable(
 
 function targetCourseEstimate(
   samples: readonly Fix[],
-  targetCourse: number,
+  target: number | ReturnTarget,
 ): TargetCourseSpeedSample | null {
   if (samples.length < TARGET_COURSE_MIN_SAMPLES) return null;
   const duration = samples[samples.length - 1].timestamp - samples[0].timestamp;
@@ -398,11 +491,17 @@ function targetCourseEstimate(
     (fix) => fix.timestamp >= observedAt - TARGET_COURSE_SPEED_WINDOW_MS,
   );
   const courseError = median(
-    recent.map((fix) => relativeBearing(targetCourse, fix.course)),
+    recent.map((fix) =>
+      relativeBearing(courseToTarget(fix, target), fix.course),
+    ),
+  );
+  const observedTargetCourse = courseToTarget(
+    recent[recent.length - 1],
+    target,
   );
   return {
     altitude: median(recent.map((fix) => fix.altitude)),
-    course: (targetCourse + courseError + 360) % 360,
+    course: (observedTargetCourse + courseError + 360) % 360,
     metersPerSecond: robustMean(recent.map((fix) => fix.speed)),
     observedAt,
     sampleCount: recent.length,
@@ -411,7 +510,7 @@ function targetCourseEstimate(
 
 export function estimateTargetCourseSpeed(
   fixes: readonly Fix[],
-  targetCourse: number,
+  target: number | ReturnTarget,
 ): TargetCourseSpeedEstimate | null {
   const latest = fixes[fixes.length - 1];
   if (!latest) return null;
@@ -423,7 +522,7 @@ export function estimateTargetCourseSpeed(
   let samples: Fix[] = [];
 
   const finishEncounter = () => {
-    const sample = targetCourseEstimate(samples, targetCourse);
+    const sample = targetCourseEstimate(samples, target);
     if (sample) {
       encounters.push({
         durationMs:
@@ -438,7 +537,7 @@ export function estimateTargetCourseSpeed(
     const fix = fixes[index];
     if (fix.timestamp < since) break;
     const next = samples[0];
-    const fixIsUsable = targetCourseFixIsUsable(fixes, index, targetCourse);
+    const fixIsUsable = targetCourseFixIsUsable(fixes, index, target);
     const gapIsUsable =
       !next || next.timestamp - fix.timestamp <= TARGET_COURSE_MAX_GAP_MS;
     if (fixIsUsable && gapIsUsable) {
@@ -462,36 +561,25 @@ export function estimateTargetCourseSpeed(
   };
 }
 
-function blend(
-  shorter: ReturnSpeedEstimate,
-  longer: ReturnSpeedEstimate,
-  shortWeight: number,
-): ReturnSpeedEstimate {
-  const longWeight = 1 - shortWeight;
-  const weighted = (shortValue: number, longValue: number) =>
-    shortValue * shortWeight + longValue * longWeight;
-  return {
-    metersPerSecond: weighted(shorter.metersPerSecond, longer.metersPerSecond),
-    conservativeMetersPerSecond: weighted(
-      shorter.conservativeMetersPerSecond,
-      longer.conservativeMetersPerSecond,
-    ),
-    windEast: weighted(shorter.windEast, longer.windEast),
-    windNorth: weighted(shorter.windNorth, longer.windNorth),
-    airspeed: weighted(shorter.airspeed, longer.airspeed),
-    residual: weighted(shorter.residual, longer.residual),
-    headingSpan: weighted(shorter.headingSpan, longer.headingSpan),
-    sampleCount: weighted(shorter.sampleCount, longer.sampleCount),
-    sensitivity: weighted(shorter.sensitivity, longer.sensitivity),
-    windowMs: weighted(shorter.windowMs, longer.windowMs),
-  };
+function courseToTarget(fix: Fix, target: number | ReturnTarget): number {
+  return typeof target === "number" ? target : bearingBetween(fix, target);
 }
 
-function averageModel(
-  models: readonly ReturnSpeedEstimate[],
+function weightedAverageModel(
+  weightedModels: readonly {
+    model: ReturnSpeedEstimate;
+    weight: number;
+  }[],
 ): ReturnSpeedEstimate {
+  const totalWeight = weightedModels.reduce(
+    (sum, candidate) => sum + candidate.weight,
+    0,
+  );
   const field = (select: (model: ReturnSpeedEstimate) => number) =>
-    models.reduce((sum, model) => sum + select(model), 0) / models.length;
+    weightedModels.reduce(
+      (sum, candidate) => sum + select(candidate.model) * candidate.weight,
+      0,
+    ) / totalWeight;
   return {
     metersPerSecond: field((model) => model.metersPerSecond),
     conservativeMetersPerSecond: field(
@@ -508,64 +596,49 @@ function averageModel(
   };
 }
 
-function shortModelReliability(model: ReturnSpeedEstimate | null): number {
-  if (!model) return 0;
-  const headingConfidence = increasingConfidence(
-    model.headingSpan,
-    MIN_HEADING_SPAN,
-    SHORT_MODEL_FULL_HEADING_SPAN,
-  );
-  const sensitivityConfidence = decliningConfidence(
-    model.sensitivity,
-    SHORT_MODEL_FULL_SENSITIVITY_MPS,
-    SHORT_MODEL_MAX_SENSITIVITY_MPS,
-  );
-  return Math.min(headingConfidence, sensitivityConfidence);
+function shortModelConfidence(model: ReturnSpeedEstimate): number {
+  const scaled = model.sensitivity / SHORT_MODEL_CONFIDENCE_SCALE_MPS;
+  return 1 / (1 + scaled * scaled * scaled * scaled);
 }
 
-function recentShortModel(
-  stable: readonly Fix[],
-  targetCourse: number,
-): { confidence: number; model: ReturnSpeedEstimate | null } {
-  const start = Math.max(
-    1,
-    stable.length - SHORT_MODEL_CONFIRMATION_FIX_COUNT + 1,
-  );
-  let confidence = 0;
-  let count = 0;
-  let model: ReturnSpeedEstimate | null = null;
-  for (let end = start; end <= stable.length; end++) {
-    const estimate = estimateReturnSpeed(
-      stable.slice(0, end),
-      targetCourse,
-      ADAPTIVE_WINDOWS_MS[0],
-    );
-    confidence += shortModelReliability(estimate);
-    model = estimate ?? model;
-    count++;
-  }
-  return {
-    confidence: count > 0 ? confidence / count : 0,
-    model,
-  };
+function reliableShortModel(
+  candidate: ReturnSpeedEstimate | null,
+  longModel: ReturnSpeedEstimate,
+): ReturnSpeedEstimate {
+  if (!candidate) return longModel;
+  const confidence = shortModelConfidence(candidate);
+  return weightedAverageModel([
+    { model: candidate, weight: confidence },
+    { model: longModel, weight: 1 - confidence },
+  ]);
 }
 
 function rawAdaptiveReturnSpeed(
   stable: readonly Fix[],
   targetCourse: number,
-  recentShort: { confidence: number; model: ReturnSpeedEstimate | null },
 ): ReturnSpeedEstimate | null {
-  const models = [
-    recentShort.model,
-    ...ADAPTIVE_WINDOWS_MS.slice(1).map((windowMs) =>
-      estimateReturnSpeed(stable, targetCourse, windowMs),
-    ),
-  ];
-  const longModel = models[models.length - 1];
-  if (!longModel) return estimateReturnSpeed(stable, targetCourse);
-  const shortModels = models.slice(0, 3).map((model) => model ?? longModel);
-  const shortModel = averageModel(shortModels);
-  return blend(shortModel, longModel, recentShort.confidence);
+  const longModel = estimateReturnSpeed(
+    stable,
+    targetCourse,
+    ADAPTIVE_WINDOWS_MS[3],
+  );
+  if (!longModel) return null;
+  const tenMinute = reliableShortModel(
+    returnSpeedCandidate(stable, targetCourse, ADAPTIVE_WINDOWS_MS[1]),
+    longModel,
+  );
+  const fifteenMinute = reliableShortModel(
+    returnSpeedCandidate(stable, targetCourse, ADAPTIVE_WINDOWS_MS[2]),
+    longModel,
+  );
+  return {
+    ...weightedAverageModel([
+      { model: tenMinute, weight: TEN_MINUTE_MODEL_WEIGHT },
+      { model: fifteenMinute, weight: FIFTEEN_MINUTE_MODEL_WEIGHT },
+      { model: longModel, weight: THIRTY_MINUTE_MODEL_WEIGHT },
+    ]),
+    windowMs: DEFAULT_WINDOW_MS,
+  };
 }
 
 export function estimateAdaptiveReturnSpeed(
@@ -576,9 +649,5 @@ export function estimateAdaptiveReturnSpeed(
   if (!latest) return null;
   const since = latest.timestamp - DEFAULT_WINDOW_MS;
   const stable = stableFixes(fixes.filter((fix) => fix.timestamp >= since));
-  return rawAdaptiveReturnSpeed(
-    stable,
-    targetCourse,
-    recentShortModel(stable, targetCourse),
-  );
+  return rawAdaptiveReturnSpeed(stable, targetCourse);
 }

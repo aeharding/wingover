@@ -4,11 +4,8 @@ import { fileURLToPath } from "node:url";
 
 import { createServer } from "vite";
 
-import {
-  estimateAdaptiveReturnSpeed,
-  estimateReturnSpeed,
-  estimateTargetCourseSpeed,
-} from "../src/flight/returnSpeed.ts";
+import { etaDisplayMinutes } from "../src/flight/format.ts";
+import { shouldShowNavigationArrival } from "../src/ui/shared/navigationDisplay.ts";
 
 const projectRoot = path.resolve(
   path.dirname(fileURLToPath(import.meta.url)),
@@ -25,6 +22,11 @@ const moduleLoader = await createServer({
 const { deriveNavigationGuidance } = await moduleLoader.ssrLoadModule(
   "/src/flight/navigationGuidance.ts",
 );
+const {
+  estimateAdaptiveReturnSpeed,
+  estimateReturnSpeed,
+  estimateTargetCourseSpeed,
+} = await moduleLoader.ssrLoadModule("/src/flight/returnSpeed.ts");
 
 const ONE_MILE_M = 1609.344;
 const ARRIVAL_RADIUS_M = 200;
@@ -44,9 +46,9 @@ const TARGET_COURSE_EXPERIMENTS = [
   { angle: 20, minutes: 2, minimumSamples: 3 },
   { angle: 20, minutes: 5, minimumSamples: 3 },
 ];
-const POINT_PATTERN =
-  /<trkpt\s+lat="([^"]+)"\s+lon="([^"]+)"[^>]*>([\s\S]*?)<\/trkpt>/g;
+const POINT_PATTERN = /<trkpt\b([^>]*)>([\s\S]*?)<\/trkpt>/g;
 const DISPLAY_ROUNDED = new Set([
+  "current",
   "noDynamic",
   "noFastTurns",
   "noTurns",
@@ -81,10 +83,7 @@ function median(values) {
 
 function percentile(values, percent) {
   const ordered = [...values].sort((a, b) => a - b);
-  const index = Math.min(
-    ordered.length - 1,
-    Math.max(0, Math.floor((ordered.length - 1) * percent)),
-  );
+  const index = Math.max(0, Math.ceil(ordered.length * percent) - 1);
   return ordered[index];
 }
 
@@ -212,7 +211,7 @@ function productionReturnSpeed(fixes, target) {
     latitude: target.latitude,
     longitude: target.longitude,
   });
-  if (!guidance?.etaSeconds) return null;
+  if (!shouldShowNavigationArrival(guidance, "launch")) return null;
   return guidance.distanceMeters / guidance.etaSeconds;
 }
 
@@ -317,13 +316,17 @@ function tag(body, name) {
   return body.match(new RegExp(`<${name}>([^<]+)</${name}>`))?.[1] ?? null;
 }
 
+function attribute(body, name) {
+  return body.match(new RegExp(`\\b${name}="([^"]+)"`))?.[1] ?? null;
+}
+
 function parsePoints(xml) {
   const points = [];
   for (const match of xml.matchAll(POINT_PATTERN)) {
-    const latitude = Number(match[1]);
-    const longitude = Number(match[2]);
-    const timestamp = Date.parse(tag(match[3], "time") ?? "");
-    const altitude = Number(tag(match[3], "ele") ?? 0);
+    const latitude = Number(attribute(match[1], "lat") ?? Number.NaN);
+    const longitude = Number(attribute(match[1], "lon") ?? Number.NaN);
+    const timestamp = Date.parse(tag(match[2], "time") ?? "");
+    const altitude = Number(tag(match[2], "ele") ?? 0);
     if (
       Number.isFinite(latitude) &&
       Number.isFinite(longitude) &&
@@ -333,10 +336,14 @@ function parsePoints(xml) {
     }
   }
   points.sort((a, b) => a.timestamp - b.timestamp);
-  return points.filter((point, index) => {
-    const previous = points[index - 1];
-    return !previous || point.timestamp - previous.timestamp >= 500;
-  });
+  const retained = [];
+  for (const point of points) {
+    const previous = retained[retained.length - 1];
+    if (!previous || point.timestamp - previous.timestamp >= 500) {
+      retained.push(point);
+    }
+  }
+  return retained;
 }
 
 function pointCourse(previous, point, next) {
@@ -384,6 +391,21 @@ function closingAt(fixes, distances, index) {
   return (distances[previousIndex] - distances[index]) / elapsed;
 }
 
+function radiusCrossingTimestamp(fixes, distances, arrivalIndex) {
+  const after = fixes[arrivalIndex];
+  const before = fixes[arrivalIndex - 1];
+  if (!before) return after.timestamp;
+  const beforeDistance = distances[arrivalIndex - 1];
+  const afterDistance = distances[arrivalIndex];
+  const distanceChange = beforeDistance - afterDistance;
+  if (distanceChange <= 0) return after.timestamp;
+  const progress = Math.min(
+    1,
+    Math.max(0, (beforeDistance - ARRIVAL_RADIUS_M) / distanceChange),
+  );
+  return before.timestamp + (after.timestamp - before.timestamp) * progress;
+}
+
 function projectedClosingAt(fixes, index, target) {
   const latest = fixes[index];
   const since = latest.timestamp - 5_000;
@@ -408,7 +430,7 @@ function inboundRun(fixes, distances, entryIndex) {
     const bearing = bearingBetween(fix, launch);
     const error = Math.abs(relativeBearing(fix.course, bearing));
     const good =
-      fix.speed >= 5 && error <= 35 && closingAt(fixes, distances, index) >= 3;
+      fix.speed >= 1 && error <= 35 && closingAt(fixes, distances, index) >= 1;
     if (good) {
       qualified.push(index);
       badMilliseconds = 0;
@@ -417,7 +439,7 @@ function inboundRun(fixes, distances, entryIndex) {
       if (badMilliseconds > 12_000) break;
     }
   }
-  if (qualified.length < 30) return null;
+  if (qualified.length < 3) return null;
   const startIndex = Math.min(...qualified);
   const duration = fixes[entryIndex].timestamp - fixes[startIndex].timestamp;
   if (duration < 30_000) return null;
@@ -438,9 +460,11 @@ function settledSample(
       fix.timestamp >= fixes[startIndex].timestamp + delayMs,
   );
   if (settledIndex <= startIndex || settledIndex >= arrivalIndex) return null;
-  const remaining = distances[settledIndex];
+  const remaining = Math.max(0, distances[settledIndex] - ARRIVAL_RADIUS_M);
   const actualSeconds =
-    (fixes[arrivalIndex].timestamp - fixes[settledIndex].timestamp) / 1000;
+    (radiusCrossingTimestamp(fixes, distances, arrivalIndex) -
+      fixes[settledIndex].timestamp) /
+    1000;
   const closing = closingAt(fixes, distances, settledIndex);
   const projectedClosing = projectedClosingAt(fixes, settledIndex, launch);
   const course = bearingBetween(fixes[settledIndex], launch);
@@ -451,7 +475,7 @@ function settledSample(
   );
   const targetEncounter = estimateTargetCourseSpeed(
     fixes.slice(0, settledIndex + 1),
-    course,
+    launch,
   );
   const modeledSpeed = model?.conservativeMetersPerSecond ?? closing;
   const adaptiveSpeed =
@@ -505,21 +529,20 @@ function analyzeFlight(fixes, file) {
     .findIndex((distance) => distance <= ARRIVAL_RADIUS_M);
   if (arrivalOffset < 0) return null;
   const arrivalIndex = entryIndex + arrivalOffset;
-  const prefix = fixes.slice(0, inbound.startIndex);
+  const prefix = fixes.slice(0, inbound.startIndex + 1);
   if (
     prefix.length < 2 ||
     prefix[prefix.length - 1].timestamp - prefix[0].timestamp < MIN_PREFIX_MS
   ) {
     return null;
   }
-  const prefixLast = prefix.length - 1;
-  prefix[prefixLast] = {
-    ...prefix[prefixLast],
-    course: bearingBetween(prefix[prefixLast - 1], prefix[prefixLast]),
-  };
-  const remaining = distances[inbound.startIndex];
+  const remaining = Math.max(
+    0,
+    distances[inbound.startIndex] - ARRIVAL_RADIUS_M,
+  );
   const actualSeconds =
-    (fixes[arrivalIndex].timestamp - fixes[inbound.startIndex].timestamp) /
+    (radiusCrossingTimestamp(fixes, distances, arrivalIndex) -
+      fixes[inbound.startIndex].timestamp) /
     1000;
   if (remaining < 500 || actualSeconds <= 0) return null;
   const course = bearingBetween(fixes[inbound.startIndex], launch);
@@ -533,7 +556,7 @@ function analyzeFlight(fixes, file) {
   if (validRecent.length === 0) return null;
   const model = estimateReturnSpeed(prefix, course);
   const adaptive = estimateAdaptiveReturnSpeed(prefix, course);
-  const targetEncounter = estimateTargetCourseSpeed(prefix, course);
+  const targetEncounter = estimateTargetCourseSpeed(prefix, launch);
   const productionSpeed = productionReturnSpeed(prefix, launch);
   const recent15 = estimateReturnSpeed(prefix, course, FIFTEEN_MINUTES_MS);
   const recent20 = estimateReturnSpeed(prefix, course, TWENTY_MINUTES_MS);
@@ -714,16 +737,28 @@ function addResult(results, name, speed, sample) {
 function errorMinutes(name, speed, sample) {
   const rawSeconds = sample.remaining / speed;
   const predictedSeconds = DISPLAY_ROUNDED.has(name)
-    ? Math.ceil(rawSeconds / 60) * 60
+    ? etaDisplayMinutes(rawSeconds) * 60
     : rawSeconds;
   return (predictedSeconds - sample.actualSeconds) / 60;
 }
 
 function summarize(errors, eligible) {
+  if (errors.length === 0) {
+    return {
+      flights: 0,
+      coverage: "0%",
+      medianAbsoluteMinutes: "n/a",
+      p90AbsoluteMinutes: "n/a",
+      p95AbsoluteMinutes: "n/a",
+      meanBiasMinutes: "n/a",
+      p10Minutes: "n/a",
+      optimisticOver2Minutes: "0/0",
+    };
+  }
   const absolute = errors.map(Math.abs);
   const mean = errors.reduce((sum, value) => sum + value, 0) / errors.length;
-  const optimistic =
-    errors.filter((value) => value < -2).length / errors.length;
+  const optimisticCount = errors.filter((value) => value < -2).length;
+  const optimistic = optimisticCount / errors.length;
   return {
     flights: errors.length,
     coverage: `${Math.round((errors.length / eligible) * 100)}%`,
@@ -732,12 +767,15 @@ function summarize(errors, eligible) {
     p95AbsoluteMinutes: percentile(absolute, 0.95).toFixed(2),
     meanBiasMinutes: mean.toFixed(2),
     p10Minutes: percentile(errors, 0.1).toFixed(2),
-    optimisticOver2Minutes: `${Math.round(optimistic * 100)}%`,
+    optimisticOver2Minutes: `${optimisticCount}/${errors.length} (${Math.round(optimistic * 100)}%)`,
   };
 }
 
 function diagnosticSummary(samples) {
-  const errors = samples.map((sample) =>
+  const withEstimate = samples.filter(
+    (sample) => sample.speeds.productionDisplay !== null,
+  );
+  const errors = withEstimate.map((sample) =>
     errorMinutes("productionDisplay", sample.speeds.productionDisplay, sample),
   );
   if (errors.length === 0) return { flights: 0 };
@@ -967,6 +1005,35 @@ async function gpxFiles(input) {
     .map((name) => path.join(input, name));
 }
 
+function flightSignature(fixes) {
+  const first = fixes[0];
+  const latest = fixes[fixes.length - 1];
+  if (!first || !latest) return "empty";
+  return [
+    first.timestamp,
+    latest.timestamp,
+    fixes.length,
+    first.latitude.toFixed(6),
+    first.longitude.toFixed(6),
+    latest.latitude.toFixed(6),
+    latest.longitude.toFixed(6),
+  ].join(":");
+}
+
+function corpusEligibility(fixes) {
+  if (fixes.length < 300) return "short";
+  const launch = fixes[0];
+  const distances = fixes.map((fix) => haversineMeters(fix, launch));
+  let maximumDistance = 0;
+  for (const distance of distances) {
+    maximumDistance = Math.max(maximumDistance, distance);
+  }
+  if (maximumDistance < ONE_MILE_M * 1.5) return "near";
+  return distances[distances.length - 1] <= 500
+    ? "ended-near-launch"
+    : "ended-away";
+}
+
 async function main() {
   const input = process.argv[2];
   if (!input) {
@@ -1032,17 +1099,47 @@ async function main() {
     ["targetEncounterHybrid", []],
   ]);
   const samples = [];
+  const signatures = new Set();
+  const eligibility = new Map([
+    ["short", 0],
+    ["near", 0],
+    ["ended-near-launch", 0],
+    ["ended-away", 0],
+    ["duplicate", 0],
+    ["ended-near-without-qualifying-rtl", 0],
+  ]);
   for (const file of files) {
-    const sample = analyzeFlight(
-      toFixes(parsePoints(await readFile(file, "utf8"))),
-      file,
-    );
-    if (!sample) continue;
+    const fixes = toFixes(parsePoints(await readFile(file, "utf8")));
+    const signature = flightSignature(fixes);
+    if (signatures.has(signature)) {
+      eligibility.set("duplicate", eligibility.get("duplicate") + 1);
+      continue;
+    }
+    signatures.add(signature);
+    const category = corpusEligibility(fixes);
+    eligibility.set(category, eligibility.get(category) + 1);
+    const sample = analyzeFlight(fixes, file);
+    if (!sample) {
+      if (category === "ended-near-launch") {
+        eligibility.set(
+          "ended-near-without-qualifying-rtl",
+          eligibility.get("ended-near-without-qualifying-rtl") + 1,
+        );
+      }
+      continue;
+    }
     samples.push(sample);
   }
+  if (samples.length === 0) {
+    console.log("No qualifying successful RTL samples", {
+      files: files.length,
+      ...Object.fromEntries(eligibility),
+    });
+    return;
+  }
   samples.sort((a, b) => a.startedAt - b.startedAt);
-  const holdoutStart = Math.floor(samples.length * 0.7);
-  const holdout = samples.slice(holdoutStart);
+  const evaluationStart = Math.floor(samples.length * 0.7);
+  const evaluation = samples.slice(evaluationStart);
   for (const sample of samples) {
     for (const [name, speed] of Object.entries(sample.speeds)) {
       addResult(results, name, speed, sample);
@@ -1056,6 +1153,7 @@ async function main() {
       }
     }
   }
+  console.log("Corpus eligibility", Object.fromEntries(eligibility));
   if (process.argv.includes("--brief")) {
     const brief = (selected, name, speed) => {
       const errors = selected
@@ -1063,7 +1161,7 @@ async function main() {
         .map((sample) => errorMinutes(name, speed(sample), sample));
       return summarize(errors, selected.length);
     };
-    const directHoldout = holdout.filter(
+    const directEvaluation = evaluation.filter(
       (sample) => sample.diagnostics.returnPathEfficiency >= 0.9,
     );
     console.log(
@@ -1083,43 +1181,51 @@ async function main() {
       ),
     );
     console.log(
-      "Holdout adaptive",
+      "All instantaneous groundspeed",
+      brief(samples, "current", (sample) => sample.speeds.current),
+    );
+    console.log(
+      "Chronological evaluation adaptive",
       brief(
-        holdout,
+        evaluation,
         "adaptive",
         (sample) => sample.experimentalSpeeds.adaptive,
       ),
     );
     console.log(
-      "Holdout production",
+      "Chronological evaluation production",
       brief(
-        holdout,
+        evaluation,
         "productionDisplay",
         (sample) => sample.speeds.productionDisplay,
       ),
     );
     console.log(
-      "Direct holdout adaptive",
+      "Chronological evaluation instantaneous groundspeed",
+      brief(evaluation, "current", (sample) => sample.speeds.current),
+    );
+    console.log(
+      "Direct chronological evaluation adaptive",
       brief(
-        directHoldout,
+        directEvaluation,
         "adaptive",
         (sample) => sample.experimentalSpeeds.adaptive,
       ),
     );
     console.log(
-      "Direct holdout production",
+      "Direct chronological evaluation production",
       brief(
-        directHoldout,
+        directEvaluation,
         "productionDisplay",
         (sample) => sample.speeds.productionDisplay,
       ),
     );
     for (const delay of [3, 4, 5, 12, 30, 60]) {
-      const selected = directHoldout
+      const selected = directEvaluation
         .map((sample) => sample.settledByDelay[delay])
         .filter(Boolean);
       console.log(
-        `Direct holdout production after ${delay}s`,
+        `Direct chronological evaluation production after ${delay}s`,
         brief(
           selected,
           "productionDisplay",
@@ -1141,19 +1247,21 @@ async function main() {
   for (const [name, errors] of settledResults) {
     console.log(name, summarize(errors, settledEligible));
   }
-  console.log("Newest 30% chronological holdout");
+  console.log("Newest 30% chronological evaluation slice");
   for (const name of results.keys()) {
     const errors = [];
-    for (const sample of holdout) {
+    for (const sample of evaluation) {
       addResult(new Map([[name, errors]]), name, sample.speeds[name], sample);
     }
-    console.log(name, summarize(errors, holdout.length));
+    console.log(name, summarize(errors, evaluation.length));
   }
-  console.log("Newest 30% holdout, twelve seconds after inbound begins");
-  const settledHoldout = holdout.filter((sample) => sample.settled);
+  console.log(
+    "Newest 30% chronological evaluation, twelve seconds after inbound begins",
+  );
+  const settledEvaluation = evaluation.filter((sample) => sample.settled);
   for (const name of settledResults.keys()) {
     const errors = [];
-    for (const sample of settledHoldout) {
+    for (const sample of settledEvaluation) {
       addResult(
         new Map([[name, errors]]),
         name,
@@ -1161,16 +1269,18 @@ async function main() {
         sample.settled,
       );
     }
-    console.log(name, summarize(errors, settledHoldout.length));
+    console.log(name, summarize(errors, settledEvaluation.length));
   }
   console.log("Maneuver-filter experiments, all eligible flights");
   for (const [name, errors] of experimentalResults) {
     console.log(name, summarize(errors, samples.length));
   }
-  console.log("Maneuver-filter experiments, newest 30% holdout");
+  console.log(
+    "Maneuver-filter experiments, newest 30% chronological evaluation",
+  );
   for (const name of experimentalResults.keys()) {
     const errors = [];
-    for (const sample of holdout) {
+    for (const sample of evaluation) {
       addResult(
         new Map([[name, errors]]),
         name,
@@ -1178,10 +1288,10 @@ async function main() {
         sample,
       );
     }
-    console.log(name, summarize(errors, holdout.length));
+    console.log(name, summarize(errors, evaluation.length));
   }
-  printDynamicsDiagnostics(holdout);
-  printAdaptiveComparisons(holdout);
+  printDynamicsDiagnostics(evaluation);
+  printAdaptiveComparisons(evaluation);
 }
 
 try {

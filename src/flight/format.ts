@@ -129,8 +129,12 @@ function signedMinutes(minutes: number, offsetMs: number): string {
   return `S${sign}${String(Math.abs(minutes)).padStart(2, "0")}`;
 }
 
+export function etaDisplayMinutes(etaSeconds: number): number {
+  return Math.max(0, Math.ceil(etaSeconds / 60));
+}
+
 export function formatEta(etaSeconds: number): string {
-  const minutes = Math.max(0, Math.ceil(etaSeconds / 60));
+  const minutes = etaDisplayMinutes(etaSeconds);
   if (minutes < 60) return `:${String(minutes).padStart(2, "0")}`;
   const hours = Math.floor(minutes / 60);
   return `${hours}:${String(minutes % 60).padStart(2, "0")}`;

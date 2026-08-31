@@ -1,3 +1,5 @@
+import { memo } from "react";
+
 import type { Fix } from "../../../engine/types";
 import {
   formatArrivalSunsetOffset,
@@ -9,17 +11,17 @@ import {
   type Units,
 } from "../../../flight/format";
 import { bearingBetween } from "../../../flight/nav";
-import { deriveNavigationGuidance } from "../../../flight/navigationGuidance";
 import {
-  estimateAdaptiveReturnSpeed,
-  estimateTargetCourseSpeed,
-} from "../../../flight/returnSpeed";
+  deriveNavigationDiagnostics,
+  deriveNavigationGuidance,
+} from "../../../flight/navigationGuidance";
+import type { TargetCourseSpeedEstimate } from "../../../flight/returnSpeed";
 import { sunsetNear } from "../../../flight/sun";
 import { shouldShowNavigationArrival } from "../../shared/navigationDisplay";
 
 import styles from "./ReplayNavigationDebug.module.css";
 
-export default function ReplayNavigationDebug({
+function ReplayNavigationDebug({
   track,
   units,
 }: {
@@ -34,13 +36,14 @@ export default function ReplayNavigationDebug({
     longitude: first.longitude,
   };
   const targetCourse = bearingBetween(latest, target);
-  const guidance = deriveNavigationGuidance(track, target);
-  const model = estimateAdaptiveReturnSpeed(track, targetCourse);
-  const targetSpeed = estimateTargetCourseSpeed(track, targetCourse);
+  const { guidance, model, targetSpeed } = deriveNavigationDiagnostics(
+    track,
+    target,
+  );
   const rawSunset = sunsetNear(
     new Date(latest.timestamp),
-    target.latitude,
-    target.longitude,
+    latest.latitude,
+    latest.longitude,
   )?.getTime();
   const rawSunsetOffset = rawSunset ? latest.timestamp - rawSunset : null;
   const etaSeconds = guidance?.etaSeconds ?? null;
@@ -112,6 +115,16 @@ export default function ReplayNavigationDebug({
   );
 }
 
+export default memo(ReplayNavigationDebug, (previous, next) => {
+  const previousLatest = previous.track[previous.track.length - 1];
+  const nextLatest = next.track[next.track.length - 1];
+  return (
+    previous.units === next.units &&
+    previous.track.length === next.track.length &&
+    previousLatest?.timestamp === nextLatest?.timestamp
+  );
+});
+
 function DebugRow({ label, value }: { label: string; value: string }) {
   return (
     <div className={styles.row}>
@@ -129,7 +142,7 @@ function formatNullable(
 }
 
 function targetHandoff(
-  target: ReturnType<typeof estimateTargetCourseSpeed>,
+  target: TargetCourseSpeedEstimate | null,
   units: Units,
 ): string {
   if (!target) return "none";

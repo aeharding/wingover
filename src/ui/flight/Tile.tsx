@@ -33,6 +33,7 @@ export default function Tile({
     accent && styles[accent],
     wide && styles.wide,
     !!icon && styles.hasIcon,
+    secondary && styles.split,
   );
   const labelClasses = cx(styles.labelRow, secondary && styles.splitRow);
   const valueClasses = cx(styles.valueRow, secondary && styles.splitRow);

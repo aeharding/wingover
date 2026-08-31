@@ -84,3 +84,44 @@ test("sunset return guidance stays compact and points toward one green edge", as
   sizes = await splitValueSizes();
   expect(sizes.slice(1)).toEqual(Array(4).fill(sizes[0]));
 });
+
+test("split guidance values fit large landscape phones and metric tablets", async ({
+  page,
+}) => {
+  await page.goto("/settings/units?map-style=blank");
+  await page.locator("ion-radio", { hasText: "Metric" }).click();
+  await page.setViewportSize({ width: 956, height: 440 });
+  await page.goto(
+    "/?mock-gpx=/e2e/fixtures/rtl-inbound.gpx&mock-speed=600&map-style=blank",
+  );
+  await page.getByRole("button", { name: "Start Flight" }).click();
+  await expect(page.getByTestId("recording")).toBeVisible({ timeout: 10_000 });
+
+  const duration = page.getByTestId("instrument-duration");
+  const sunset = page.getByTestId("instrument-sunset");
+  const distance = page.getByTestId("instrument-target-distance");
+  const arrival = page.getByTestId("instrument-target-arrival-sunset");
+  await duration.evaluate((element) => (element.textContent = "10:10:19"));
+  await sunset.evaluate((element) => (element.textContent = "S+60"));
+  await distance.evaluate((element) => (element.textContent = "99.9 km"));
+  await arrival.evaluate((element) => (element.textContent = "S+120"));
+
+  const expectValuesToFit = async () => {
+    for (const value of [duration, sunset, distance, arrival]) {
+      const layout = await value.evaluate((element) => ({
+        clientWidth: element.clientWidth,
+        scrollWidth: element.scrollWidth,
+        text: element.textContent,
+      }));
+      expect(layout.scrollWidth, JSON.stringify(layout)).toBeLessThanOrEqual(
+        layout.clientWidth,
+      );
+    }
+  };
+
+  await expectValuesToFit();
+  await page.setViewportSize({ width: 768, height: 1024 });
+  await expectValuesToFit();
+  await page.setViewportSize({ width: 390, height: 844 });
+  await expectValuesToFit();
+});
