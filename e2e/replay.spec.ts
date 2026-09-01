@@ -4,8 +4,9 @@ import { dismissLandingSheet } from "./landingSheet";
 
 type Page = import("@playwright/test").Page;
 
-async function openImportedFlight(page: Page) {
-  await page.goto("/?map-style=blank");
+async function openImportedFlight(page: Page, rtlDebug = false) {
+  const debug = rtlDebug ? "&rtl-debug=1" : "";
+  await page.goto(`/?map-style=blank${debug}`);
   await page.locator("#tab-button-logbook").click();
   await page.getByTestId("logbook-options").click();
   const chooserPromise = page.waitForEvent("filechooser");
@@ -53,7 +54,7 @@ async function stableBarogramBox(page: Page) {
 test("the fullscreen play button opens the pane playing; scrub and speed follow", async ({
   page,
 }) => {
-  await openImportedFlight(page);
+  await openImportedFlight(page, true);
 
   // Replay lives behind Expand: no pill on the preview, just the map.
   await expect(page.getByTestId("replay-dock")).toBeHidden();
@@ -61,6 +62,12 @@ test("the fullscreen play button opens the pane playing; scrub and speed follow"
   await expect(page.getByTestId("flight-detail-map-fullroot")).toBeVisible();
   await page.getByTestId("replay-start").click();
   await expect(page.getByTestId("replay-dock")).toBeVisible();
+  const navigationDebug = page.getByTestId("replay-navigation-debug");
+  await expect(navigationDebug).toBeVisible();
+  await expect(navigationDebug).toContainText("UI sunset");
+  await expect(navigationDebug).toContainText("UI launch");
+  await expect(navigationDebug).toContainText("ETA exact");
+  await expect(navigationDebug).toContainText("Speed used");
 
   // Opened playing: the short fixture plays through and holds at the end.
   await expect.poll(() => sliderFraction(page)).toBeGreaterThanOrEqual(1);
@@ -108,6 +115,7 @@ test("Expand keeps the map clean; play opens the pane; stop parks; collapse hide
 
   await page.getByTestId("replay-start").click();
   await expect(page.getByTestId("replay-dock")).toBeVisible();
+  await expect(page.getByTestId("replay-navigation-debug")).toHaveCount(0);
   await expect(page.getByTestId("replay-start")).toBeHidden();
   await expect.poll(() => aircraftDisplay(page)).not.toBeNull();
   await expect.poll(() => sliderFraction(page)).toBeGreaterThan(0);

@@ -17,11 +17,36 @@
   justify-content: center;
 }
 
+.split {
+  padding-inline: 0.4rem;
+}
+
 /* The --tile-* knobs let a HOST compact the type (FlightSurface's landscape
    rail splits 8 rows over a phone's short edge); default = full size. */
 .label {
   font-size: var(--tile-label-size, 0.72rem);
   color: #c2c7cd;
+}
+
+.labelRow,
+.valueRow {
+  min-width: 0;
+}
+
+.splitRow {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) max-content;
+  align-items: end;
+  gap: 0.1rem;
+}
+
+.secondaryLabel {
+  overflow: hidden;
+  color: #c2c7cd;
+  font-size: var(--tile-label-size, 0.72rem);
+  text-align: right;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
 .value {
@@ -45,6 +70,18 @@
   .yellow & {
     color: var(--stat-yellow);
   }
+}
+
+.secondaryValue {
+  text-align: right;
+}
+
+.value.secondaryValue.greenValue {
+  color: var(--stat-green);
+}
+
+.value.secondaryValue.magentaValue {
+  color: var(--stat-magenta);
 }
 
 .wide {

@@ -3,17 +3,23 @@ import type { RefObject } from "react";
 import type { Fix, Waypoint } from "../../engine/types";
 import {
   formatAltitude,
+  formatArrivalSunsetOffset,
   formatClimb,
   formatCourse,
-  formatDistance,
   formatDuration,
+  formatEta,
+  formatNavigationDistance,
   formatRelativeDegrees,
   formatSpeed,
+  formatSunsetOffset,
 } from "../../flight/format";
 import type { Units } from "../../flight/format";
-import { bearingBetween, relativeBearing } from "../../flight/nav";
-import { haversineMeters } from "../../flight/stats";
-import Tile from "./Tile";
+import type {
+  NavigationGuidance,
+  NavigationTargetKind,
+} from "../../flight/navigationGuidance";
+import { shouldShowNavigationArrival } from "../shared/navigationDisplay";
+import Tile, { type TileSecondary } from "./Tile";
 
 import styles from "./FlightSurface.module.css";
 
@@ -28,23 +34,23 @@ export default function InstrumentsStrip({
   latest,
   first,
   nextWaypoint,
+  guidance,
   units,
 }: {
   ref: RefObject<HTMLDivElement | null>;
   latest: Fix | null;
   first: Fix | undefined;
   nextWaypoint: Waypoint | null;
+  guidance: NavigationGuidance | null;
   units: Units;
 }) {
   // Nav points at the next waypoint whenever a route target remains, and
   // falls back to the launch point once the route is exhausted (nextWaypoint
   // null). Same distance/bearing math either way.
-  const navTarget = nextWaypoint ?? first ?? null;
-  const navLabel = nextWaypoint ? "waypoint" : "launch";
-  const hasTarget = latest !== null && navTarget !== null;
-  const toTargetRelative = hasTarget
-    ? relativeBearing(latest.course, bearingBetween(latest, navTarget))
-    : 0;
+  const targetKind: NavigationTargetKind = nextWaypoint ? "waypoint" : "launch";
+  const targetSecondary = targetEtaSecondary(guidance, targetKind);
+  const currentSunsetSecondary = sunsetSecondary(guidance);
+  const hasSunsetGuidance = Boolean(currentSunsetSecondary);
 
   function durationSeconds() {
     if (!latest || !first) return 0;
@@ -57,21 +63,21 @@ export default function InstrumentsStrip({
   }
 
   function targetDistance() {
-    if (!hasTarget) return "—";
-    return formatDistance(haversineMeters(latest, navTarget), units);
+    if (!guidance) return "—";
+    return formatNavigationDistance(guidance.distanceMeters, units);
   }
 
   function targetDirection() {
-    if (!hasTarget) return "—";
-    return formatRelativeDegrees(toTargetRelative);
+    if (!guidance) return "—";
+    return formatRelativeDegrees(guidance.directionDegrees);
   }
 
   function targetArrow() {
-    if (!hasTarget) return undefined;
+    if (!guidance) return undefined;
     return (
       <span
         className={styles.launchArrow}
-        style={{ rotate: `${toTargetRelative}deg` }}
+        style={{ rotate: `${guidance.directionDegrees}deg` }}
         aria-hidden="true"
       >
         {/* The same chevron as the map's blue location arrow,
@@ -89,7 +95,12 @@ export default function InstrumentsStrip({
   }
 
   return (
-    <div className={styles.instruments} ref={ref} data-testid="instruments">
+    <div
+      className={styles.instruments}
+      ref={ref}
+      data-testid="instruments"
+      data-sunset-guidance={hasSunsetGuidance}
+    >
       <Tile
         label="Above launch"
         value={aboveLaunch()}
@@ -99,6 +110,7 @@ export default function InstrumentsStrip({
       <Tile
         label="Duration"
         value={formatDuration(durationSeconds())}
+        secondary={currentSunsetSecondary}
         testId="instrument-duration"
       />
       <Tile
@@ -118,8 +130,9 @@ export default function InstrumentsStrip({
         testId="instrument-speed"
       />
       <Tile
-        label={`Distance to ${navLabel}`}
+        label={`To ${targetKind}`}
         value={targetDistance()}
+        secondary={targetSecondary}
         accent="green"
         testId="instrument-target-distance"
       />
@@ -131,13 +144,60 @@ export default function InstrumentsStrip({
         testId="instrument-course"
       />
       <Tile
-        label={`Direction to ${navLabel}`}
+        label={`Direction to ${targetKind}`}
         value={targetDirection()}
         icon={targetArrow()}
         accent="yellow"
         testId="instrument-target-direction"
       />
     </div>
+  );
+}
+
+function sunsetSecondary(
+  guidance: NavigationGuidance | null,
+): TileSecondary | undefined {
+  if (!guidance || guidance.sunsetOffsetMs === null) return undefined;
+  return {
+    label: "Sunset",
+    value: compactSunsetValue(formatSunsetOffset(guidance.sunsetOffsetMs)),
+    accent: "magenta",
+    testId: "instrument-sunset",
+  };
+}
+
+function targetEtaSecondary(
+  guidance: NavigationGuidance | null,
+  targetKind: NavigationTargetKind,
+): TileSecondary | undefined {
+  if (!shouldShowNavigationArrival(guidance, targetKind)) {
+    return undefined;
+  }
+  if (guidance.arrivalSunsetOffsetMs !== null) {
+    return {
+      value: compactSunsetValue(
+        formatArrivalSunsetOffset(guidance.arrivalSunsetOffsetMs),
+      ),
+      accent: "magenta",
+      testId: "instrument-target-arrival-sunset",
+    };
+  }
+  return {
+    value: formatEta(guidance.etaSeconds),
+    accent: "green",
+    testId: "instrument-target-eta",
+  };
+}
+
+function compactSunsetValue(value: string) {
+  const minusIndex = value.indexOf("−");
+  if (minusIndex < 0) return value;
+  return (
+    <>
+      {value.slice(0, minusIndex)}
+      <span className={styles.sunsetMinus}>−</span>
+      {value.slice(minusIndex + 1)}
+    </>
   );
 }
 
