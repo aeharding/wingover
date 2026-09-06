@@ -13,17 +13,19 @@ The flight surface keeps its existing eight tiles and existing row height.
   Distance remains on the left and a green unsigned ETA such as `:12` appears
   on the right. If the track cannot support an estimate yet, the split is not
   shown.
-- From 30 minutes before sunset through 60 minutes after it, `Duration` splits
-  to show the current sunset
+- When projected arrival reaches 30 minutes before sunset or later, `Duration`
+  splits to show the current sunset
   offset, such as `S−03`. The target tile replaces ordinary ETA with projected
   arrival relative to the same sunset, such as `S+02`. Both offsets use the
   same magenta. There is no separate legal-time line.
 - Sunset mode uses the pilot's current coordinates, independently of the
-  navigation target. It appears from 30 minutes before that sunset through 60
-  minutes after it, including for a flight launched inside the post-sunset
-  window. Reaching or changing a waypoint cannot move the reference. Morning
-  flight does not show the previous sunset, and active flight never shows
-  sunrise.
+  navigation target. Arrival can open the display while sunset is still more
+  than 30 minutes away. Without an ETA, it opens 30 minutes before sunset.
+  It remains available until 60 minutes after sunset, including for a flight
+  launched inside the post-sunset window. An arrival later than sunset does
+  not hide it. Changing a waypoint can change when the display opens, but
+  cannot move the sunset reference. Morning flight does not show the previous
+  sunset, and active flight never shows sunrise.
 - ETA is rounded up to the next minute. Current sunset time counts down before
   sunset and counts elapsed whole minutes after it. Projected sunset arrival
   rounds toward the later minute.
@@ -31,8 +33,9 @@ The flight surface keeps its existing eight tiles and existing row height.
   no longer useful. Arrival for any target disappears at one minute or less.
   The target distance remains visible in both cases.
 - Waypoints use the same target-independent estimator and compact tile split.
-  Labels stay generic because in-flight waypoints are anonymous. Direction-edge
-  guidance is launch-only in this version.
+  Labels stay generic because in-flight waypoints are anonymous.
+- Direction to the target stays in its instrument tile. There are no
+  directional bars along the screen edges.
 
 Recorded-flight replay includes a temporary `RTL debug` overlay. `UI sunset`
 and `UI launch` are the exact compact values the flight tiles would render at
@@ -41,20 +44,20 @@ gate opens, while exact ETA, selected speed, fallback model, recent
 target-course sample, course, bearing, and error expose estimator handoffs.
 This panel exists only in playback and does not add a live-flight stat line.
 
-The direction hint is one full-strength green edge on the side the pilot should
-turn toward. It is fine guidance, not a return alert. It appears only when all
-of these are true:
+## Solar times
 
-- the target is launch;
-- the flight has reached 1.2 miles from launch and remains more than 1 mile
-  away;
-- the last 12 seconds are continuous, accurate, closing on launch, and within
-  30 degrees of the target;
-- a 5 to 20 degree error persists on the same side;
-- the pilot is not turning quickly or already correcting the error.
+Sunrise and sunset use the Meeus solar-position and equation-of-time formulas
+published in [NOAA's calculator](https://gml.noaa.gov/grad/solcalc/main.js).
+The event time is iterated with the solar coordinates at sunrise or sunset,
+using a standard upper-limb horizon of -0.833 degrees. Calculations run locally.
+They do not account for terrain or the pilot's altitude.
 
-Aligned flight, a large course error, circling, gaps, poor accuracy, movement
-away from launch, and the inner mile all show no edge.
+Independent [USNO reference times](https://aa.usno.navy.mil/data/RS_OneDay)
+are checked in under `src/flight/test-fixtures/sun-usno.json`, with the source
+query for each case. Tests require sunrise and sunset to round to the published
+minute across 14 dates and locations, including both hemispheres, Alaska, and
+both sides of the date line. Absolute clock labels also round to the nearest
+minute.
 
 ## Speed estimate
 

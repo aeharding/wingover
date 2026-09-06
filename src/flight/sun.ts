@@ -1,3 +1,5 @@
+import { solarPosition } from "./solarPosition";
+
 const DEG = Math.PI / 180;
 const J2000 = 2451545.0;
 const UNIX_EPOCH_JD = 2440587.5;
@@ -5,44 +7,30 @@ const MS_PER_DAY = 86400000;
 const MS_PER_MINUTE = 60000;
 const MS_PER_HOUR = 3600000;
 
-interface SolarDay {
-  // Julian date of solar noon.
-  jTransit: number;
-  // Half the day arc, in degrees of hour angle.
-  omega: number;
-}
-
-// The standard sunrise-equation approximation (NOAA coefficients) for
-// the mean solar day nearest the given moment. Accurate to a couple of
-// minutes, plenty for a glanceable fact; no network, no tables. Null in
-// polar day/night, when the sun neither rises nor sets.
-function solarDayNear(
+// A level horizon with standard refraction and the Sun's upper limb.
+// Solar coordinates are refined at the event, independently for rise/set.
+function solarEventNear(
   at: Date,
   latitude: number,
   longitude: number,
-): SolarDay | null {
+  direction: -1 | 1,
+): Date | null {
   const jd = at.getTime() / MS_PER_DAY + UNIX_EPOCH_JD;
-  // Local solar time runs AHEAD of UTC east of Greenwich, hence +lng.
-  const n = Math.round(jd - J2000 + 0.0008 + longitude / 360);
-  const jStar = n + longitude / -360;
-
-  const meanAnomaly = (357.5291 + 0.98560028 * jStar) % 360;
-  const m = meanAnomaly * DEG;
-  const center =
-    1.9148 * Math.sin(m) + 0.02 * Math.sin(2 * m) + 0.0003 * Math.sin(3 * m);
-  const eclipticLng = ((meanAnomaly + center + 180 + 102.9372) % 360) * DEG;
-
-  const jTransit =
-    J2000 + jStar + 0.0053 * Math.sin(m) - 0.0069 * Math.sin(2 * eclipticLng);
-
-  const sinDecl = Math.sin(eclipticLng) * Math.sin(23.4397 * DEG);
-  const cosDecl = Math.cos(Math.asin(sinDecl));
-  const cosHourAngle =
-    (Math.sin(-0.833 * DEG) - Math.sin(latitude * DEG) * sinDecl) /
-    (Math.cos(latitude * DEG) * cosDecl);
-  if (cosHourAngle < -1 || cosHourAngle > 1) return null;
-
-  return { jTransit, omega: Math.acos(cosHourAngle) / DEG };
+  const solarDay = Math.round(jd - J2000 + longitude / 360);
+  const meanNoon = J2000 + solarDay - longitude / 360;
+  let event = meanNoon + direction / 4;
+  for (let iteration = 0; iteration < 4; iteration++) {
+    const { declinationRadians, equationOfTimeMinutes } = solarPosition(event);
+    const cosHourAngle =
+      (Math.sin(-0.833 * DEG) -
+        Math.sin(latitude * DEG) * Math.sin(declinationRadians)) /
+      (Math.cos(latitude * DEG) * Math.cos(declinationRadians));
+    if (cosHourAngle < -1 || cosHourAngle > 1) return null;
+    const hourAngle = Math.acos(cosHourAngle) / DEG;
+    event =
+      meanNoon + (direction * hourAngle * 4 - equationOfTimeMinutes) / 1440;
+  }
+  return fromJulian(event);
 }
 
 const fromJulian = (j: number) => new Date((j - UNIX_EPOCH_JD) * MS_PER_DAY);
@@ -53,8 +41,7 @@ export function sunsetNear(
   latitude: number,
   longitude: number,
 ): Date | null {
-  const day = solarDayNear(at, latitude, longitude);
-  return day ? fromJulian(day.jTransit + day.omega / 360) : null;
+  return solarEventNear(at, latitude, longitude, 1);
 }
 
 /** Sunrise, same contract as sunsetNear. */
@@ -63,8 +50,7 @@ export function sunriseNear(
   latitude: number,
   longitude: number,
 ): Date | null {
-  const day = solarDayNear(at, latitude, longitude);
-  return day ? fromJulian(day.jTransit - day.omega / 360) : null;
+  return solarEventNear(at, latitude, longitude, -1);
 }
 
 type EventNear = typeof sunsetNear;
@@ -114,7 +100,9 @@ function span(ms: number): string {
 }
 
 const clock = (d: Date) =>
-  d.toLocaleTimeString(undefined, { hour: "numeric", minute: "2-digit" });
+  new Date(
+    Math.round(d.getTime() / MS_PER_MINUTE) * MS_PER_MINUTE,
+  ).toLocaleTimeString(undefined, { hour: "numeric", minute: "2-digit" });
 
 /**
  * The idle screen's sun fact, walking the day's cycle (boundaries per

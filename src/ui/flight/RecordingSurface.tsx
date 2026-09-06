@@ -8,7 +8,6 @@ import type { MapView } from "../shared/map/types";
 import useChartOverlay from "../shared/map/useChartOverlay";
 import type { LiveView } from "../shared/useLiveViewPrefs";
 import { ConfirmSurface } from "./BigConfirm";
-import DirectionHint from "./DirectionHint";
 import InstrumentsStrip from "./InstrumentsStrip";
 import LiveTrackMap from "./LiveTrackMap";
 import MapControls from "./MapControls";
@@ -107,7 +106,6 @@ export default function RecordingSurface({
         onSelectWaypoint={waypoints.select}
         onFollowChange={changeFollow}
       />
-      <DirectionHint direction={guidance?.directionHint ?? null} />
       <MapControls
         mapView={mapView}
         follow={follow}

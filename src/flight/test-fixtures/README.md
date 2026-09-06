@@ -1,4 +1,13 @@
-# Anonymized RTL tracks
+# Flight test fixtures
+
+## Solar reference times
+
+`sun-usno.json` contains sunrise and sunset times retrieved from the
+[USNO one-day service](https://aa.usno.navy.mil/data/RS_OneDay) on September 6, 2026. Each row records the public query URL, date, coordinates, and the explicit
+UTC offset used by the service. Times are published to the minute. These are
+independent test inputs; production does not contact USNO or read the fixture.
+
+## Anonymized RTL tracks
 
 These fixtures contain trimmed kinematics from two real flights that exposed
 return-ETA failures. They are test data only and are never loaded by production

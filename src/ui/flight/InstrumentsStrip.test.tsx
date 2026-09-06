@@ -35,7 +35,6 @@ function guidance(
     sunsetAt: null,
     sunsetOffsetMs: null,
     arrivalSunsetOffsetMs: null,
-    directionHint: null,
     ...overrides,
   };
 }

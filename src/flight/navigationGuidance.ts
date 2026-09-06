@@ -11,7 +11,6 @@ import { haversineMeters } from "./stats";
 import { sunsetNear } from "./sun";
 
 const ONE_MILE_M = 1609.344;
-const REARM_DISTANCE_M = ONE_MILE_M * 1.2;
 const INBOUND_WINDOW_MS = 12_000;
 const MEASURED_SPEED_WINDOW_MS = 5_000;
 const CALIBRATION_MAX_AGE_MS = 30 * 60_000;
@@ -27,15 +26,10 @@ const SUNSET_TRAIL_MS = 60 * 60 * 1000;
 const MIN_NAV_SPEED_MPS = 1;
 const MIN_CLOSING_SPEED_MPS = 1;
 const ACQUIRE_ERROR_DEGREES = 30;
-const HINT_MIN_DEGREES = 5;
-const HINT_MAX_DEGREES = 20;
-const MAX_TURN_RATE_DEGREES = 3;
-const CORRECTING_DEGREES = 3;
 const MAX_FIX_GAP_MS = 3000;
 const MAX_HORIZONTAL_ACCURACY_M = 100;
 
 export type NavigationTargetKind = "launch" | "waypoint";
-export type DirectionHint = "left" | "right" | null;
 
 export interface NavigationTarget {
   kind: NavigationTargetKind;
@@ -50,7 +44,6 @@ export interface NavigationGuidance {
   sunsetAt: number | null;
   sunsetOffsetMs: number | null;
   arrivalSunsetOffsetMs: number | null;
-  directionHint: DirectionHint;
 }
 
 export interface NavigationGuidanceDiagnostics {
@@ -88,18 +81,6 @@ function targetErrors(
   return fixes.map((fix) =>
     relativeBearing(fix.course, bearingBetween(fix, target)),
   );
-}
-
-function averageTurnRate(fixes: readonly Fix[]): number {
-  let total = 0;
-  for (let index = 1; index < fixes.length; index++) {
-    total += Math.abs(
-      relativeBearing(fixes[index - 1].course, fixes[index].course),
-    );
-  }
-  const duration =
-    (fixes[fixes.length - 1].timestamp - fixes[0].timestamp) / 1000;
-  return duration > 0 ? total / duration : Number.POSITIVE_INFINITY;
 }
 
 function closingSpeed(fixes: readonly Fix[], target: NavigationTarget): number {
@@ -396,45 +377,10 @@ function returnSpeed(
   );
 }
 
-function crossedRearmDistance(
+function relevantSunset(
   track: readonly Fix[],
-  target: NavigationTarget,
-): boolean {
-  return track.some((fix) => haversineMeters(fix, target) >= REARM_DISTANCE_M);
-}
-
-function hintFromInbound(inbound: InboundState): DirectionHint {
-  if (averageTurnRate(inbound.fixes) > MAX_TURN_RATE_DEGREES) return null;
-  const firstError = Math.abs(inbound.errors[0]);
-  const latestError = inbound.errors[inbound.errors.length - 1];
-  if (firstError - Math.abs(latestError) >= CORRECTING_DEGREES) return null;
-  const side = Math.sign(latestError);
-  const persistent = inbound.errors.every((error) => {
-    const magnitude = Math.abs(error);
-    return (
-      Math.sign(error) === side &&
-      magnitude >= HINT_MIN_DEGREES &&
-      magnitude <= HINT_MAX_DEGREES
-    );
-  });
-  if (!persistent) {
-    return null;
-  }
-  return latestError < 0 ? "left" : "right";
-}
-
-function directionHint(
-  track: readonly Fix[],
-  target: NavigationTarget,
-  distanceMeters: number,
-): DirectionHint {
-  if (target.kind !== "launch" || distanceMeters <= ONE_MILE_M) return null;
-  if (!crossedRearmDistance(track, target)) return null;
-  const inbound = stableInbound(track, target);
-  return inbound ? hintFromInbound(inbound) : null;
-}
-
-function relevantSunset(track: readonly Fix[]): number | null {
+  etaSeconds: number | null,
+): number | null {
   const latest = track[track.length - 1];
   if (!latest) return null;
   const sunset = sunsetNear(
@@ -442,9 +388,10 @@ function relevantSunset(track: readonly Fix[]): number | null {
     latest.latitude,
     latest.longitude,
   )?.getTime();
+  const arrivalAt = latest.timestamp + (etaSeconds ?? 0) * 1000;
   if (
     sunset &&
-    latest.timestamp >= sunset - SUNSET_LEAD_MS &&
+    arrivalAt >= sunset - SUNSET_LEAD_MS &&
     latest.timestamp <= sunset + SUNSET_TRAIL_MS
   ) {
     return sunset;
@@ -462,10 +409,10 @@ function deriveNavigationGuidanceDiagnostics(
   const distanceMeters = haversineMeters(latest, target);
   const targetCourse = bearingBetween(latest, target);
   const directionDegrees = relativeBearing(latest.course, targetCourse);
+  const shouldEstimateLiveArrival =
+    target.kind !== "launch" || distanceMeters > ONE_MILE_M;
   const shouldEstimateArrival =
-    includeHiddenArrival ||
-    target.kind !== "launch" ||
-    distanceMeters > ONE_MILE_M;
+    includeHiddenArrival || shouldEstimateLiveArrival;
   const model = shouldEstimateArrival
     ? estimateAdaptiveReturnSpeed(track, targetCourse)
     : null;
@@ -476,7 +423,10 @@ function deriveNavigationGuidanceDiagnostics(
     ? returnSpeed(track, target, targetCourse, model, targetSpeed)
     : null;
   const etaSeconds = speed ? distanceMeters / speed : null;
-  const sunsetAt = relevantSunset(track);
+  const sunsetAt = relevantSunset(
+    track,
+    shouldEstimateLiveArrival ? etaSeconds : null,
+  );
   return {
     guidance: {
       distanceMeters,
@@ -488,7 +438,6 @@ function deriveNavigationGuidanceDiagnostics(
         sunsetAt && etaSeconds
           ? latest.timestamp + etaSeconds * 1000 - sunsetAt
           : null,
-      directionHint: directionHint(track, target, distanceMeters),
     },
     model,
     targetSpeed,

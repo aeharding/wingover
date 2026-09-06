@@ -292,7 +292,7 @@
   padding-right: env(safe-area-inset-right);
 
   &[data-sunset-guidance="true"] {
-    grid-template-columns: minmax(0, 0.96fr) minmax(0, 1.04fr);
+    grid-template-columns: minmax(0, 0.9fr) minmax(0, 1.1fr);
   }
 
   @media (min-width: 768px) {
