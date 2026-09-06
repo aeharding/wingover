@@ -3,6 +3,7 @@ import { describe, expect, it } from "vitest";
 import type { Fix } from "../engine/types";
 import { bearingBetween } from "./nav";
 import {
+  deriveNavigationDiagnostics,
   deriveNavigationGuidance,
   type NavigationTarget,
 } from "./navigationGuidance";
@@ -48,124 +49,6 @@ function inboundTrack(
 }
 
 describe("deriveNavigationGuidance", () => {
-  it("shows the edge on the side of a persistent small correction", () => {
-    const guidance = deriveNavigationGuidance(inboundTrack(8), launch);
-    expect(guidance?.directionHint).toBe("left");
-    expect(
-      deriveNavigationGuidance(inboundTrack(-8), launch)?.directionHint,
-    ).toBe("right");
-  });
-
-  it("acquires inbound guidance with ordinary fix timestamp jitter", () => {
-    const fasterCadence = inboundTrack(8, 14).map((sample, index) => ({
-      ...sample,
-      timestamp: index * 999,
-    }));
-    const slowerCadence = inboundTrack(8, 13).map((sample, index) => ({
-      ...sample,
-      timestamp: index * 1001,
-    }));
-
-    expect(deriveNavigationGuidance(fasterCadence, launch)?.directionHint).toBe(
-      "left",
-    );
-    expect(deriveNavigationGuidance(slowerCadence, launch)?.directionHint).toBe(
-      "left",
-    );
-  });
-
-  it("shows nothing when aligned, far off, inside a mile, or targeting a waypoint", () => {
-    expect(
-      deriveNavigationGuidance(inboundTrack(2), launch)?.directionHint,
-    ).toBeNull();
-    expect(
-      deriveNavigationGuidance(inboundTrack(25), launch)?.directionHint,
-    ).toBeNull();
-    const close = inboundTrack(8).map((sample) => ({
-      ...sample,
-      latitude: 43.005,
-    }));
-    expect(deriveNavigationGuidance(close, launch)?.directionHint).toBeNull();
-    expect(
-      deriveNavigationGuidance(inboundTrack(8), {
-        ...launch,
-        kind: "waypoint",
-      })?.directionHint,
-    ).toBeNull();
-  });
-
-  it("suppresses the hint while the pilot is already correcting", () => {
-    const track = inboundTrack(10).map((sample, index) => {
-      const point = {
-        latitude: sample.latitude,
-        longitude: sample.longitude,
-      };
-      return {
-        ...sample,
-        course: bearingBetween(point, launch) + 10 - index * 0.4,
-      };
-    });
-    expect(deriveNavigationGuidance(track, launch)?.directionHint).toBeNull();
-    const turning = inboundTrack(8).map((sample, index) => {
-      const point = {
-        latitude: sample.latitude,
-        longitude: sample.longitude,
-      };
-      return {
-        ...sample,
-        course: bearingBetween(point, launch) + (index % 2 === 0 ? 8 : 12),
-      };
-    });
-    expect(deriveNavigationGuidance(turning, launch)?.directionHint).toBeNull();
-  });
-
-  it("suppresses the hint for gaps, poor accuracy, and movement away", () => {
-    const withGap = inboundTrack(8).map((sample, index) => ({
-      ...sample,
-      timestamp: index < 7 ? sample.timestamp : sample.timestamp + 4000,
-    }));
-    const inaccurate = inboundTrack(8).map((sample, index) => ({
-      ...sample,
-      horizontalAccuracy: index === 7 ? 150 : sample.horizontalAccuracy,
-    }));
-    const movingAway = inboundTrack(8).map((sample, index) => {
-      const latitude = 43.03 + index * 0.0001;
-      const point = { latitude, longitude: sample.longitude };
-      return {
-        ...sample,
-        latitude,
-        course: bearingBetween(point, launch) + 8,
-      };
-    });
-    expect(deriveNavigationGuidance(withGap, launch)?.directionHint).toBeNull();
-    expect(
-      deriveNavigationGuidance(inaccurate, launch)?.directionHint,
-    ).toBeNull();
-    expect(
-      deriveNavigationGuidance(movingAway, launch)?.directionHint,
-    ).toBeNull();
-  });
-
-  it("waits for the 1.2 mile rearm distance before hinting", () => {
-    const underRearm = Array.from({ length: 13 }, (_, index) => {
-      const latitude = 43.017 - index * 0.0001;
-      const point = { latitude, longitude: -89 };
-      return fix(
-        index * 1000,
-        latitude,
-        -89,
-        bearingBetween(point, launch) + 8,
-      );
-    });
-    expect(
-      deriveNavigationGuidance(underRearm, launch)?.directionHint,
-    ).toBeNull();
-    const rearmed = [fix(-1000, 43.0185, -89, 180), ...underRearm];
-    expect(deriveNavigationGuidance(rearmed, launch)?.directionHint).toBe(
-      "left",
-    );
-  });
-
   it("does not show a morning sunset reference", () => {
     const morning = fix(Date.UTC(2026, 6, 18, 15), 43.03, -89, 180);
     expect(deriveNavigationGuidance([morning], launch)?.sunsetAt).toBeNull();
@@ -335,7 +218,7 @@ describe("deriveNavigationGuidance", () => {
     );
   });
 
-  it("shows sunset from thirty minutes before through one hour after", () => {
+  it("uses the current sunset window when arrival is unavailable", () => {
     const sunset = sunsetNear(
       new Date(Date.UTC(2026, 6, 18, 18)),
       launch.latitude,
@@ -353,6 +236,81 @@ describe("deriveNavigationGuidance", () => {
     ).toBe(sunset.getTime());
     expect(deriveNavigationGuidance(tooEarly, launch)?.sunsetAt).toBeNull();
     expect(deriveNavigationGuidance(tooLate, launch)?.sunsetAt).toBeNull();
+  });
+
+  it("opens sunset guidance when projected arrival reaches the thirty-minute lead", () => {
+    const point = { latitude: 43.3, longitude: -89 };
+    const sunset = sunsetNear(
+      new Date(Date.UTC(2026, 8, 6, 18)),
+      point.latitude,
+      point.longitude,
+    )!.getTime();
+    const sample = fix(
+      sunset - 2 * 60 * 60_000,
+      point.latitude,
+      point.longitude,
+      bearingBetween(point, launch),
+    );
+    const etaSeconds = deriveNavigationGuidance([sample], launch)!.etaSeconds!;
+    const boundary = sunset - 30 * 60_000 - etaSeconds * 1000;
+    const before = deriveNavigationGuidance(
+      [{ ...sample, timestamp: boundary - 1 }],
+      launch,
+    )!;
+    const atBoundary = deriveNavigationGuidance(
+      [{ ...sample, timestamp: boundary }],
+      launch,
+    )!;
+
+    expect(etaSeconds).toBeGreaterThan(30 * 60);
+    expect(before.sunsetAt).toBeNull();
+    expect(atBoundary.sunsetAt).toBe(sunset);
+    expect(atBoundary.sunsetOffsetMs).toBeLessThan(-60 * 60_000);
+    expect(atBoundary.arrivalSunsetOffsetMs).toBeCloseTo(-30 * 60_000);
+  });
+
+  it("keeps sunset guidance for arrivals after sunset, but retires it an hour after sunset now", () => {
+    const point = { latitude: 43.3, longitude: -89 };
+    const sunset = sunsetNear(
+      new Date(Date.UTC(2026, 8, 6, 18)),
+      point.latitude,
+      point.longitude,
+    )!.getTime();
+    const sample = fix(
+      sunset - 40 * 60_000,
+      point.latitude,
+      point.longitude,
+      bearingBetween(point, launch),
+      6,
+    );
+    const guidance = deriveNavigationGuidance([sample], launch)!;
+    expect(guidance.sunsetAt).toBe(sunset);
+    expect(guidance.arrivalSunsetOffsetMs).toBeGreaterThan(30 * 60_000);
+    expect(
+      deriveNavigationGuidance(
+        [{ ...sample, timestamp: sunset + 61 * 60_000 }],
+        launch,
+      )!.sunsetAt,
+    ).toBeNull();
+  });
+
+  it("keeps replay's sunset gate aligned with live guidance inside one mile", () => {
+    const point = { latitude: 43.01, longitude: -89 };
+    const sunset = sunsetNear(
+      new Date(Date.UTC(2026, 8, 6, 18)),
+      point.latitude,
+      point.longitude,
+    )!.getTime();
+    const track = [
+      fix(sunset - 40 * 60_000, point.latitude, point.longitude, 180, 1.5),
+    ];
+    const live = deriveNavigationGuidance(track, launch)!;
+    const replay = deriveNavigationDiagnostics(track, launch).guidance!;
+
+    expect(live.etaSeconds).toBeNull();
+    expect(replay.etaSeconds).toBeGreaterThan(10 * 60);
+    expect(live.sunsetAt).toBeNull();
+    expect(replay.sunsetAt).toBe(live.sunsetAt);
   });
 
   it("keeps the sunset reference stable when a waypoint changes", () => {

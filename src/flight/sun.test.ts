@@ -1,8 +1,30 @@
 import { describe, expect, it } from "vitest";
 
 import { sunFactLabel, sunriseNear, sunsetNear } from "./sun";
+import usnoReference from "./test-fixtures/sun-usno.json";
 
 const hourUtc = (d: Date) => d.getUTCHours() + d.getUTCMinutes() / 60;
+
+describe("USNO reference times", () => {
+  it.each(usnoReference)(
+    "$name matches rise and set to the published minute",
+    (row) => {
+      const utcOffsetMs = row.timezone * 3600000;
+      const noon = new Date(Date.parse(`${row.date}T12:00:00Z`) - utcOffsetMs);
+      const rise = sunriseNear(noon, row.latitude, row.longitude)!;
+      const set = sunsetNear(noon, row.latitude, row.longitude)!;
+      const expectedRise =
+        Date.parse(`${row.date}T${row.sunrise}:00Z`) - utcOffsetMs;
+      const expectedSet =
+        Date.parse(`${row.date}T${row.sunset}:00Z`) - utcOffsetMs;
+
+      expect(rise).not.toBeNull();
+      expect(set).not.toBeNull();
+      expect(Math.round(rise.getTime() / 60_000) * 60_000).toBe(expectedRise);
+      expect(Math.round(set.getTime() / 60_000) * 60_000).toBe(expectedSet);
+    },
+  );
+});
 
 describe("sunsetNear", () => {
   it("equator sunset is ~18:00 local solar time year round", () => {
@@ -60,6 +82,16 @@ describe("sunFactLabel", () => {
   const HOUR = 3600000;
   const at = (base: Date, hours: number) =>
     sunFactLabel(new Date(base.getTime() + hours * HOUR), 45, 0);
+
+  it("rounds the absolute sunset label to the USNO reference minute", () => {
+    const published = new Date("2026-09-07T00:22:00Z");
+    const label = sunFactLabel(new Date("2026-09-06T19:22:00Z"), 43, -89);
+    const expected = published.toLocaleTimeString(undefined, {
+      hour: "numeric",
+      minute: "2-digit",
+    });
+    expect(label).toBe(`Sunset ${expected}`);
+  });
 
   it("far from sunset: absolute clock time", () => {
     const label = at(set, -5)!;

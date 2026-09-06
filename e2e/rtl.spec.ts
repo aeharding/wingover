@@ -1,6 +1,26 @@
 import { expect, test } from "@playwright/test";
 
-test("sunset return guidance stays compact and points toward one green edge", async ({
+test("projected arrival opens sunset guidance more than thirty minutes before sunset", async ({
+  page,
+}) => {
+  await page.goto(
+    "/?mock-gpx=/e2e/fixtures/rtl-early-arrival.gpx&mock-speed=600&map-style=blank",
+  );
+  await page.getByRole("button", { name: "Start Flight" }).click();
+  await expect(page.getByTestId("recording")).toBeVisible({ timeout: 10_000 });
+
+  const sunset = page.getByTestId("instrument-sunset");
+  const arrival = page.getByTestId("instrument-target-arrival-sunset");
+  await expect(sunset).toHaveText(/^S−\d{2}$/);
+  await expect(arrival).toHaveText(/^S−\d{2}$/);
+  const minutesUntilSunset = Number((await sunset.textContent())!.slice(2));
+  const arrivalLead = Number((await arrival.textContent())!.slice(2));
+  expect(minutesUntilSunset).toBeGreaterThan(30);
+  expect(arrivalLead).toBeLessThanOrEqual(30);
+  await expect(page.getByTestId("instrument-target-eta")).toHaveCount(0);
+});
+
+test("sunset return guidance stays compact without direction bars", async ({
   page,
 }) => {
   await page.goto(
@@ -15,7 +35,7 @@ test("sunset return guidance stays compact and points toward one green edge", as
   await expect(sunset).toHaveText(/^S−\d{2}$/);
   await expect(arrival).toHaveText(/^S[+−]\d{2}$/);
   await expect(page.getByTestId("instrument-target-eta")).toHaveCount(0);
-  await expect(page.getByTestId("direction-hint-left")).toBeVisible();
+  await expect(page.getByTestId("direction-hint-left")).toHaveCount(0);
   await expect(page.getByTestId("direction-hint-right")).toHaveCount(0);
 
   const colors = await Promise.all([
@@ -69,11 +89,8 @@ test("sunset return guidance stays compact and points toward one green edge", as
   expect(sizes.slice(1)).toEqual(Array(4).fill(sizes[0]));
 
   await page.setViewportSize({ width: 844, height: 390 });
-  const instrumentsBox = await instruments.boundingBox();
-  const hintBox = await page.getByTestId("direction-hint-left").boundingBox();
-  expect(instrumentsBox).not.toBeNull();
-  expect(hintBox).not.toBeNull();
-  expect(hintBox!.x).toBeCloseTo(instrumentsBox!.x + instrumentsBox!.width, 0);
+  await expect(page.getByTestId("direction-hint-left")).toHaveCount(0);
+  await expect(page.getByTestId("direction-hint-right")).toHaveCount(0);
   for (const value of [duration, sunset, targetDistance, arrival]) {
     expect(
       await value.evaluate(
@@ -102,7 +119,10 @@ test("split guidance values fit large landscape phones and metric tablets", asyn
   const distance = page.getByTestId("instrument-target-distance");
   const arrival = page.getByTestId("instrument-target-arrival-sunset");
   await duration.evaluate((element) => (element.textContent = "10:10:19"));
-  await sunset.evaluate((element) => (element.textContent = "S+60"));
+  await sunset.evaluate((element) => {
+    const minus = element.querySelector("span")!;
+    element.replaceChildren("S", minus, "120");
+  });
   await distance.evaluate((element) => (element.textContent = "99.9 km"));
   await arrival.evaluate((element) => (element.textContent = "S+120"));
 

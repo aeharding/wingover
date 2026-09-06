@@ -1,0 +1,142 @@
+[
+  {
+    "name": "Wisconsin September",
+    "date": "2026-09-06",
+    "latitude": 43,
+    "longitude": -89,
+    "timezone": -5,
+    "sunrise": "06:26",
+    "sunset": "19:22",
+    "source": "https://aa.usno.navy.mil/api/rstt/oneday?date=2026-09-06&coords=43%2C-89&tz=-5"
+  },
+  {
+    "name": "Wisconsin June",
+    "date": "2026-06-21",
+    "latitude": 43,
+    "longitude": -89,
+    "timezone": -5,
+    "sunrise": "05:17",
+    "sunset": "20:39",
+    "source": "https://aa.usno.navy.mil/api/rstt/oneday?date=2026-06-21&coords=43%2C-89&tz=-5"
+  },
+  {
+    "name": "Wisconsin December",
+    "date": "2026-12-21",
+    "latitude": 43,
+    "longitude": -89,
+    "timezone": -6,
+    "sunrise": "07:24",
+    "sunset": "16:24",
+    "source": "https://aa.usno.navy.mil/api/rstt/oneday?date=2026-12-21&coords=43%2C-89&tz=-6"
+  },
+  {
+    "name": "Wisconsin March",
+    "date": "2026-03-20",
+    "latitude": 43,
+    "longitude": -89,
+    "timezone": -5,
+    "sunrise": "06:59",
+    "sunset": "19:08",
+    "source": "https://aa.usno.navy.mil/api/rstt/oneday?date=2026-03-20&coords=43%2C-89&tz=-5"
+  },
+  {
+    "name": "London June",
+    "date": "2026-06-21",
+    "latitude": 51.5,
+    "longitude": 0,
+    "timezone": 1,
+    "sunrise": "04:43",
+    "sunset": "21:21",
+    "source": "https://aa.usno.navy.mil/api/rstt/oneday?date=2026-06-21&coords=51.5%2C0&tz=1"
+  },
+  {
+    "name": "London December",
+    "date": "2026-12-21",
+    "latitude": 51.5,
+    "longitude": 0,
+    "timezone": 0,
+    "sunrise": "08:03",
+    "sunset": "15:53",
+    "source": "https://aa.usno.navy.mil/api/rstt/oneday?date=2026-12-21&coords=51.5%2C0&tz=0"
+  },
+  {
+    "name": "Sydney June",
+    "date": "2026-06-21",
+    "latitude": -33.87,
+    "longitude": 151.21,
+    "timezone": 10,
+    "sunrise": "07:00",
+    "sunset": "16:54",
+    "source": "https://aa.usno.navy.mil/api/rstt/oneday?date=2026-06-21&coords=-33.87%2C151.21&tz=10"
+  },
+  {
+    "name": "Sydney December",
+    "date": "2026-12-21",
+    "latitude": -33.87,
+    "longitude": 151.21,
+    "timezone": 11,
+    "sunrise": "05:41",
+    "sunset": "20:05",
+    "source": "https://aa.usno.navy.mil/api/rstt/oneday?date=2026-12-21&coords=-33.87%2C151.21&tz=11"
+  },
+  {
+    "name": "Tokyo September",
+    "date": "2026-09-06",
+    "latitude": 35.68,
+    "longitude": 139.69,
+    "timezone": 9,
+    "sunrise": "05:17",
+    "sunset": "18:02",
+    "source": "https://aa.usno.navy.mil/api/rstt/oneday?date=2026-09-06&coords=35.68%2C139.69&tz=9"
+  },
+  {
+    "name": "Anchorage June",
+    "date": "2026-06-21",
+    "latitude": 61.22,
+    "longitude": -149.9,
+    "timezone": -8,
+    "sunrise": "04:20",
+    "sunset": "23:43",
+    "source": "https://aa.usno.navy.mil/api/rstt/oneday?date=2026-06-21&coords=61.22%2C-149.9&tz=-8"
+  },
+  {
+    "name": "Anchorage December",
+    "date": "2026-12-21",
+    "latitude": 61.22,
+    "longitude": -149.9,
+    "timezone": -9,
+    "sunrise": "10:14",
+    "sunset": "15:41",
+    "source": "https://aa.usno.navy.mil/api/rstt/oneday?date=2026-12-21&coords=61.22%2C-149.9&tz=-9"
+  },
+  {
+    "name": "Suva March",
+    "date": "2026-03-20",
+    "latitude": -18.14,
+    "longitude": 178.44,
+    "timezone": 12,
+    "sunrise": "06:10",
+    "sunset": "18:17",
+    "source": "https://aa.usno.navy.mil/api/rstt/oneday?date=2026-03-20&coords=-18.14%2C178.44&tz=12"
+  },
+  {
+    "name": "Pago Pago March",
+    "date": "2026-03-20",
+    "latitude": -14.28,
+    "longitude": -170.7,
+    "timezone": -11,
+    "sunrise": "06:27",
+    "sunset": "18:33",
+    "source": "https://aa.usno.navy.mil/api/rstt/oneday?date=2026-03-20&coords=-14.28%2C-170.7&tz=-11"
+  },
+  {
+    "name": "Quito September",
+    "date": "2026-09-06",
+    "latitude": -0.18,
+    "longitude": -78.47,
+    "timezone": -5,
+    "sunrise": "06:09",
+    "sunset": "18:15",
+    "source": "https://aa.usno.navy.mil/api/rstt/oneday?date=2026-09-06&coords=-0.18%2C-78.47&tz=-5"
+  }
+]
